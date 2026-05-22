@@ -554,13 +554,16 @@ const DB = {
     DB._sync(k, old, arr);
   },
   async _sync(table, oldArr, newArr) {
+    console.log('[SYNC]', table, 'old:', oldArr.length, 'new:', newArr.length);
     const oldMap = {}; oldArr.forEach(x => { if(x.id) oldMap[x.id] = x; });
     const newMap = {}; newArr.forEach(x => { if(x.id) newMap[x.id] = x; });
     for (const item of newArr) {
       if (!item.id) continue;
       const isNumeric = /^\d+$/.test(item.id);
       if (!oldMap[item.id]) {
+        console.log('[SYNC] INSERT', table, item.id, item);
         const newId = await sbAdd(table, item);
+        console.log('[SYNC] INSERT result newId:', newId);
         if (newId) {
           const idx = _syncCache[table].findIndex(x => x.id === item.id);
           if (idx > -1) _syncCache[table][idx].id = newId;

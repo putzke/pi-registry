@@ -773,7 +773,7 @@ async function loadAllData() {
 
 // ── DB SHIM ────────────────────────────────────────────────────────
 const DB = {
-  get(k) { return _syncCache[k] || []; },
+  get(k) { return (_syncCache[k] || []).slice(); },
   set(k, arr) {
     const old = (_syncCache[k] || []).slice();
     _syncCache[k] = arr;

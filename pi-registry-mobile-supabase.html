@@ -1426,6 +1426,19 @@ async function initApp(){
     showToast('Error loading data','error');
   }
 }
+// Listen for import completion from the desktop app or importer tool
+const _importChannel = new BroadcastChannel('pi_registry');
+_importChannel.addEventListener('message', e => {
+  if (e.data?.type === 'import_complete') {
+    loadAllData().then(() => {
+      populateProjectDropdowns();
+      refreshHome();
+      updateFUBadges();
+      if (e.data.message) showToast(e.data.message);
+    });
+  }
+});
+
 initApp();
 </script>
 </body>

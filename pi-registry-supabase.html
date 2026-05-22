@@ -3590,14 +3590,10 @@ function navToContacts() {
 }
 
 function openImportTool(projectId) {
-  // Store the target project so the importer can pre-select it
-  if (projectId) {
-    localStorage.setItem('pir4_import_project', projectId);
-  } else {
-    localStorage.removeItem('pir4_import_project');
-  }
-  // Open importer — works whether files are served together or opened directly
-  const importerPath = 'stakeholder-importer.html';
+  // Pass the target project as a URL param so the importer can pre-select it
+  const importerPath = projectId
+    ? 'stakeholder-importer-supabase.html?project=' + encodeURIComponent(projectId)
+    : 'stakeholder-importer-supabase.html';
   const win = window.open(importerPath, 'pi-importer', 'width=1100,height=800,left=100,top=60');
   if (!win) {
     // Popup blocked — fall back to same-tab navigation
@@ -3609,15 +3605,8 @@ function openImportTool(projectId) {
     try {
       if (win.closed) {
         clearInterval(poll);
-        // Importer closed — refresh badges and current view to pick up new contacts
-        refreshBadges();
-        render();
-        // Show a brief toast if contacts were imported
-        const result = localStorage.getItem('pir4_import_result');
-        if (result) {
-          localStorage.removeItem('pir4_import_result');
-          showToast(result);
-        }
+        // Importer closed — refresh data and badges to pick up any new contacts
+        loadAllData().then(() => { refreshBadges(); render(); });
       }
     } catch(e) { clearInterval(poll); }
   }, 800);
@@ -3634,18 +3623,15 @@ function showToast(msg) {
   t.style.transition = 'opacity .4s';
 }
 
-// Listen for storage events — catches import completion if importer is open in same browser
-window.addEventListener('storage', e => {
-  if (e.key === 'pir4_import_result' && e.newValue) {
-    localStorage.removeItem('pir4_import_result');
-    refreshBadges();
-    render();
-    showToast(e.newValue);
-  }
-  // Also refresh if stakeholders table changes (e.g. importer added contacts)
-  if (e.key === 'pir4_stakeholders') {
-    refreshBadges();
-    if (S.view === 'master' || S.view === 'stakeholders') render();
+// Listen for import completion via BroadcastChannel (importer runs in a separate tab)
+const _importChannel = new BroadcastChannel('pi_registry');
+_importChannel.addEventListener('message', e => {
+  if (e.data?.type === 'import_complete') {
+    loadAllData().then(() => {
+      refreshBadges();
+      render();
+      if (e.data.message) showToast(e.data.message);
+    });
   }
 });
 

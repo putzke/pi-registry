@@ -611,12 +611,14 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 // ── DATA LAYER (Supabase) ─────────────────
 // ── SUPABASE CONFIG ────────────────────────────────────────────────
 const SUPA_URL = 'https://ncfbblhlsiglxkoiounv.supabase.co';
-const SUPA_KEY = 'sb_publishable_Wg25e6gStnkk_Bm9m_L4YA_HXlooxS5';
+const SUPA_REST = SUPA_URL + '/rest/v1';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5jZmJibGhsc2lnbHhrb2lvdW52Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0MTUzOTMsImV4cCI6MjA5NDk5MTM5M30.-fRI1QGkr1teN0sFvl25Uq7U38Jq1SAc6heIJvOud2Q';
 const SUPA_HEADERS = {
   'Content-Type': 'application/json',
   'apikey': SUPA_KEY,
   'Authorization': 'Bearer ' + SUPA_KEY,
-  'Prefer': 'return=representation'
+  'Prefer': 'return=representation',
+  'X-Client-Info': 'supabase-js/2.0.0'
 };
 
 // Map our internal table names to Supabase table names
@@ -706,7 +708,7 @@ async function sbGet(table) {
   const cached = cacheGet(table);
   if (cached) return cached;
   const sbTable = SB_TABLES[table];
-  const r = await fetch(SUPA_URL + '/rest/v1/' + sbTable + '?select=*&order=id.asc&limit=5000', {
+  const r = await fetch(SUPA_REST + '/' + sbTable + '?select=*&order=id.asc&limit=5000', {
     headers: SUPA_HEADERS
   });
   if (!r.ok) { console.error('SB GET error:', r.status, table); return []; }
@@ -719,7 +721,7 @@ async function sbGet(table) {
 async function sbAdd(table, obj) {
   const sbTable = SB_TABLES[table];
   const body = toSB(table, obj);
-  const r = await fetch(SUPA_URL + '/rest/v1/' + sbTable, {
+  const r = await fetch(SUPA_REST + '/' + sbTable, {
     method: 'POST',
     headers: SUPA_HEADERS,
     body: JSON.stringify(body)
@@ -733,7 +735,7 @@ async function sbAdd(table, obj) {
 async function sbUpdate(table, sbId, obj) {
   const sbTable = SB_TABLES[table];
   const body = toSB(table, obj);
-  const r = await fetch(SUPA_URL + '/rest/v1/' + sbTable + '?id=eq.' + sbId, {
+  const r = await fetch(SUPA_REST + '/' + sbTable + '?id=eq.' + sbId, {
     method: 'PATCH',
     headers: SUPA_HEADERS,
     body: JSON.stringify(body)
@@ -745,7 +747,7 @@ async function sbUpdate(table, sbId, obj) {
 
 async function sbDelete(table, sbId) {
   const sbTable = SB_TABLES[table];
-  const r = await fetch(SUPA_URL + '/rest/v1/' + sbTable + '?id=eq.' + sbId, {
+  const r = await fetch(SUPA_REST + '/' + sbTable + '?id=eq.' + sbId, {
     method: 'DELETE',
     headers: SUPA_HEADERS
   });

@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PI Registry — Stakeholder Import Tool</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --navy:#1A3050;--navy-mid:#FFFFFF;--navy-rim:#F0F4F8;
+  --sky:#2D7DD2;--sky-lt:#1A5FB4;--sky-dim:rgba(45,125,210,.08);
+  --white:#1A202C;--mist:#2D3748;--slate:#4A5568;--fog:#718096;
+  --amber:#B45309;--amber-lt:rgba(180,83,9,.08);
+  --green:#1A7A50;--green-lt:rgba(26,122,80,.08);
+  --red:#C0392B;--red-lt:rgba(192,57,43,.08);
+  --purple:#553C9A;--purple-lt:rgba(85,60,154,.1);
+  --border:#E2E8F0;--border-md:#CBD5E0;
+  --radius:6px;--radius-lg:10px;--radius-xl:14px;
+  --font:'IBM Plex Sans',sans-serif;--mono:'IBM Plex Mono',monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%;background:#F5F7FA;color:var(--white);font-family:var(--font);font-size:13px}
+body{padding:0}
+
+/* LAYOUT */
+.app-header{background:var(--navy-mid);border-bottom:1px solid var(--border);padding:14px 32px;display:flex;align-items:center;gap:14px}
+.hdr-icon{width:32px;height:32px;border-radius:8px;background:var(--sky);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.hdr-icon svg{width:16px;height:16px}
+.hdr-title{font-size:16px;font-weight:600;letter-spacing:-.2px}
+.hdr-sub{font-size:11px;color:var(--fog);margin-top:1px}
+.hdr-sp{flex:1}
+.page{max-width:1100px;margin:0 auto;padding:28px 32px}
+
+/* STEPS */
+.steps{display:flex;align-items:center;gap:0;margin-bottom:28px}
+.step{display:flex;align-items:center;gap:8px;padding:8px 16px;font-size:12px;color:var(--fog);border-radius:var(--radius);cursor:default}
+.step.active{color:var(--sky-lt);font-weight:500}
+.step.done{color:var(--green)}
+.step-num{width:22px;height:22px;border-radius:50%;border:1px solid currentColor;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0}
+.step.done .step-num{background:var(--green);border-color:var(--green);color:#fff}
+.step.active .step-num{background:var(--sky);border-color:var(--sky);color:#fff}
+.step-arrow{color:var(--fog);margin:0 2px;font-size:10px}
+
+/* CARDS */
+.card{background:#FFFFFF;border:1px solid var(--border);border-radius:var(--radius-xl);padding:22px 26px;margin-bottom:18px}
+.card-title{font-size:14px;font-weight:600;margin-bottom:4px}
+.card-sub{font-size:12px;color:var(--slate);margin-bottom:18px;line-height:1.5}
+.sec-t{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--fog);margin-bottom:10px}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 15px;border-radius:var(--radius);border:1px solid var(--border-md);background:rgba(255,255,255,.06);color:var(--mist);font-family:var(--font);font-size:12px;cursor:pointer;font-weight:500;transition:all .1s;white-space:nowrap}
+.btn:hover{background:rgba(255,255,255,.1);color:var(--white)}
+.btn svg{width:13px;height:13px}
+.btn-primary{background:var(--sky);border-color:var(--sky-lt);color:#fff}
+.btn-primary:hover{background:var(--sky-lt)}
+.btn-success{background:var(--green);border-color:#38c882;color:#fff}
+.btn-success:hover{opacity:.85}
+.btn-danger{background:transparent;border-color:var(--red);color:var(--red)}
+.btn-ghost{background:transparent;border-color:transparent}
+.btn-ghost:hover{background:rgba(255,255,255,.06)}
+.btn-sm{padding:4px 10px;font-size:11px}
+.btn-xs{padding:3px 8px;font-size:11px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* DROP ZONE */
+.dropzone{border:2px dashed rgba(45,125,210,.4);border-radius:var(--radius-lg);padding:40px 24px;text-align:center;cursor:pointer;transition:all .15s;background:rgba(45,125,210,.04)}
+.dropzone:hover,.dropzone.drag{border-color:var(--sky);background:var(--sky-dim)}
+.dropzone svg{width:36px;height:36px;color:var(--fog);margin-bottom:10px}
+.dropzone-title{font-size:14px;font-weight:500;color:var(--mist);margin-bottom:4px}
+.dropzone-sub{font-size:12px;color:var(--slate)}
+.dropzone input{display:none}
+
+/* TEMPLATE DOWNLOAD */
+.tpl-box{display:flex;align-items:center;gap:14px;background:rgba(40,168,112,.06);border:1px solid rgba(40,168,112,.2);border-radius:var(--radius-lg);padding:14px 18px;margin-bottom:18px}
+.tpl-icon{width:36px;height:36px;border-radius:8px;background:rgba(40,168,112,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.tpl-icon svg{width:18px;height:18px;color:var(--green)}
+
+/* MAPPER */
+.mapper-grid{display:grid;grid-template-columns:1fr 28px 1fr;gap:0;align-items:center}
+.mapper-row{display:contents}
+.mapper-row:hover .mcol-src,.mapper-row:hover .mcol-arr,.mapper-row:hover .mcol-dst{background:rgba(255,255,255,.03)}
+.mcol-src{padding:7px 12px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--border);font-size:12px;color:var(--mist);font-family:var(--mono)}
+.mcol-arr{padding:7px 4px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--border);text-align:center;color:var(--fog);font-size:11px}
+.mcol-dst{padding:5px 8px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--border)}
+.mcol-dst select{width:100%;background:transparent;border:none;color:var(--mist);font-family:var(--font);font-size:12px;outline:none;cursor:pointer;padding:1px 0}
+.mcol-dst select option{background:var(--navy-mid)}
+.mapper-hdr{display:contents}
+.mhdr{padding:7px 12px;background:var(--navy-rim);border-bottom:1px solid var(--border);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--fog)}
+.preview-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:14px}
+.preview-table th{background:var(--navy-rim);padding:7px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--fog);border-bottom:1px solid var(--border);white-space:nowrap}
+.preview-table td{padding:6px 10px;border-bottom:1px solid var(--border);color:var(--mist);font-size:11px}
+.preview-table tr:last-child td{border-bottom:none}
+
+/* BADGES */
+.badge{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600;white-space:nowrap}
+.b-sky{background:var(--sky-dim);color:var(--sky-lt)}
+.b-green{background:var(--green-lt);color:#1a7a50}
+.b-amber{background:var(--amber-lt);color:#9a6800}
+.b-red{background:var(--red-lt);color:var(--red)}
+.b-purple{background:var(--purple-lt);color:var(--purple)}
+.b-gray{background:rgba(255,255,255,.07);color:var(--slate)}
+
+/* REVIEW TABLE */
+.review-table{width:100%;border-collapse:collapse;font-size:12px}
+.review-table th{position:sticky;top:0;background:var(--navy-mid);padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--fog);border-bottom:1px solid var(--border);font-weight:600;white-space:nowrap;z-index:2}
+.review-table td{padding:8px 12px;border-bottom:1px solid var(--border);color:var(--mist);vertical-align:top}
+.review-table tr.new-row td{background:rgba(40,168,112,.04)}
+.review-table tr.dup-exact td{background:rgba(232,160,32,.05)}
+.review-table tr.dup-fuzzy td{background:rgba(217,64,64,.04)}
+.review-table tr.skip-row td{background:rgba(255,255,255,.02);opacity:.5}
+.action-sel{display:flex;gap:4px;flex-wrap:wrap}
+.action-btn{padding:3px 9px;border-radius:var(--radius);border:1px solid var(--border-md);background:transparent;color:var(--slate);font-family:var(--font);font-size:11px;cursor:pointer;transition:all .1s}
+.action-btn:hover{color:var(--white)}
+.action-btn.sel-add{background:var(--green-lt);border-color:var(--green);color:#1a7a50}
+.action-btn.sel-update{background:var(--sky-dim);border-color:var(--sky);color:var(--sky-lt)}
+.action-btn.sel-skip{background:rgba(255,255,255,.04);border-color:var(--border-md);color:var(--slate)}
+.match-diff{font-size:11px;color:var(--slate);margin-top:3px}
+.match-diff span.changed{color:var(--amber)}
+.match-diff span.same{color:var(--fog)}
+
+/* SUMMARY */
+.summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+.sum-card{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 16px;text-align:center}
+.sum-val{font-size:26px;font-weight:600;margin-bottom:2px}
+.sum-lbl{font-size:11px;color:var(--fog)}
+
+/* PROGRESS */
+.prog-bar{height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;margin:10px 0}
+.prog-fill{height:100%;border-radius:3px;background:var(--sky);transition:width .3s}
+
+/* FORM INLINE */
+.fi-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.fi-lbl{font-size:11px;color:var(--fog);min-width:100px}
+.fi-sel{padding:6px 9px;background:rgba(255,255,255,.05);border:1px solid var(--border-md);border-radius:var(--radius);color:var(--mist);font-family:var(--font);font-size:12px;outline:none}
+.fi-sel:focus{border-color:var(--sky)}
+
+/* SCROLLABLE AREA */
+.review-wrap{max-height:460px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-lg)}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:2px}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.18)}
+
+/* ALERT */
+.alert{padding:10px 14px;border-radius:var(--radius);font-size:12px;margin-bottom:14px;display:flex;align-items:flex-start;gap:8px}
+.alert svg{width:14px;height:14px;flex-shrink:0;margin-top:1px}
+.alert-warn{background:var(--amber-lt);border:1px solid rgba(232,160,32,.3);color:#9a6800}
+.alert-info{background:var(--sky-dim);border:1px solid rgba(45,125,210,.3);color:var(--sky-lt)}
+.alert-success{background:var(--green-lt);border:1px solid rgba(40,168,112,.3);color:#1a7a50}
+
+.hidden{display:none}
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <div class="hdr-icon">
+    <svg viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.8"><path d="M2 14V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v10"/><path d="M2 14h12"/><path d="M6 7h4M6 10h2"/><path d="M8 1v3"/></svg>
+  </div>
+  <div><div class="hdr-title">Stakeholder import tool</div><div class="hdr-sub">PI Registry — import, deduplicate, and link contacts to projects</div></div>
+  <div class="hdr-sp"></div>
+  <button class="btn" onclick="window.close ? window.close() : history.back()">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 3L5 8l5 5"/></svg>
+    Back to app
+  </button>
+</div>
+
+<div class="page">
+
+  <!-- STEPS -->
+  <div class="steps">
+    <div class="step active" id="step-1"><div class="step-num">1</div>Upload file</div>
+    <div class="step-arrow">›</div>
+    <div class="step" id="step-2"><div class="step-num">2</div>Map columns</div>
+    <div class="step-arrow">›</div>
+    <div class="step" id="step-3"><div class="step-num">3</div>Review &amp; resolve</div>
+    <div class="step-arrow">›</div>
+    <div class="step" id="step-4"><div class="step-num">4</div>Import complete</div>
+  </div>
+
+  <!-- STEP 1: UPLOAD -->
+  <div id="pane-1">
+    <div class="tpl-box">
+      <div class="tpl-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg></div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:500;color:var(--green);margin-bottom:2px">Download the import template</div>
+        <div style="font-size:12px;color:var(--slate)">Use this pre-formatted CSV for fastest import — no column mapping needed. Paste your data into it, save, and upload below.</div>
+      </div>
+      <button class="btn btn-success" onclick="downloadTemplate()">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg>
+        Download template
+      </button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Upload your stakeholder file</div>
+      <div class="card-sub">Accepts CSV or Excel (.xlsx). First row must be column headers. All other formatting is handled automatically — phone numbers, capitalization, blank cells are all fine.</div>
+
+      <div class="fi-row" style="margin-bottom:16px">
+        <div class="fi-lbl">Import context</div>
+        <select class="fi-sel" id="import-context" onchange="updateContext()">
+          <option value="master">Master list only — no project link</option>
+        </select>
+      </div>
+
+      <label class="dropzone" id="dropzone" ondragover="dragOver(event)" ondragleave="dragLeave()" ondrop="dropFile(event)">
+        <input type="file" id="file-input" accept=".csv,.xlsx,.xls" onchange="fileChosen(this.files[0])">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <div class="dropzone-title">Drop your file here, or click to browse</div>
+        <div class="dropzone-sub">CSV or Excel · Max 5,000 rows</div>
+      </label>
+
+      <div id="file-status" class="hidden" style="margin-top:12px"></div>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end">
+      <button class="btn btn-primary" id="btn-to-2" onclick="goToStep(2)" disabled>
+        Next: Map columns
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- STEP 2: MAP COLUMNS -->
+  <div id="pane-2" class="hidden">
+    <div class="card">
+      <div class="card-title">Map your columns to app fields</div>
+      <div class="card-sub">Match each column from your file to the corresponding field in PI Registry. Columns you don't need can be left as "— ignore —". The app will auto-suggest matches based on column names.</div>
+
+      <div id="auto-mapped-notice" class="hidden"></div>
+
+      <div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-lg)">
+        <div class="mapper-grid" id="mapper-grid">
+          <div class="mapper-hdr"><div class="mhdr">Your column</div><div class="mhdr" style="text-align:center">→</div><div class="mhdr">App field</div></div>
+        </div>
+      </div>
+
+      <div style="margin-top:18px">
+        <div class="sec-t">Data preview (first 3 rows)</div>
+        <div style="overflow-x:auto"><table class="preview-table" id="preview-table"></table></div>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between">
+      <button class="btn" onclick="goToStep(1)">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3l-5 5 5 5"/></svg>
+        Back
+      </button>
+      <button class="btn btn-primary" id="btn-to-3" onclick="goToStep(3)">
+        Next: Review duplicates
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- STEP 3: REVIEW -->
+  <div id="pane-3" class="hidden">
+    <div class="card">
+      <div class="card-title">Batch review &amp; duplicate resolution</div>
+      <div class="card-sub">Each row from your file has been checked against the master stakeholder list. Review the results below and choose an action for each row. When you're satisfied, click Import.</div>
+
+      <div id="review-summary" style="margin-bottom:16px"></div>
+
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <span style="font-size:12px;color:var(--fog)">Bulk set:</span>
+        <button class="btn btn-sm" onclick="bulkAction('new','add')">All new → Add</button>
+        <button class="btn btn-sm" onclick="bulkAction('exact','skip')">All exact dupes → Skip</button>
+        <button class="btn btn-sm" onclick="bulkAction('exact','update')">All exact dupes → Update</button>
+        <button class="btn btn-sm" onclick="bulkAction('fuzzy','skip')">All fuzzy → Skip</button>
+        <div style="flex:1"></div>
+        <select class="fi-sel" id="review-filter" onchange="renderReviewTable()">
+          <option value="">Show all</option>
+          <option value="new">New only</option>
+          <option value="exact">Exact duplicates</option>
+          <option value="fuzzy">Fuzzy matches</option>
+        </select>
+      </div>
+
+      <div class="review-wrap">
+        <table class="review-table">
+          <thead><tr>
+            <th style="width:24px">#</th>
+            <th>Imported contact</th>
+            <th style="width:100px">Match type</th>
+            <th>Existing record / differences</th>
+            <th style="width:130px">Action</th>
+          </tr></thead>
+          <tbody id="review-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <button class="btn" onclick="goToStep(2)">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3l-5 5 5 5"/></svg>
+        Back
+      </button>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span id="import-count-label" style="font-size:12px;color:var(--slate)"></span>
+        <button class="btn btn-primary" id="btn-import" onclick="runImport()">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg>
+          Import selected
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 4: COMPLETE -->
+  <div id="pane-4" class="hidden">
+    <div class="card" style="text-align:center;padding:40px">
+      <div style="width:56px;height:56px;border-radius:50%;background:var(--green-lt);border:2px solid var(--green);display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5"><path d="M4 12l6 6L20 6"/></svg>
+      </div>
+      <div style="font-size:20px;font-weight:600;margin-bottom:6px">Import complete</div>
+      <div style="font-size:13px;color:var(--slate);margin-bottom:24px" id="complete-msg"></div>
+      <div class="summary-grid" id="complete-summary"></div>
+      <div style="display:flex;gap:10px;justify-content:center;margin-top:8px">
+        <button class="btn btn-primary" onclick="resetImport()">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 8a7 7 0 1 1 2.1 5.1"/><path d="M1 14V8h6"/></svg>
+          Import another file
+        </button>
+        <button class="btn btn-success" onclick="goToApp()">
+          Open PI Registry
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── SUPABASE CONFIG ────────────────────────────────────────────
+const SUPA_URL = 'https://ncfbblhlsiglxkoiounv.supabase.co';
+const SUPA_REST = SUPA_URL + '/rest/v1';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5jZmJibGhsc2lnbHhrb2lvdW52Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0MTUzOTMsImV4cCI6MjA5NDk5MTM5M30.-fRI1QGkr1teN0sFvl25Uq7U38Jq1SAc6heIJvOud2Q';
+const SUPA_HEADERS = {
+  'Content-Type': 'application/json',
+  'apikey': SUPA_KEY,
+  'Authorization': 'Bearer ' + SUPA_KEY,
+  'Prefer': 'return=representation',
+  'X-Client-Info': 'supabase-js/2.0.0'
+};
+
+const SB_TABLES = {
+  projects:             'pi_projects',
+  stakeholders:         'pi_stakeholders',
+  project_stakeholders: 'pi_project_stakeholders'
+};
+
+const SB_TO_INT = {
+  pi_projects: {
+    id:'id', name:'name', pid:'pid', client:'client', type:'project_type',
+    county:'county', phase:'phase', status:'status', startDate:'start_date',
+    endDate:'end_date', preconDate:'precon_date', notes:'notes'
+  },
+  pi_stakeholders: {
+    id:'id', firstName:'first_name', lastName:'last_name', org:'org',
+    title:'title', email:'email', phone:'phone', address:'address',
+    parcelId:'parcel_id', type:'stakeholder_type', influenceTier:'influence_tier',
+    prefContact:'pref_contact', isMaster:'is_master', isAnonymous:'is_anonymous',
+    notes:'notes'
+  },
+  pi_project_stakeholders: {
+    id:'id', projectId:'project_id', stakeholderId:'stakeholder_id',
+    stakeholderRole:'stakeholder_role', support:'support',
+    distributionGroups:'distribution_groups', issueTags:'issue_tags',
+    addedDate:'added_date', notes:'notes'
+  }
+};
+
+function toSB(table, obj) {
+  const sbTable = SB_TABLES[table];
+  const map = SB_TO_INT[sbTable];
+  const result = {};
+  for (const [intKey, sbCol] of Object.entries(map)) {
+    if (intKey === 'id') continue;
+    if (obj[intKey] !== undefined && obj[intKey] !== null) result[sbCol] = obj[intKey];
+  }
+  return result;
+}
+
+function fromSB(table, row) {
+  const sbTable = SB_TABLES[table];
+  const map = SB_TO_INT[sbTable];
+  const result = {};
+  for (const [intKey, sbCol] of Object.entries(map)) {
+    if (intKey === 'id') { result.id = String(row.id || ''); continue; }
+    result[intKey] = row[sbCol] !== undefined ? row[sbCol] : (intKey.startsWith('is') ? false : '');
+  }
+  ['isMaster','isAnonymous'].forEach(f => {
+    if (result[f] !== undefined) result[f] = result[f] === true || result[f] === 1;
+  });
+  return result;
+}
+
+async function sbGet(table) {
+  const sbTable = SB_TABLES[table];
+  const r = await fetch(SUPA_REST + '/' + sbTable + '?select=*&order=id.asc&limit=5000', { headers: SUPA_HEADERS });
+  if (!r.ok) { console.error('SB GET error:', r.status, table); return []; }
+  const rows = await r.json();
+  return rows.map(row => fromSB(table, row));
+}
+
+async function sbAdd(table, obj) {
+  const sbTable = SB_TABLES[table];
+  const body = toSB(table, obj);
+  const r = await fetch(SUPA_REST + '/' + sbTable, {
+    method: 'POST', headers: SUPA_HEADERS, body: JSON.stringify(body)
+  });
+  if (!r.ok) { const e = await r.text(); console.error('SB ADD error:', r.status, e); return null; }
+  const rows = await r.json();
+  return rows[0] ? String(rows[0].id) : null;
+}
+
+async function sbUpdate(table, sbId, obj) {
+  const sbTable = SB_TABLES[table];
+  const body = toSB(table, obj);
+  const r = await fetch(SUPA_REST + '/' + sbTable + '?id=eq.' + sbId, {
+    method: 'PATCH', headers: SUPA_HEADERS, body: JSON.stringify(body)
+  });
+  if (!r.ok) { console.error('SB UPDATE error:', r.status); return false; }
+  return true;
+}
+
+// ── IN-MEMORY CACHE (for this session) ────────────────────────
+const _cache = {};
+async function cacheLoad(table) {
+  if (!_cache[table]) _cache[table] = await sbGet(table);
+  return _cache[table].slice();
+}
+function cacheClear(table) { delete _cache[table]; }
+
+// ── DB SHIM ────────────────────────────────────────────────────
+const DB = {
+  uid() { return 'tmp_' + Date.now().toString(36) + Math.random().toString(36).slice(2,5); }
+};
+
+// ── APP FIELDS ────────────────────────────────────────────────
+const APP_FIELDS = [
+  {key:'ignore',    label:'— ignore —'},
+  {key:'firstName', label:'First name *'},
+  {key:'lastName',  label:'Last name *'},
+  {key:'fullName',  label:'Full name (split on import)'},
+  {key:'org',       label:'Organization'},
+  {key:'title',     label:'Title / role'},
+  {key:'email',     label:'Email'},
+  {key:'phone',     label:'Phone'},
+  {key:'address',   label:'Mailing address'},
+  {key:'type',      label:'Stakeholder type'},
+  {key:'influenceTier', label:'Influence tier'},
+  {key:'prefContact',   label:'Preferred contact'},
+  {key:'support',   label:'Support level (project)'},
+  {key:'issueTags', label:'Issue tags'},
+  {key:'notes',     label:'Notes'},
+  {key:'isMaster',  label:'Master list (yes/no)'},
+];
+
+// Auto-suggest map: common column name fragments → field key
+const AUTO_MAP = {
+  'first':      'firstName',
+  'fname':      'firstName',
+  'last':       'lastName',
+  'lname':      'lastName',
+  'full name':  'fullName',
+  'name':       'fullName',
+  'org':        'org',
+  'company':    'org',
+  'agency':     'org',
+  'firm':       'org',
+  'title':      'title',
+  'role':       'title',
+  'position':   'title',
+  'email':      'email',
+  'e-mail':     'email',
+  'mail':       'email',
+  'phone':      'phone',
+  'cell':       'phone',
+  'mobile':     'phone',
+  'tel':        'phone',
+  'fax':        'ignore',
+  'address':    'address',
+  'street':     'address',
+  'type':       'type',
+  'category':   'type',
+  'tier':       'influenceTier',
+  'influence':  'influenceTier',
+  'support':    'support',
+  'sentiment':  'support',
+  'stance':     'support',
+  'position':   'support',
+  'tag':        'issueTags',
+  'issue':      'issueTags',
+  'concern':    'issueTags',
+  'note':       'notes',
+  'comment':    'notes',
+  'master':     'isMaster',
+  'preferred':  'prefContact',
+  'pref':       'prefContact',
+};
+
+// ── STATE ─────────────────────────────────────────────────────
+let state = {
+  step: 1,
+  file: null,
+  rawHeaders: [],
+  rawRows: [],      // array of arrays
+  columnMap: {},    // colIndex → field key
+  importContext: 'master',
+  selectedProject: null,
+  parsed: [],       // array of {firstName,lastName,email,phone,...}
+  reviewed: [],     // array of {row, matchType, matchId, action, diffs}
+  existingStakeholders: [],  // loaded from Supabase when entering step 3
+};
+
+// ── UTIL ──────────────────────────────────────────────────────
+function normalizePhone(p) {
+  if (!p) return '';
+  const digits = String(p).replace(/\D/g, '');
+  return digits.length === 11 && digits[0] === '1' ? digits.slice(1) : digits.length === 10 ? digits : digits;
+}
+function normalizeName(s) { return (s||'').trim().toLowerCase().replace(/\s+/g,' '); }
+function normalizeEmail(s) { return (s||'').trim().toLowerCase(); }
+function normalizeSupportLevel(s) {
+  const v = (s||'').toLowerCase();
+  if (['champion','support','supportive','yes','favorable','pro','for'].some(x=>v.includes(x))) return 'Champion';
+  if (['opponent','oppose','against','no','opposition','anti'].some(x=>v.includes(x))) return 'Opponent';
+  return 'Neutral';
+}
+function normalizeTier(s) {
+  const v = (s||'').toLowerCase();
+  if (v.includes('high')||v==='h'||v==='3') return 'High';
+  if (v.includes('low')||v==='l'||v==='1') return 'Low';
+  return 'Medium';
+}
+function normalizeType(s) {
+  const v = (s||'').toLowerCase();
+  if (v.includes('elect')||v.includes('council')||v.includes('mayor')||v.includes('commissioner')) return 'Elected Official';
+  if (v.includes('agency')||v.includes('government')||v.includes('dept')||v.includes('department')) return 'Agency';
+  if (v.includes('media')||v.includes('press')||v.includes('reporter')||v.includes('journal')) return 'Media';
+  if (v.includes('community')||v.includes('assoc')||v.includes('group')||v.includes('org')) return 'Community Group';
+  if (v.includes('business group')||v.includes('chamber')) return 'Business Group';
+  if (v.includes('business')||v.includes('company')||v.includes('corp')) return 'Business';
+  if (v.includes('resident')||v.includes('homeowner')) return 'Resident';
+  if (v.includes('property')||v.includes('owner')) return 'Property Owner';
+  return s || 'Other';
+}
+function splitFullName(full) {
+  const parts = (full||'').trim().split(/\s+/);
+  if (parts.length === 0) return { firstName: '', lastName: '' };
+  if (parts.length === 1) return { firstName: parts[0], lastName: '' };
+  return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
+}
+function autoSuggest(header) {
+  const h = header.toLowerCase().replace(/[^a-z0-9 ]/g,'').trim();
+  for (const [frag, key] of Object.entries(AUTO_MAP)) {
+    if (h.includes(frag)) return key;
+  }
+  return 'ignore';
+}
+function fmt(d){if(!d)return'—';return new Date(d+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
+
+// ── TEMPLATE DOWNLOAD ─────────────────────────────────────────
+function downloadTemplate() {
+  const headers = ['FirstName','LastName','Organization','Title','Email','Phone','MailingAddress','StakeholderType','InfluenceTier','PreferredContact','SupportLevel','IssueTags','Notes','IsMasterList'];
+  const example1 = ['Maria','Santos','Riverside Residents Assoc.','President','msantos@rra.org','(951) 555-0211','123 Main St, Riverside CA','Community Group','High','Email','Opponent','Noise,Night work','Formal comment filed','Yes'];
+  const example2 = ['Tom','Barker','Barker Plumbing Supply','Owner','tom@barkerplumbing.com','(951) 555-0077','889 SR-12 Millbrook CA','Business','Medium','Email','Neutral','Access','Delivery truck concern','No'];
+  const example3 = ['Dana','Chu','Inland Valley Daily Bulletin','Staff Reporter','dchu@ivdb.com','','','Media','Medium','Email','','','','No'];
+  const csv = [headers, example1, example2, example3].map(r => r.map(v => `"${v}"`).join(',')).join('\r\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'PI_Registry_Stakeholder_Import_Template.csv';
+  a.click();
+}
+
+// ── PROJECT POPULATION ────────────────────────────────────────
+async function populateProjectSelect() {
+  const projs = await cacheLoad('projects');
+  // Check if the main app signalled a project pre-selection via BroadcastChannel or URL param
+  const params = new URLSearchParams(window.location.search);
+  const preselect = params.get('project') || '';
+  const sel = document.getElementById('import-context');
+  sel.innerHTML = '<option value="master">Master list only — no project link</option>' +
+    projs.map(p => `<option value="${p.id}"${p.id===preselect?' selected':''}>${p.pid} — ${p.name}</option>`).join('');
+  if (preselect) {
+    state.importContext = preselect;
+    state.selectedProject = preselect;
+  }
+}
+function updateContext() {
+  const val = document.getElementById('import-context').value;
+  state.importContext = val === 'master' ? 'master' : val;
+  state.selectedProject = val === 'master' ? null : val;
+}
+populateProjectSelect();
+
+// ── DRAG AND DROP ─────────────────────────────────────────────
+function dragOver(e) { e.preventDefault(); document.getElementById('dropzone').classList.add('drag'); }
+function dragLeave() { document.getElementById('dropzone').classList.remove('drag'); }
+function dropFile(e) {
+  e.preventDefault();
+  document.getElementById('dropzone').classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if (f) fileChosen(f);
+}
+
+// ── FILE HANDLING ─────────────────────────────────────────────
+function fileChosen(file) {
+  if (!file) return;
+  state.file = file;
+  const ext = file.name.split('.').pop().toLowerCase();
+  const status = document.getElementById('file-status');
+  status.className = '';
+  status.innerHTML = `<div class="alert alert-info"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v4M8 11v1"/></svg>Reading <strong>${file.name}</strong>…</div>`;
+  if (ext === 'csv') {
+    const reader = new FileReader();
+    reader.onload = e => parseCSV(e.target.result);
+    reader.readAsText(file);
+  } else if (ext === 'xlsx' || ext === 'xls') {
+    const reader = new FileReader();
+    reader.onload = e => parseXLSX(e.target.result);
+    reader.readAsArrayBuffer(file);
+  } else {
+    status.innerHTML = `<div class="alert alert-warn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v4M8 11v1"/></svg>Unsupported file type. Please use CSV or Excel (.xlsx).</div>`;
+  }
+}
+
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  const rows = lines.map(line => {
+    const cells = []; let cur = '', inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === '"') { inQ = !inQ; }
+      else if (line[i] === ',' && !inQ) { cells.push(cur.trim()); cur = ''; }
+      else cur += line[i];
+    }
+    cells.push(cur.trim());
+    return cells;
+  });
+  if (rows.length < 2) { showFileError('File appears empty or has only one row.'); return; }
+  state.rawHeaders = rows[0];
+  state.rawRows = rows.slice(1).filter(r => r.some(c => c));
+  onFileParsed();
+}
+
+function parseXLSX(buffer) {
+  try {
+    const wb = XLSX.read(buffer, {type:'arraybuffer'});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_array(ws);
+    if (!data || data.length < 2) { showFileError('Sheet appears empty.'); return; }
+    state.rawHeaders = (data[0]||[]).map(c => String(c||''));
+    state.rawRows = data.slice(1).filter(r => r && r.some(c => c != null && c !== ''));
+    state.rawRows = state.rawRows.map(r => r.map(c => c == null ? '' : String(c)));
+    onFileParsed();
+  } catch(e) { showFileError('Could not read Excel file: '+e.message); }
+}
+
+function showFileError(msg) {
+  document.getElementById('file-status').innerHTML = `<div class="alert alert-warn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v4M8 11v1"/></svg>${msg}</div>`;
+}
+
+function onFileParsed() {
+  const { rawHeaders, rawRows, file } = state;
+  document.getElementById('file-status').innerHTML = `<div class="alert alert-success"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8l4 4 6-6"/></svg>Loaded <strong>${file.name}</strong> — ${rawRows.length} rows, ${rawHeaders.length} columns detected.</div>`;
+  document.getElementById('btn-to-2').disabled = false;
+  // Build auto column map
+  state.columnMap = {};
+  rawHeaders.forEach((h, i) => { state.columnMap[i] = autoSuggest(h); });
+}
+
+// ── STEP NAVIGATION ───────────────────────────────────────────
+async function goToStep(n) {
+  if (n === 2 && state.rawRows.length === 0) return;
+  if (n === 3) {
+    buildParsed();
+    // Show loading state while fetching stakeholders from Supabase
+    document.getElementById('pane-3').classList.remove('hidden');
+    document.getElementById('review-tbody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--fog)">Loading stakeholder data…</td></tr>';
+    state.existingStakeholders = await cacheLoad('stakeholders');
+    buildReview();
+  }
+  state.step = n;
+  [1,2,3,4].forEach(i => {
+    document.getElementById('pane-'+i).classList.toggle('hidden', i !== n);
+    const s = document.getElementById('step-'+i);
+    s.classList.remove('active','done');
+    if (i < n) s.classList.add('done');
+    else if (i === n) s.classList.add('active');
+  });
+  if (n === 2) buildMapper();
+}
+
+// ── MAPPER ────────────────────────────────────────────────────
+function buildMapper() {
+  const { rawHeaders, rawRows, columnMap } = state;
+  const grid = document.getElementById('mapper-grid');
+  // Remove all but header row
+  while (grid.children.length > 3) grid.removeChild(grid.lastChild);
+
+  const autoCount = rawHeaders.filter((h,i) => columnMap[i] !== 'ignore').length;
+  const notice = document.getElementById('auto-mapped-notice');
+  if (autoCount > 0) {
+    notice.className = 'alert alert-info';
+    notice.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v4M8 11v1"/></svg>${autoCount} column${autoCount!==1?'s were':' was'} auto-matched based on header names. Review and adjust as needed.`;
+  } else {
+    notice.className = 'hidden';
+  }
+
+  rawHeaders.forEach((h, i) => {
+    const srcDiv = document.createElement('div');
+    srcDiv.className = 'mcol-src';
+    srcDiv.textContent = h;
+
+    const arrDiv = document.createElement('div');
+    arrDiv.className = 'mcol-arr';
+    arrDiv.textContent = '→';
+
+    const dstDiv = document.createElement('div');
+    dstDiv.className = 'mcol-dst';
+    const sel = document.createElement('select');
+    sel.innerHTML = APP_FIELDS.map(f => `<option value="${f.key}"${columnMap[i]===f.key?' selected':''}>${f.label}</option>`).join('');
+    sel.addEventListener('change', () => { state.columnMap[i] = sel.value; updatePreview(); });
+    dstDiv.appendChild(sel);
+
+    grid.appendChild(srcDiv);
+    grid.appendChild(arrDiv);
+    grid.appendChild(dstDiv);
+  });
+  updatePreview();
+}
+
+function updatePreview() {
+  const { rawHeaders, rawRows, columnMap } = state;
+  const tbl = document.getElementById('preview-table');
+  const mapped = rawHeaders.map((h,i) => ({col: i, header: h, field: columnMap[i]})).filter(x => x.field !== 'ignore');
+  if (mapped.length === 0) { tbl.innerHTML = '<tr><td style="color:var(--fog);padding:10px">No columns mapped yet.</td></tr>'; return; }
+  const head = '<thead><tr>'+mapped.map(m=>`<th>${m.header} → ${APP_FIELDS.find(f=>f.key===m.field)?.label||m.field}</th>`).join('')+'</tr></thead>';
+  const rows = rawRows.slice(0,3).map(r=>'<tr>'+mapped.map(m=>`<td>${r[m.col]||'—'}</td>`).join('')+'</tr>').join('');
+  tbl.innerHTML = head + '<tbody>'+rows+'</tbody>';
+}
+
+// ── PARSED ROWS ───────────────────────────────────────────────
+function buildParsed() {
+  const { rawRows, columnMap } = state;
+  state.parsed = rawRows.map((row, rowIdx) => {
+    const obj = { _rowIdx: rowIdx };
+    Object.entries(columnMap).forEach(([ci, field]) => {
+      if (field === 'ignore') return;
+      const val = (row[ci]||'').trim();
+      if (!val) return;
+      if (field === 'fullName') {
+        const {firstName, lastName} = splitFullName(val);
+        obj.firstName = obj.firstName || firstName;
+        obj.lastName  = obj.lastName  || lastName;
+      } else if (field === 'phone') {
+        obj.phone = normalizePhone(val);
+      } else if (field === 'email') {
+        obj.email = normalizeEmail(val);
+      } else if (field === 'support') {
+        obj.support = normalizeSupportLevel(val);
+      } else if (field === 'influenceTier') {
+        obj.influenceTier = normalizeTier(val);
+      } else if (field === 'type') {
+        obj.type = normalizeType(val);
+      } else if (field === 'isMaster') {
+        obj.isMaster = /^(yes|true|1|y)$/i.test(val);
+      } else {
+        obj[field] = val;
+      }
+    });
+    // Normalize name casing
+    if (obj.firstName) obj.firstName = obj.firstName.charAt(0).toUpperCase()+obj.firstName.slice(1);
+    if (obj.lastName)  obj.lastName  = obj.lastName.charAt(0).toUpperCase()+obj.lastName.slice(1);
+    return obj;
+  }).filter(r => r.firstName || r.lastName);
+}
+
+// ── DUPLICATE DETECTION ───────────────────────────────────────
+function buildReview() {
+  const existing = state.existingStakeholders || [];
+  state.reviewed = state.parsed.map(row => {
+    let matchType = 'new', matchId = null, diffs = [];
+    // 1. Email match (high confidence)
+    if (row.email) {
+      const em = existing.find(e => normalizeEmail(e.email) === row.email);
+      if (em) { matchType = 'exact'; matchId = em.id; diffs = getDiffs(row, em); }
+    }
+    // 2. Phone match (high confidence)
+    if (matchType === 'new' && row.phone && row.phone.length >= 10) {
+      const ph = existing.find(e => normalizePhone(e.phone) === row.phone);
+      if (ph) { matchType = 'exact'; matchId = ph.id; diffs = getDiffs(row, ph); }
+    }
+    // 3. Name + Org fuzzy match
+    if (matchType === 'new' && row.firstName && row.lastName) {
+      const fn = normalizeName(row.firstName), ln = normalizeName(row.lastName);
+      const nameMatch = existing.filter(e => normalizeName(e.firstName) === fn && normalizeName(e.lastName) === ln);
+      if (nameMatch.length > 0) {
+        const best = row.org ? nameMatch.find(e => normalizeName(e.org||'') === normalizeName(row.org)) || nameMatch[0] : nameMatch[0];
+        matchType = 'fuzzy'; matchId = best.id; diffs = getDiffs(row, best);
+      }
+    }
+    return { row, matchType, matchId, action: matchType === 'new' ? 'add' : matchType === 'exact' ? 'skip' : 'review', diffs };
+  });
+  renderReviewTable();
+  updateImportCount();
+}
+
+function getDiffs(incoming, existing) {
+  const fields = ['firstName','lastName','org','title','email','phone','address','type','influenceTier','prefContact','notes'];
+  return fields.map(f => {
+    const iv = (incoming[f]||'').toString().trim();
+    const ev = (existing[f]||'').toString().trim();
+    if (!iv) return null;
+    return { field: f, incoming: iv, existing: ev, changed: iv.toLowerCase() !== ev.toLowerCase() };
+  }).filter(Boolean);
+}
+
+// ── REVIEW TABLE ──────────────────────────────────────────────
+function renderReviewTable() {
+  const filter = document.getElementById('review-filter')?.value || '';
+  const tbody = document.getElementById('review-tbody');
+  const existing = state.existingStakeholders || [];
+  let items = state.reviewed;
+  if (filter) items = items.filter(r => r.matchType === filter || (filter === 'new' && r.matchType === 'new'));
+
+  tbody.innerHTML = items.map((r, displayIdx) => {
+    const { row, matchType, matchId, action, diffs } = r;
+    const realIdx = state.reviewed.indexOf(r);
+    const ex = matchId ? existing.find(e => e.id === matchId) : null;
+    const rowClass = action === 'skip' ? 'skip-row' : matchType === 'new' ? 'new-row' : matchType === 'exact' ? 'dup-exact' : 'dup-fuzzy';
+
+    const contactHTML = `<div style="font-weight:500">${row.firstName||''} ${row.lastName||''}</div>
+      ${row.org ? `<div style="font-size:11px;color:var(--slate)">${row.org}${row.title?' · '+row.title:''}</div>` : ''}
+      <div style="font-size:11px;color:var(--fog);margin-top:2px">
+        ${row.email?`<span style="margin-right:8px">✉ ${row.email}</span>`:''}
+        ${row.phone?`<span>☎ ${formatPhone(row.phone)}</span>`:''}
+        ${!row.email&&!row.phone?'<span style="color:var(--red)">⚠ No email or phone</span>':''}
+      </div>`;
+
+    const matchBadge = matchType === 'new'
+      ? '<span class="badge b-green">New</span>'
+      : matchType === 'exact'
+      ? '<span class="badge b-amber">Exact match</span>'
+      : '<span class="badge b-red">Fuzzy match</span>';
+
+    const existingHTML = ex ? `<div style="font-weight:500;font-size:12px">${ex.firstName} ${ex.lastName}</div>
+      ${ex.org?`<div style="font-size:11px;color:var(--slate)">${ex.org}</div>`:''}
+      <div class="match-diff">${diffs.filter(d=>d.changed).slice(0,3).map(d=>`<span class="changed">▲ ${d.field}: "${d.incoming}" vs "${d.existing}"</span><br>`).join('')}
+      ${diffs.filter(d=>!d.changed).slice(0,2).map(d=>`<span class="same">✓ ${d.field} matches</span><br>`).join('')}</div>` : '—';
+
+    const actions = matchType === 'new'
+      ? `<div class="action-sel">
+          <button class="action-btn ${action==='add'?'sel-add':''}" onclick="setAction(${realIdx},'add')">Add</button>
+          <button class="action-btn ${action==='skip'?'sel-skip':''}" onclick="setAction(${realIdx},'skip')">Skip</button>
+        </div>`
+      : `<div class="action-sel">
+          <button class="action-btn ${action==='skip'?'sel-skip':''}" onclick="setAction(${realIdx},'skip')">Skip</button>
+          <button class="action-btn ${action==='update'?'sel-update':''}" onclick="setAction(${realIdx},'update')">Update</button>
+          <button class="action-btn ${action==='add'?'sel-add':''}" onclick="setAction(${realIdx},'add')">Add as new</button>
+        </div>`;
+
+    return `<tr class="${rowClass}" id="rrow-${realIdx}">
+      <td style="color:var(--fog);font-size:11px">${realIdx+1}</td>
+      <td>${contactHTML}</td>
+      <td>${matchBadge}</td>
+      <td>${existingHTML}</td>
+      <td>${actions}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--fog)">No rows match this filter.</td></tr>`;
+
+  updateReviewSummary();
+  updateImportCount();
+}
+
+function formatPhone(p) {
+  if (!p || p.length !== 10) return p;
+  return `(${p.slice(0,3)}) ${p.slice(3,6)}-${p.slice(6)}`;
+}
+
+function setAction(idx, action) {
+  state.reviewed[idx].action = action;
+  renderReviewTable();
+}
+
+function bulkAction(matchType, action) {
+  state.reviewed.forEach(r => { if (r.matchType === matchType) r.action = action; });
+  renderReviewTable();
+}
+
+function updateReviewSummary() {
+  const r = state.reviewed;
+  const newCt = r.filter(x=>x.matchType==='new').length;
+  const exactCt = r.filter(x=>x.matchType==='exact').length;
+  const fuzzyCt = r.filter(x=>x.matchType==='fuzzy').length;
+  const addCt = r.filter(x=>x.action==='add').length;
+  const updateCt = r.filter(x=>x.action==='update').length;
+  const skipCt = r.filter(x=>x.action==='skip').length;
+  document.getElementById('review-summary').innerHTML = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <span class="badge b-green">${newCt} new contacts</span>
+      <span class="badge b-amber">${exactCt} exact duplicates</span>
+      <span class="badge b-red">${fuzzyCt} fuzzy matches</span>
+      <span style="margin-left:auto;font-size:12px;color:var(--slate)">Actions: ${addCt} add · ${updateCt} update · ${skipCt} skip</span>
+    </div>`;
+}
+
+function updateImportCount() {
+  const toProcess = state.reviewed.filter(r => r.action !== 'skip').length;
+  document.getElementById('import-count-label').textContent = `${toProcess} contact${toProcess!==1?'s':''} will be imported`;
+}
+
+// ── RUN IMPORT ────────────────────────────────────────────────
+async function runImport() {
+  // Disable button to prevent double-submit
+  const btn = document.getElementById('btn-import');
+  btn.disabled = true;
+  btn.textContent = 'Importing…';
+
+  let added=0, updated=0, linked=0, skipped=0;
+
+  // Load current project_stakeholders to check for existing links
+  const existingLinks = await cacheLoad('project_stakeholders');
+
+  for (const r of state.reviewed) {
+    const { row, matchType, matchId, action } = r;
+    if (action === 'skip') { skipped++; continue; }
+
+    let stakeholderId;
+
+    if (action === 'add') {
+      const newS = {
+        id: DB.uid(),
+        firstName: row.firstName || '',
+        lastName:  row.lastName  || '',
+        org:       row.org       || '',
+        title:     row.title     || '',
+        email:     row.email     || '',
+        phone:     row.phone ? formatPhone(row.phone) : '',
+        address:   row.address   || '',
+        type:      row.type      || 'Other',
+        influenceTier: row.influenceTier || 'Medium',
+        prefContact:   row.prefContact   || 'Email',
+        isMaster:  row.isMaster !== undefined ? row.isMaster : true,
+        isAnonymous: false,
+        notes:     row.notes     || '',
+      };
+      const newId = await sbAdd('stakeholders', newS);
+      stakeholderId = newId || newS.id;
+      if (newId) added++;
+
+    } else if (action === 'update' && matchId) {
+      const fields = ['org','title','email','phone','address','type','influenceTier','prefContact','notes'];
+      const updateObj = {};
+      fields.forEach(f => { if (row[f]) updateObj[f] = f==='phone' ? formatPhone(row[f]) : row[f]; });
+      await sbUpdate('stakeholders', matchId, updateObj);
+      stakeholderId = matchId;
+      updated++;
+
+    } else {
+      stakeholderId = matchId;
+    }
+
+    // Link to project if context selected
+    if (stakeholderId && state.selectedProject) {
+      const alreadyLinked = existingLinks.find(x => x.projectId === state.selectedProject && x.stakeholderId === stakeholderId);
+      if (!alreadyLinked) {
+        await sbAdd('project_stakeholders', {
+          id: DB.uid(),
+          projectId: state.selectedProject,
+          stakeholderId,
+          support: row.support || 'Neutral',
+          issueTags: row.issueTags || '',
+          addedDate: new Date().toISOString().slice(0,10),
+          notes: 'Imported via stakeholder import tool.'
+        });
+        linked++;
+      }
+    }
+  }
+
+  // Clear caches so the main app gets fresh data on next load
+  cacheClear('stakeholders');
+  cacheClear('project_stakeholders');
+
+  // Signal completion to the main app window via BroadcastChannel
+  try {
+    const proj = state.selectedProject ? (await cacheLoad('projects')).find(p=>p.id===state.selectedProject) : null;
+    const resultMsg = `${added+updated} contact${added+updated!==1?'s':''} imported${proj?' → '+proj.name:' to master list'}.`;
+    const bc = new BroadcastChannel('pi_registry');
+    bc.postMessage({ type: 'import_complete', message: resultMsg });
+    bc.close();
+  } catch(e) { /* BroadcastChannel not available — no signal needed */ }
+
+  // Show complete screen
+  const projName = state.selectedProject ? ((await cacheLoad('projects')).find(p=>p.id===state.selectedProject)||{}).name : null;
+  document.getElementById('complete-msg').textContent = `${added+updated} contact${added+updated!==1?'s':''} imported to the master list${projName?' and linked to '+projName:''}.`;
+  document.getElementById('complete-summary').innerHTML = `
+    <div class="sum-card"><div class="sum-val" style="color:var(--green)">${added}</div><div class="sum-lbl">Added new</div></div>
+    <div class="sum-card"><div class="sum-val" style="color:var(--sky-lt)">${updated}</div><div class="sum-lbl">Updated</div></div>
+    <div class="sum-card"><div class="sum-val" style="color:var(--purple)">${linked}</div><div class="sum-lbl">Project links</div></div>
+    <div class="sum-card"><div class="sum-val" style="color:var(--fog)">${skipped}</div><div class="sum-lbl">Skipped</div></div>`;
+  goToStep(4);
+}
+
+function resetImport() {
+  state = { step:1, file:null, rawHeaders:[], rawRows:[], columnMap:{}, importContext:'master', selectedProject:null, parsed:[], reviewed:[], existingStakeholders:[] };
+  document.getElementById('file-status').className = 'hidden';
+  document.getElementById('file-input').value = '';
+  document.getElementById('btn-to-2').disabled = true;
+  populateProjectSelect();
+  goToStep(1);
+}
+
+function goToApp() {
+  // Try to open/focus the main app — works if opened from same browser tab
+  if (window.opener) window.opener.focus();
+  else alert('Switch back to the PI Registry tab in your browser.');
+}
+</script>
+</body>
+</html>

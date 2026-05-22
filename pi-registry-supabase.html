@@ -770,7 +770,9 @@ function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.mast
   S.view=v;S.selStakeholder=null;S.selInteraction=null;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const nb=document.getElementById('nav-'+v);if(nb)nb.classList.add('active');
-  async function initApp(){
+  render();
+}
+async function initApp(){
   try{
     await loadAllData();
     refreshBadges();
@@ -781,7 +783,6 @@ function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.mast
   }
 }
 initApp();
-}
 function filterByProject(pid){S.projectFilter=pid;S.selStakeholder=null;render()}
 function refreshBadges(){
   const all=DB.get('stakeholders');

@@ -775,7 +775,7 @@ async function loadAllData() {
 const DB = {
   get(k) { return _syncCache[k] || []; },
   set(k, arr) {
-    const old = _syncCache[k] || [];
+    const old = (_syncCache[k] || []).slice();
     _syncCache[k] = arr;
     DB._sync(k, old, arr);
   },

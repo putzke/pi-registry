@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://ncfbblhlsiglxkoiounv.supabase.co; img-src 'self' data:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PI Registry — Stakeholder Import Tool</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -335,13 +336,35 @@ body{padding:0}
 const SUPA_URL = 'https://ncfbblhlsiglxkoiounv.supabase.co';
 const SUPA_REST = SUPA_URL + '/rest/v1';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5jZmJibGhsc2lnbHhrb2lvdW52Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0MTUzOTMsImV4cCI6MjA5NDk5MTM5M30.-fRI1QGkr1teN0sFvl25Uq7U38Jq1SAc6heIJvOud2Q';
-const SUPA_HEADERS = {
-  'Content-Type': 'application/json',
-  'apikey': SUPA_KEY,
-  'Authorization': 'Bearer ' + SUPA_KEY,
-  'Prefer': 'return=representation',
-  'X-Client-Info': 'supabase-js/2.0.0'
-};
+
+// ── AUTH: read token from URL param (passed by parent app) ──────
+function sanitizeHTML(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function getImporterToken() {
+  // Prefer URL param (passed from parent), fall back to sessionStorage, then anon key
+  const urlToken = new URLSearchParams(window.location.search).get('token');
+  if (urlToken) return urlToken;
+  try {
+    const s = sessionStorage.getItem('pi_session');
+    if (s) { const d = JSON.parse(s); if (d.access_token) return d.access_token; }
+  } catch(e) {}
+  return SUPA_KEY;
+}
+
+function getAuthHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'apikey': SUPA_KEY,
+    'Authorization': 'Bearer ' + getImporterToken(),
+    'Prefer': 'return=representation',
+    'X-Client-Info': 'supabase-js/2.0.0'
+  };
+}
 
 const SB_TABLES = {
   projects:             'pi_projects',
@@ -397,7 +420,7 @@ function fromSB(table, row) {
 
 async function sbGet(table) {
   const sbTable = SB_TABLES[table];
-  const r = await fetch(SUPA_REST + '/' + sbTable + '?select=*&order=id.asc&limit=5000', { headers: SUPA_HEADERS });
+  const r = await fetch(SUPA_REST + '/' + sbTable + '?select=*&order=id.asc&limit=5000', { headers: getAuthHeaders() });
   if (!r.ok) { console.error('SB GET error:', r.status, table); return []; }
   const rows = await r.json();
   return rows.map(row => fromSB(table, row));
@@ -407,7 +430,7 @@ async function sbAdd(table, obj) {
   const sbTable = SB_TABLES[table];
   const body = toSB(table, obj);
   const r = await fetch(SUPA_REST + '/' + sbTable, {
-    method: 'POST', headers: SUPA_HEADERS, body: JSON.stringify(body)
+    method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(body)
   });
   if (!r.ok) { const e = await r.text(); console.error('SB ADD error:', r.status, e); return null; }
   const rows = await r.json();
@@ -418,7 +441,7 @@ async function sbUpdate(table, sbId, obj) {
   const sbTable = SB_TABLES[table];
   const body = toSB(table, obj);
   const r = await fetch(SUPA_REST + '/' + sbTable + '?id=eq.' + sbId, {
-    method: 'PATCH', headers: SUPA_HEADERS, body: JSON.stringify(body)
+    method: 'PATCH', headers: getAuthHeaders(), body: JSON.stringify(body)
   });
   if (!r.ok) { console.error('SB UPDATE error:', r.status); return false; }
   return true;

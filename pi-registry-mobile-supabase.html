@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://ncfbblhlsiglxkoiounv.supabase.co; img-src 'self' data:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://ncfbblhlsiglxkoiounv.supabase.co; img-src 'self' data:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -1312,7 +1312,7 @@ function saveInteraction(){
     summary,
     loggedBy:document.getElementById('log-by').value.trim(),
     followUp:fuChecked,
-    followUpDue:fuChecked?fuDate:'',
+    followUpDue:fuChecked?(fuDate||null):null,
     followUpNote:fuChecked?fuNote:'',
     followUpDone:false
   };
@@ -1517,7 +1517,10 @@ _importChannel.addEventListener('message', e => {
 });
 
 // ── STARTUP: check session before loading app ──────────────────────
+// ⚠️  DEV BYPASS — set to false before deploying to GitHub Pages
+const DEV_BYPASS = false;
 (function() {
+  if (DEV_BYPASS) { initApp(); return; }
   const sess = getSession();
   if (sess && sess.access_token) {
     initApp();

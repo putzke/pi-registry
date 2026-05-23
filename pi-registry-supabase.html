@@ -732,15 +732,15 @@ function seed(){
   ]);
   const i1=DB.uid(),i2=DB.uid(),i3=DB.uid(),i4=DB.uid(),i5=DB.uid(),i6=DB.uid(),i7=DB.uid(),i8=DB.uid(),i9=DB.uid();
   DB.set('interactions',[
-    {id:i1,projectId:p1,stakeholderId:s2,date:'2024-05-14',channel:'Phone',direction:'Incoming',summary:'CM Reyes called regarding constituent complaints about construction dust near Oak St. Advised of active water truck schedule. She requested a written dust control plan be emailed to her office.',followUp:true,followUpNotes:'Email dust control plan PDF to CM Reyes office',followUpDue:'2024-05-21',followUpDone:true,loggedBy:'M. Torres'},
-    {id:i2,projectId:p1,stakeholderId:s4,date:'2024-04-22',channel:'Public meeting',direction:'In-person',summary:'Santos attended scoping meeting and voiced formal opposition to nighttime construction windows. Submitted written comment card. Stated she will bring additional residents to next meeting.',followUp:true,followUpNotes:'Draft written response to Santos comment card per NEPA requirement',followUpDue:'2024-05-06',followUpDone:false,loggedBy:'M. Torres'},
-    {id:i3,projectId:p1,stakeholderId:s1,date:'2024-05-01',channel:'Email',direction:'Outgoing',summary:'Distributed April business impact update newsletter to Chamber contact list. Included lane closure calendar and detour map.',followUp:false,followUpNotes:'',followUpDue:'',followUpDone:false,loggedBy:'M. Torres'},
-    {id:i4,projectId:p1,stakeholderId:s5,date:'2024-05-08',channel:'In-person',direction:'In-person',summary:'On-site coordination meeting with Capt. Ellis re: upcoming I-12 on-ramp closure. Reviewed detour signage plan and agreed on 14-day advance public notice schedule.',followUp:true,followUpNotes:'Submit final detour sign layout to Ellis for PD review',followUpDue:'2024-05-22',followUpDone:true,loggedBy:'M. Torres'},
-    {id:i5,projectId:p1,stakeholderId:s6,date:'2024-04-30',channel:'Email',direction:'Incoming',summary:'Reporter Chu emailed requesting comment on anonymous social media complaints about construction noise. Forwarded to PM. Responded with project noise mitigation statement within 2 hours.',followUp:false,followUpNotes:'',followUpDue:'',followUpDone:false,loggedBy:'M. Torres'},
-    {id:i6,projectId:p3,stakeholderId:s7,date:'2024-01-18',channel:'Public meeting',direction:'In-person',summary:'Gutierrez attended NEPA scoping meeting with 35 community members. Presented petition requesting Spanish-language interpreters at all future meetings and bilingual project materials. Group voiced concerns about potential displacement of small businesses near hub site.',followUp:true,followUpNotes:'Arrange Spanish interpretation services for all future meetings. Translate project fact sheet.',followUpDue:'2024-02-01',followUpDone:true,loggedBy:'M. Vega'},
-    {id:i7,projectId:p3,stakeholderId:s9,date:'2024-02-05',channel:'Mail',direction:'Incoming',summary:'Received formal letter of opposition from Marsh via certified mail. Letter details concerns about permanent loss of 30 customer parking spaces, reduced foot traffic during construction, and potential decline in property value. Requests meeting with project team to discuss mitigation options.',followUp:true,followUpNotes:'Schedule in-person meeting with Marsh to discuss parking mitigation alternatives',followUpDue:'2024-02-19',followUpDone:false,loggedBy:'M. Vega'},
-    {id:i8,projectId:p3,stakeholderId:s8,date:'2024-03-12',channel:'Email',direction:'Outgoing',summary:'Transmitted Draft Environmental Assessment to Park for OCTA review. Includes traffic analysis, air quality study, and noise impact assessment. 45-day review period begins.',followUp:true,followUpNotes:'Follow up on OCTA review comments — due April 26',followUpDue:'2024-04-26',followUpDone:false,loggedBy:'M. Vega'},
-    {id:i9,projectId:p3,stakeholderId:s4,date:'2024-02-22',channel:'Phone',direction:'Incoming',summary:'Santos called to express concern about transit hub impacts on eastside residents she represents through regional advocacy network. Wants to be included in stakeholder notifications for this project as well.',followUp:false,followUpNotes:'',followUpDue:'',followUpDone:false,loggedBy:'M. Vega'}
+    {id:i1,projectId:p1,stakeholderId:s2,date:'2024-05-14',channel:'Phone',direction:'Incoming',summary:'CM Reyes called regarding constituent complaints about construction dust near Oak St. Advised of active water truck schedule. She requested a written dust control plan be emailed to her office.',followUp:true,followUpNote:'Email dust control plan PDF to CM Reyes office',followUpDue:'2024-05-21',followUpDone:true,loggedBy:'M. Torres'},
+    {id:i2,projectId:p1,stakeholderId:s4,date:'2024-04-22',channel:'Public meeting',direction:'In-person',summary:'Santos attended scoping meeting and voiced formal opposition to nighttime construction windows. Submitted written comment card. Stated she will bring additional residents to next meeting.',followUp:true,followUpNote:'Draft written response to Santos comment card per NEPA requirement',followUpDue:'2024-05-06',followUpDone:false,loggedBy:'M. Torres'},
+    {id:i3,projectId:p1,stakeholderId:s1,date:'2024-05-01',channel:'Email',direction:'Outgoing',summary:'Distributed April business impact update newsletter to Chamber contact list. Included lane closure calendar and detour map.',followUp:false,followUpNote:'',followUpDue:'',followUpDone:false,loggedBy:'M. Torres'},
+    {id:i4,projectId:p1,stakeholderId:s5,date:'2024-05-08',channel:'In-person',direction:'In-person',summary:'On-site coordination meeting with Capt. Ellis re: upcoming I-12 on-ramp closure. Reviewed detour signage plan and agreed on 14-day advance public notice schedule.',followUp:true,followUpNote:'Submit final detour sign layout to Ellis for PD review',followUpDue:'2024-05-22',followUpDone:true,loggedBy:'M. Torres'},
+    {id:i5,projectId:p1,stakeholderId:s6,date:'2024-04-30',channel:'Email',direction:'Incoming',summary:'Reporter Chu emailed requesting comment on anonymous social media complaints about construction noise. Forwarded to PM. Responded with project noise mitigation statement within 2 hours.',followUp:false,followUpNote:'',followUpDue:'',followUpDone:false,loggedBy:'M. Torres'},
+    {id:i6,projectId:p3,stakeholderId:s7,date:'2024-01-18',channel:'Public meeting',direction:'In-person',summary:'Gutierrez attended NEPA scoping meeting with 35 community members. Presented petition requesting Spanish-language interpreters at all future meetings and bilingual project materials. Group voiced concerns about potential displacement of small businesses near hub site.',followUp:true,followUpNote:'Arrange Spanish interpretation services for all future meetings. Translate project fact sheet.',followUpDue:'2024-02-01',followUpDone:true,loggedBy:'M. Vega'},
+    {id:i7,projectId:p3,stakeholderId:s9,date:'2024-02-05',channel:'Mail',direction:'Incoming',summary:'Received formal letter of opposition from Marsh via certified mail. Letter details concerns about permanent loss of 30 customer parking spaces, reduced foot traffic during construction, and potential decline in property value. Requests meeting with project team to discuss mitigation options.',followUp:true,followUpNote:'Schedule in-person meeting with Marsh to discuss parking mitigation alternatives',followUpDue:'2024-02-19',followUpDone:false,loggedBy:'M. Vega'},
+    {id:i8,projectId:p3,stakeholderId:s8,date:'2024-03-12',channel:'Email',direction:'Outgoing',summary:'Transmitted Draft Environmental Assessment to Park for OCTA review. Includes traffic analysis, air quality study, and noise impact assessment. 45-day review period begins.',followUp:true,followUpNote:'Follow up on OCTA review comments — due April 26',followUpDue:'2024-04-26',followUpDone:false,loggedBy:'M. Vega'},
+    {id:i9,projectId:p3,stakeholderId:s4,date:'2024-02-22',channel:'Phone',direction:'Incoming',summary:'Santos called to express concern about transit hub impacts on eastside residents she represents through regional advocacy network. Wants to be included in stakeholder notifications for this project as well.',followUp:false,followUpNote:'',followUpDue:'',followUpDone:false,loggedBy:'M. Vega'}
   ]);
   const d1=DB.uid(),d2=DB.uid(),d3=DB.uid(),d4=DB.uid(),d5=DB.uid(),d6=DB.uid(),d7=DB.uid(),d8=DB.uid();
   DB.set('deliverables',[
@@ -1402,7 +1402,7 @@ function renderStakeDetail(s,link){
         <div class="log-sum">${i.summary}</div>
         ${i.followUp?`<div class="log-fu${i.followUpDone?' done':''}">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">${i.followUpDone?'<path d="M3 8l4 4 6-6"/>':'<circle cx="8" cy="8" r="6"/><path d="M8 5v4M8 11v1"/>'}</svg>
-          <span>${i.followUpDone?'Resolved: ':'Follow-up: '}<strong>${i.followUpNotes}</strong>${!i.followUpDone&&i.followUpDue?' — due '+fmt(i.followUpDue):''}</span>
+          <span>${i.followUpDone?'Resolved: ':'Follow-up: '}<strong>${i.followUpNote}</strong>${!i.followUpDone&&i.followUpDue?' — due '+fmt(i.followUpDue):''}</span>
           ${!i.followUpDone?`<button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" style="margin-left:auto" onclick="resolveFollowUp('${i.id}')">Resolve</button>`:''}
         </div>`:''}
         <div style="margin-top:6px"><button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="openEditIntModal('${i.id}')">Edit</button></div>
@@ -1510,7 +1510,7 @@ function renderFollowups(el){
   if(projF)ints=ints.filter(i=>i.projectId===projF);
   if(search)ints=ints.filter(i=>{
     const s=stakes.find(x=>x.id===i.stakeholderId);
-    return(i.followUpNotes||'').toLowerCase().includes(search)||(s&&(s.firstName+' '+s.lastName).toLowerCase().includes(search));
+    return(i.followUpNote||'').toLowerCase().includes(search)||(s&&(s.firstName+' '+s.lastName).toLowerCase().includes(search));
   });
 
   // Sort by selected column (default: due date asc, overdue first)
@@ -1609,7 +1609,7 @@ function renderFollowups(el){
                     ${od?'<div style="font-size:11px;color:var(--red);font-weight:700;letter-spacing:.3px">OVERDUE</div>':''}
                     ${i.followUpDone?'<div style="font-size:11px;color:var(--green)">✓ Resolved</div>':''}
                   </td>
-                  <td style="font-weight:500;color:var(--white)">${i.followUpNotes||'—'}</td>
+                  <td style="font-weight:500;color:var(--white)">${i.followUpNote||'—'}</td>
                   <td style="white-space:nowrap">
                     <div class="td-link" onclick="filterByProject('${projId}');selectStake('${i.stakeholderId}');setView('stakeholders')">${s?dispName(s):'Unknown'}</div>
                   </td>
@@ -2380,7 +2380,7 @@ function openEditIntModal(id){
   <div class="fsec">Follow-up</div>
   <div class="fr"><div class="fcheck"><input type="checkbox" id="f-ifu"${i.followUp?' checked':''} onchange="document.getElementById('fu-f').style.display=this.checked?'':'none'"><label for="f-ifu">Requires follow-up</label></div></div>
   <div id="fu-f" style="${i.followUp?'':'display:none'}"><div class="fgrid fg2f">
-    <div class="fr"><label>Action</label><input id="f-ifun" value="${i.followUpNotes||''}"></div>
+    <div class="fr"><label>Action</label><input id="f-ifun" value="${i.followUpNote||''}"></div>
     <div class="fr"><label>Due date</label><input type="date" id="f-ifud" value="${i.followUpDue||''}"></div>
   </div>
   <div class="fr"><div class="fcheck"><input type="checkbox" id="f-ifudo"${i.followUpDone?' checked':''}><label for="f-ifudo">Follow-up resolved</label></div></div></div>`,
@@ -2390,9 +2390,10 @@ function openEditIntModal(id){
 }
 function saveInt(){
   const v=id=>document.getElementById(id)?.value||'';
+  const vDate=id=>{const val=document.getElementById(id)?.value||'';return val||null;};
   const projId=v('f-ip'),stakeId=v('f-is');
   if(!v('f-isu')){alert('Summary required.');return}
-  const data={id:S.editId||DB.uid(),projectId:projId,stakeholderId:stakeId,date:v('f-id'),channel:v('f-ic'),direction:v('f-idr'),subject:v('f-isub')||'General',nature:v('f-inat')||'Inquiry',summary:v('f-isu'),loggedBy:v('f-il'),followUp:document.getElementById('f-ifu')?.checked||false,followUpNotes:v('f-ifun'),followUpDue:v('f-ifud'),followUpDone:document.getElementById('f-ifudo')?.checked||false};
+  const data={id:S.editId||DB.uid(),projectId:projId,stakeholderId:stakeId,date:vDate('f-id'),channel:v('f-ic'),direction:v('f-idr'),subject:v('f-isub')||'General',nature:v('f-inat')||'Inquiry',summary:v('f-isu'),loggedBy:v('f-il'),followUp:document.getElementById('f-ifu')?.checked||false,followUpNote:v('f-ifun'),followUpDue:vDate('f-ifud'),followUpDone:document.getElementById('f-ifudo')?.checked||false};
   const psAll=DB.get('project_stakeholders');
   if(!psAll.find(x=>x.projectId===projId&&x.stakeholderId===stakeId)){
     psAll.push({id:DB.uid(),projectId:projId,stakeholderId:stakeId,support:'Neutral',issueTags:'',addedDate:data.date,notes:'Auto-linked via interaction log.',distributionGroups:'',stakeholderRole:'External'});
@@ -2454,7 +2455,8 @@ function toggleDelFields(){
 }
 function saveDel(){
   const v=id=>document.getElementById(id)?.value||'';
-  const data={id:S.editId||DB.uid(),projectId:v('f-dp'),type:v('f-dt'),scopeType:v('f-ds'),status:v('f-dst'),contractedQty:parseInt(v('f-dcq'))||0,deliveredCount:parseInt(v('f-ddc'))||0,freq:v('f-dfr'),milestoneStart:v('f-dm1'),milestoneEnd:v('f-dm2'),dueDate:v('f-ddu'),distList:v('f-ddl'),notes:v('f-dno')};
+  const vDate=id=>{const val=document.getElementById(id)?.value||'';return val||null;};
+  const data={id:S.editId||DB.uid(),projectId:v('f-dp'),type:v('f-dt'),scopeType:v('f-ds'),status:v('f-dst'),contractedQty:parseInt(v('f-dcq'))||0,deliveredCount:parseInt(v('f-ddc'))||0,freq:v('f-dfr'),milestoneStart:v('f-dm1'),milestoneEnd:v('f-dm2'),dueDate:vDate('f-ddu'),distList:v('f-ddl'),notes:v('f-dno')};
   if(false){return}
   if(data.contractedQty>0){
     data.progress=Math.min(100,Math.round((data.deliveredCount/data.contractedQty)*100));
@@ -2835,7 +2837,7 @@ function generateReport(type){
       var od=!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<now;
       body+='<tr style="'+(od?'background:rgba(217,64,64,.06)':'')+(i.followUpDone?'opacity:.65':'')+'">'
         +'<td style="font-weight:600;color:'+(od?'var(--red)':i.followUpDone?'var(--green)':'var(--amber)')+'">'+(i.followUpDue||'No date')+(od?' OVERDUE':'')+'</td>'
-        +'<td style="font-weight:500;color:var(--white)">'+(i.followUpNotes||'—')+'</td>'
+        +'<td style="font-weight:500;color:var(--white)">'+(i.followUpNote||'—')+'</td>'
         +'<td>'+(s?dispName(s):'Unknown')+'</td>'
         +'<td>'+(i.followUpDone?'<span class="badge b-green">Resolved</span>':'<span class="badge b-amber">Open</span>')+'</td>'
         +'<td class="td-mono">'+i.date+'</td>'
@@ -2906,7 +2908,7 @@ function generateReport(type){
         +'<td><span class="badge '+chCls(i.channel)+'">'+i.channel+'</span></td>'
         +'<td style="max-width:300px;line-height:1.5">'+i.summary+'</td>'
         +'<td>'+(i.followUpDone?'<span class="badge b-green">Responded</span>':'<span class="badge b-amber">Pending</span>')+'</td>'
-        +'<td style="font-size:12px;color:var(--slate)">'+(i.followUpNotes||'—')+'</td></tr>';
+        +'<td style="font-size:12px;color:var(--slate)">'+(i.followUpNote||'—')+'</td></tr>';
     });
     body+='</tbody></table>';
   }
@@ -3621,7 +3623,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
         var status=i.followUpDone?'RESOLVED':'OPEN';
         var od=!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<now;
         if(od)status='OVERDUE';
-        var line='['+status+'] '+(i.followUpDue||'No date')+' \u2014 '+(i.followUpNotes||'No description')+' ('+name+')';
+        var line='['+status+'] '+(i.followUpDue||'No date')+' \u2014 '+(i.followUpNote||'No description')+' ('+name+')';
         xml+=bullet(line);
       });
       if(fuItems.length===0)xml+=bullet('No follow-up items.');
@@ -3822,7 +3824,7 @@ function exportProject(projectId) {
   const intHeaders = ['Date','Stakeholder','Organization','Channel','Direction','Summary','Follow-up required','Follow-up action','Follow-up due','Follow-up resolved','Logged by'];
   const intRows = ints.sort((a,b)=>b.date.localeCompare(a.date)).map(i=>{
     const s = allS.find(x=>x.id===i.stakeholderId);
-    return [i.date||'',s?dispName(s):'Unknown',s?s.org||'':'',i.channel||'',i.direction||'',i.summary||'',i.followUp?'Yes':'No',i.followUpNotes||'',i.followUpDue||'',i.followUpDone?'Yes':'No',i.loggedBy||''];
+    return [i.date||'',s?dispName(s):'Unknown',s?s.org||'':'',i.channel||'',i.direction||'',i.summary||'',i.followUp?'Yes':'No',i.followUpNote||'',i.followUpDue||'',i.followUpDone?'Yes':'No',i.loggedBy||''];
   });
   const ws3 = XLSX.utils.aoa_to_sheet([intHeaders, ...intRows]);
   ws3['!cols'] = [{wch:11},{wch:22},{wch:26},{wch:14},{wch:11},{wch:60},{wch:10},{wch:36},{wch:12},{wch:10},{wch:14}];
@@ -3839,7 +3841,7 @@ function exportProject(projectId) {
   const fuHeaders = ['Date','Stakeholder','Organization','Follow-up action','Due date','Resolved','Logged by','Interaction summary'];
   const fuRows = ints.filter(i=>i.followUp).sort((a,b)=>b.date.localeCompare(a.date)).map(i=>{
     const s = allS.find(x=>x.id===i.stakeholderId);
-    return [i.date||'',s?dispName(s):'Unknown',s?s.org||'':'',i.followUpNotes||'',i.followUpDue||'',i.followUpDone?'Yes':'No',i.loggedBy||'',i.summary||''];
+    return [i.date||'',s?dispName(s):'Unknown',s?s.org||'':'',i.followUpNote||'',i.followUpDue||'',i.followUpDone?'Yes':'No',i.loggedBy||'',i.summary||''];
   });
   const ws5 = XLSX.utils.aoa_to_sheet([fuHeaders, ...fuRows]);
   ws5['!cols'] = [{wch:11},{wch:22},{wch:26},{wch:36},{wch:12},{wch:10},{wch:14},{wch:55}];
@@ -3849,7 +3851,7 @@ function exportProject(projectId) {
   const cmHeaders = ['Date','Name','Organization','Channel','Comment summary','Response status','Response notes','Logged by'];
   const cmRows = ints.filter(i=>['Comment card','Public meeting','Mail','In-person'].includes(i.channel)).sort((a,b)=>b.date.localeCompare(a.date)).map(i=>{
     const s = allS.find(x=>x.id===i.stakeholderId);
-    return [i.date||'',s?dispName(s):'Unknown',s?s.org||'':'',i.channel||'',i.summary||'',i.followUpDone?'Responded':'Pending',i.followUpNotes||'',i.loggedBy||''];
+    return [i.date||'',s?dispName(s):'Unknown',s?s.org||'':'',i.channel||'',i.summary||'',i.followUpDone?'Responded':'Pending',i.followUpNote||'',i.loggedBy||''];
   });
   const ws6 = XLSX.utils.aoa_to_sheet([cmHeaders, ...cmRows]);
   ws6['!cols'] = [{wch:11},{wch:22},{wch:26},{wch:14},{wch:55},{wch:12},{wch:36},{wch:14}];

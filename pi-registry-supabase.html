@@ -347,7 +347,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   </div>
   <div style="margin:8px 10px 0;background:#0E1E30;border:1px solid rgba(255,255,255,.13);border-radius:var(--radius-lg);flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0">
     <div style="padding:8px 16px 6px;border-bottom:1px solid rgba(255,255,255,.1);flex-shrink:0">
-      <div class="nav-label" style="margin-bottom:0;padding:0">Active projects</div>
+      <div class="nav-label" style="margin-bottom:0;padding:0">Active / On-Hold Projects</div>
     </div>
     <div class="proj-scroll" id="proj-list" style="flex:1"></div>
     <div style="padding:8px 10px;border-top:1px solid rgba(255,255,255,.1);flex-shrink:0">
@@ -900,7 +900,7 @@ async function initApp(){
 
 // ── STARTUP: check session before loading app ──────────────────────
 // ⚠️  DEV BYPASS — set to false before deploying to GitHub Pages
-const DEV_BYPASS = true;
+const DEV_BYPASS = false;
 (function() {
   if (DEV_BYPASS) { initApp(); return; }
   const sess = getSession();

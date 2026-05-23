@@ -4008,7 +4008,7 @@ function openMeetingModal(id){
   </div>
   <div class="fr"><label>Purpose / agenda</label><textarea id="f-mga" style="height:60px">${m.agenda||''}</textarea></div>
   <div class="fr"><label>Key concerns raised</label><textarea id="f-mkc" style="height:60px">${m.keyConcerns||''}</textarea></div>
-  <div class="fr"><label>Action items / follow-ups</label><textarea id="f-mai" style="height:60px" placeholder="One per line — these will be added as follow-up interactions">${m.actionItems||''}</textarea></div>
+  <div class="fr"><label>Action items / follow-ups</label><textarea id="f-mai" style="height:60px" placeholder="Enter one action item — it will be added as a follow-up interaction">${m.actionItems||''}</textarea><div style="font-size:11px;color:var(--slate);margin-top:4px;">⚠ One action item per meeting. Only the first line will be tracked as a follow-up.</div></div>
   
   <div class="fr"><label>Notes</label><textarea id="f-mno">${m.notes||''}</textarea></div>`,
   `<button class="btn" onclick="closeM()">Cancel</button>

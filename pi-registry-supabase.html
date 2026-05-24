@@ -1153,8 +1153,8 @@ function filterMasterList(){
   listEl.innerHTML=stakes.length===0?
     '<div class="pane-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="9" cy="7" r="4"/><path d="M2 20c0-3.314 3.134-6 7-6s7 2.686 7 6"/></svg><div class="pe-title">No stakeholders found</div></div>'
     :stakes.map(s=>{
-      const projCount=ps.filter(x=>x.stakeholderId===s.id).length;
-      const intCount=ints.filter(i=>i.stakeholderId===s.id).length;
+      const projCount=ps.filter(x=>String(x.stakeholderId)===String(s.id)).length;
+      const intCount=ints.filter(i=>String(i.stakeholderId)===String(s.id)).length;
       const col=acol(s.firstName+s.lastName);
       return'<div class="lrow'+(s.id===sel?' sel':'')+'" onclick="selectStake(\''+s.id+'\')">'+
         '<div class="avatar" style="background:'+col+'22;color:'+col+'">'+ini(s.firstName,s.lastName)+'</div>'+
@@ -1173,7 +1173,7 @@ function renderMaster(el){
   const masterOnly=S.masterOnly||false;
   const search=(S.masterSearch||document.getElementById('ms-search')?.value||'').toLowerCase();
   const typeF=S.masterType||'';
-  if(masterOnly){const ps=DB.get('project_stakeholders');stakes=stakes.filter(s=>ps.filter(x=>x.stakeholderId===s.id).length>=2);}
+  if(masterOnly){const ps=DB.get('project_stakeholders');stakes=stakes.filter(s=>ps.filter(x=>String(x.stakeholderId)===String(s.id)).length>=2);}
   if(search)stakes=stakes.filter(s=>(s.firstName+' '+s.lastName+' '+(s.org||'')).toLowerCase().includes(search));
   if(typeF)stakes=stakes.filter(s=>s.type===typeF);
   if(S.msOrgOnly)stakes=stakes.filter(s=>isOrgContact(s));
@@ -1229,8 +1229,8 @@ function renderMaster(el){
         <div class="data-list" id="ms-data-list">
           ${stakes.length===0?`<div class="pane-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="9" cy="7" r="4"/><path d="M2 20c0-3.314 3.134-6 7-6s7 2.686 7 6"/></svg><div class="pe-title">No stakeholders found</div></div>`
           :stakes.map(s=>{
-            const projCount=ps.filter(x=>x.stakeholderId===s.id).length;
-            const intCount=ints.filter(i=>i.stakeholderId===s.id).length;
+            const projCount=ps.filter(x=>String(x.stakeholderId)===String(s.id)).length;
+            const intCount=ints.filter(i=>String(i.stakeholderId)===String(s.id)).length;
             const col=acol(s.firstName+s.lastName);
             return`<div class="lrow${s.id===sel?' sel':''}" onclick="selectStake('${s.id}')">
               <div class="avatar" style="background:${col}22;color:${col}">${ini(s.firstName,s.lastName)}</div>
@@ -1266,7 +1266,7 @@ function renderStakeholders(el){
   let listItems=[];
   if(S.projectFilter){
     listItems=ps.filter(x=>x.projectId===S.projectFilter).map(lk=>{
-      const s=allStakes.find(x=>x.id===lk.stakeholderId);
+      const s=allStakes.find(x=>String(x.id)===String(lk.stakeholderId));
       return s?{...s,_link:lk}:null;
     }).filter(Boolean);
   } else {
@@ -1314,8 +1314,8 @@ function renderStakeholders(el){
         <div class="data-list">
           ${listItems.length===0?`<div class="pane-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="9" cy="7" r="4"/><path d="M2 20c0-3.314 3.134-6 7-6s7 2.686 7 6"/></svg><div class="pe-title">No stakeholders</div><div class="pe-sub">${S.projectFilter?'Add or link stakeholders to this project.':'Add your first stakeholder.'}</div></div>`
           :listItems.map(s=>{
-            const lk=S.projectFilter?ps.find(x=>x.projectId===S.projectFilter&&x.stakeholderId===s.id):null;
-            const intCt=ints.filter(i=>i.stakeholderId===s.id&&(!S.projectFilter||i.projectId===S.projectFilter)).length;
+            const lk=S.projectFilter?ps.find(x=>x.projectId===S.projectFilter&&String(x.stakeholderId)===String(s.id)):null;
+            const intCt=ints.filter(i=>String(i.stakeholderId)===String(s.id)&&(!S.projectFilter||i.projectId===S.projectFilter)).length;
             const col=acol(s.firstName+s.lastName);
             return`<div class="lrow${s.id===sel?' sel':''}" onclick="selectStake('${s.id}')">
               <div class="avatar" style="background:${col}22;color:${col}">${ini(s.firstName,s.lastName)}</div>
@@ -1355,8 +1355,8 @@ function selectStake(id){
 }
 
 function renderStakeDetail(s,link){
-  const ints=DB.get('interactions').filter(i=>i.stakeholderId===s.id&&(!S.projectFilter||i.projectId===S.projectFilter));
-  const ps=DB.get('project_stakeholders').filter(x=>x.stakeholderId===s.id);
+  const ints=DB.get('interactions').filter(i=>String(i.stakeholderId)===String(s.id)&&(!S.projectFilter||i.projectId===S.projectFilter));
+  const ps=DB.get('project_stakeholders').filter(x=>String(x.stakeholderId)===String(s.id));
   const projs=DB.get('projects');
   const col=acol(s.firstName+s.lastName);
   const tab=S.stakeTab||'info';
@@ -1448,8 +1448,8 @@ function sortFollowups(ints, stakes){
   const dir=S.fuSortDir||'asc';
   return ints.slice().sort(function(a,b){
     let av,bv;
-    const sa=stakes.find(x=>x.id===a.stakeholderId);
-    const sb=stakes.find(x=>x.id===b.stakeholderId);
+    const sa=stakes.find(x=>String(x.id)===String(a.stakeholderId));
+    const sb=stakes.find(x=>String(x.id)===String(b.stakeholderId));
     if(col==='dueDate'){av=a.followUpDue||'9999';bv=b.followUpDue||'9999';}
     else if(col==='action'){av=a.followUpNote||a.summary||'';bv=b.followUpNote||b.summary||'';}
     else if(col==='stakeholder'){av=sa?sa.lastName+sa.firstName:'';bv=sb?sb.lastName+sb.firstName:'';}
@@ -1509,7 +1509,7 @@ function renderFollowups(el){
   else if(statusF==='resolved')ints=ints.filter(i=>i.followUpDone);
   if(projF)ints=ints.filter(i=>i.projectId===projF);
   if(search)ints=ints.filter(i=>{
-    const s=stakes.find(x=>x.id===i.stakeholderId);
+    const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
     return(i.followUpNote||'').toLowerCase().includes(search)||(s&&(s.firstName+' '+s.lastName).toLowerCase().includes(search));
   });
 
@@ -1600,7 +1600,7 @@ function renderFollowups(el){
 </thead>
               <tbody>
               ${pitems.map(i=>{
-                const s=stakes.find(x=>x.id===i.stakeholderId);
+                const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
                 const od=!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<now;
                 const dueTxt=i.followUpDue?new Date(i.followUpDue+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'No date set';
                 return`<tr style="${od?'background:rgba(217,64,64,.06);':i.followUpDone?'opacity:.6;':''}">
@@ -1647,8 +1647,8 @@ function sortInts(ints){
     let av,bv;
     if(col==='date'){av=a.date||'';bv=b.date||'';}
     else if(col==='stakeholder'){
-      const sa=window._intStakes&&window._intStakes.find(x=>x.id===a.stakeholderId);
-      const sb=window._intStakes&&window._intStakes.find(x=>x.id===b.stakeholderId);
+      const sa=window._intStakes&&window._intStakes.find(x=>String(x.id)===String(a.stakeholderId));
+      const sb=window._intStakes&&window._intStakes.find(x=>String(x.id)===String(b.stakeholderId));
       av=sa?sa.lastName+sa.firstName:'';bv=sb?sb.lastName+sb.firstName:'';
     }
     else if(col==='channel'){av=a.channel||'';bv=b.channel||'';}
@@ -1675,7 +1675,7 @@ function renderInteractions(el){
   const chF=S.intCh||'';
   const fuF=S.intFu||'';
   const pF=S.intProj||'';
-  if(search)ints=ints.filter(i=>{const s=stakes.find(x=>x.id===i.stakeholderId);return i.summary.toLowerCase().includes(search)||(s&&(s.firstName+' '+s.lastName).toLowerCase().includes(search))});
+  if(search)ints=ints.filter(i=>{const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));return i.summary.toLowerCase().includes(search)||(s&&(s.firstName+' '+s.lastName).toLowerCase().includes(search))});
   const subjF=S.intSubj||'';
   if(chF)ints=ints.filter(i=>i.channel===chF);
   if(subjF)ints=ints.filter(i=>(i.subject||'General')===subjF);
@@ -1726,7 +1726,7 @@ function renderInteractions(el){
 <th style="width:80px;cursor:pointer;user-select:none" onclick="setIntSort('nature')">${S.intSortCol==='nature'?(S.intSortDir==='asc'?' ▲':' ▼'):''} Nature</th><th style="cursor:pointer;user-select:none" onclick="setIntSort('summary')">${S.intSortCol==='summary'?(S.intSortDir==='asc'?' ▲':' ▼'):''} Summary</th><th style="width:70px;cursor:pointer;user-select:none" onclick="setIntSort('loggedBy')">${S.intSortCol==='loggedBy'?(S.intSortDir==='asc'?' ▲':' ▼'):''} Logged by</th><th style="width:60px"></th></tr></thead>
           <tbody>${ints.length===0?`<tr><td colspan="9" style="text-align:center;padding:36px;color:var(--fog)">No interactions match your filters.</td></tr>`
           :ints.map(i=>{
-            const s=stakes.find(x=>x.id===i.stakeholderId);
+            const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
             const p=projs.find(x=>x.id===i.projectId);
             const od=i.followUp&&!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<new Date();
             return`<tr>
@@ -2144,7 +2144,7 @@ function toggleAnonContact(){
       const ps = DB.get('project_stakeholders').filter(x=>x.projectId===pF);
       const stakes = DB.get('stakeholders');
       ps.forEach(function(lk){
-        const s = stakes.find(x=>x.id===lk.stakeholderId);
+        const s = stakes.find(x=>String(x.id)===String(lk.stakeholderId));
         if(s && s.firstName==='Anonymous' && s.lastName && s.lastName.startsWith('Caller')) anonCount++;
       });
     }
@@ -2370,7 +2370,7 @@ function openEditIntModal(id){
   openM('Edit interaction',
   `<div class="fgrid fg2f">
     <div class="fr"><label>Project</label><select id="f-ip">${projs.map(p=>`<option value="${p.id}"${i.projectId===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
-    <div class="fr"><label>Stakeholder</label><select id="f-is">${stakes.map(s=>`<option value="${s.id}"${i.stakeholderId===s.id?' selected':''}>${dispName(s)}${(s.firstName||s.lastName)&&s.org?' — '+s.org:''}</option>`).join('')}</select></div>
+    <div class="fr"><label>Stakeholder</label><select id="f-is">${stakes.map(s=>`<option value="${s.id}"${String(i.stakeholderId)===String(s.id)?' selected':''}>${dispName(s)}${(s.firstName||s.lastName)&&s.org?' — '+s.org:''}</option>`).join('')}</select></div>
     <div class="fr"><label>Date</label><input type="date" id="f-id" value="${i.date||''}"></div>
     <div class="fr"><label>Channel</label><select id="f-ic">${['Phone','Email','In-person','Public meeting','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'].map(c=>`<option${i.channel===c?' selected':''}>${c}</option>`).join('')}</select></div>
     <div class="fr"><label>Direction</label><select id="f-idr">${['Incoming','Outgoing','In-person'].map(d=>`<option${i.direction===d?' selected':''}>${d}</option>`).join('')}</select></div>
@@ -2729,7 +2729,7 @@ function generateReport(type){
 
   var filteredStakes=[];
   filteredPS.forEach(function(lk){
-    var s=allStakes.find(function(x){return x.id===lk.stakeholderId});
+    var s=allStakes.find(function(x){return String(x.id)===String(lk.stakeholderId)});
     if(s)filteredStakes.push({s:s,lk:lk});
   });
   // Sort: Internal first, then by last name A-Z
@@ -2758,7 +2758,7 @@ function generateReport(type){
   });
   var recipientNames=[];
   internalRecipients.forEach(function(lk){
-    var s=allStakes.find(function(x){return x.id===lk.stakeholderId});
+    var s=allStakes.find(function(x){return String(x.id)===String(lk.stakeholderId)});
     if(s)recipientNames.push(dispName(s));
   });
 
@@ -2810,7 +2810,7 @@ function generateReport(type){
       +'<th style="width:10%;padding:4px 6px;background:#1a3a5c;color:#fff;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Logged by</th>'
       +'</tr></thead><tbody>';
     sorted.forEach(function(i){
-      var s=allStakes.find(function(x){return x.id===i.stakeholderId});
+      var s=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
       body+='<tr>'
         +'<td style="padding:5px 6px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-family:monospace;font-size:8px">'+i.date+'</td>'
         +'<td style="padding:5px 6px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-weight:600">'+(s?dispName(s):'Unknown')+'</td>'
@@ -2833,7 +2833,7 @@ function generateReport(type){
       +'<th>Due date</th><th>Action</th><th>Stakeholder</th><th>Status</th><th>Log date</th><th>Logged by</th></tr></thead><tbody>';
     fuItems.sort(function(a,b){if(!a.followUpDone&&b.followUpDone)return -1;if(a.followUpDone&&!b.followUpDone)return 1;return(a.followUpDue||'9999').localeCompare(b.followUpDue||'9999')});
     fuItems.forEach(function(i){
-      var s=allStakes.find(function(x){return x.id===i.stakeholderId});
+      var s=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
       var od=!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<now;
       body+='<tr style="'+(od?'background:rgba(217,64,64,.06)':'')+(i.followUpDone?'opacity:.65':'')+'">'
         +'<td style="font-weight:600;color:'+(od?'var(--red)':i.followUpDone?'var(--green)':'var(--amber)')+'">'+(i.followUpDue||'No date')+(od?' OVERDUE':'')+'</td>'
@@ -2848,7 +2848,7 @@ function generateReport(type){
   } else if(type==='sentiment-summary'){
     var groups={Champion:[],Neutral:[],Opponent:[]};
     externalFilteredPS.forEach(function(lk){
-      var s=allStakes.find(function(x){return x.id===lk.stakeholderId});
+      var s=allStakes.find(function(x){return String(x.id)===String(lk.stakeholderId)});
       if(s&&groups[lk.support])groups[lk.support].push({s:s,lk:lk});
     });
     body='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px">';
@@ -2901,7 +2901,7 @@ function generateReport(type){
       +'<table class="dtable" style="font-size:13px"><thead><tr>'
       +'<th>Date</th><th>Name</th><th>Organization</th><th>Channel</th><th>Comment / summary</th><th>Response status</th><th>Follow-up notes</th></tr></thead><tbody>';
     comments.forEach(function(i){
-      var s=allStakes.find(function(x){return x.id===i.stakeholderId});
+      var s=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
       body+='<tr><td class="td-mono">'+i.date+'</td>'
         +'<td style="font-weight:500;color:var(--white)">'+(s?dispName(s):'Unknown')+'</td>'
         +'<td>'+(s?s.org||'':'—')+'</td>'
@@ -3381,7 +3381,7 @@ function exportPIDocx(){
     var match=false;
     for(var g=0;g<groups.length;g++){if(selGroups.indexOf(groups[g])>=0){match=true;break;}}
     if(match){
-      var s=allStakes.find(function(x){return x.id===lk.stakeholderId});
+      var s=allStakes.find(function(x){return String(x.id)===String(lk.stakeholderId)});
       if(s)recipients.push(s.firstName+' '+s.lastName+(s.org?' ('+s.org+')':''));
     }
   });
@@ -3538,8 +3538,8 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
         var aInt=(a.stakeholderRole||'External')==='Internal'?0:1;
         var bInt=(b.stakeholderRole||'External')==='Internal'?0:1;
         if(aInt!==bInt)return aInt-bInt;
-        var aSk=allStakes.find(function(x){return x.id===a.stakeholderId});
-        var bSk=allStakes.find(function(x){return x.id===b.stakeholderId});
+        var aSk=allStakes.find(function(x){return String(x.id)===String(a.stakeholderId)});
+        var bSk=allStakes.find(function(x){return String(x.id)===String(b.stakeholderId)});
         var aName=(aSk?aSk.lastName+aSk.firstName:'').toLowerCase();
         var bName=(bSk?bSk.lastName+bSk.firstName:'').toLowerCase();
         return aName.localeCompare(bName);
@@ -3564,7 +3564,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
         });
         xml+='</w:tr>';
         contactPS.forEach(function(lk,ri){
-          var sk=allStakes.find(function(x){return x.id===lk.stakeholderId});
+          var sk=allStakes.find(function(x){return String(x.id)===String(lk.stakeholderId)});
           if(!sk)return;
           var rowFill=ri%2!==0?'<w:shd w:val="clear" w:color="auto" w:fill="EEF4FB"/>':'';
           var vals=[
@@ -3618,7 +3618,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
       xml+=spacer();
       fuItems.sort(function(a,b){if(!a.followUpDone&&b.followUpDone)return-1;if(a.followUpDone&&!b.followUpDone)return 1;return(a.followUpDue||'9999').localeCompare(b.followUpDue||'9999')});
       fuItems.forEach(function(i){
-        var sk=allStakes.find(function(x){return x.id===i.stakeholderId});
+        var sk=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
         var name=sk?sk.firstName+' '+sk.lastName:'Unknown';
         var status=i.followUpDone?'RESOLVED':'OPEN';
         var od=!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<now;
@@ -3631,7 +3631,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
     } else if(sec.type==='auto-sentiment'){
       var groups={Champion:[],Neutral:[],Opponent:[]};
       externalPS.forEach(function(lk){
-        var sk=allStakes.find(function(x){return x.id===lk.stakeholderId});
+        var sk=allStakes.find(function(x){return String(x.id)===String(lk.stakeholderId)});
         if(sk&&groups[lk.support])groups[lk.support].push(sk);
       });
       ['Champion','Neutral','Opponent'].forEach(function(g){
@@ -3673,7 +3673,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
         xml+=para(comments.length+' public comment(s) received:');
         xml+=spacer();
         comments.forEach(function(i){
-          var sk=allStakes.find(function(x){return x.id===i.stakeholderId});
+          var sk=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
           var name=sk?sk.firstName+' '+sk.lastName:'Unknown';
           var org=sk?sk.org||'':'';
           var status=i.followUpDone?'Responded':'Pending';
@@ -3812,7 +3812,7 @@ function exportProject(projectId) {
   // ── TAB 2: Stakeholder contact list ────────────────────────
   const stakeHeaders = ['First name','Last name','Organization','Title','Email','Phone','Type','Role','Support level','Issue tags','Distribution groups','Address','Master list','Project notes'];
   const stakeRows = ps.map(lk=>{
-    const s = allS.find(x=>x.id===lk.stakeholderId);
+    const s = allS.find(x=>String(x.id)===String(lk.stakeholderId));
     if (!s) return null;
     return [s.firstName||'',s.lastName||'',s.org||'',s.title||'',s.email||'',s.phone||'',s.type||'',lk.stakeholderRole||'External',lk.support||'',lk.issueTags||'',lk.distributionGroups||'',s.address||'',s.isMaster?'Yes':'No',lk.notes||''];
   }).filter(Boolean);
@@ -3823,7 +3823,7 @@ function exportProject(projectId) {
   // ── TAB 3: Interaction log ──────────────────────────────────
   const intHeaders = ['Date','Stakeholder','Organization','Channel','Direction','Summary','Follow-up required','Follow-up action','Follow-up due','Follow-up resolved','Logged by'];
   const intRows = ints.sort((a,b)=>b.date.localeCompare(a.date)).map(i=>{
-    const s = allS.find(x=>x.id===i.stakeholderId);
+    const s = allS.find(x=>String(x.id)===String(i.stakeholderId));
     return [i.date||'',s?dispName(s):'Unknown',s?s.org||'':'',i.channel||'',i.direction||'',i.summary||'',i.followUp?'Yes':'No',i.followUpNote||'',i.followUpDue||'',i.followUpDone?'Yes':'No',i.loggedBy||''];
   });
   const ws3 = XLSX.utils.aoa_to_sheet([intHeaders, ...intRows]);
@@ -3840,7 +3840,7 @@ function exportProject(projectId) {
   // ── TAB 5: Follow-up resolution log ────────────────────────
   const fuHeaders = ['Date','Stakeholder','Organization','Follow-up action','Due date','Resolved','Logged by','Interaction summary'];
   const fuRows = ints.filter(i=>i.followUp).sort((a,b)=>b.date.localeCompare(a.date)).map(i=>{
-    const s = allS.find(x=>x.id===i.stakeholderId);
+    const s = allS.find(x=>String(x.id)===String(i.stakeholderId));
     return [i.date||'',s?dispName(s):'Unknown',s?s.org||'':'',i.followUpNote||'',i.followUpDue||'',i.followUpDone?'Yes':'No',i.loggedBy||'',i.summary||''];
   });
   const ws5 = XLSX.utils.aoa_to_sheet([fuHeaders, ...fuRows]);
@@ -3850,7 +3850,7 @@ function exportProject(projectId) {
   // ── TAB 6: Public comment matrix ───────────────────────────
   const cmHeaders = ['Date','Name','Organization','Channel','Comment summary','Response status','Response notes','Logged by'];
   const cmRows = ints.filter(i=>['Comment card','Public meeting','Mail','In-person'].includes(i.channel)).sort((a,b)=>b.date.localeCompare(a.date)).map(i=>{
-    const s = allS.find(x=>x.id===i.stakeholderId);
+    const s = allS.find(x=>String(x.id)===String(i.stakeholderId));
     return [i.date||'',s?dispName(s):'Unknown',s?s.org||'':'',i.channel||'',i.summary||'',i.followUpDone?'Responded':'Pending',i.followUpNote||'',i.loggedBy||''];
   });
   const ws6 = XLSX.utils.aoa_to_sheet([cmHeaders, ...cmRows]);

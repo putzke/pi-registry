@@ -989,7 +989,7 @@ function refreshHome(){
     intList.innerHTML='<div class="empty" style="padding:24px"><div class="empty-title">No interactions yet</div></div>';
   } else {
     intList.innerHTML=recent.map(i=>{
-      const s=stakes.find(x=>x.id===i.stakeholderId);
+      const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
       const p=projs.find(x=>x.id===i.projectId);
       return`<div class="list-item">
         <div style="flex:1">
@@ -1020,7 +1020,7 @@ function renderContacts(){
   if(pF){
     const linked=ps.filter(x=>x.projectId===pF);
     list=linked.map(lk=>{
-      const s=stakes.find(x=>x.id===lk.stakeholderId);
+      const s=stakes.find(x=>String(x.id)===String(lk.stakeholderId));
       return s?{...s,_lk:lk}:null;
     }).filter(Boolean);
   } else {
@@ -1038,7 +1038,7 @@ function renderContacts(){
 
   el.innerHTML=list.map(s=>{
     const col=acol(s.firstName+s.lastName+(s.org||''));
-    const intCount=ints.filter(i=>i.stakeholderId===s.id).length;
+    const intCount=ints.filter(i=>String(i.stakeholderId)===String(s.id)).length;
     return`<div class="list-item" onclick="showContactDetail('${s.id}')">
       <div class="item-avatar" style="background:${col}18;color:${col}">${ini(s.firstName,s.lastName)}</div>
       <div class="item-body">
@@ -1065,7 +1065,7 @@ function showContactDetail(id){
   document.getElementById('detail-topbar-name').textContent=s.firstName+' '+s.lastName;
   const col=acol(s.firstName+s.lastName+(s.org||''));
   const ints=DB.get('interactions').filter(i=>i.stakeholderId===id).sort((a,b)=>b.date.localeCompare(a.date));
-  const ps=DB.get('project_stakeholders').filter(x=>x.stakeholderId===id);
+  const ps=DB.get('project_stakeholders').filter(x=>String(x.stakeholderId)===String(id));
   const projs=DB.get('projects');
 
   document.getElementById('detail-body').innerHTML=`
@@ -1149,7 +1149,7 @@ function renderInteractionsList(){
 
   let list=pF?ints.filter(i=>i.projectId===pF):ints;
   if(search) list=list.filter(i=>{
-    const s=stakes.find(x=>x.id===i.stakeholderId);
+    const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
     return i.summary.toLowerCase().includes(search)||(s&&(s.firstName+' '+s.lastName).toLowerCase().includes(search));
   });
   list=list.sort((a,b)=>b.date.localeCompare(a.date));
@@ -1160,7 +1160,7 @@ function renderInteractionsList(){
     return;
   }
   el.innerHTML=list.map(i=>{
-    const s=stakes.find(x=>x.id===i.stakeholderId);
+    const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
     const p=projs.find(x=>x.id===i.projectId);
     return`<div class="int-item">
       <div class="int-header">
@@ -1219,7 +1219,7 @@ function renderFollowupsList(){
 }
 
 function fuItemHTML(i,stakes,projs,resolved){
-  const s=stakes.find(x=>x.id===i.stakeholderId);
+  const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
   const p=projs.find(x=>x.id===i.projectId);
   const od=isOverdue(i.followUpDue);
   const resolveBtn=resolved
@@ -1270,7 +1270,7 @@ function updateLogStakeholders(){
 
   let list;
   if(pF){
-    list=ps.filter(x=>x.projectId===pF).map(lk=>stakes.find(x=>x.id===lk.stakeholderId)).filter(Boolean);
+    list=ps.filter(x=>x.projectId===pF).map(lk=>stakes.find(x=>String(x.id)===String(lk.stakeholderId))).filter(Boolean);
   } else {
     list=stakes;
   }
@@ -1369,7 +1369,7 @@ function toggleAnon(){
     if(pF){
       const linked=ps.filter(x=>x.projectId===pF);
       linked.forEach(lk=>{
-        const s=stakes.find(x=>x.id===lk.stakeholderId);
+        const s=stakes.find(x=>String(x.id)===String(lk.stakeholderId));
         if(s&&s.firstName==='Anonymous'&&s.lastName&&s.lastName.startsWith('Caller'))count++;
       });
     } else {

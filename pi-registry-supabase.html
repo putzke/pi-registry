@@ -814,7 +814,7 @@ const DEL_GROUPS=[
   {group:'Digital & Multimedia',types:['Website update','Social media post','Project video / drone update','Virtual public meeting / webinar','Text messaging','Multimedia update']},
   {group:'Media Relations',types:['Media / press release','Media advisory','Press conference coordination','Talking points / key messages']},
   {group:'Signage & Visual',types:['Construction / project ID sign','Detour signage plan','Lane closure graphic','QR code signage']},
-  {group:'Government & Agency',types:['Agency coordination meeting','Elected official briefing','Intergovernmental notification letter','Permit / ROW notification to property owners']},
+  {group:'Government & Agency',types:['Agency coordination meeting','Elected official briefing','Intergovernmental notification letter','Permit / ROW notification to property owners','ROW outreach documentation']},
   {group:'Documentation & Reporting',types:['PI summary report','Final PI closeout report','Council / legislative report','Stakeholder database / registry','Public hearing transcript','EJ outreach documentation','Section 106 / tribal consultation record']},
   {group:'Other',types:['Other']}
 ];
@@ -3872,7 +3872,7 @@ refreshBadges();render();
 
 
 // ── MEETINGS VIEW ──────────────────────────────────────────────────────────
-const MEETING_TYPES=['Public open house','Agency coordination','Elected official briefing','Property owner meeting','Pre-construction meeting','Progress meeting','Virtual/online meeting','Other'];
+const MEETING_TYPES=['Public open house','Public hearing','Scoping meeting','Agency coordination meeting','Elected official briefing','Partnering meeting','Property owner / ROW discussion','Pre-construction meeting','Progress meeting','Community advisory committee','Media briefing / press conference','Pop-up / information booth','School or business outreach','Site visit','Webinar / virtual meeting','Other'];
 
 function renderMeetings(el){
   const pF=S.projectFilter;

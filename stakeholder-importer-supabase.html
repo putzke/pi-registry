@@ -708,7 +708,6 @@ function parseXLSX(buffer) {
     onFileParsed();
   } catch(e) { showFileError('Could not read Excel file: '+e.message); }
 }
-}
 
 function showFileError(msg) {
   document.getElementById('file-status').innerHTML = `<div class="alert alert-warn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v4M8 11v1"/></svg>${msg}</div>`;

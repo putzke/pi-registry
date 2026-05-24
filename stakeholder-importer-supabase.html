@@ -687,14 +687,27 @@ function parseCSV(text) {
 function parseXLSX(buffer) {
   try {
     const wb = XLSX.read(buffer, {type:'arraybuffer'});
-    const ws = wb.Sheets[wb.SheetNames[0]];
+    // Prefer the 'Stakeholder Import' sheet; fall back to first sheet
+    const sheetName = wb.SheetNames.find(n => n.toLowerCase().includes('stakeholder')) || wb.SheetNames[0];
+    const ws = wb.Sheets[sheetName];
     const data = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
     if (!data || data.length < 2) { showFileError('Sheet appears empty.'); return; }
-    state.rawHeaders = (data[0]||[]).map(c => String(c||''));
-    state.rawRows = data.slice(1).filter(r => r && r.some(c => c != null && c !== ''));
+    // If using our template, row 1=banner, row 2=req labels, row 3=notes, row 4=headers, row 5+=data
+    // Detect template by checking if row 4 has known column headers
+    let headerRow = 0;
+    for (let i = 0; i < Math.min(5, data.length); i++) {
+      const row = data[i].map(c => String(c||'').toLowerCase());
+      if (row.some(c => c === 'firstname' || c === 'lastname' || c === 'email')) {
+        headerRow = i;
+        break;
+      }
+    }
+    state.rawHeaders = (data[headerRow]||[]).map(c => String(c||''));
+    state.rawRows = data.slice(headerRow + 1).filter(r => r && r.some(c => c != null && c !== ''));
     state.rawRows = state.rawRows.map(r => r.map(c => c == null ? '' : String(c)));
     onFileParsed();
   } catch(e) { showFileError('Could not read Excel file: '+e.message); }
+}
 }
 
 function showFileError(msg) {

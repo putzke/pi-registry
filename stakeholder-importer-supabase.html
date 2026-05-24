@@ -688,7 +688,7 @@ function parseXLSX(buffer) {
   try {
     const wb = XLSX.read(buffer, {type:'arraybuffer'});
     const ws = wb.Sheets[wb.SheetNames[0]];
-    const data = XLSX.utils.sheet_to_array(ws);
+    const data = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
     if (!data || data.length < 2) { showFileError('Sheet appears empty.'); return; }
     state.rawHeaders = (data[0]||[]).map(c => String(c||''));
     state.rawRows = data.slice(1).filter(r => r && r.some(c => c != null && c !== ''));

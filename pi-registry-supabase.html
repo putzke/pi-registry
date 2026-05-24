@@ -337,7 +337,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     </button>
     <button class="nav-btn" id="nav-meetings" onclick="setView('meetings')">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="14" height="11" rx="1"/><path d="M5 1v4M11 1v4M1 7h14"/><circle cx="5" cy="11" r="1" fill="currentColor"/><circle cx="8" cy="11" r="1" fill="currentColor"/><circle cx="11" cy="11" r="1" fill="currentColor"/></svg>
-      Meetings
+      Events
       <span class="nav-badge" id="meetings-badge" style="display:none"></span>
     </button>
     <button class="nav-btn" id="nav-reports" onclick="setView('reports')">
@@ -3897,14 +3897,14 @@ function renderMeetings(el){
 
   el.innerHTML=`
   <div class="topbar">
-    <div><div class="topbar-title">Meetings${proj?' — '+proj.name:''}</div>
-    <div class="topbar-sub">${meetings.length} meeting${meetings.length!==1?'s':''} · ${planned} planned · ${completed} completed</div></div>
+    <div><div class="topbar-title">Events${proj?' — '+proj.name:''}</div>
+    <div class="topbar-sub">${meetings.length} event${meetings.length!==1?'s':''} · ${planned} planned · ${completed} completed</div></div>
     <div class="topbar-sp"></div>
     <div class="topbar-acts">
       <select class="fsel" id="meet-proj" onchange="S.projectFilter=this.value;renderMeetings(document.getElementById('main'))">
         <option value="">All projects</option>${projs.map(p=>`<option value="${p.id}"${p.id===S.projectFilter?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}
       </select>
-      <button class="btn btn-primary" onclick="openMeetingModal()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v10M3 8h10"/></svg>Log meeting</button>
+      <button class="btn btn-primary" onclick="openMeetingModal()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v10M3 8h10"/></svg>Log event</button>
     </div>
   </div>
   <div style="display:flex;gap:10px;padding:10px 22px;border-bottom:1px solid var(--border);flex-shrink:0">
@@ -3918,16 +3918,16 @@ function renderMeetings(el){
     <div style="padding:14px 18px">
     <div class="toolbar" style="margin-bottom:12px">
       <div class="srch"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4"/><path d="M10 10l3 3"/></svg>
-        <input id="meet-search" placeholder="Search meetings…" style="min-width:280px" value="${S.meetSearch||''}" oninput="S.meetSearch=this.value;renderMeetings(document.getElementById('main'))">
+        <input id="meet-search" placeholder="Search events…" style="min-width:280px" value="${S.meetSearch||''}" oninput="S.meetSearch=this.value;renderMeetings(document.getElementById('main'))">
       </div>
       <div class="tb-sp"></div>
       <span class="tb-info">${meetings.length} record${meetings.length!==1?'s':''}</span>
     </div>
-    ${meetings.length===0?`<div class="pane-empty"><div class="pe-title">No meetings logged yet</div><div class="pe-sub">Click Log meeting to add the first one.</div></div>`:`
+    ${meetings.length===0?`<div class="pane-empty"><div class="pe-title">No events logged yet</div><div class="pe-sub">Click Log event to add the first one.</div></div>`:`
     <table class="dtable">
       <thead><tr>
         <th style="width:100px">Date</th>
-        <th>Meeting</th>
+        <th>Event</th>
         <th style="width:120px">Type</th>
         <th style="width:70px;text-align:center">Attend.</th>
         <th style="width:70px;text-align:center">Comments</th>
@@ -3985,14 +3985,14 @@ function openMeetingModal(id){
   // Get attendees for this meeting
   const attendeeIds=(m.attendeeIds||[]);
 
-  openM(id?'Edit meeting':'Log meeting',`
+  openM(id?'Edit event':'Log event',`
   <div class="fgrid fg2f">
-    <div class="fr"><label>Meeting title *</label><input id="f-mt" value="${m.title||''}"></div>
+    <div class="fr"><label>Event title *</label><input id="f-mt" value="${m.title||''}"></div>
     <div class="fr"><label>Date *</label><input type="date" id="f-md" value="${m.date||''}"></div>
   </div>
   <div class="fgrid fg2f">
     <div class="fr"><label>Project</label><select id="f-mp">${projs.map(p=>`<option value="${p.id}"${(m.projectId||pF)===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
-    <div class="fr"><label>Meeting type</label><select id="f-mty">${MEETING_TYPES.map(t=>`<option${m.type===t?' selected':''}>${t}</option>`).join('')}</select></div>
+    <div class="fr"><label>Event type</label><select id="f-mty">${MEETING_TYPES.map(t=>`<option${m.type===t?' selected':''}>${t}</option>`).join('')}</select></div>
   </div>
   <div class="fgrid fg2f">
     <div class="fr"><label>Location / venue</label><input id="f-ml" value="${m.location||''}"></div>
@@ -4008,19 +4008,19 @@ function openMeetingModal(id){
   </div>
   <div class="fr"><label>Purpose / agenda</label><textarea id="f-mga" style="height:60px">${m.agenda||''}</textarea></div>
   <div class="fr"><label>Key concerns raised</label><textarea id="f-mkc" style="height:60px">${m.keyConcerns||''}</textarea></div>
-  <div class="fr"><label>Action items / follow-ups</label><textarea id="f-mai" style="height:60px" placeholder="Enter one action item — it will be added as a follow-up interaction">${m.actionItems||''}</textarea><div style="font-size:11px;color:var(--slate);margin-top:4px;">⚠ One action item per meeting. Only the first line will be tracked as a follow-up.</div></div>
+  <div class="fr"><label>Action items / follow-ups</label><textarea id="f-mai" style="height:60px" placeholder="Enter one action item — it will be added as a follow-up interaction">${m.actionItems||''}</textarea><div style="font-size:11px;color:var(--slate);margin-top:4px;">⚠ One action item per event. Only the first line will be tracked as a follow-up.</div></div>
   
   <div class="fr"><label>Notes</label><textarea id="f-mno">${m.notes||''}</textarea></div>`,
   `<button class="btn" onclick="closeM()">Cancel</button>
-   <button class="btn btn-primary" onclick="saveMeeting()">Save meeting</button>`);
+   <button class="btn btn-primary" onclick="saveMeeting()">Save event</button>`);
 }
 
 function saveMeeting(){
   const v=id=>document.getElementById(id)?.value||'';
   const title=v('f-mt');
   const date=v('f-md');
-  if(!title){alert('Meeting title is required.');return;}
-  if(!date){alert('Meeting date is required.');return;}
+  if(!title){alert('Event title is required.');return;}
+  if(!date){alert('Event date is required.');return;}
 
   const attendeeIds=[];
   const actionItemsText=v('f-mai').trim();
@@ -4060,12 +4060,12 @@ function saveMeeting(){
           date:date,
           channel:'Public meeting',
           direction:'Inbound',
-          summary:'Meeting action item: '+line.trim(),
+          summary:'Event action item: '+line.trim(),
           followUp:true,
           followUpDone:false,
           followUpNote:line.trim(),
           meetingId:data.id,
-          notes:'Auto-created from meeting: '+title
+          notes:'Auto-created from event: '+title
         });
       });
     }
@@ -4083,12 +4083,12 @@ function saveMeeting(){
           date:date,
           channel:'Public meeting',
           direction:'Inbound',
-          summary:'Meeting action item: '+line.trim(),
+          summary:'Event action item: '+line.trim(),
           followUp:true,
           followUpDone:false,
           followUpNote:line.trim(),
           meetingId:data.id,
-          notes:'Auto-created from meeting: '+title
+          notes:'Auto-created from event: '+title
         });
       });
       DB.set('interactions',ints);
@@ -4097,7 +4097,7 @@ function saveMeeting(){
 
   DB.set('meetings',all);
   closeM();
-  showToast(S.editId?'Meeting updated.':'Meeting logged.'+(actionItemsText?' Action items added to follow-ups.':''));
+  showToast(S.editId?'Event updated.':'Event logged.'+(actionItemsText?' Action items added to follow-ups.':''));
   S.editId=null;
   renderMeetings(document.getElementById('main'));
 }

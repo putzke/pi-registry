@@ -727,6 +727,20 @@ async function goToStep(n) {
   if (n === 2 && state.rawRows.length === 0) return;
   if (n === 3) {
     buildParsed();
+    // Show rejection summary in Step 3 review pane if any rows were dropped
+    if (state.rejected && state.rejected.length > 0) {
+      const rejHTML = state.rejected.map(r =>
+        `<li><strong>${r.name}</strong> — ${r.reason}</li>`
+      ).join('');
+      document.getElementById('review-summary').innerHTML =
+        `<div class="alert alert-warn">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v4M8 11v1"/></svg>
+          <div><strong>${state.rejected.length} row${state.rejected.length>1?'s':''} skipped</strong> — fix these in your file and re-import:
+          <ul style="margin:6px 0 0 16px;padding:0">${rejHTML}</ul></div>
+        </div>`;
+    } else {
+      document.getElementById('review-summary').innerHTML = '';
+    }
     // Show loading state while fetching stakeholders from Supabase
     document.getElementById('pane-3').classList.remove('hidden');
     document.getElementById('review-tbody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--fog)">Loading stakeholder data…</td></tr>';
@@ -796,7 +810,7 @@ function updatePreview() {
 // ── PARSED ROWS ───────────────────────────────────────────────
 function buildParsed() {
   const { rawRows, columnMap } = state;
-  state.parsed = rawRows.map((row, rowIdx) => {
+  const allParsed = rawRows.map((row, rowIdx) => {
     const obj = { _rowIdx: rowIdx };
     Object.entries(columnMap).forEach(([ci, field]) => {
       if (field === 'ignore') return;
@@ -826,17 +840,27 @@ function buildParsed() {
     if (obj.firstName) obj.firstName = obj.firstName.charAt(0).toUpperCase()+obj.firstName.slice(1);
     if (obj.lastName)  obj.lastName  = obj.lastName.charAt(0).toUpperCase()+obj.lastName.slice(1);
     return obj;
-  }).filter(r => {
-    // NAME RULE: must have first+last OR organization
+  });
+
+  // Validate and track rejections
+  state.rejected = [];
+  const valid = allParsed.filter((r, idx) => {
     const hasName = (r.firstName || '').trim() || (r.lastName || '').trim();
     const hasOrg  = (r.org || '').trim();
-    if (!hasName && !hasOrg) return false;
-    // CONTACT RULE: must have at least a valid email or phone
     const hasEmail = (r.email || '').trim().length > 0;
     const hasPhone = (r.phone || '').replace(/\D/g,'').length >= 7;
-    if (!hasEmail && !hasPhone) return false;
+    const displayName = [r.firstName, r.lastName].filter(Boolean).join(' ') || r.org || `Row ${idx + 2}`;
+    if (!hasName && !hasOrg) {
+      state.rejected.push({ name: displayName, reason: 'No name or organization' });
+      return false;
+    }
+    if (!hasEmail && !hasPhone) {
+      state.rejected.push({ name: displayName, reason: 'No email or phone number' });
+      return false;
+    }
     return true;
   });
+  state.parsed = valid;
 }
 
 // ── DUPLICATE DETECTION ───────────────────────────────────────

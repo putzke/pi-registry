@@ -727,20 +727,6 @@ async function goToStep(n) {
   if (n === 2 && state.rawRows.length === 0) return;
   if (n === 3) {
     buildParsed();
-    // Show rejection summary in Step 3 review pane if any rows were dropped
-    if (state.rejected && state.rejected.length > 0) {
-      const rejHTML = state.rejected.map(r =>
-        `<li><strong>${r.name}</strong> — ${r.reason}</li>`
-      ).join('');
-      document.getElementById('review-summary').innerHTML =
-        `<div class="alert alert-warn">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v4M8 11v1"/></svg>
-          <div><strong>${state.rejected.length} row${state.rejected.length>1?'s':''} skipped</strong> — fix these in your file and re-import:
-          <ul style="margin:6px 0 0 16px;padding:0">${rejHTML}</ul></div>
-        </div>`;
-    } else {
-      document.getElementById('review-summary').innerHTML = '';
-    }
     // Show loading state while fetching stakeholders from Supabase
     document.getElementById('pane-3').classList.remove('hidden');
     document.getElementById('review-tbody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--fog)">Loading stakeholder data…</td></tr>';
@@ -989,7 +975,12 @@ function updateReviewSummary() {
       <span class="badge b-amber">${exactCt} exact duplicates</span>
       <span class="badge b-red">${fuzzyCt} fuzzy matches</span>
       <span style="margin-left:auto;font-size:12px;color:var(--slate)">Actions: ${addCt} add · ${updateCt} update · ${skipCt} skip</span>
-    </div>`;
+    </div>${state.rejected && state.rejected.length > 0 ?
+      `<div class="alert alert-warn">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v4M8 11v1"/></svg>
+        <div><strong>${state.rejected.length} row${state.rejected.length>1?'s':''} skipped</strong> — fix these in your file and re-import:
+        <ul style="margin:6px 0 0 16px;padding:0">${state.rejected.map(r=>`<li><strong>${r.name}</strong> — ${r.reason}</li>`).join('')}</ul></div>
+      </div>` : ''}`;
 }
 
 function updateImportCount() {

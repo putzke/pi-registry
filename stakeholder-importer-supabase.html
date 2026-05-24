@@ -503,7 +503,6 @@ const AUTO_MAP = {
   'position':   'title',
   'email':      'email',
   'e-mail':     'email',
-  'mail':       'email',
   'phone':      'phone',
   'cell':       'phone',
   'mobile':     'phone',
@@ -511,6 +510,7 @@ const AUTO_MAP = {
   'fax':        'ignore',
   'address':    'address',
   'street':     'address',
+  'mailing':    'address',
   'type':       'type',
   'category':   'type',
   'tier':       'influenceTier',
@@ -828,12 +828,12 @@ function buildParsed() {
     return obj;
   }).filter(r => {
     // NAME RULE: must have first+last OR organization
-    const hasName = r.firstName || r.lastName;
-    const hasOrg  = r.org && r.org.trim();
+    const hasName = (r.firstName || '').trim() || (r.lastName || '').trim();
+    const hasOrg  = (r.org || '').trim();
     if (!hasName && !hasOrg) return false;
-    // CONTACT RULE: must have at least email or phone
-    const hasEmail = r.email && r.email.trim();
-    const hasPhone = r.phone && r.phone.trim();
+    // CONTACT RULE: must have at least a valid email or phone
+    const hasEmail = (r.email || '').trim().length > 0;
+    const hasPhone = (r.phone || '').replace(/\D/g,'').length >= 7;
     if (!hasEmail && !hasPhone) return false;
     return true;
   });

@@ -185,8 +185,8 @@ body{padding:0}
     <div class="tpl-box">
       <div class="tpl-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg></div>
       <div style="flex:1">
-        <div style="font-size:13px;font-weight:500;color:var(--green);margin-bottom:2px">Download the import template</div>
-        <div style="font-size:12px;color:var(--slate)">Use this pre-formatted CSV for fastest import — no column mapping needed. Paste your data into it, save, and upload below.</div>
+        <div style="font-size:13px;font-weight:500;color:var(--green);margin-bottom:2px">Download the import template (.xlsx)</div>
+        <div style="font-size:12px;color:var(--slate)">Pre-formatted Excel workbook with instructions, color-coded fields, dropdown validation, and example rows. Fill in your data and upload below.</div>
       </div>
       <button class="btn btn-success" onclick="downloadTemplate()">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg>
@@ -205,12 +205,12 @@ body{padding:0}
         </select>
       </div>
 
-      <label class="dropzone" id="dropzone" ondragover="dragOver(event)" ondragleave="dragLeave()" ondrop="dropFile(event)">
-        <input type="file" id="file-input" accept=".csv,.xlsx,.xls" onchange="fileChosen(this.files[0])">
+      <div class="dropzone" id="dropzone" ondragover="dragOver(event)" ondragleave="dragLeave()" ondrop="dropFile(event)" onclick="document.getElementById('file-input').click()">
+        <input type="file" id="file-input" accept=".csv,.xlsx,.xls" onchange="fileChosen(this.files[0])" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         <div class="dropzone-title">Drop your file here, or click to browse</div>
         <div class="dropzone-sub">CSV or Excel · Max 5,000 rows</div>
-      </label>
+      </div>
 
       <div id="file-status" class="hidden" style="margin-top:12px"></div>
     </div>

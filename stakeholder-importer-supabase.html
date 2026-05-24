@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://ncfbblhlsiglxkoiounv.supabase.co; img-src 'self' data:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://ncfbblhlsiglxkoiounv.supabase.co; img-src 'self' data:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PI Registry — Stakeholder Import Tool</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -346,7 +346,6 @@ function sanitizeHTML(str) {
 }
 
 function getImporterToken() {
-  // Prefer URL param (passed from parent), fall back to sessionStorage, then anon key
   const urlToken = new URLSearchParams(window.location.search).get('token');
   if (urlToken) return urlToken;
   try {
@@ -365,6 +364,9 @@ function getAuthHeaders() {
     'X-Client-Info': 'supabase-js/2.0.0'
   };
 }
+
+// ⚠️  DEV BYPASS — set to false before deploying to GitHub Pages
+const DEV_BYPASS = false;
 
 const SB_TABLES = {
   projects:             'pi_projects',
@@ -462,22 +464,26 @@ const DB = {
 
 // ── APP FIELDS ────────────────────────────────────────────────
 const APP_FIELDS = [
-  {key:'ignore',    label:'— ignore —'},
-  {key:'firstName', label:'First name *'},
-  {key:'lastName',  label:'Last name *'},
-  {key:'fullName',  label:'Full name (split on import)'},
-  {key:'org',       label:'Organization'},
-  {key:'title',     label:'Title / role'},
-  {key:'email',     label:'Email'},
-  {key:'phone',     label:'Phone'},
-  {key:'address',   label:'Mailing address'},
-  {key:'type',      label:'Stakeholder type'},
-  {key:'influenceTier', label:'Influence tier'},
-  {key:'prefContact',   label:'Preferred contact'},
-  {key:'support',   label:'Support level (project)'},
-  {key:'issueTags', label:'Issue tags'},
-  {key:'notes',     label:'Notes'},
-  {key:'isMaster',  label:'Master list (yes/no)'},
+  {key:'ignore',            label:'— ignore —'},
+  {key:'firstName',         label:'First name *'},
+  {key:'lastName',          label:'Last name *'},
+  {key:'fullName',          label:'Full name (split on import)'},
+  {key:'org',               label:'Organization'},
+  {key:'title',             label:'Title / role'},
+  {key:'email',             label:'Email'},
+  {key:'phone',             label:'Phone'},
+  {key:'address',           label:'Mailing address'},
+  {key:'parcelId',          label:'Parcel ID'},
+  {key:'type',              label:'Stakeholder type'},
+  {key:'influenceTier',     label:'Influence tier'},
+  {key:'prefContact',       label:'Preferred contact'},
+  {key:'isMaster',          label:'Master list (yes/no)'},
+  {key:'isAnonymous',       label:'Anonymous (yes/no)'},
+  {key:'stakeholderRole',   label:'Role on project (Internal/External)'},
+  {key:'support',           label:'Support level (project)'},
+  {key:'distributionGroups',label:'Distribution groups (project)'},
+  {key:'issueTags',         label:'Issue tags (project)'},
+  {key:'notes',             label:'Notes'},
 ];
 
 // Auto-suggest map: common column name fragments → field key
@@ -518,6 +524,17 @@ const AUTO_MAP = {
   'concern':    'issueTags',
   'note':       'notes',
   'comment':    'notes',
+  'parcel':     'parcelId',
+  'apn':        'parcelId',
+  'pin':        'parcelId',
+  'anon':       'isAnonymous',
+  'anonymous':  'isAnonymous',
+  'role':       'stakeholderRole',
+  'internal':   'stakeholderRole',
+  'external':   'stakeholderRole',
+  'dist':       'distributionGroups',
+  'group':      'distributionGroups',
+  'distribution':'distributionGroups',
   'master':     'isMaster',
   'preferred':  'prefContact',
   'pref':       'prefContact',

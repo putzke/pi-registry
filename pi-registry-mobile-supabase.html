@@ -1117,7 +1117,7 @@ function showContactDetail(id){
     <div class="section-hdr">Interaction history (${ints.length})</div>
     <div class="card" style="border-radius:0;border-left:none;border-right:none">
       ${ints.length===0?'<div class="empty" style="padding:20px"><div class="empty-title">No interactions logged</div></div>':
-      ints.map(i=>`<div class="int-item">
+      ints.map(i=>`<div class="int-item" onclick="editInteraction('${i.id}')" style="cursor:pointer">
         <div class="int-header">
           <span class="int-date">${i.date}</span>
           <span class="badge b-gray" style="font-size:12px">${i.channel}</span>
@@ -1162,7 +1162,7 @@ function renderInteractionsList(){
   el.innerHTML=list.map(i=>{
     const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
     const p=projs.find(x=>x.id===i.projectId);
-    return`<div class="int-item">
+    return`<div class="int-item" onclick="editInteraction('${i.id}')" style="cursor:pointer">
       <div class="int-header">
         <span class="int-date">${i.date}</span>
         ${p?`<span class="proj-pill" style="font-size:10px;padding:2px 7px"><span class="proj-dot${p.status==='On hold'?' hold':''}"></span>${p.pid}</span>`:''}

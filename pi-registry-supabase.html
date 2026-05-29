@@ -676,7 +676,7 @@ async function loadAllData() {
 
 // ── DB SHIM ────────────────────────────────────────────────────────
 const DB = {
-  get(k) { return (_syncCache[k] || []).slice(); },
+  get(k) { return (_syncCache[k] || []).map(x => ({...x})); },
   set(k, arr) {
     const old = (_syncCache[k] || []).slice();
     _syncCache[k] = arr;
@@ -2023,17 +2023,16 @@ function confirmTplDelete(tplId){
 function adjDel(id,delta){
   const all=DB.get('deliverables');
   const i=all.findIndex(x=>x.id===id);if(i<0)return;
-  all[i].deliveredCount=Math.max(0,(all[i].deliveredCount||0)+delta);
-  const pct=all[i].contractedQty>0?Math.min(100,Math.round(all[i].deliveredCount/all[i].contractedQty*100)):all[i].progress;
-  if(pct>=100){all[i].status='Complete';all[i].progress=100;}
-  else if(all[i].deliveredCount>0){all[i].status='In progress';all[i].progress=pct;}
+  const newCount=Math.max(0,(all[i].deliveredCount||0)+delta);
+  const pct=all[i].contractedQty>0?Math.min(100,Math.round(newCount/all[i].contractedQty*100)):0;
+  const newStatus=pct>=100?'Complete':newCount>0?'In progress':all[i].status;
+  all[i]={...all[i], deliveredCount:newCount, status:newStatus};
   DB.set('deliverables',all);renderDeliverables(document.getElementById('main'));
 }
 function markDelDone(id){
   const all=DB.get('deliverables');
   const i=all.findIndex(x=>x.id===id);if(i<0)return;
-  all[i].status='Complete';all[i].progress=100;
-  if(all[i].contractedQty)all[i].deliveredCount=all[i].contractedQty;
+  all[i]={...all[i], status:'Complete', deliveredCount:all[i].contractedQty||all[i].deliveredCount};
   DB.set('deliverables',all);renderDeliverables(document.getElementById('main'));
 }
 function cycleDelStatus(id){
@@ -2042,8 +2041,9 @@ function cycleDelStatus(id){
   const cycle=['Not started','In progress','Complete','On hold','Cancelled'];
   const cur=all[i].status||'Not started';
   const next=cycle[(cycle.indexOf(cur)+1)%cycle.length];
-  all[i].status=next;
-  if(next==='Complete'){all[i].progress=100;if(all[i].contractedQty)all[i].deliveredCount=all[i].contractedQty;}
+  const updates={status:next};
+  if(next==='Complete'){updates.deliveredCount=all[i].contractedQty||all[i].deliveredCount;}
+  all[i]={...all[i],...updates};
   DB.set('deliverables',all);renderDeliverables(document.getElementById('main'));
 }
 
@@ -2424,12 +2424,14 @@ function delInt(id){
 }
 function resolveFollowUp(id){
   const all=DB.get('interactions');
-  const i=all.findIndex(x=>x.id===id);if(i>-1)all[i].followUpDone=true;
+  const i=all.findIndex(x=>x.id===id);
+  if(i>-1) all[i]={...all[i], followUpDone:true};
   DB.set('interactions',all);refreshBadges();render();
 }
 function reopenFollowUp(id){
   const all=DB.get('interactions');
-  const i=all.findIndex(x=>x.id===id);if(i>-1)all[i].followUpDone=false;
+  const i=all.findIndex(x=>x.id===id);
+  if(i>-1) all[i]={...all[i], followUpDone:false};
   DB.set('interactions',all);refreshBadges();render();
 }
 

@@ -632,14 +632,16 @@ async function sbAdd(table, obj) {
 async function sbUpdate(table, sbId, obj) {
   const sbTable = SB_TABLES[table];
   const body = toSB(table, obj);
+  console.log('SB UPDATE sending:', sbTable, 'id=', sbId, JSON.stringify(body));
   const r = await fetch(SUPA_REST + '/' + sbTable + '?id=eq.' + sbId, {
     method: 'PATCH',
     headers: getAuthHeaders(),
     body: JSON.stringify(body)
   });
+  const responseText = await r.text();
+  console.log('SB UPDATE response:', r.status, responseText);
   if (!r.ok) {
-    const errText = await r.text();
-    console.error('SB UPDATE error:', r.status, sbTable, errText);
+    console.error('SB UPDATE error:', r.status, sbTable, responseText);
     return false;
   }
   cacheClear(table);

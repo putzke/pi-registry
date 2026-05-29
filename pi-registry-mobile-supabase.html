@@ -751,14 +751,20 @@ const SB_TO_INT = {
 };
 
 // Convert our internal object to Supabase column names
+const DATE_FIELDS = new Set(['interaction_date','follow_up_due','due_date','start_date','end_date','precon_date','added_date','meeting_date']);
+
 function toSB(table, obj) {
   const sbTable = SB_TABLES[table];
   const map = SB_TO_INT[sbTable];
   const result = {};
   for (const [intKey, sbCol] of Object.entries(map)) {
     if (intKey === 'id') continue;
-    if (obj[intKey] !== undefined && obj[intKey] !== null) {
-      result[sbCol] = obj[intKey];
+    let val = obj[intKey];
+    if (DATE_FIELDS.has(sbCol) && (val === '' || val === undefined)) val = null;
+    if (val !== undefined && val !== null) {
+      result[sbCol] = val;
+    } else if (DATE_FIELDS.has(sbCol)) {
+      result[sbCol] = null;
     }
   }
   return result;
@@ -850,7 +856,7 @@ async function loadAllData() {
 
 // ── DB SHIM ────────────────────────────────────────────────────────
 const DB = {
-  get(k) { return (_syncCache[k] || []).slice(); },
+  get(k) { return (_syncCache[k] || []).map(x => ({...x})); },
   set(k, arr) {
     const old = (_syncCache[k] || []).slice();
     _syncCache[k] = arr;
@@ -1239,7 +1245,7 @@ function resolveFollowup(id,e){
   const ints=DB.get('interactions');
   const i=ints.findIndex(x=>x.id===id);
   if(i<0)return;
-  ints[i].followUpDone=true;
+  ints[i]={...ints[i], followUpDone:true};
   DB.set('interactions',ints);
   showToast('Follow-up resolved ✓');
   refreshHome();

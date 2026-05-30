@@ -116,6 +116,7 @@ body{padding:0}
 .action-btn.sel-add{background:var(--green-lt);border-color:var(--green);color:#1a7a50}
 .action-btn.sel-update{background:var(--sky-dim);border-color:var(--sky);color:var(--sky-lt)}
 .action-btn.sel-skip{background:rgba(255,255,255,.04);border-color:var(--border-md);color:var(--slate)}
+.action-btn.sel-link{background:rgba(93,164,207,.15);border-color:var(--sky);color:var(--sky-lt)}
 .match-diff{font-size:11px;color:var(--slate);margin-top:3px}
 .match-diff span.changed{color:var(--amber)}
 .match-diff span.same{color:var(--fog)}
@@ -263,11 +264,12 @@ body{padding:0}
 
       <div id="review-summary" style="margin-bottom:16px"></div>
 
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <div id="bulk-btns" style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
         <span style="font-size:12px;color:var(--fog)">Bulk set:</span>
         <button class="btn btn-sm" onclick="bulkAction('new','add')">All new → Add</button>
         <button class="btn btn-sm" onclick="bulkAction('exact','skip')">All exact dupes → Skip</button>
         <button class="btn btn-sm" onclick="bulkAction('exact','update')">All exact dupes → Update</button>
+        <button class="btn btn-sm" id="bulk-link-btn" style="display:none" onclick="bulkAction('exact','link');bulkAction('fuzzy','link')">All dupes → Link to project</button>
         <button class="btn btn-sm" onclick="bulkAction('fuzzy','skip')">All fuzzy → Skip</button>
         <div style="flex:1"></div>
         <select class="fi-sel" id="review-filter" onchange="renderReviewTable()">
@@ -851,6 +853,10 @@ function buildParsed() {
 
 // ── DUPLICATE DETECTION ───────────────────────────────────────
 function buildReview() {
+  // Show/hide "Link to project" bulk button based on project selection
+  const linkBtn = document.getElementById('bulk-link-btn');
+  if (linkBtn) linkBtn.style.display = state.selectedProject ? '' : 'none';
+
   const existing = state.existingStakeholders || [];
   state.reviewed = state.parsed.map(row => {
     let matchType = 'new', matchId = null, diffs = [];
@@ -873,7 +879,7 @@ function buildReview() {
         matchType = 'fuzzy'; matchId = best.id; diffs = getDiffs(row, best);
       }
     }
-    return { row, matchType, matchId, action: matchType === 'new' ? 'add' : matchType === 'exact' ? 'skip' : 'review', diffs };
+    return { row, matchType, matchId, action: matchType === 'new' ? 'add' : matchType === 'exact' ? (state.selectedProject ? 'link' : 'skip') : (state.selectedProject ? 'link' : 'review'), diffs };
   });
   renderReviewTable();
   updateImportCount();
@@ -928,6 +934,7 @@ function renderReviewTable() {
           <button class="action-btn ${action==='skip'?'sel-skip':''}" onclick="setAction(${realIdx},'skip')">Skip</button>
         </div>`
       : `<div class="action-sel">
+          ${state.selectedProject ? `<button class="action-btn ${action==='link'?'sel-link':''}" onclick="setAction(${realIdx},'link')">Link to project</button>` : ''}
           <button class="action-btn ${action==='skip'?'sel-skip':''}" onclick="setAction(${realIdx},'skip')">Skip</button>
           <button class="action-btn ${action==='update'?'sel-update':''}" onclick="setAction(${realIdx},'update')">Update</button>
           <button class="action-btn ${action==='add'?'sel-add':''}" onclick="setAction(${realIdx},'add')">Add as new</button>
@@ -968,13 +975,14 @@ function updateReviewSummary() {
   const fuzzyCt = r.filter(x=>x.matchType==='fuzzy').length;
   const addCt = r.filter(x=>x.action==='add').length;
   const updateCt = r.filter(x=>x.action==='update').length;
+  const linkCt = r.filter(x=>x.action==='link').length;
   const skipCt = r.filter(x=>x.action==='skip').length;
   document.getElementById('review-summary').innerHTML = `
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
       <span class="badge b-green">${newCt} new contacts</span>
       <span class="badge b-amber">${exactCt} exact duplicates</span>
       <span class="badge b-red">${fuzzyCt} fuzzy matches</span>
-      <span style="margin-left:auto;font-size:12px;color:var(--slate)">Actions: ${addCt} add · ${updateCt} update · ${skipCt} skip</span>
+      <span style="margin-left:auto;font-size:12px;color:var(--slate)">Actions: ${addCt} add · ${updateCt} update · ${linkCt} link · ${skipCt} skip</span>
     </div>${state.rejected && state.rejected.length > 0 ?
       `<div class="alert alert-warn">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v4M8 11v1"/></svg>
@@ -1034,6 +1042,10 @@ async function runImport() {
       await sbUpdate('stakeholders', matchId, updateObj);
       stakeholderId = matchId;
       updated++;
+
+    } else if (action === 'link' && matchId) {
+      // Link existing master stakeholder to project — no master record changes
+      stakeholderId = matchId;
 
     } else {
       stakeholderId = matchId;

@@ -1150,12 +1150,12 @@ function renderDash(el){
     var maxWeekTotal=Math.max.apply(null,weeks.map(function(w){return w.total;}))||1;
 
     // ── STACKED BAR CHART ──────────────────────────────────────────
-    var BAR_W=55,BAR_GAP=24,CHART_H=100,LABEL_H=32,PAD_L=28,PAD_R=8;
+    var BAR_W=38,BAR_GAP=16,CHART_H=80,LABEL_H=28,PAD_L=24,PAD_R=8;
     var totalBarW=(BAR_W+BAR_GAP)*4-BAR_GAP;
     var svgW=PAD_L+totalBarW+PAD_R;
     var svgH=CHART_H+LABEL_H+18; // +18 for y-axis labels
 
-    var svg='<svg width="100%" viewBox="0 0 '+svgW+' '+svgH
+    var svg='<svg width="'+svgW+'" height="'+svgH+'" viewBox="0 0 '+svgW+' '+svgH
       +'" xmlns="http://www.w3.org/2000/svg" style="overflow:visible;display:block">';
 
     // Y axis gridlines & labels
@@ -1198,25 +1198,27 @@ function renderDash(el){
       // Week label
       var shortLabel=wk.start.toLocaleDateString('en-US',{month:'short',day:'numeric'});
       svg+='<text x="'+(x+BAR_W/2)+'" y="'+(18+CHART_H+14)+'"'
-        +' text-anchor="middle" font-size="9" fill="#7A99B0"'
+        +' text-anchor="middle" font-size="8" fill="#7A99B0"'
         +' font-family="IBM Plex Sans,sans-serif">'+shortLabel+'</text>';
-      svg+='<text x="'+(x+BAR_W/2)+'" y="'+(18+CHART_H+24)+'"'
-        +' text-anchor="middle" font-size="8" fill="#4A6A80"'
+      svg+='<text x="'+(x+BAR_W/2)+'" y="'+(18+CHART_H+22)+'"'
+        +' text-anchor="middle" font-size="7" fill="#4A6A80"'
         +' font-family="IBM Plex Sans,sans-serif">'+['Week 1','Week 2','Week 3','This week'][wi]+'</text>';
     });
 
-    // Week-over-week trend arrow (top right)
+    svg+='</svg>';
+
+    // Week-over-week trend badge (HTML element, placed next to chart title via return value)
     var prev=weeks[2].total,curr=weeks[3].total;
+    var trendBadge='';
     if(prev>0||curr>0){
-      var delta=prev>0?Math.round((curr-prev)/prev*100):100;
+      var delta=prev>0?Math.round((curr-prev)/prev*100):(curr>0?100:0);
       var arrow=delta>=0?'▲':'▼';
       var tcolor=delta>=0?'#28A870':'#D94040';
-      var ttext=(delta>=0?'+':'')+delta+'%';
-      svg+='<text x="'+(svgW-PAD_R)+'" y="14" text-anchor="end" font-size="10"'
-        +' fill="'+tcolor+'" font-family="IBM Plex Sans,sans-serif" font-weight="600">'
-        +arrow+' '+ttext+' vs prior week</text>';
+      var tbg=delta>=0?'rgba(40,168,112,.12)':'rgba(217,64,64,.10)';
+      trendBadge='<span style="font-size:10px;font-weight:600;color:'+tcolor+';background:'+tbg
+        +';border-radius:4px;padding:2px 7px;margin-left:8px;white-space:nowrap">'
+        +arrow+' '+(delta>=0?'+':'')+delta+'% vs last week</span>';
     }
-    svg+='</svg>';
 
     // ── CHANNEL LEGEND ─────────────────────────────────────────────
     var allChans={};
@@ -1306,7 +1308,10 @@ function renderDash(el){
       swimHtml+='</div>';
     }
 
-    return '<div>'+svg+legend+swimHtml+'</div>';
+    return '<div>'
+      +'<div style="display:flex;align-items:center;margin-bottom:10px">'
+      +svg+trendBadge+'</div>'
+      +legend+swimHtml+'</div>';
   }
 
   // Helper: hex color to rgb components for rgba()
@@ -1426,7 +1431,7 @@ function renderDash(el){
     <!-- ROW 3: Activity panel + Live feed -->
     <div style="display:grid;grid-template-columns:3fr 2fr;gap:14px;margin-bottom:20px">
       <div class="dash-anim" style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:18px;animation-delay:420ms">
-        <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:14px">Activity pulse <span style="font-size:11px;font-weight:400;color:var(--fog);margin-left:6px">past 4 weeks · by channel &amp; project</span></div>
+        <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:8px">Activity pulse <span style="font-size:11px;font-weight:400;color:var(--fog);margin-left:6px">past 4 weeks · by channel &amp; project</span></div>
         ${buildActivityPanel()}
       </div>
       <div class="dash-anim" style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:18px;animation-delay:480ms">

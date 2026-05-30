@@ -450,6 +450,23 @@ function signOut() {
   location.reload();
 }
 
+async function refreshSession() {
+  const sess = getSession();
+  if (!sess || !sess.refresh_token) { signOut(); return; }
+  try {
+    const res = await fetch(SUPA_URL + '/auth/v1/token?grant_type=refresh_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPA_KEY },
+      body: JSON.stringify({ refresh_token: sess.refresh_token })
+    });
+    const data = await res.json();
+    if (!res.ok) { console.warn('Token refresh failed — signing out:', data); signOut(); return; }
+    setSession({ access_token: data.access_token, refresh_token: data.refresh_token, user: data.user });
+  } catch(e) {
+    console.warn('Token refresh error (will retry next interval):', e);
+  }
+}
+
 // ── LOGIN OVERLAY ──────────────────────────────────────────────────
 function showLoginOverlay() {
   const overlay = document.createElement('div');
@@ -681,7 +698,7 @@ const DB = {
   set(k, arr) {
     const old = (_syncCache[k] || []).slice();
     _syncCache[k] = arr;
-    DB._sync(k, old, arr);
+    return DB._sync(k, old, arr); // return promise so callers can await if needed
   },
   async _sync(table, oldArr, newArr) {
     const oldMap = {}; oldArr.forEach(x => { if(x.id) oldMap[x.id] = x; });
@@ -907,6 +924,8 @@ async function initApp(){
     await loadAllData();
     refreshBadges();
     render();
+    // Refresh Supabase token every 45 min (tokens expire after 1 hour)
+    setInterval(refreshSession, 45 * 60 * 1000);
   } catch(e) {
     console.error('Supabase init error:', e);
     showToast('Error loading data from Supabase', 'error');
@@ -4053,7 +4072,7 @@ function openMeetingModal(id){
    <button class="btn btn-primary" onclick="saveMeeting()">Save event</button>`);
 }
 
-function saveMeeting(){
+async function saveMeeting(){
   const v=id=>document.getElementById(id)?.value||'';
   const title=v('f-mt');
   const date=v('f-md');
@@ -4085,9 +4104,11 @@ function saveMeeting(){
 
   const all=DB.get('meetings')||[];
   if(S.editId){
+    // EDIT PATH: meeting already has a real numeric ID — safe to write interactions immediately
     const i=all.findIndex(x=>x.id===S.editId);
     if(i>-1)all[i]=data;else all.push(data);
-    // On edit: remove old auto-created follow-ups for this meeting, then recreate
+    DB.set('meetings',all);
+    // Remove old auto-created follow-ups for this meeting, then recreate
     let ints=DB.get('interactions').filter(x=>x.meetingId!==S.editId);
     if(actionItemsText&&data.projectId){
       actionItemsText.split('\n').filter(l=>l.trim()).forEach(line=>{
@@ -4109,9 +4130,14 @@ function saveMeeting(){
     }
     DB.set('interactions',ints);
   } else {
+    // NEW RECORD PATH: await the meeting sync so _syncCache gets the real numeric ID
+    // before we write interactions that reference it via meetingId
     all.push(data);
-    // On create: generate follow-up interactions from action items
+    await DB.set('meetings',all);
     if(actionItemsText&&data.projectId){
+      // Read the real ID from _syncCache (tmp_ has been replaced by sbAdd by now)
+      const savedMeeting=(_syncCache['meetings']||[]).find(x=>x.title===data.title&&x.date===data.date);
+      const realMeetingId=savedMeeting?.id||data.id;
       const ints=DB.get('interactions');
       actionItemsText.split('\n').filter(l=>l.trim()).forEach(line=>{
         ints.push({
@@ -4125,29 +4151,22 @@ function saveMeeting(){
           followUp:true,
           followUpDone:false,
           followUpNote:line.trim(),
-          meetingId:data.id,
+          meetingId:realMeetingId,
           notes:'Auto-created from event: '+title
         });
       });
       DB.set('interactions',ints);
     }
   }
-
-  DB.set('meetings',all);
   closeM();
   showToast(S.editId?'Event updated.':'Event logged.'+(actionItemsText?' Action items added to follow-ups.':''));
-  const wasNew=!S.editId;
   S.editId=null;
-  if(wasNew){
-    loadAllData().then(()=>renderMeetings(document.getElementById('main')));
-  } else {
-    renderMeetings(document.getElementById('main'));
-  }
+  renderMeetings(document.getElementById('main'));
 }
 // ── END MEETINGS ───────────────────────────────────────────────────────────
-function delMeeting(id){
+async function delMeeting(id){
   if(!confirm('Delete this event? This cannot be undone.')) return;
-  DB.set('meetings', DB.get('meetings').filter(x=>x.id!==id));
+  await DB.set('meetings', DB.get('meetings').filter(x=>x.id!==id));
   // Also remove any auto-created follow-up interactions linked to this event
   DB.set('interactions', DB.get('interactions').filter(x=>x.meetingId!==id));
   closeM();

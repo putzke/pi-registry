@@ -557,8 +557,9 @@ const SB_TO_INT = {
     id:'id', projectId:'project_id', title:'title', date:'meeting_date',
     type:'meeting_type', location:'location', status:'status',
     attendanceCount:'attendance_count', commentCards:'comment_cards',
-    format:'format', keyConcerns:'key_concerns', actionItems:'action_items',
-    notes:'notes'
+    handouts:'handouts', format:'format', agenda:'agenda',
+    keyConcerns:'key_concerns', actionItems:'action_items',
+    notes:'notes', createdAt:'created_at'
   }
 };
 
@@ -2797,6 +2798,16 @@ function generateReport(type){
   var body='';
 
   if(type==='contact-list'){
+    // Sort: Internal stakeholders first (alpha), then External (alpha)
+    var sortedStakes = filteredStakes.slice().sort(function(a, b) {
+      var roleA = (a.lk.stakeholderRole || 'External').toLowerCase();
+      var roleB = (b.lk.stakeholderRole || 'External').toLowerCase();
+      if (roleA === 'internal' && roleB !== 'internal') return -1;
+      if (roleA !== 'internal' && roleB === 'internal') return 1;
+      var nameA = ((a.s.lastName||'') + (a.s.firstName||'') + (a.s.org||'')).toLowerCase();
+      var nameB = ((b.s.lastName||'') + (b.s.firstName||'') + (b.s.org||'')).toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
     body='<table style="width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed"><thead><tr>'
       +'<th style="width:16%;padding:4px 6px;background:#1a3a5c;color:#fff;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.4px">Name</th>'
       +'<th style="width:20%;padding:4px 6px;background:#1a3a5c;color:#fff;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.4px">Organization</th>'
@@ -2805,8 +2816,15 @@ function generateReport(type){
       +'<th style="width:14%;padding:4px 6px;background:#1a3a5c;color:#fff;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.4px">Phone</th>'
       +'<th style="width:8%;padding:4px 6px;background:#1a3a5c;color:#fff;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.4px">Type</th>'
       +'</tr></thead><tbody>';
-    filteredStakes.forEach(function(item){
+    var lastRole = null;
+    sortedStakes.forEach(function(item){
       var s=item.s,lk=item.lk;
+      var role=(lk.stakeholderRole||'External');
+      if(role!==lastRole){
+        var sectionColor=role==='Internal'?'#2d5a8e':'#4a7a4a';
+        body+='<tr><td colspan="6" style="padding:6px 6px 3px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:'+sectionColor+';border-bottom:2px solid '+sectionColor+';background:#f8f9fa">'+role+' Stakeholders</td></tr>';
+        lastRole=role;
+      }
       var dgBadges=(lk.distributionGroups||'').split(',').filter(Boolean).map(function(g){return '<span class="badge b-teal" style="margin:1px">'+g.trim()+'</span>'}).join('');
       body+='<tr>'
         +'<td style="font-weight:600;padding:5px 6px;border-bottom:1px solid #e0e0e0;word-wrap:break-word;vertical-align:top">'+s.firstName+' '+s.lastName+'</td>'
@@ -2817,7 +2835,7 @@ function generateReport(type){
         +'<td style="padding:5px 6px;border-bottom:1px solid #e0e0e0;vertical-align:top">'+(s.type||'—')+'</td></tr>';
     });
     body+='</tbody></table>';
-    if(filteredStakes.length===0)body='<div style="padding:32px;text-align:center;color:var(--fog)">No stakeholders match the selected distribution groups.</div>';
+    if(sortedStakes.length===0)body='<div style="padding:32px;text-align:center;color:var(--fog)">No stakeholders match the selected distribution groups.</div>';
 
   } else if(type==='interaction-log'){
     var sorted=externalInts.slice().sort(function(a,b){return b.date.localeCompare(a.date)});
@@ -4117,8 +4135,13 @@ function saveMeeting(){
   DB.set('meetings',all);
   closeM();
   showToast(S.editId?'Event updated.':'Event logged.'+(actionItemsText?' Action items added to follow-ups.':''));
+  const wasNew=!S.editId;
   S.editId=null;
-  renderMeetings(document.getElementById('main'));
+  if(wasNew){
+    loadAllData().then(()=>renderMeetings(document.getElementById('main')));
+  } else {
+    renderMeetings(document.getElementById('main'));
+  }
 }
 // ── END MEETINGS ───────────────────────────────────────────────────────────
 

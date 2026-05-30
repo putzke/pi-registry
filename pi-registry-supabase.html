@@ -4048,7 +4048,8 @@ function openMeetingModal(id){
   <div class="fr"><label>Action items / follow-ups</label><textarea id="f-mai" style="height:60px" placeholder="Enter one action item — it will be added as a follow-up interaction">${m.actionItems||''}</textarea><div style="font-size:11px;color:var(--slate);margin-top:4px;">⚠ One action item per event. Only the first line will be tracked as a follow-up.</div></div>
   
   <div class="fr"><label>Notes</label><textarea id="f-mno">${m.notes||''}</textarea></div>`,
-  `<button class="btn" onclick="closeM()">Cancel</button>
+  `${id?`<button class="btn btn-danger btn-sm" onclick="delMeeting('${id}')">Delete</button>`:''}
+   <button class="btn" onclick="closeM()">Cancel</button>
    <button class="btn btn-primary" onclick="saveMeeting()">Save event</button>`);
 }
 
@@ -4144,6 +4145,14 @@ function saveMeeting(){
   }
 }
 // ── END MEETINGS ───────────────────────────────────────────────────────────
+function delMeeting(id){
+  if(!confirm('Delete this event? This cannot be undone.')) return;
+  DB.set('meetings', DB.get('meetings').filter(x=>x.id!==id));
+  // Also remove any auto-created follow-up interactions linked to this event
+  DB.set('interactions', DB.get('interactions').filter(x=>x.meetingId!==id));
+  closeM();
+  renderMeetings(document.getElementById('main'));
+}
 
 </script>
 </body>

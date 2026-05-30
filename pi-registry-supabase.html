@@ -280,6 +280,37 @@ select optgroup{background:var(--navy-mid);color:var(--sky-lt);font-weight:700;f
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.25);border-radius:4px;border:2px solid transparent;background-clip:padding-box}
 ::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.4);background-clip:padding-box}
+
+/* DASHBOARD ANIMATIONS */
+@keyframes countUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeSlideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes feedIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
+@keyframes heatPop{from{transform:scale(0.4);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes bubblePop{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(45,125,210,.4)}50%{box-shadow:0 0 0 5px rgba(45,125,210,0)}}
+.dash-anim{animation:fadeSlideIn .35s ease both}
+.stat-val-anim{animation:countUp .4s ease both}
+/* ACTIVITY HEATMAP */
+.heat-grid{display:flex;gap:3px;align-items:flex-end}
+.heat-col{display:flex;flex-direction:column;gap:3px}
+.heat-cell{width:13px;height:13px;border-radius:3px;cursor:pointer;transition:transform .1s,opacity .1s;animation:heatPop .25s ease both}
+.heat-cell:hover{transform:scale(1.35);z-index:2}
+.heat-0{background:rgba(255,255,255,.06)}
+.heat-1{background:rgba(45,125,210,.30)}
+.heat-2{background:rgba(45,125,210,.55)}
+.heat-3{background:rgba(45,125,210,.80)}
+.heat-4{background:#2D7DD2}
+/* ACTIVITY FEED */
+.feed-item{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06);animation:feedIn .3s ease both}
+.feed-item:last-child{border-bottom:none}
+.feed-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px}
+/* BUBBLE CHART */
+.bubble-wrap{position:relative;width:100%;overflow:hidden}
+.bubble-chart{position:relative}
+.bubble{position:absolute;border-radius:50%;cursor:pointer;transition:transform .15s,box-shadow .15s;animation:bubblePop .4s cubic-bezier(.34,1.56,.64,1) both}
+.bubble:hover{transform:scale(1.18)!important;z-index:10;box-shadow:0 0 0 2px rgba(255,255,255,.35)}
+.bubble-tooltip{position:absolute;background:#0B1929;border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:8px 11px;font-size:12px;color:var(--white);pointer-events:none;z-index:20;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.5)}
+.b-axis-lbl{position:absolute;font-size:10px;color:var(--fog);letter-spacing:.3px}
 </style>
 <!-- SheetJS loaded on demand for Excel export -->
 <script>/* JSZip 3.10.1 - embedded for offline use */
@@ -878,6 +909,7 @@ const S={
   selStakeholder:null,
   selInteraction:null,
   stakeTab:'info',
+  skView:'list',
   delTab:'scope',
   projTab:'active',
   editId:null,
@@ -1034,42 +1066,24 @@ function renderDash(el){
       </div>`;
     return card.outerHTML;
   }
-  // ── COMPUTE DASHBOARD DATA ──────────────────────
   const dels=DB.get('deliverables');
   const totalDels=dels.length;
   const completeDels=dels.filter(d=>d.status==='Complete').length;
   const inProgDels=dels.filter(d=>d.status==='In progress').length;
   const notStartedDels=dels.filter(d=>d.status==='Not started').length;
   const delPct=totalDels>0?Math.round(completeDels/totalDels*100):0;
-
-  // Interaction channels breakdown
   const channels={};
   ints.forEach(i=>{channels[i.channel]=(channels[i.channel]||0)+1});
   const chSorted=Object.entries(channels).sort((a,b)=>b[1]-a[1]);
   const maxCh=chSorted.length>0?chSorted[0][1]:1;
-
-  // Sentiment across all projects
   const allChamp=ps.filter(x=>(x.stakeholderRole||'External')==='External'&&x.support==='Champion').length;
   const allNeut=ps.filter(x=>(x.stakeholderRole||'External')==='External'&&x.support==='Neutral').length;
   const allOpp=ps.filter(x=>(x.stakeholderRole||'External')==='External'&&x.support==='Opponent').length;
   const sentTotal=allChamp+allNeut+allOpp||1;
-
-  // Recent interactions (last 30 days)
   const now=new Date();
   const d30=new Date(now.getTime()-30*86400000);
   const recent30=ints.filter(i=>new Date(i.date+'T00:00:00')>=d30).length;
 
-  // Per-project deliverable progress for mini bars
-  function projDelBar(projId){
-    const pd=dels.filter(d=>d.projectId===projId);
-    if(pd.length===0)return'<span style="font-size:11px;color:var(--fog)">No deliverables</span>';
-    const pc=pd.filter(d=>d.status==='Complete').length;
-    const pct=Math.round(pc/pd.length*100);
-    return'<div style="display:flex;align-items:center;gap:8px;width:100%"><div style="flex:1;height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+
-      (pct>=100?'var(--green)':pct>=50?'var(--sky-lt)':'var(--amber)')+';border-radius:3px;transition:width .3s"></div></div><span style="font-size:11px;color:var(--mist);white-space:nowrap">'+pc+'/'+pd.length+'</span></div>';
-  }
-
-  // SVG donut chart helper
   function donut(pct,color,size,label){
     var r=size/2-4,c=2*Math.PI*r,dash=pct/100*c,gap=c-dash;
     return'<div style="position:relative;width:'+size+'px;height:'+size+'px;display:flex;align-items:center;justify-content:center">'
@@ -1081,12 +1095,106 @@ function renderDash(el){
       +'<div style="font-size:10px;color:var(--fog)">'+label+'</div></div></div>';
   }
 
-  // Sentiment bar
   var sentBar='<div style="display:flex;height:10px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.06)">'
     +'<div style="width:'+(allChamp/sentTotal*100)+'%;background:var(--green);transition:width .3s" title="Champions: '+allChamp+'"></div>'
     +'<div style="width:'+(allNeut/sentTotal*100)+'%;background:var(--slate);transition:width .3s" title="Neutral: '+allNeut+'"></div>'
     +'<div style="width:'+(allOpp/sentTotal*100)+'%;background:var(--red);transition:width .3s" title="Opponents: '+allOpp+'"></div>'
     +'</div>';
+
+  // ── ACTIVITY HEATMAP (14 weeks) ──────────────────────────────────
+  function buildHeatmap(){
+    var counts={};
+    ints.forEach(function(i){if(i.date)counts[i.date]=(counts[i.date]||0)+1});
+    var meetings=DB.get('meetings')||[];
+    meetings.forEach(function(m){if(m.date)counts[m.date]=(counts[m.date]||0)+1});
+    var WEEKS=14;
+    var today=new Date();
+    var dayOfWeek=today.getDay();
+    var cols=[];
+    for(var w=WEEKS-1;w>=0;w--){
+      var cells=[];
+      for(var d=6;d>=0;d--){
+        var offset=w*7+d;
+        var dt=new Date(today);
+        dt.setDate(today.getDate()-dayOfWeek-offset);
+        var key=dt.toISOString().slice(0,10);
+        var ct=counts[key]||0;
+        var lvl=ct===0?0:ct===1?1:ct<=3?2:ct<=5?3:4;
+        var label=dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})+(ct?' · '+ct+' activit'+(ct===1?'y':'ies'):'');
+        cells.push({key:key,ct:ct,lvl:lvl,label:label});
+      }
+      cols.push(cells.reverse());
+    }
+    var monthLabels=[];
+    cols.forEach(function(col,ci){
+      var m=new Date(col[0].key+'T00:00:00').toLocaleDateString('en-US',{month:'short'});
+      if(ci===0||m!==(monthLabels[monthLabels.length-1]||{}).m)monthLabels.push({m:m,ci:ci});
+    });
+    var html='<div style="display:flex;flex-direction:column;gap:0">';
+    html+='<div style="display:flex;gap:3px;padding-left:0;margin-bottom:3px;height:14px;position:relative">';
+    monthLabels.forEach(function(x){
+      html+='<div style="position:absolute;left:'+x.ci*16+'px;font-size:10px;color:var(--fog);white-space:nowrap">'+x.m+'</div>';
+    });
+    html+='</div>';
+    html+='<div class="heat-grid">';
+    cols.forEach(function(col,ci){
+      html+='<div class="heat-col">';
+      col.forEach(function(cell,ri){
+        var delay=(ci*7+ri)*10;
+        html+='<div class="heat-cell heat-'+cell.lvl+'" style="animation-delay:'+delay+'ms" title="'+cell.label+'"></div>';
+      });
+      html+='</div>';
+    });
+    html+='</div>';
+    html+='<div style="display:flex;align-items:center;gap:5px;margin-top:8px;justify-content:flex-end">';
+    html+='<span style="font-size:10px;color:var(--fog)">Less</span>';
+    [0,1,2,3,4].forEach(function(l){html+='<div style="width:11px;height:11px;border-radius:2px" class="heat-'+l+'"></div>';});
+    html+='<span style="font-size:10px;color:var(--fog)">More</span>';
+    html+='</div></div>';
+    return html;
+  }
+
+  // ── LIVE ACTIVITY FEED ──────────────────────────────────────────
+  function buildFeed(){
+    var CHAN_COLORS={'Phone':'var(--sky-lt)','Email':'var(--green)','Public meeting':'#a080e8',
+      'Mail':'var(--amber)','In-person':'#a080e8','Social media':'var(--sky-lt)',
+      'Media inquiry':'#e87070','Door-to-door':'#60c89a','Comment card':'var(--amber)'};
+    var feedInts=ints.map(function(i){
+      var s=stakes.find(function(x){return String(x.id)===String(i.stakeholderId);});
+      var p=projs.find(function(x){return x.id===i.projectId;});
+      return{ts:new Date(i.date+'T00:00:00').getTime(),
+        label:i.channel||'Interaction',color:CHAN_COLORS[i.channel]||'var(--slate)',
+        name:s?(s.firstName+' '+s.lastName):'(no stakeholder)',
+        sub:(p?p.pid+' · ':'')+((i.summary||'').slice(0,55)+((i.summary||'').length>55?'…':''))};
+    });
+    var feedMeets=(DB.get('meetings')||[]).map(function(m){
+      var p=projs.find(function(x){return x.id===m.projectId;});
+      return{ts:new Date(m.date+'T00:00:00').getTime(),
+        label:m.type||'Meeting',color:'#a080e8',
+        name:m.title,
+        sub:(p?p.pid+' · ':'')+m.location};
+    });
+    var combined=feedInts.concat(feedMeets).sort(function(a,b){return b.ts-a.ts;}).slice(0,8);
+    if(!combined.length)return'<div style="font-size:12px;color:var(--fog);padding:10px 0">No activity recorded yet.</div>';
+    function relTime(ts){
+      var diff=Date.now()-ts,days=Math.floor(diff/86400000);
+      if(days===0)return'Today';if(days===1)return'Yesterday';
+      if(days<7)return days+'d ago';if(days<30)return Math.floor(days/7)+'w ago';
+      if(days<365)return Math.floor(days/30)+'mo ago';return Math.floor(days/365)+'y ago';
+    }
+    return combined.map(function(item,i){
+      return'<div class="feed-item" style="animation-delay:'+i*55+'ms">'
+        +'<div class="feed-dot" style="background:'+item.color+';margin-top:5px"></div>'
+        +'<div style="flex:1;min-width:0">'
+        +'<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">'
+        +'<span style="font-size:12px;font-weight:500;color:var(--white);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px">'+item.name+'</span>'
+        +'<span style="font-size:11px;color:var(--fog);white-space:nowrap;flex-shrink:0">'+relTime(item.ts)+'</span>'
+        +'</div>'
+        +'<div style="font-size:11px;color:var(--slate);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+        +'<span style="color:'+item.color+';margin-right:5px">'+item.label+'</span>'+item.sub
+        +'</div></div></div>';
+    }).join('');
+  }
 
   el.innerHTML=`
   <div class="topbar"><div class="topbar-title">Dashboard</div><div class="topbar-sp"></div>
@@ -1096,35 +1204,33 @@ function renderDash(el){
     </div>
   </div>
   <div style="flex:1;overflow-y:auto;padding:20px">
-    <!-- ROW 1: Stat cards -->
+    <!-- ROW 1: Stat cards with count-up -->
     <div class="stat-row">
-      <div class="stat-card" style="cursor:pointer" onclick="setView('projects')">
+      <div class="stat-card dash-anim" style="cursor:pointer;animation-delay:0ms" onclick="setView('projects')">
         <div class="stat-lbl">Active projects</div>
-        <div class="stat-val sv-sky">${active.length}</div>
+        <div class="stat-val sv-sky" id="sv-proj">0</div>
         <div class="stat-sub">${projs.filter(p=>p.status==='Complete').length} complete · ${projs.filter(p=>p.status==='On hold').length} on hold</div>
       </div>
-      <div class="stat-card" style="cursor:pointer" onclick="setView('master')">
+      <div class="stat-card dash-anim" style="cursor:pointer;animation-delay:60ms" onclick="setView('master')">
         <div class="stat-lbl">Total stakeholders</div>
-        <div class="stat-val">${stakes.length}</div>
+        <div class="stat-val" id="sv-stakes">0</div>
         <div class="stat-sub">${DB.get('project_stakeholders').map(x=>x.projectId).filter((v,i,a)=>a.indexOf(v)===i).length} active projects</div>
       </div>
-      <div class="stat-card" style="cursor:pointer" onclick="setView('interactions')">
+      <div class="stat-card dash-anim" style="cursor:pointer;animation-delay:120ms" onclick="setView('interactions')">
         <div class="stat-lbl">Interactions logged</div>
-        <div class="stat-val">${ints.length}</div>
+        <div class="stat-val" id="sv-ints">0</div>
         <div class="stat-sub">${recent30} in last 30 days</div>
       </div>
-      <div class="stat-card" style="cursor:pointer" onclick="setView('followups')">
+      <div class="stat-card dash-anim" style="cursor:pointer;animation-delay:180ms" onclick="setView('followups')">
         <div class="stat-lbl">Open / overdue follow-ups</div>
-        <div class="stat-val sv-amber">${openFUCt}</div>
+        <div class="stat-val sv-amber" id="sv-fu">0</div>
         <div class="stat-sub" style="color:${overdueCt>0?'var(--red)':'var(--fog)'}">${overdueCt>0?overdueCt+' overdue':'All on track'}</div>
       </div>
     </div>
 
     <!-- ROW 2: Visual panels -->
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:20px">
-
-      <!-- Deliverable progress donut -->
-      <div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:18px;display:flex;flex-direction:column;align-items:center">
+      <div class="dash-anim" style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:18px;display:flex;flex-direction:column;align-items:center;animation-delay:240ms">
         <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:14px;align-self:flex-start">Deliverable progress</div>
         ${donut(delPct,delPct>=75?'#28A870':delPct>=40?'#5BA4CF':'#D9A544',90,'complete')}
         <div style="display:flex;gap:16px;margin-top:14px;font-size:12px">
@@ -1133,9 +1239,7 @@ function renderDash(el){
           <span style="color:var(--fog)">${notStartedDels} pending</span>
         </div>
       </div>
-
-      <!-- Sentiment gauge -->
-      <div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:18px">
+      <div class="dash-anim" style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:18px;animation-delay:300ms">
         <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:14px">External stakeholder sentiment</div>
         ${sentBar}
         <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:12px">
@@ -1145,9 +1249,7 @@ function renderDash(el){
         </div>
         <div style="margin-top:16px;font-size:11px;color:var(--fog)">Across all active projects (External only)</div>
       </div>
-
-      <!-- Channel breakdown -->
-      <div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:18px">
+      <div class="dash-anim" style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:18px;animation-delay:360ms">
         <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:14px">Interaction channels</div>
         ${chSorted.slice(0,6).map(function(ch){
           var pct=Math.round(ch[1]/maxCh*100);
@@ -1160,14 +1262,45 @@ function renderDash(el){
       </div>
     </div>
 
-    <!-- ROW 3: Active project cards with deliverable progress bars -->
-    <div>
+    <!-- ROW 3: Activity heatmap + Live feed -->
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:20px">
+      <div class="dash-anim" style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:18px;animation-delay:420ms">
+        <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:14px">Activity pulse <span style="font-size:11px;font-weight:400;color:var(--fog);margin-left:6px">interactions + events · past 14 weeks</span></div>
+        <div style="overflow-x:auto;padding-bottom:4px">${buildHeatmap()}</div>
+      </div>
+      <div class="dash-anim" style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:18px;animation-delay:480ms">
+        <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:12px">Recent activity</div>
+        <div style="overflow-y:auto;max-height:210px">${buildFeed()}</div>
+      </div>
+    </div>
+
+    <!-- ROW 4: Active project cards -->
+    <div class="dash-anim" style="animation-delay:540ms">
       <div class="sec-hd"><span class="sec-t">Active projects</span><button class="btn btn-ghost btn-sm" onclick="setView('projects')">View all</button></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px">
         ${active.map(projCard).join('')||'<div style="color:var(--fog);font-size:13px">No active projects.</div>'}
       </div>
     </div>
   </div>`;
+
+  // ── COUNT-UP ANIMATION ──────────────────────────────────────────
+  function countUp(elId,target,delayMs){
+    var node=document.getElementById(elId);if(!node||target===0){if(node)node.textContent='0';return;}
+    var dur=600,started=false;
+    setTimeout(function(){
+      var start=performance.now();
+      function tick(now){
+        var p=Math.min((now-start)/dur,1),ease=1-Math.pow(1-p,3);
+        node.textContent=Math.round(ease*target);
+        if(p<1)requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    },delayMs);
+  }
+  countUp('sv-proj', active.length, 50);
+  countUp('sv-stakes', stakes.length, 110);
+  countUp('sv-ints', ints.length, 170);
+  countUp('sv-fu', openFUCt, 230);
 }
 
 // ── MASTER STAKEHOLDER LIST ───────────────────
@@ -1329,8 +1462,9 @@ function renderStakeholders(el){
     </div>
   </div>
   <div class="vtabs">
-    <button class="vtab active"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="5" r="3"/><path d="M1 13.5c0-2.485 2.239-4.5 5-4.5s5 2.015 5 4.5"/></svg>Contact list <span class="vtab-ct">${listItems.length}</span></button>
+    <button class="vtab${S.skView!=='bubble'?' active':''}" onclick="S.skView='list';renderStakeholders(document.getElementById('main'))"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="5" r="3"/><path d="M1 13.5c0-2.485 2.239-4.5 5-4.5s5 2.015 5 4.5"/></svg>Contact list <span class="vtab-ct">${listItems.length}</span></button>
     <button class="vtab" onclick="setView('interactions')"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 3H2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h3l2 2 2-2h5a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1z"/></svg>Interaction log <span class="vtab-ct">${ints.filter(i=>!S.projectFilter||i.projectId===S.projectFilter).length}</span></button>
+    ${S.projectFilter?`<button class="vtab${S.skView==='bubble'?' active':''}" onclick="S.skView='bubble';renderStakeholders(document.getElementById('main'))"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="4" cy="10" r="2.5"/><circle cx="10" cy="5" r="3.5"/><circle cx="13" cy="11" r="1.5"/></svg>Influence map</button>`:''}
   </div>
   <div class="toolbar">
     <div class="srch"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4"/><path d="M10 10l3 3"/></svg>
@@ -1342,6 +1476,13 @@ function renderStakeholders(el){
     </select>
     <div class="tb-sp"></div><span class="tb-info">${listItems.length} contact${listItems.length!==1?'s':''}</span>
   </div>
+  ${S.skView==='bubble'&&S.projectFilter ? `
+  <div class="content" style="overflow-y:auto;padding:20px" id="bubble-container">
+    <div style="font-size:12px;color:var(--fog);margin-bottom:16px">
+      Bubble size = interaction count &nbsp;·&nbsp; X = influence tier &nbsp;·&nbsp; Y = sentiment &nbsp;·&nbsp; Hover for name &amp; details
+    </div>
+    <div id="bubble-chart-mount" style="width:100%;height:460px;position:relative"></div>
+  </div>` : `
   <div class="content">
     <div class="split">
       <div class="list-pane">
@@ -1370,7 +1511,12 @@ function renderStakeholders(el){
         ${selData?renderStakeDetail(selData,selLink):`<div class="pane-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="9" cy="7" r="4"/><path d="M2 20c0-3.314 3.134-6 7-6s7 2.686 7 6"/><path d="M19 8v6M22 11h-6"/></svg><div class="pe-title">Select a contact</div><div class="pe-sub">Profile, project context, and interaction history.</div></div>`}
       </div>
     </div>
-  </div>`;
+  </div>`}`;
+
+  // Render bubble chart after DOM is set
+  if(S.skView==='bubble'&&S.projectFilter){
+    requestAnimationFrame(()=>renderBubbleChart(S.projectFilter));
+  }
 }
 
 function selectStake(id){
@@ -1387,6 +1533,133 @@ function selectStake(id){
     if(el&&skVal)el.value=skVal;
   }
 }
+
+// ── INFLUENCE-SENTIMENT BUBBLE CHART ───────────────────────────────
+function renderBubbleChart(projectId){
+  var mount=document.getElementById('bubble-chart-mount');
+  if(!mount)return;
+  try{
+    var allStakes=DB.get('stakeholders');
+    var ps=DB.get('project_stakeholders').filter(function(x){return x.projectId===projectId;});
+    var ints=DB.get('interactions');
+    var projs=DB.get('projects');
+    var proj=projs.find(function(p){return p.id===projectId;})||{};
+
+    // Chart dimensions
+    var W=mount.offsetWidth||700,H=460;
+    var PAD={top:40,right:40,bottom:60,left:70};
+    var CW=W-PAD.left-PAD.right,CH=H-PAD.top-PAD.bottom;
+
+    // Axis definitions
+    var X_TIERS=['Low','Medium','High'];           // influence
+    var Y_LEVELS=['Opponent','Neutral','Champion']; // sentiment bottom→top
+    var SENT_COLORS={Champion:'#28A870',Neutral:'#A8C2D8',Opponent:'#D94040'};
+    var ROLE_STROKE={Internal:'#4A9BE8',External:'rgba(255,255,255,.25)'};
+
+    // Build bubble data
+    var bubbles=ps.map(function(lk){
+      var s=allStakes.find(function(x){return String(x.id)===String(lk.stakeholderId);});
+      if(!s)return null;
+      var intCt=ints.filter(function(i){return String(i.stakeholderId)===String(s.id)&&i.projectId===projectId;}).length;
+      var xi=X_TIERS.indexOf(s.influenceTier||'Medium');if(xi<0)xi=1;
+      var yi=Y_LEVELS.indexOf(lk.support||'Neutral');if(yi<0)yi=1;
+      // Jitter within cell to prevent full overlap
+      var jx=(Math.sin(s.id.charCodeAt?s.id.charCodeAt(0)*7:0)*0.3);
+      var jy=(Math.cos(s.id.charCodeAt?s.id.charCodeAt(1)*13:1)*0.3);
+      var minR=10,maxR=30;
+      var r=intCt===0?minR:Math.min(maxR,minR+Math.sqrt(intCt)*5);
+      var cx=PAD.left+(xi/(X_TIERS.length-1))*CW+jx*(CW/X_TIERS.length*0.6);
+      var cy=PAD.top+((Y_LEVELS.length-1-yi)/(Y_LEVELS.length-1))*CH+jy*(CH/Y_LEVELS.length*0.6);
+      return{s:s,lk:lk,intCt:intCt,r:r,cx:cx,cy:cy,
+        color:SENT_COLORS[lk.support]||'#A8C2D8',
+        stroke:ROLE_STROKE[lk.stakeholderRole]||ROLE_STROKE.External};
+    }).filter(Boolean);
+
+    // Build SVG
+    var svg='<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg" style="overflow:visible">';
+
+    // Grid lines
+    X_TIERS.forEach(function(t,i){
+      var x=PAD.left+(i/(X_TIERS.length-1))*CW;
+      svg+='<line x1="'+x+'" y1="'+PAD.top+'" x2="'+x+'" y2="'+(PAD.top+CH)+'" stroke="rgba(255,255,255,.07)" stroke-width="1" stroke-dasharray="4 4"/>';
+    });
+    Y_LEVELS.forEach(function(t,i){
+      var y=PAD.top+((Y_LEVELS.length-1-i)/(Y_LEVELS.length-1))*CH;
+      svg+='<line x1="'+PAD.left+'" y1="'+y+'" x2="'+(PAD.left+CW)+'" y2="'+y+'" stroke="rgba(255,255,255,.07)" stroke-width="1" stroke-dasharray="4 4"/>';
+    });
+
+    // Quadrant shading: top-right (high influence, champion) = green tint
+    var qx=PAD.left+CW/2,qy=PAD.top+CH/2;
+    svg+='<rect x="'+qx+'" y="'+PAD.top+'" width="'+CW/2+'" height="'+CH/2+'" fill="rgba(40,168,112,.04)" rx="4"/>';
+    svg+='<rect x="'+PAD.left+'" y="'+qy+'" width="'+CW/2+'" height="'+CH/2+'" fill="rgba(217,64,64,.04)" rx="4"/>';
+
+    // X axis labels
+    X_TIERS.forEach(function(t,i){
+      var x=PAD.left+(i/(X_TIERS.length-1))*CW;
+      svg+='<text x="'+x+'" y="'+(PAD.top+CH+22)+'" text-anchor="middle" font-size="12" fill="#A8C2D8" font-family="IBM Plex Sans,sans-serif">'+t+'</text>';
+    });
+    svg+='<text x="'+(PAD.left+CW/2)+'" y="'+(H-8)+'" text-anchor="middle" font-size="11" fill="#7A99B0" font-family="IBM Plex Sans,sans-serif">Influence Tier</text>';
+
+    // Y axis labels
+    Y_LEVELS.forEach(function(t,i){
+      var y=PAD.top+((Y_LEVELS.length-1-i)/(Y_LEVELS.length-1))*CH;
+      var color=SENT_COLORS[t];
+      svg+='<text x="'+(PAD.left-10)+'" y="'+(y+4)+'" text-anchor="end" font-size="12" fill="'+color+'" font-family="IBM Plex Sans,sans-serif">'+t+'</text>';
+    });
+
+    // Bubbles (sorted largest first so small ones render on top)
+    bubbles.sort(function(a,b){return b.r-a.r;}).forEach(function(b,i){
+      var delay=i*40;
+      var name=(b.s.firstName+' '+b.s.lastName).replace(/'/g,'&apos;');
+      var org=(b.s.org||b.s.type||'').replace(/'/g,'&apos;');
+      var tip=name+(org?' · '+org:'')+' | '+b.intCt+' interaction'+(b.intCt!==1?'s':'');
+      svg+='<circle class="bubble" cx="'+b.cx+'" cy="'+b.cy+'" r="'+b.r+'"'
+        +' fill="'+b.color+'33"'
+        +' stroke="'+b.color+'" stroke-width="1.8"'
+        +' style="animation-delay:'+delay+'ms;transform-origin:'+b.cx+'px '+b.cy+'px"'
+        +' data-tip="'+tip+'"'
+        +' onclick="selectStake(\''+b.s.id+'\');S.skView=\'list\';renderStakeholders(document.getElementById(\'main\'))"'
+        +'></circle>';
+      // Initials label for larger bubbles
+      if(b.r>=16){
+        var initials=((b.s.firstName||'')[0]||'')+((b.s.lastName||'')[0]||'');
+        svg+='<text x="'+b.cx+'" y="'+(b.cy+4)+'" text-anchor="middle" font-size="10" font-weight="600" fill="'+b.color+'" font-family="IBM Plex Sans,sans-serif" pointer-events="none" style="animation-delay:'+delay+'ms">'+initials+'</text>';
+      }
+    });
+
+    // Legend
+    var lx=PAD.left,ly=PAD.top-22;
+    svg+='<text x="'+lx+'" y="'+ly+'" font-size="11" fill="#7A99B0" font-family="IBM Plex Sans,sans-serif">'+proj.pid+' — '+proj.name+'</text>';
+    svg+='<text x="'+(W-PAD.right)+'" y="'+ly+'" text-anchor="end" font-size="11" fill="#7A99B0" font-family="IBM Plex Sans,sans-serif">'+bubbles.length+' contacts plotted</text>';
+
+    svg+='</svg>';
+    mount.innerHTML=svg;
+
+    // Tooltip on hover
+    var tip=document.createElement('div');
+    tip.className='bubble-tooltip';tip.style.display='none';
+    mount.appendChild(tip);
+    mount.querySelectorAll('.bubble').forEach(function(el){
+      el.addEventListener('mouseenter',function(e){
+        tip.textContent=el.dataset.tip;
+        tip.style.display='block';
+      });
+      el.addEventListener('mousemove',function(e){
+        var rect=mount.getBoundingClientRect();
+        var tx=e.clientX-rect.left+12,ty=e.clientY-rect.top-36;
+        if(tx+200>W)tx=e.clientX-rect.left-200;
+        tip.style.left=tx+'px';tip.style.top=ty+'px';
+      });
+      el.addEventListener('mouseleave',function(){tip.style.display='none';});
+    });
+  }catch(err){
+    console.error('Bubble chart error:',err);
+    var mount=document.getElementById('bubble-chart-mount');
+    if(mount)mount.innerHTML='<div style="color:var(--fog);font-size:13px;padding:20px">Chart unavailable</div>';
+  }
+}
+
+
 
 function renderStakeDetail(s,link){
   const ints=DB.get('interactions').filter(i=>String(i.stakeholderId)===String(s.id)&&(!S.projectFilter||i.projectId===S.projectFilter));
@@ -4041,13 +4314,29 @@ function openMeetingModal(id){
   // Get attendees for this meeting
   const attendeeIds=(m.attendeeIds||[]);
 
+  // Build attendee options from project stakeholders
+  const projId=m.projectId||pF||'';
+  const projStakes=projId?DB.get('project_stakeholders').filter(x=>x.projectId===projId):[];
+  const allStakes=DB.get('stakeholders');
+  function attendeeOptions(pid,selected){
+    const ps2=pid?DB.get('project_stakeholders').filter(x=>x.projectId===pid):[];
+    if(ps2.length===0)return'<option disabled value="">— Select a project first —</option>';
+    return ps2.map(lk=>{
+      const s=allStakes.find(x=>String(x.id)===String(lk.stakeholderId));
+      if(!s)return'';
+      const name=s.firstName+' '+s.lastName+(s.org?' ('+s.org+')':'');
+      const sel=selected.indexOf(String(lk.stakeholderId))>-1?' selected':'';
+      return`<option value="${lk.stakeholderId}"${sel}>${name}</option>`;
+    }).join('');
+  }
+
   openM(id?'Edit event':'Log event',`
   <div class="fgrid fg2f">
     <div class="fr"><label>Event title *</label><input id="f-mt" value="${m.title||''}"></div>
     <div class="fr"><label>Date *</label><input type="date" id="f-md" value="${m.date||''}"></div>
   </div>
   <div class="fgrid fg2f">
-    <div class="fr"><label>Project</label><select id="f-mp">${projs.map(p=>`<option value="${p.id}"${(m.projectId||pF)===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
+    <div class="fr"><label>Project</label><select id="f-mp" onchange="document.getElementById('f-matt').innerHTML=window._meetAttendeeOptions(this.value,[])">${projs.map(p=>`<option value="${p.id}"${(m.projectId||pF)===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
     <div class="fr"><label>Event type</label><select id="f-mty">${MEETING_TYPES.map(t=>`<option${m.type===t?' selected':''}>${t}</option>`).join('')}</select></div>
   </div>
   <div class="fgrid fg2f">
@@ -4062,14 +4351,20 @@ function openMeetingModal(id){
     <div class="fr"><label>Handouts distributed</label><input id="f-mh" value="${m.handouts||''}" placeholder="e.g. Fact sheet, Project map"></div>
     <div class="fr"><label>Virtual / in-person</label><select id="f-mfm"><option${(m.format||'In-person')==='In-person'?' selected':''}>In-person</option><option${m.format==='Virtual'?' selected':''}>Virtual</option><option${m.format==='Hybrid'?' selected':''}>Hybrid</option></select></div>
   </div>
+  <div class="fr"><label>Linked attendees <span style="font-weight:400;color:var(--fog)">(hold Ctrl/Cmd to select multiple)</span></label>
+    <select id="f-matt" multiple style="height:90px">${attendeeOptions(projId,attendeeIds.map(String))}</select>
+    <div style="font-size:11px;color:var(--slate);margin-top:3px">Select stakeholders from the project roster who attended this event.</div>
+  </div>
   <div class="fr"><label>Purpose / agenda</label><textarea id="f-mga" style="height:60px">${m.agenda||''}</textarea></div>
   <div class="fr"><label>Key concerns raised</label><textarea id="f-mkc" style="height:60px">${m.keyConcerns||''}</textarea></div>
   <div class="fr"><label>Action items / follow-ups</label><textarea id="f-mai" style="height:60px" placeholder="Enter one action item — it will be added as a follow-up interaction">${m.actionItems||''}</textarea><div style="font-size:11px;color:var(--slate);margin-top:4px;">⚠ One action item per event. Only the first line will be tracked as a follow-up.</div></div>
-  
   <div class="fr"><label>Notes</label><textarea id="f-mno">${m.notes||''}</textarea></div>`,
   `${id?`<button class="btn btn-danger btn-sm" onclick="delMeeting('${id}')">Delete</button>`:''}
    <button class="btn" onclick="closeM()">Cancel</button>
    <button class="btn btn-primary" onclick="saveMeeting()">Save event</button>`);
+
+  // Expose helper for project-change dynamic reload
+  window._meetAttendeeOptions=function(pid,sel){return attendeeOptions(pid,sel);};
 }
 
 async function saveMeeting(){
@@ -4079,8 +4374,7 @@ async function saveMeeting(){
   if(!title){alert('Event title is required.');return;}
   if(!date){alert('Event date is required.');return;}
 
-  const attendeeIds=[];
-  const actionItemsText=v('f-mai').trim();
+  const attendeeIds=Array.from(document.getElementById('f-matt')?.selectedOptions||[]).map(o=>o.value);
 
   const data={
     id:S.editId||DB.uid(),

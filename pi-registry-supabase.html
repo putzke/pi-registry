@@ -608,6 +608,7 @@ const SB_TO_INT = {
     attendanceCount:'attendance_count', commentCards:'comment_cards',
     handouts:'handouts', format:'format', agenda:'agenda',
     keyConcerns:'key_concerns', actionItems:'action_items',
+    attendeeIds:'attendee_ids',
     notes:'notes', createdAt:'created_at'
   }
 };
@@ -4370,27 +4371,7 @@ function openMeetingModal(id){
   const all=DB.get('meetings')||[];
   const m=id?all.find(x=>x.id===id)||{}:{};
   const projs=DB.get('projects');
-  const stakes=DB.get('stakeholders');
   const pF=S.projectFilter;
-
-  // Get attendees for this meeting
-  const attendeeIds=(m.attendeeIds||[]);
-
-  // Build attendee options from project stakeholders
-  const projId=m.projectId||pF||'';
-  const projStakes=projId?DB.get('project_stakeholders').filter(x=>x.projectId===projId):[];
-  const allStakes=DB.get('stakeholders');
-  function attendeeOptions(pid,selected){
-    const ps2=pid?DB.get('project_stakeholders').filter(x=>x.projectId===pid):[];
-    if(ps2.length===0)return'<option disabled value="">— Select a project first —</option>';
-    return ps2.map(lk=>{
-      const s=allStakes.find(x=>String(x.id)===String(lk.stakeholderId));
-      if(!s)return'';
-      const name=s.firstName+' '+s.lastName+(s.org?' ('+s.org+')':'');
-      const sel=selected.indexOf(String(lk.stakeholderId))>-1?' selected':'';
-      return`<option value="${lk.stakeholderId}"${sel}>${name}</option>`;
-    }).join('');
-  }
 
   openM(id?'Edit event':'Log event',`
   <div class="fgrid fg2f">
@@ -4398,7 +4379,7 @@ function openMeetingModal(id){
     <div class="fr"><label>Date *</label><input type="date" id="f-md" value="${m.date||''}"></div>
   </div>
   <div class="fgrid fg2f">
-    <div class="fr"><label>Project</label><select id="f-mp" onchange="document.getElementById('f-matt').innerHTML=window._meetAttendeeOptions(this.value,[])">${projs.map(p=>`<option value="${p.id}"${(m.projectId||pF)===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
+    <div class="fr"><label>Project</label><select id="f-mp">${projs.map(p=>`<option value="${p.id}"${(m.projectId||pF)===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
     <div class="fr"><label>Event type</label><select id="f-mty">${MEETING_TYPES.map(t=>`<option${m.type===t?' selected':''}>${t}</option>`).join('')}</select></div>
   </div>
   <div class="fgrid fg2f">
@@ -4413,9 +4394,8 @@ function openMeetingModal(id){
     <div class="fr"><label>Handouts distributed</label><input id="f-mh" value="${m.handouts||''}" placeholder="e.g. Fact sheet, Project map"></div>
     <div class="fr"><label>Virtual / in-person</label><select id="f-mfm"><option${(m.format||'In-person')==='In-person'?' selected':''}>In-person</option><option${m.format==='Virtual'?' selected':''}>Virtual</option><option${m.format==='Hybrid'?' selected':''}>Hybrid</option></select></div>
   </div>
-  <div class="fr"><label>Linked attendees <span style="font-weight:400;color:var(--fog)">(hold Ctrl/Cmd to select multiple)</span></label>
-    <select id="f-matt" multiple style="height:90px">${attendeeOptions(projId,attendeeIds.map(String))}</select>
-    <div style="font-size:11px;color:var(--slate);margin-top:3px">Select stakeholders from the project roster who attended this event.</div>
+  <div class="fr"><label>Key attendees <span style="font-weight:400;color:var(--fog)">(named contacts worth documenting)</span></label>
+    <input id="f-matt" value="${(m.attendeeIds||[]).join?((m.attendeeIds||[]).join(', ')):(m.attendeeIds||'')}" placeholder="e.g. Mayor Johnson, Sarah Kim (UDOT R3), Bob Torres">
   </div>
   <div class="fr"><label>Purpose / agenda</label><textarea id="f-mga" style="height:60px">${m.agenda||''}</textarea></div>
   <div class="fr"><label>Key concerns raised</label><textarea id="f-mkc" style="height:60px">${m.keyConcerns||''}</textarea></div>
@@ -4424,9 +4404,6 @@ function openMeetingModal(id){
   `${id?`<button class="btn btn-danger btn-sm" onclick="delMeeting('${id}')">Delete</button>`:''}
    <button class="btn" onclick="closeM()">Cancel</button>
    <button class="btn btn-primary" onclick="saveMeeting()">Save event</button>`);
-
-  // Expose helper for project-change dynamic reload
-  window._meetAttendeeOptions=function(pid,sel){return attendeeOptions(pid,sel);};
 }
 
 async function saveMeeting(){
@@ -4436,7 +4413,8 @@ async function saveMeeting(){
   if(!title){alert('Event title is required.');return;}
   if(!date){alert('Event date is required.');return;}
 
-  const attendeeIds=Array.from(document.getElementById('f-matt')?.selectedOptions||[]).map(o=>o.value);
+  const attendeeIds=v('f-matt')||'';
+  const actionItemsText=v('f-mai').trim();
 
   const data={
     id:S.editId||DB.uid(),

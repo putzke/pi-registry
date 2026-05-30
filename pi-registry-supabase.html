@@ -2535,12 +2535,15 @@ function openProjModal(id){
 }
 function saveProj(){
   const v=id=>document.getElementById(id)?.value||'';
-  const data={id:S.editId||DB.uid(),pid:v('f-pid'),name:v('f-pn'),client:v('f-pc2'),type:v('f-pty'),county:v('f-pco'),phase:v('f-pph'),status:v('f-pst'),startDate:v('f-psd'),endDate:v('f-ped'),preconDate:v('f-ppd'),notes:v('f-pno')};
+  const vDate=id=>{const val=document.getElementById(id)?.value||'';return val||null;};
+  const data={id:S.editId||DB.uid(),pid:v('f-pid'),name:v('f-pn'),client:v('f-pc2'),type:v('f-pty'),county:v('f-pco'),phase:v('f-pph'),status:v('f-pst'),startDate:vDate('f-psd'),endDate:vDate('f-ped'),preconDate:vDate('f-ppd'),notes:v('f-pno')};
   if(!data.pid||!/^\d{3,5}$/.test(data.pid)){alert('Project ID must be 3 to 5 digits.');return}
   if(!data.name){alert('Project name is required.');return}
+  const isNew=!S.editId;
   const all=DB.get('projects');
   if(S.editId){const i=all.findIndex(x=>x.id===S.editId);if(i>-1)all[i]=data;}else all.push(data);
-  DB.set('projects',all);closeM();buildProjList();render();
+  DB.set('projects',all);closeM();
+  if(isNew){loadAllData().then(()=>{buildProjList();render();});}else{buildProjList();render();}
 }
 function delProj(id){
   DB.set('projects',DB.get('projects').filter(x=>x.id!==id));

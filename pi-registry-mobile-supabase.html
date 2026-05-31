@@ -958,6 +958,17 @@ function isOrgContact(s){
 function fmt(d){if(!d)return'—';const dt=new Date(d+'T00:00:00');return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}
 function fmtShort(d){if(!d)return'—';const dt=new Date(d+'T00:00:00');return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});}
 function today(){return new Date().toISOString().slice(0,10)}
+
+// ── PHONE UTILITIES ────────────────────────────────────────────────────
+function cleanPhone(raw){ return (raw||'').replace(/\D/g,''); }
+function formatPhone(digits){ return digits.length===10?'('+digits.slice(0,3)+') '+digits.slice(3,6)+'-'+digits.slice(6):''; }
+function validatePhone(raw){
+  if(!raw||!raw.trim()) return null; // optional — blank is fine
+  const d=cleanPhone(raw);
+  if(d.length!==10) return 'Phone number must be exactly 10 digits (got '+d.length+').';
+  return null;
+}
+// ───────────────────────────────────────────────────────────────────────
 function isOverdue(d){return d&&new Date(d+'T00:00:00')<new Date()}
 
 function showToast(msg,type='success'){
@@ -1440,8 +1451,13 @@ async function saveInteraction(){
   if(!stakeId){
     const cfn=(document.getElementById('caller-fn').value||'').trim();
     const cln=(document.getElementById('caller-ln').value||'').trim();
-    const cph=(document.getElementById('caller-ph').value||'').trim();
+    const rawCph=(document.getElementById('caller-ph').value||'').trim();
     const cem=(document.getElementById('caller-em').value||'').trim();
+    if(rawCph){
+      const phoneErr=validatePhone(rawCph);
+      if(phoneErr){showToast(phoneErr,'error');return;}
+    }
+    const cph=rawCph?formatPhone(cleanPhone(rawCph)):'';
     if(cfn||cln||cph||cem){
       // Create a minimal project-only stakeholder record
       const newS={
@@ -1528,10 +1544,13 @@ function saveStakeholder(){
   const fn=document.getElementById('add-fn').value.trim();
   const ln=document.getElementById('add-ln').value.trim();
   const email=document.getElementById('add-email').value.trim();
-  const phone=document.getElementById('add-phone').value.trim();
+  const rawPhone=document.getElementById('add-phone').value.trim();
 
   if(!fn&&!ln&&!document.getElementById('add-org').value.trim()){showToast('First and last name, or Organization required','error');return;}
-  if(!email&&!phone){showToast('Email or phone required','error');return;}
+  if(!email&&!rawPhone){showToast('Email or phone required','error');return;}
+  const phoneErr=validatePhone(rawPhone);
+  if(phoneErr){showToast(phoneErr,'error');return;}
+  const phone=rawPhone?formatPhone(cleanPhone(rawPhone)):'';
 
   const isMaster=document.getElementById('add-master').checked;
   const projId=document.getElementById('add-proj').value;

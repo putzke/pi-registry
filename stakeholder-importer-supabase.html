@@ -197,7 +197,7 @@ body{padding:0}
 
     <div class="card">
       <div class="card-title">Upload your stakeholder file</div>
-      <div class="card-sub">Accepts CSV or Excel (.xlsx). First row must be column headers. All other formatting is handled automatically — phone numbers, capitalization, blank cells are all fine.</div>
+      <div class="card-sub">Accepts CSV or Excel (.xlsx). First row must be column headers. All other formatting is handled automatically — capitalization and blank cells are fine. Phone numbers must be 10 digits; invalid numbers are flagged in the review step and stored as-is for manual correction.</div>
 
       <div class="fi-row" style="margin-bottom:16px">
         <div class="fi-lbl">Import context</div>
@@ -560,7 +560,10 @@ let state = {
 function normalizePhone(p) {
   if (!p) return '';
   const digits = String(p).replace(/\D/g, '');
-  return digits.length === 11 && digits[0] === '1' ? digits.slice(1) : digits.length === 10 ? digits : digits;
+  if (digits.length === 11 && digits[0] === '1') return digits.slice(1); // strip country code
+  if (digits.length === 10) return digits;
+  if (digits.length === 0) return ''; // blank — fine
+  return 'INVALID:' + String(p).trim(); // flag non-10-digit numbers
 }
 function normalizeName(s) { return (s||'').trim().toLowerCase().replace(/\s+/g,' '); }
 function normalizeEmail(s) { return (s||'').trim().toLowerCase(); }
@@ -836,7 +839,7 @@ function buildParsed() {
     const hasName = (r.firstName || '').trim() || (r.lastName || '').trim();
     const hasOrg  = (r.org || '').trim();
     const hasEmail = (r.email || '').trim().length > 0;
-    const hasPhone = (r.phone || '').replace(/\D/g,'').length >= 7;
+    const hasPhone = (r.phone || '').replace(/\D/g,'').length >= 7 && !String(r.phone||'').startsWith('INVALID:');
     const displayName = [r.firstName, r.lastName].filter(Boolean).join(' ') || r.org || `Row ${idx + 2}`;
     if (!hasName && !hasOrg) {
       state.rejected.push({ name: displayName, reason: 'No name or organization' });
@@ -913,7 +916,8 @@ function renderReviewTable() {
       ${row.org ? `<div style="font-size:11px;color:var(--slate)">${row.org}${row.title?' · '+row.title:''}</div>` : ''}
       <div style="font-size:11px;color:var(--fog);margin-top:2px">
         ${row.email?`<span style="margin-right:8px">✉ ${row.email}</span>`:''}
-        ${row.phone?`<span>☎ ${formatPhone(row.phone)}</span>`:''}
+        ${row.phone?`<span>☎ ${formatPhone(row.phone)}</span>`:''} 
+        ${row.phone&&row.phone.startsWith('INVALID:')?`<span style="color:var(--red);font-size:11px;font-weight:600">⚠ Invalid phone — will be stored as-is</span>`:''}
         ${!row.email&&!row.phone?'<span style="color:var(--red)">⚠ No email or phone</span>':''}
       </div>`;
 
@@ -954,7 +958,9 @@ function renderReviewTable() {
 }
 
 function formatPhone(p) {
-  if (!p || p.length !== 10) return p;
+  if (!p) return '';
+  if (String(p).startsWith('INVALID:')) return p; // pass through flagged values
+  if (p.length !== 10) return p;
   return `(${p.slice(0,3)}) ${p.slice(3,6)}-${p.slice(6)}`;
 }
 

@@ -2538,9 +2538,23 @@ function openStakeModal(id){
   <button class="btn" onclick="closeM()">Cancel</button>
   <button class="btn btn-primary" onclick="saveStake()">Save stakeholder</button>`,true);
 }
+// ── PHONE UTILITIES ────────────────────────────────────────────────────
+function cleanPhone(raw){ return (raw||'').replace(/\D/g,''); }
+function formatPhone(digits){ return digits.length===10?'('+digits.slice(0,3)+') '+digits.slice(3,6)+'-'+digits.slice(6):''; }
+function validatePhone(raw){
+  if(!raw||!raw.trim()) return null; // optional — blank is fine
+  const d=cleanPhone(raw);
+  if(d.length!==10) return 'Phone number must be exactly 10 digits (got '+d.length+').';
+  return null;
+}
+// ───────────────────────────────────────────────────────────────────────
+
 function saveStake(){
   const v=id=>document.getElementById(id)?.value||'';
-  const data={id:S.editId||DB.uid(),firstName:document.getElementById('f-fn')?.value||'',lastName:document.getElementById('f-ln')?.value||'',org:v('f-org'),title:v('f-ti'),email:v('f-em'),phone:v('f-ph'),address:v('f-ad'),parcelId:v('f-parc'),type:v('f-st'),isMaster:true,notes:v('f-no'),isAnonymous:false};
+  const rawPhone=v('f-ph');
+  const phoneErr=validatePhone(rawPhone);
+  if(phoneErr){alert(phoneErr);return;}
+  const data={id:S.editId||DB.uid(),firstName:document.getElementById('f-fn')?.value||'',lastName:document.getElementById('f-ln')?.value||'',org:v('f-org'),title:v('f-ti'),email:v('f-em'),phone:rawPhone.trim()?formatPhone(cleanPhone(rawPhone)):'',address:v('f-ad'),parcelId:v('f-parc'),type:v('f-st'),isMaster:true,notes:v('f-no'),isAnonymous:false};
   if(!data.firstName&&!data.lastName&&!data.org){alert('First and last name, or Organization name required.');return}
   const all=DB.get('stakeholders');
   if(S.editId){const i=all.findIndex(x=>x.id===S.editId);if(i>-1)all[i]=data;}else all.push(data);

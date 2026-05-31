@@ -10,7 +10,7 @@
 :root {
   --navy:#0B1929;--navy-mid:#112236;--navy-rim:#1A3350;--steel:#1E4068;
   --sky:#2D7DD2;--sky-lt:#4A9BE8;--sky-dim:rgba(45,125,210,.15);
-  --ice:#E8F4FF;--white:#F5F8FB;--mist:#D4E6F4;--slate:#A8C2D8;--fog:#7A99B0;
+  --ice:#E8F4FF;--white:#F5F8FB;--mist:#D4E6F4;--slate:#A8C2D8;--fog:#8DAFC8;
   --amber:#E8A020;--amber-lt:rgba(232,160,32,.12);
   --green:#28A870;--green-lt:rgba(40,168,112,.12);
   --red:#D94040;--red-lt:rgba(217,64,64,.1);
@@ -311,7 +311,7 @@ select optgroup{background:var(--navy-mid);color:var(--sky-lt);font-weight:700;f
 .bubble{position:absolute;border-radius:50%;cursor:pointer;transition:transform .15s,box-shadow .15s;animation:bubblePop .4s cubic-bezier(.34,1.56,.64,1) both}
 .bubble:hover{transform:scale(1.18)!important;z-index:10;box-shadow:0 0 0 2px rgba(255,255,255,.35)}
 .bubble-tooltip{position:absolute;background:#0B1929;border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:8px 11px;font-size:12px;color:var(--white);pointer-events:none;z-index:20;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.5)}
-.b-axis-lbl{position:absolute;font-size:10px;color:var(--fog);letter-spacing:.3px}
+.b-axis-lbl{position:absolute;font-size:11px;color:var(--mist);letter-spacing:.3px}
 </style>
 <!-- SheetJS loaded on demand for Excel export -->
 <script>/* JSZip 3.10.1 - embedded for offline use */
@@ -1107,7 +1107,7 @@ function renderDash(el){
   function buildSwimLanes(){
     var today=new Date();
     var CHAN_COLORS={
-      'Phone':'#4A9BE8','Email':'#28A870','Public meeting':'#b08ff5',
+      'Phone':'#4A9BE8','Email':'#28A870','Public meeting':'#b08ff5','Public event':'#b08ff5',
       'Mail':'#E8A020','In-person':'#b08ff5','Social media':'#4A9BE8',
       'Media inquiry':'#e87070','Door-to-door':'#60c89a',
       'Comment card':'#E8A020','Agency coordination':'#1D9E75'
@@ -1167,7 +1167,7 @@ function renderDash(el){
     // Axis labels
     html+='<div style="display:flex;margin-left:'+SWIM_PAD_L+'px;margin-top:1px">';
     ['4w ago','3w ago','2w ago','1w ago','Today'].forEach(function(lbl,i){
-      html+='<div style="flex:1;font-size:9px;color:var(--fog);'
+      html+='<div style="flex:1;font-size:11px;color:var(--mist);'
         +(i===0?'text-align:left':i===4?'text-align:right':'text-align:center')+'">'+lbl+'</div>';
     });
     html+='</div></div>';
@@ -1176,12 +1176,12 @@ function renderDash(el){
 
     var today=new Date();
     var CHAN_COLORS={
-      'Phone':'#4A9BE8','Email':'#28A870','Public meeting':'#b08ff5',
+      'Phone':'#4A9BE8','Email':'#28A870','Public meeting':'#b08ff5','Public event':'#b08ff5',
       'Mail':'#E8A020','In-person':'#b08ff5','Social media':'#4A9BE8',
       'Media inquiry':'#e87070','Door-to-door':'#60c89a',
       'Comment card':'#E8A020','Agency coordination':'#1E8FA0'
     };
-    var CHAN_ORDER=['Public meeting','Phone','Email','In-person','Mail','Comment card',
+    var CHAN_ORDER=['Public meeting','Public event','Phone','Email','In-person','Mail','Comment card',
       'Agency coordination','Social media','Media inquiry','Door-to-door'];
 
     // Build 4 full weeks (Mon-Sun) ending with the current week
@@ -1219,7 +1219,7 @@ function renderDash(el){
 
   // ── LIVE ACTIVITY FEED ──────────────────────────────────────────
   function buildFeed(){
-    var CHAN_COLORS={'Phone':'var(--sky-lt)','Email':'var(--green)','Public meeting':'#a080e8',
+    var CHAN_COLORS={'Phone':'var(--sky-lt)','Email':'var(--green)','Public meeting':'#a080e8','Public event':'#a080e8',
       'Mail':'var(--amber)','In-person':'#a080e8','Social media':'var(--sky-lt)',
       'Media inquiry':'#e87070','Door-to-door':'#60c89a','Comment card':'var(--amber)'};
     var feedInts=ints.map(function(i){
@@ -1328,7 +1328,7 @@ function renderDash(el){
     <!-- ROW 3: Swim lanes + Live feed -->
     <div style="display:grid;grid-template-columns:3fr 2fr;gap:14px;margin-bottom:20px">
       <div class="dash-anim" style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:14px 18px;animation-delay:420ms">
-        <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:10px">Project activity <span style="font-size:11px;font-weight:400;color:var(--fog);margin-left:6px">past 4 weeks</span></div>
+        <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:10px">Project activity <span style="font-size:11px;font-weight:400;color:var(--mist);margin-left:6px">past 4 weeks</span></div>
         ${buildSwimLanes()}
       </div>
       <div class="dash-anim" style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:14px 18px;animation-delay:480ms">
@@ -2080,7 +2080,7 @@ function renderInteractions(el){
     ${!S.projectFilter?`<select class="fsel" id="int-proj" onchange="S.intProj=this.value;renderInteractions(document.getElementById('main'))"><option value="">All projects</option>${projs.map(p=>`<option value="${p.id}"${(S.intProj||'')===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select>`:`<select id="int-proj" style="display:none"></select>`}
     <select class="fsel" id="int-subj" onchange="S.intSubj=this.value;renderInteractions(document.getElementById('main'))"><option value="">All subjects</option>${(S.intSubj||'')=== 'General'?`<option value='General' selected>General</option>`:`<option value='General'>General</option>`}${(S.intSubj||'')=== 'Traffic'?`<option value='Traffic' selected>Traffic</option>`:`<option value='Traffic'>Traffic</option>`}${(S.intSubj||'')=== 'Property Access'?`<option value='Property Access' selected>Property Access</option>`:`<option value='Property Access'>Property Access</option>`}${(S.intSubj||'')=== 'Property Issue'?`<option value='Property Issue' selected>Property Issue</option>`:`<option value='Property Issue'>Property Issue</option>`}${(S.intSubj||'')=== 'Environmental'?`<option value='Environmental' selected>Environmental</option>`:`<option value='Environmental'>Environmental</option>`}${(S.intSubj||'')=== 'Utility Service'?`<option value='Utility Service' selected>Utility Service</option>`:`<option value='Utility Service'>Utility Service</option>`}${(S.intSubj||'')=== 'Information'?`<option value='Information' selected>Information</option>`:`<option value='Information'>Information</option>`}</select>
     <select class="fsel" id="int-nat" onchange="S.intNat=this.value;renderInteractions(document.getElementById('main'))"><option value="">All types</option>${['Inquiry','Complaint','Compliment'].map(n=>`<option value="${n}"${(S.intNat||'')=== n?' selected':''}>${n}</option>`).join('')}</select>
-    <select class="fsel" id="int-ch" onchange="S.intCh=this.value;renderInteractions(document.getElementById('main'))"><option value="">All channels</option>${['Phone','Email','In-person','Public meeting','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'].map(c=>`<option${(S.intCh||'')=== c?' selected':''}>${c}</option>`).join('')}</select>
+    <select class="fsel" id="int-ch" onchange="S.intCh=this.value;renderInteractions(document.getElementById('main'))"><option value="">All channels</option>${['Phone','Email','In-person','Public meeting','Public event','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'].map(c=>`<option${(S.intCh||'')=== c?' selected':''}>${c}</option>`).join('')}</select>
     <select class="fsel" id="int-fu" onchange="S.intFu=this.value;renderInteractions(document.getElementById('main'))"><option value=""${(S.intFu||'')=== ''?' selected':''}>All</option><option value="open"${(S.intFu||'')=== 'open'?' selected':''}>Open / overdue</option><option value="done"${(S.intFu||'')=== 'done'?' selected':''}>Resolved</option></select>
     <button class="btn btn-sm" style="background:rgba(45,125,210,.15);border-color:rgba(74,155,232,.4);color:var(--sky-lt);white-space:nowrap" onclick="S.intSearch='';S.intProj='';S.intCh='';S.intFu='';renderInteractions(document.getElementById('main'))" title="Reset all filters">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M2 8a6 6 0 1 0 1.5-3.9"/><path d="M2 4v4h4"/></svg>
@@ -2718,7 +2718,7 @@ function openIntModal(preStake){
     <div class="fr"><label>Project *</label><select id="f-ip">${projs.map(p=>`<option value="${p.id}"${S.projectFilter===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
     <div class="fr"><label>Stakeholder *</label><select id="f-is">${stakes.map(s=>`<option value="${s.id}"${s.id===preStake?' selected':''}>${dispName(s)}${(s.firstName||s.lastName)&&s.org?' — '+s.org:''}</option>`).join('')}</select></div>
     <div class="fr"><label>Date *</label><input type="date" id="f-id" value="${new Date().toISOString().slice(0,10)}"></div>
-    <div class="fr"><label>Channel</label><select id="f-ic">${['Phone','Email','In-person','Public meeting','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'].map(c=>`<option>${c}</option>`).join('')}</select></div>
+    <div class="fr"><label>Channel</label><select id="f-ic">${['Phone','Email','In-person','Public meeting','Public event','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'].map(c=>`<option>${c}</option>`).join('')}</select></div>
     <div class="fr"><label>Direction</label><select id="f-idr">${['Incoming','Outgoing','In-person'].map(d=>`<option>${d}</option>`).join('')}</select></div>
     <div class="fr"><label>Subject</label><select id="f-isub">${['General','Traffic','Property','Environmental','Utility Service'].map(s=>`<option>${s}</option>`).join('')}</select></div>
     <div class="fr"><label>Nature</label><select id="f-inat"><option>Inquiry</option><option>Complaint</option><option>Compliment</option></select></div>
@@ -2742,7 +2742,7 @@ function openEditIntModal(id){
     <div class="fr"><label>Project</label><select id="f-ip">${projs.map(p=>`<option value="${p.id}"${i.projectId===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
     <div class="fr"><label>Stakeholder</label><select id="f-is">${stakes.map(s=>`<option value="${s.id}"${String(i.stakeholderId)===String(s.id)?' selected':''}>${dispName(s)}${(s.firstName||s.lastName)&&s.org?' — '+s.org:''}</option>`).join('')}</select></div>
     <div class="fr"><label>Date</label><input type="date" id="f-id" value="${i.date||''}"></div>
-    <div class="fr"><label>Channel</label><select id="f-ic">${['Phone','Email','In-person','Public meeting','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'].map(c=>`<option${i.channel===c?' selected':''}>${c}</option>`).join('')}</select></div>
+    <div class="fr"><label>Channel</label><select id="f-ic">${['Phone','Email','In-person','Public meeting','Public event','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'].map(c=>`<option${i.channel===c?' selected':''}>${c}</option>`).join('')}</select></div>
     <div class="fr"><label>Direction</label><select id="f-idr">${['Incoming','Outgoing','In-person'].map(d=>`<option${i.direction===d?' selected':''}>${d}</option>`).join('')}</select></div>
     <div class="fr"><label>Logged by</label><select id="f-il"><option value="">— Select —</option><option value="JP"${i.loggedBy==='JP'?' selected':''}>JP</option><option value="SH"${i.loggedBy==='SH'?' selected':''}>SH</option><option value="SB"${i.loggedBy==='SB'?' selected':''}>SB</option></select></div>
   </div>
@@ -4451,7 +4451,7 @@ async function saveMeeting(){
           projectId:data.projectId,
           stakeholderId:null,
           date:date,
-          channel:'Public meeting',
+          channel:'Public event',
           direction:'Inbound',
           summary:'Event action item: '+line.trim(),
           followUp:true,
@@ -4479,7 +4479,7 @@ async function saveMeeting(){
           projectId:data.projectId,
           stakeholderId:null,
           date:date,
-          channel:'Public meeting',
+          channel:'Public event',
           direction:'Inbound',
           summary:'Event action item: '+line.trim(),
           followUp:true,

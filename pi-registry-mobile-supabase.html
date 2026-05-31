@@ -99,6 +99,10 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .form-input:focus{border-color:var(--sky)}
 .form-input::placeholder{color:var(--text3)}
 .form-select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238896A7' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:36px}
+.stake-opt{padding:11px 13px;font-size:15px;color:var(--text);cursor:pointer;border-bottom:1px solid var(--border)}
+.stake-opt:last-child{border-bottom:none}
+.stake-opt:active,.stake-opt.hovered{background:var(--surface2)}
+.stake-opt-sub{font-size:12px;color:var(--text3);margin-top:2px}
 textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 
 /* ── TOGGLE ROW ── */
@@ -162,7 +166,8 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 .divider-label{height:32px;display:flex;align-items:center;padding:0 16px;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;background:var(--surface2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
 
 /* ── INTERACTION LOG ITEM ── */
-.int-item{padding:14px 16px;border-bottom:1px solid var(--border);background:var(--surface)}
+.int-item{padding:14px 16px;border-bottom:1px solid var(--border);background:var(--surface);transition:background .1s}
+.int-item:active{background:var(--surface2)}
 .int-item:last-child{border-bottom:none}
 .int-header{display:flex;align-items:center;gap:8px;margin-bottom:6px}
 .int-date{font-size:14px;font-weight:600;font-family:var(--mono);color:var(--text)}
@@ -439,9 +444,11 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
         </div>
         <div class="form-group">
           <label class="form-label">Stakeholder</label>
-          <select class="form-input form-select" id="log-stake">
-            <option value="">— None / Anonymous —</option>
-          </select>
+          <div style="position:relative" id="stake-picker-wrap">
+            <input type="text" class="form-input" id="log-stake-search" placeholder="Search name or org… (leave blank for anonymous)" autocomplete="off" oninput="filterStakePicker()" onfocus="showStakePicker()">
+            <input type="hidden" id="log-stake" value="">
+            <div id="stake-picker-list" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1.5px solid var(--sky);border-top:none;border-radius:0 0 var(--radius-sm) var(--radius-sm);max-height:200px;overflow-y:auto;z-index:200;box-shadow:var(--shadow-lg)"></div>
+          </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div class="form-group">
@@ -1273,39 +1280,104 @@ function resolveFollowup(id,e){
 // ── LOG SHEET ──────────────────────────────────────────────────────────
 function prepLogSheet(){
   document.getElementById('log-date').value=today();
+  clearStakePicker();
   updateLogStakeholders();
   // Pre-select stakeholder if coming from detail view
   if(window._detailStakeId){
-    const sel=document.getElementById('log-stake');
-    setTimeout(()=>{
-      if([...sel.options].find(o=>o.value===window._detailStakeId)){
-        sel.value=window._detailStakeId;
-      }
-    },100);
+    const stakes=DB.get('stakeholders');
+    const s=stakes.find(x=>String(x.id)===String(window._detailStakeId));
+    if(s){
+      const name=(s.firstName+' '+s.lastName).trim();
+      setTimeout(()=>selectStake(String(s.id), name), 50);
+    }
   }
 }
 
 function updateLogStakeholders(){
+  // When project changes, reset the stakeholder picker
+  clearStakePicker();
+}
+
+// ── STAKEHOLDER AUTOCOMPLETE PICKER ───────────────────────────────────
+function _getPickerList(){
   const pF=document.getElementById('log-proj').value;
-  const sel=document.getElementById('log-stake');
   const stakes=DB.get('stakeholders');
   const ps=DB.get('project_stakeholders');
-
   let list;
   if(pF){
     list=ps.filter(x=>x.projectId===pF).map(lk=>stakes.find(x=>String(x.id)===String(lk.stakeholderId))).filter(Boolean);
   } else {
     list=stakes;
   }
-  list=list.sort((a,b)=>(a.lastName+a.firstName).localeCompare(b.lastName+b.firstName));
+  return list.sort((a,b)=>(a.lastName+a.firstName).localeCompare(b.lastName+b.firstName));
+}
 
-  sel.innerHTML='<option value="">— None / Anonymous —</option>'+
-    list.map(s=>`<option value="${s.id}">${s.firstName} ${s.lastName}${s.org?' — '+s.org:''}</option>`).join('');
+function clearStakePicker(){
+  const inp=document.getElementById('log-stake-search');
+  const hid=document.getElementById('log-stake');
+  const lst=document.getElementById('stake-picker-list');
+  if(inp) inp.value='';
+  if(hid) hid.value='';
+  if(lst){lst.innerHTML='';lst.style.display='none';}
+}
 
-  if(window._detailStakeId){
-    sel.value=window._detailStakeId;
+function showStakePicker(){
+  const inp=document.getElementById('log-stake-search');
+  // Only show list if nothing selected yet or if searching
+  if(!document.getElementById('log-stake').value){
+    filterStakePicker();
   }
 }
+
+function filterStakePicker(){
+  const query=(document.getElementById('log-stake-search').value||'').toLowerCase().trim();
+  const hid=document.getElementById('log-stake');
+  const lst=document.getElementById('stake-picker-list');
+
+  // If user is editing text, clear the hidden selection
+  hid.value='';
+
+  const list=_getPickerList();
+  const filtered=query
+    ? list.filter(s=>(s.firstName+' '+s.lastName+' '+(s.org||'')).toLowerCase().includes(query))
+    : list.slice(0,40); // show first 40 when no query
+
+  if(!filtered.length && !query){
+    lst.style.display='none';
+    return;
+  }
+
+  lst.innerHTML='<div class="stake-opt" style="color:var(--text3);font-style:italic" onmousedown="selectStake(\'\',\'— None / Anonymous —\')">— None / Anonymous —</div>'+
+    filtered.map(s=>{
+      const name=(s.firstName+' '+s.lastName).trim();
+      const sub=s.org?(s.org+(s.title?' · '+s.title:'')):(s.title||'');
+      return `<div class="stake-opt" onmousedown="selectStake('${s.id}','${name.replace(/'/g,"\\'")}')">
+        <div>${name}</div>
+        ${sub?`<div class="stake-opt-sub">${sub}</div>`:''}
+      </div>`;
+    }).join('');
+  lst.style.display='block';
+}
+
+function selectStake(id, label){
+  document.getElementById('log-stake').value=id;
+  document.getElementById('log-stake-search').value=id?label:'';
+  document.getElementById('stake-picker-list').style.display='none';
+}
+
+// Close picker when tapping outside
+document.addEventListener('touchstart', function(e){
+  const wrap=document.getElementById('stake-picker-wrap');
+  if(wrap&&!wrap.contains(e.target)){
+    document.getElementById('stake-picker-list').style.display='none';
+  }
+}, {passive:true});
+document.addEventListener('mousedown', function(e){
+  const wrap=document.getElementById('stake-picker-wrap');
+  if(wrap&&!wrap.contains(e.target)){
+    document.getElementById('stake-picker-list').style.display='none';
+  }
+});
 
 function toggleLogFU(){
   const checked=document.getElementById('log-fu').checked;
@@ -1432,6 +1504,8 @@ function saveStakeholder(){
 }
 
 // ── EDIT FOLLOW-UP ────────────────────────────────────────────────────
+function editInteraction(id){ openLogEdit(id); }
+
 function openLogEdit(id){
   const ints=DB.get('interactions');
   const i=ints.find(x=>x.id===id);
@@ -1442,7 +1516,14 @@ function openLogEdit(id){
   document.getElementById('log-proj').value=i.projectId||'';
   updateLogStakeholders();
   setTimeout(()=>{
-    document.getElementById('log-stake').value=i.stakeholderId||'';
+    // Restore stakeholder picker
+    if(i.stakeholderId){
+      const s=DB.get('stakeholders').find(x=>String(x.id)===String(i.stakeholderId));
+      if(s) selectStake(String(s.id),(s.firstName+' '+s.lastName).trim());
+      else clearStakePicker();
+    } else {
+      clearStakePicker();
+    }
     document.getElementById('log-date').value=i.date||today();
     document.getElementById('log-channel').value=i.channel||'Phone';
     document.getElementById('log-subject').value=i.subject||'General';

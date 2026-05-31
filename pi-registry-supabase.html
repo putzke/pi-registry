@@ -424,6 +424,13 @@ window._srFooter = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEA3ADcAAD/2wBDAAIBA
 // ── DB ────────────────────────────────────────
 // ── SUPABASE CONFIG ────────────────────────────────────────────────
 const SUPA_URL = 'https://ncfbblhlsiglxkoiounv.supabase.co';
+// ── MIGRATION NOTE ─────────────────────────────────────────────────
+// The isAnonymous flag has been removed from stakeholder entry.
+// Run this SQL in Supabase to clean up existing records:
+//   UPDATE pi_stakeholders SET is_anonymous = false WHERE is_anonymous = true;
+// The is_anonymous column can be dropped entirely once confirmed clean:
+//   ALTER TABLE pi_stakeholders DROP COLUMN is_anonymous;
+// ────────────────────────────────────────────────────────────────────
 const SUPA_REST = SUPA_URL + '/rest/v1';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5jZmJibGhsc2lnbHhrb2lvdW52Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0MTUzOTMsImV4cCI6MjA5NDk5MTM5M30.-fRI1QGkr1teN0sFvl25Uq7U38Jq1SAc6heIJvOud2Q';
 
@@ -1389,7 +1396,7 @@ function filterMasterList(){
       return'<div class="lrow'+(s.id===sel?' sel':'')+'" onclick="selectStake(\''+s.id+'\')">'+
         '<div class="avatar" style="background:'+col+'22;color:'+col+'">'+ini(s.firstName,s.lastName)+'</div>'+
         '<div class="lrow-body">'+
-          '<div class="lrow-name">'+s.firstName+' '+s.lastName+(s.isAnonymous?'<span class="badge b-amber" style="font-size:9px;padding:1px 5px;margin-left:4px">Anon</span>':'')+(s.org||s.organization?'<span class="lrow-org">'+(s.org||s.organization)+'</span>':'')+'</div>'+
+          '<div class="lrow-name">'+s.firstName+' '+s.lastName+(s.org||s.organization?'<span class="lrow-org">'+(s.org||s.organization)+'</span>':'')+'</div>'+
           '<div class="lrow-meta">'+(s.type||'')+(projCount?' · '+projCount+' proj':'')+(intCount?' · '+intCount+' int':'')+'</div>'+
         '</div>'+
       '</div>';
@@ -2500,49 +2507,12 @@ function closeM(){document.getElementById('modal-ov').classList.remove('open');S
 document.getElementById('modal-ov').addEventListener('click',e=>{if(e.target===e.currentTarget)closeM()});
 
 // STAKEHOLDER MODAL
-
-function toggleAnonContact(){
-  const cb = document.getElementById('f-anon');
-  const fnEl = document.getElementById('f-fn');
-  const lnEl = document.getElementById('f-ln');
-  if(!cb || !fnEl || !lnEl) return;
-  if(cb.checked){
-    // Count existing anonymous callers for this project
-    const pF = S.projectFilter;
-    let anonCount = 0;
-    if(pF){
-      const ps = DB.get('project_stakeholders').filter(x=>x.projectId===pF);
-      const stakes = DB.get('stakeholders');
-      ps.forEach(function(lk){
-        const s = stakes.find(x=>String(x.id)===String(lk.stakeholderId));
-        if(s && s.firstName==='Anonymous' && s.lastName && s.lastName.startsWith('Caller')) anonCount++;
-      });
-    }
-    fnEl.value = 'Anonymous';
-    lnEl.value = 'Caller ' + (anonCount + 1);
-    fnEl.disabled = true;
-    lnEl.disabled = true;
-    fnEl.style.opacity = '0.5';
-    lnEl.style.opacity = '0.5';
-  } else {
-    fnEl.value = '';
-    lnEl.value = '';
-    fnEl.disabled = false;
-    lnEl.disabled = false;
-    fnEl.style.opacity = '1';
-    lnEl.style.opacity = '1';
-  }
-}
 function openStakeModal(id){
   S.editId=id||null;
   const s=id?(DB.get('stakeholders').find(x=>x.id===id)||{}):{};
   const projs=DB.get('projects');
   openM(id?'Edit stakeholder':'New stakeholder',
   `<div class="fsec">Contact information</div>
-  <div style="margin-bottom:8px;padding:8px 12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:6px;display:flex;align-items:center;gap:8px">
-    <input type="checkbox" id="f-anon" onchange="toggleAnonContact()" style="accent-color:var(--sky);width:14px;height:14px">
-    <label for="f-anon" style="font-size:12px;color:var(--mist);cursor:pointer">Anonymous caller — no name provided (requires email or phone)</label>
-  </div>
   <div class="fgrid fg2f">
     <div class="fr"><label>First name *</label><input id="f-fn" value="${s.firstName||''}"></div>
     <div class="fr"><label>Last name *</label><input id="f-ln" value="${s.lastName||''}"></div>
@@ -2570,10 +2540,8 @@ function openStakeModal(id){
 }
 function saveStake(){
   const v=id=>document.getElementById(id)?.value||'';
-  const isAnon=document.getElementById('f-anon')?.checked||false;
-  const data={id:S.editId||DB.uid(),firstName:document.getElementById('f-fn')?.value||'',lastName:document.getElementById('f-ln')?.value||'',org:v('f-org'),title:v('f-ti'),email:v('f-em'),phone:v('f-ph'),address:v('f-ad'),parcelId:v('f-parc'),type:v('f-st'),isMaster:!isAnon,notes:v('f-no'),isAnonymous:isAnon};
+  const data={id:S.editId||DB.uid(),firstName:document.getElementById('f-fn')?.value||'',lastName:document.getElementById('f-ln')?.value||'',org:v('f-org'),title:v('f-ti'),email:v('f-em'),phone:v('f-ph'),address:v('f-ad'),parcelId:v('f-parc'),type:v('f-st'),isMaster:true,notes:v('f-no'),isAnonymous:false};
   if(!data.firstName&&!data.lastName&&!data.org){alert('First and last name, or Organization name required.');return}
-  if(isAnon&&!data.email&&!data.phone){alert('Anonymous callers require at least an email or phone number.');return}
   const all=DB.get('stakeholders');
   if(S.editId){const i=all.findIndex(x=>x.id===S.editId);if(i>-1)all[i]=data;}else all.push(data);
   DB.set('stakeholders',all);

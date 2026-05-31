@@ -463,7 +463,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
             <label class="form-label">Channel</label>
             <select class="form-input form-select" id="log-channel">
               <option>Phone</option><option>Email</option><option>In-person</option>
-              <option>Public meeting</option><option>Mail</option><option>Social media</option>
+              <option>Public meeting</option><option>Public event</option><option>Mail</option><option>Social media</option>
               <option>Media inquiry</option><option>Door-to-door</option>
               <option>Comment card</option><option>Other</option>
             </select>
@@ -536,11 +536,6 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
         </button>
       </div>
       <div class="sheet-body">
-        <!-- Anonymous toggle -->
-        <div class="anon-bar">
-          <input type="checkbox" id="add-anon" onchange="toggleAnon()">
-          <label for="add-anon">Anonymous caller — no name provided</label>
-        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px" id="name-fields">
           <div class="form-group">
             <label class="form-label">First name *</label>
@@ -612,6 +607,13 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 // ── DATA LAYER (Supabase) ─────────────────
 // ── SUPABASE CONFIG ────────────────────────────────────────────────
 const SUPA_URL = 'https://ncfbblhlsiglxkoiounv.supabase.co';
+// ── MIGRATION NOTE ─────────────────────────────────────────────────
+// The isAnonymous flag has been removed from stakeholder entry.
+// Run this SQL in Supabase to clean up existing records:
+//   UPDATE pi_stakeholders SET is_anonymous = false WHERE is_anonymous = true;
+// The is_anonymous column can be dropped entirely once confirmed clean:
+//   ALTER TABLE pi_stakeholders DROP COLUMN is_anonymous;
+// ────────────────────────────────────────────────────────────────────
 const SUPA_REST = SUPA_URL + '/rest/v1';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5jZmJibGhsc2lnbHhrb2lvdW52Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0MTUzOTMsImV4cCI6MjA5NDk5MTM5M30.-fRI1QGkr1teN0sFvl25Uq7U38Jq1SAc6heIJvOud2Q';
 
@@ -655,6 +657,21 @@ async function signIn(email, password) {
 }
 
 function signOut() { clearSession(); location.reload(); }
+
+async function refreshSession() {
+  const sess = getSession();
+  if (!sess || !sess.refresh_token) return;
+  try {
+    const res = await fetch(SUPA_URL + '/auth/v1/token?grant_type=refresh_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPA_KEY },
+      body: JSON.stringify({ refresh_token: sess.refresh_token })
+    });
+    if (res.status >= 400) { signOut(); return; }
+    const data = await res.json();
+    setSession({ access_token: data.access_token, refresh_token: data.refresh_token, user: data.user });
+  } catch(e) { console.warn('Token refresh failed', e); }
+}
 
 function showLoginOverlay() {
   const overlay = document.createElement('div');
@@ -860,7 +877,7 @@ const DB = {
   set(k, arr) {
     const old = (_syncCache[k] || []).slice();
     _syncCache[k] = arr;
-    DB._sync(k, old, arr);
+    return DB._sync(k, old, arr);
   },
   async _sync(table, oldArr, newArr) {
     const oldMap = {}; oldArr.forEach(x => { if(x.id) oldMap[x.id] = x; });
@@ -1048,7 +1065,7 @@ function renderContacts(){
     return`<div class="list-item" onclick="showContactDetail('${s.id}')">
       <div class="item-avatar" style="background:${col}18;color:${col}">${ini(s.firstName,s.lastName)}</div>
       <div class="item-body">
-        <div class="item-name">${dispName(s)}${s.isAnonymous?'<span class="badge b-amber" style="font-size:9px;margin-left:6px">Anon</span>':''}</div>
+        <div class="item-name">${dispName(s)}</div>
         <div class="item-sub">${s.org||s.title||'—'}</div>
       </div>
       <div class="item-right">
@@ -1081,7 +1098,7 @@ function showContactDetail(id){
       ${s.org?`<div class="detail-org">${s.org}${s.title?' · '+s.title:''}</div>`:''}
       <div class="detail-pills">
         ${s.type?`<span class="badge b-navy">${s.type}</span>`:''}
-        ${s.isAnonymous?'<span class="badge b-amber">Anonymous</span>':''}
+        
         ${s.isMaster?'<span class="badge" style="background:rgba(255,255,255,.15);color:#fff">Master list</span>':''}
       </div>
     </div>
@@ -1349,7 +1366,6 @@ function saveInteraction(){
 
 // ── ADD STAKEHOLDER SHEET ──────────────────────────────────────────────
 function prepAddStakeholderSheet(){
-  document.getElementById('add-anon').checked=false;
   document.getElementById('add-fn').value='';
   document.getElementById('add-ln').value='';
   document.getElementById('add-org').value='';
@@ -1362,41 +1378,7 @@ function prepAddStakeholderSheet(){
   document.getElementById('add-ln').disabled=false;
 }
 
-function toggleAnon(){
-  const checked=document.getElementById('add-anon').checked;
-  const fnEl=document.getElementById('add-fn');
-  const lnEl=document.getElementById('add-ln');
-  if(checked){
-    // Count existing anonymous callers for selected project
-    const pF=document.getElementById('add-proj').value;
-    const ps=DB.get('project_stakeholders');
-    const stakes=DB.get('stakeholders');
-    let count=0;
-    if(pF){
-      const linked=ps.filter(x=>x.projectId===pF);
-      linked.forEach(lk=>{
-        const s=stakes.find(x=>String(x.id)===String(lk.stakeholderId));
-        if(s&&s.firstName==='Anonymous'&&s.lastName&&s.lastName.startsWith('Caller'))count++;
-      });
-    } else {
-      count=stakes.filter(s=>s.firstName==='Anonymous'&&s.lastName&&s.lastName.startsWith('Caller')).length;
-    }
-    fnEl.value='Anonymous';
-    lnEl.value='Caller '+(count+1);
-    fnEl.disabled=true;
-    lnEl.disabled=true;
-    document.getElementById('name-fields').style.opacity='.5';
-    document.getElementById('add-master').checked=false;
-  } else {
-    fnEl.value='';lnEl.value='';
-    fnEl.disabled=false;lnEl.disabled=false;
-    document.getElementById('name-fields').style.opacity='1';
-    document.getElementById('add-master').checked=true;
-  }
-}
-
 function saveStakeholder(){
-  const isAnon=document.getElementById('add-anon').checked;
   const fn=document.getElementById('add-fn').value.trim();
   const ln=document.getElementById('add-ln').value.trim();
   const email=document.getElementById('add-email').value.trim();
@@ -1405,7 +1387,7 @@ function saveStakeholder(){
   if(!fn&&!ln&&!document.getElementById('add-org').value.trim()){showToast('First and last name, or Organization required','error');return;}
   if(!email&&!phone){showToast('Email or phone required','error');return;}
 
-  const isMaster=document.getElementById('add-master').checked&&!isAnon;
+  const isMaster=document.getElementById('add-master').checked;
   const projId=document.getElementById('add-proj').value;
 
   const newS={
@@ -1419,7 +1401,7 @@ function saveStakeholder(){
     phone,
     type:document.getElementById('add-type').value,
     isMaster,
-    isAnonymous:isAnon,
+    isAnonymous:false,
     notes:''
   };
 
@@ -1491,6 +1473,7 @@ function init(){
 }
 
 async function initApp(){
+  setInterval(refreshSession, 45 * 60 * 1000);
   try{
     showToast('Loading...','info');
     await loadAllData();

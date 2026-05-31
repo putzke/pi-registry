@@ -68,6 +68,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 
 /* ── LIST ITEMS ── */
 .list-item{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer;background:var(--surface);transition:background .1s;text-decoration:none;color:inherit}
+.list-item:active{background:var(--surface2)}
 .list-item:last-child{border-bottom:none}
 .list-item:active{background:var(--surface2)}
 .item-avatar{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0;font-family:var(--mono)}
@@ -448,6 +449,30 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
             <input type="text" class="form-input" id="log-stake-search" placeholder="Search name or org… (leave blank for anonymous)" autocomplete="off" oninput="filterStakePicker()" onfocus="showStakePicker()">
             <input type="hidden" id="log-stake" value="">
             <div id="stake-picker-list" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1.5px solid var(--sky);border-top:none;border-radius:0 0 var(--radius-sm) var(--radius-sm);max-height:200px;overflow-y:auto;z-index:200;box-shadow:var(--shadow-lg)"></div>
+          </div>
+        </div>
+        <!-- Caller info — shown only when no stakeholder selected -->
+        <div id="caller-info-wrap" style="display:none;background:var(--surface2);border:1.5px solid var(--border2);border-radius:var(--radius-sm);padding:12px 14px">
+          <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Caller info <span style="font-weight:400;font-style:italic;text-transform:none;letter-spacing:0;color:var(--text3)">(optional — creates a project-only contact)</span></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <div class="form-group">
+              <label class="form-label">First name</label>
+              <input type="text" class="form-input" id="caller-fn" placeholder="Optional">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Last name</label>
+              <input type="text" class="form-input" id="caller-ln" placeholder="Optional">
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="form-group">
+              <label class="form-label">Phone</label>
+              <input type="tel" class="form-input" id="caller-ph" placeholder="Optional">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email</label>
+              <input type="email" class="form-input" id="caller-em" placeholder="Optional">
+            </div>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -1021,7 +1046,8 @@ function refreshHome(){
     intList.innerHTML=recent.map(i=>{
       const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
       const p=projs.find(x=>x.id===i.projectId);
-      return`<div class="list-item">
+      const projLabel=p?(p.pid+(p.name?' — '+(p.name.length>22?p.name.slice(0,22)+'…':p.name):'')):'';
+      return`<div class="list-item" onclick="editInteraction('${i.id}')" style="cursor:pointer">
         <div style="flex:1">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
             <span style="font-size:14px;font-weight:600;font-family:var(--mono);color:var(--text)">${i.date}</span>
@@ -1029,7 +1055,7 @@ function refreshHome(){
             <span class="badge b-sky" style="font-size:12px">${i.subject||'General'}</span>
           </div>
           <div style="font-size:14px;color:var(--text);line-height:1.4">${i.summary}</div>
-          <div style="font-size:14px;font-weight:600;color:var(--sky);margin-top:3px">${s?dispName(s):'—'}${p?' · '+p.pid:''}${i.loggedBy?' · '+i.loggedBy:''}</div>
+          <div style="font-size:14px;font-weight:600;color:var(--sky);margin-top:3px">${s?dispName(s):'—'}${projLabel?' · '+projLabel:''}${i.loggedBy?' · '+i.loggedBy:''}</div>
         </div>
       </div>`;
     }).join('');
@@ -1312,13 +1338,23 @@ function _getPickerList(){
   return list.sort((a,b)=>(a.lastName+a.firstName).localeCompare(b.lastName+b.firstName));
 }
 
+function _clearCallerFields(){
+  ['caller-fn','caller-ln','caller-ph','caller-em'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.value='';
+  });
+}
+
 function clearStakePicker(){
   const inp=document.getElementById('log-stake-search');
   const hid=document.getElementById('log-stake');
   const lst=document.getElementById('stake-picker-list');
+  const wrap=document.getElementById('caller-info-wrap');
   if(inp) inp.value='';
   if(hid) hid.value='';
   if(lst){lst.innerHTML='';lst.style.display='none';}
+  if(wrap) wrap.style.display='none';
+  _clearCallerFields();
 }
 
 function showStakePicker(){
@@ -1336,6 +1372,9 @@ function filterStakePicker(){
 
   // If user is editing text, clear the hidden selection
   hid.value='';
+  // Show caller info since no stakeholder is linked
+  const wrap=document.getElementById('caller-info-wrap');
+  if(wrap) wrap.style.display='block';
 
   const list=_getPickerList();
   const filtered=query
@@ -1363,6 +1402,10 @@ function selectStake(id, label){
   document.getElementById('log-stake').value=id;
   document.getElementById('log-stake-search').value=id?label:'';
   document.getElementById('stake-picker-list').style.display='none';
+  // Show caller info only when no stakeholder selected
+  const wrap=document.getElementById('caller-info-wrap');
+  if(wrap) wrap.style.display=id?'none':'block';
+  if(id) _clearCallerFields();
 }
 
 // Close picker when tapping outside
@@ -1386,11 +1429,42 @@ function toggleLogFU(){
   if(checked) document.getElementById('log-fu-date').value=today();
 }
 
-function saveInteraction(){
+async function saveInteraction(){
   const projId=document.getElementById('log-proj').value;
   if(!projId){showToast('Please select a project','error');return;}
   const summary=document.getElementById('log-summary').value.trim();
   if(!summary){showToast('Summary is required','error');return;}
+
+  // If no stakeholder selected, check for caller info to auto-create a project-only contact
+  let stakeId=document.getElementById('log-stake').value||null;
+  if(!stakeId){
+    const cfn=(document.getElementById('caller-fn').value||'').trim();
+    const cln=(document.getElementById('caller-ln').value||'').trim();
+    const cph=(document.getElementById('caller-ph').value||'').trim();
+    const cem=(document.getElementById('caller-em').value||'').trim();
+    if(cfn||cln||cph||cem){
+      // Create a minimal project-only stakeholder record
+      const newS={
+        id:DB.uid(),
+        firstName:cfn||'Unknown',
+        lastName:cln||'',
+        org:'',title:'',
+        email:cem,phone:cph,
+        type:'Motorist/Passerby',
+        isMaster:false,
+        isAnonymous:false,
+        notes:'Auto-created from interaction log'
+      };
+      const allStakes=DB.get('stakeholders');
+      allStakes.push(newS);
+      await DB.set('stakeholders',allStakes);
+      // Link to project
+      const ps=DB.get('project_stakeholders');
+      ps.push({id:DB.uid(),projectId:projId,stakeholderId:newS.id});
+      await DB.set('project_stakeholders',ps);
+      stakeId=newS.id;
+    }
+  }
   const fuChecked=document.getElementById('log-fu').checked;
   const fuDate=document.getElementById('log-fu-date').value;
   const fuNote=document.getElementById('log-fu-note').value.trim();
@@ -1398,7 +1472,7 @@ function saveInteraction(){
   const data={
     id:DB.uid(),
     projectId:projId,
-    stakeholderId:document.getElementById('log-stake').value||null,
+    stakeholderId:stakeId,
     date:document.getElementById('log-date').value||today(),
     channel:document.getElementById('log-channel').value,
     subject:document.getElementById('log-subject').value,
@@ -1515,6 +1589,9 @@ function openLogEdit(id){
   populateProjectDropdowns();
   document.getElementById('log-proj').value=i.projectId||'';
   updateLogStakeholders();
+  // Hide caller info panel when editing existing interaction
+  const ciw=document.getElementById('caller-info-wrap');
+  if(ciw) ciw.style.display='none';
   setTimeout(()=>{
     // Restore stakeholder picker
     if(i.stakeholderId){

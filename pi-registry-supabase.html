@@ -2678,13 +2678,33 @@ function saveEditLink(lid){
 }
 
 // INTERACTION MODAL
+function updateIntStakeholders(){
+  const projId=document.getElementById('f-ip')?.value;
+  const sel=document.getElementById('f-is');
+  if(!sel) return;
+  const stakes=DB.get('stakeholders');
+  const ps=DB.get('project_stakeholders');
+  let list;
+  if(projId){
+    const linked=ps.filter(x=>x.projectId===projId).map(x=>x.stakeholderId);
+    list=stakes.filter(s=>linked.includes(String(s.id))||linked.includes(s.id));
+  } else {
+    list=stakes;
+  }
+  list=list.sort((a,b)=>(a.lastName+a.firstName).localeCompare(b.lastName+b.firstName));
+  const prev=sel.value;
+  sel.innerHTML='<option value="">— None / Anonymous —</option>'+
+    list.map(s=>`<option value="${s.id}">${dispName(s)}${(s.firstName||s.lastName)&&s.org?' — '+s.org:''}</option>`).join('');
+  if(prev) sel.value=prev;
+}
+
 function openIntModal(preStake){
   S.editId=null;
   const projs=DB.get('projects'),stakes=DB.get('stakeholders');
   openM('Log interaction',
   `<div class="fgrid fg2f">
-    <div class="fr"><label>Project *</label><select id="f-ip">${projs.map(p=>`<option value="${p.id}"${S.projectFilter===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
-    <div class="fr"><label>Stakeholder *</label><select id="f-is">${stakes.map(s=>`<option value="${s.id}"${s.id===preStake?' selected':''}>${dispName(s)}${(s.firstName||s.lastName)&&s.org?' — '+s.org:''}</option>`).join('')}</select></div>
+    <div class="fr"><label>Project *</label><select id="f-ip" onchange="updateIntStakeholders()"><option value="">— Select project —</option>${projs.map(p=>`<option value="${p.id}"${S.projectFilter===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
+    <div class="fr"><label>Stakeholder</label><select id="f-is"><option value="">— None / Anonymous —</option>${stakes.map(s=>`<option value="${s.id}"${s.id===preStake?' selected':''}>${dispName(s)}${(s.firstName||s.lastName)&&s.org?' — '+s.org:''}</option>`).join('')}</select></div>
     <div class="fr"><label>Date *</label><input type="date" id="f-id" value="${new Date().toISOString().slice(0,10)}"></div>
     <div class="fr"><label>Channel</label><select id="f-ic">${['Phone','Email','In-person','Public meeting','Public event','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'].map(c=>`<option>${c}</option>`).join('')}</select></div>
     <div class="fr"><label>Direction</label><select id="f-idr">${['Incoming','Outgoing','In-person'].map(d=>`<option>${d}</option>`).join('')}</select></div>
@@ -2700,6 +2720,8 @@ function openIntModal(preStake){
     <div class="fr"><label>Due date</label><input type="date" id="f-ifud"></div>
   </div></div>`,
   `<button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-primary" onclick="saveInt()">Save interaction</button>`,true);
+  // If a project is already selected (via filter), populate stakeholders for that project
+  if(S.projectFilter) updateIntStakeholders();
 }
 function openEditIntModal(id){
   S.editId=id;
@@ -2729,11 +2751,12 @@ function openEditIntModal(id){
 function saveInt(){
   const v=id=>document.getElementById(id)?.value||'';
   const vDate=id=>{const val=document.getElementById(id)?.value||'';return val||null;};
-  const projId=v('f-ip'),stakeId=v('f-is');
+  const projId=v('f-ip'),stakeId=v('f-is')||null;
+  if(!projId){alert('Project required.');return}
   if(!v('f-isu')){alert('Summary required.');return}
   const data={id:S.editId||DB.uid(),projectId:projId,stakeholderId:stakeId,date:vDate('f-id'),channel:v('f-ic'),direction:v('f-idr'),subject:v('f-isub')||'General',nature:v('f-inat')||'Inquiry',summary:v('f-isu'),loggedBy:v('f-il'),followUp:document.getElementById('f-ifu')?.checked||false,followUpNote:v('f-ifun'),followUpDue:vDate('f-ifud'),followUpDone:document.getElementById('f-ifudo')?.checked||false};
   const psAll=DB.get('project_stakeholders');
-  if(!psAll.find(x=>x.projectId===projId&&x.stakeholderId===stakeId)){
+  if(stakeId&&!psAll.find(x=>x.projectId===projId&&x.stakeholderId===stakeId)){
     psAll.push({id:DB.uid(),projectId:projId,stakeholderId:stakeId,support:'Neutral',issueTags:'',addedDate:data.date,notes:'Auto-linked via interaction log.',distributionGroups:'',stakeholderRole:'External'});
     DB.set('project_stakeholders',psAll);
   }

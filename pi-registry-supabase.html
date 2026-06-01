@@ -932,6 +932,7 @@ const S={
   selInteraction:null,
   stakeTab:'info',
   skView:'list',
+  issStatus:'', issCat:'', selIssue:null,
   delTab:'scope',
   projTab:'active',
   editId:null,
@@ -1545,9 +1546,10 @@ function renderStakeholders(el){
     </div>
   </div>
   <div class="vtabs">
-    <button class="vtab${S.skView!=='bubble'?' active':''}" onclick="S.skView='list';renderStakeholders(document.getElementById('main'))"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="5" r="3"/><path d="M1 13.5c0-2.485 2.239-4.5 5-4.5s5 2.015 5 4.5"/></svg>Contact list <span class="vtab-ct">${listItems.length}</span></button>
+    <button class="vtab${S.skView!=='bubble'&&S.skView!=='issues'?' active':''}" onclick="S.skView='list';renderStakeholders(document.getElementById('main'))"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="5" r="3"/><path d="M1 13.5c0-2.485 2.239-4.5 5-4.5s5 2.015 5 4.5"/></svg>Contact list <span class="vtab-ct">${listItems.length}</span></button>
     <button class="vtab" onclick="setView('interactions')"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 3H2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h3l2 2 2-2h5a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1z"/></svg>Interaction log <span class="vtab-ct">${ints.filter(i=>!S.projectFilter||i.projectId===S.projectFilter).length}</span></button>
     ${S.projectFilter?`<button class="vtab${S.skView==='bubble'?' active':''}" onclick="S.skView='bubble';renderStakeholders(document.getElementById('main'))"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="4" cy="10" r="2.5"/><circle cx="10" cy="5" r="3.5"/><circle cx="13" cy="11" r="1.5"/></svg>Influence map</button>`:''}
+    ${S.projectFilter?`<button class="vtab${S.skView==='issues'?' active':''}" onclick="S.skView='issues';renderStakeholders(document.getElementById('main'))"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v3"/><circle cx="8" cy="11" r=".8" fill="currentColor"/></svg>Issues <span class="vtab-ct">${(DB.get('issues')||[]).filter(x=>x.projectId===S.projectFilter).length}</span></button>`:''}
   </div>
   <div class="toolbar">
     <div class="srch"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4"/><path d="M10 10l3 3"/></svg>
@@ -1600,6 +1602,233 @@ function renderStakeholders(el){
   if(S.skView==='bubble'&&S.projectFilter){
     requestAnimationFrame(()=>renderBubbleChart(S.projectFilter));
   }
+  // Render issues view after DOM is set
+  if(S.skView==='issues'&&S.projectFilter){
+    requestAnimationFrame(()=>renderIssuesPanel(S.projectFilter));
+  }
+}
+
+// ── ISSUES ─────────────────────────────────────────────────────────
+
+const ISSUE_CATEGORIES = [
+  'Traffic & Access','Noise & Vibration','Property Impact','ROW / Easement',
+  'Environmental','Schedule & Construction Phasing','Safety',
+  'Utility Conflicts','Elected Official Concern','Media / Public Perception',
+  'ADA / Accessibility','Neighbor / Community Relations','Other'
+];
+const ISSUE_STATUSES = ['Open','In Progress','Resolved','Monitoring'];
+const ISSUE_PRIORITIES = ['High','Medium','Low'];
+
+const STATUS_COLORS = {
+  'Open':'var(--red)','In Progress':'var(--amber)',
+  'Resolved':'var(--green)','Monitoring':'var(--sky)'
+};
+const PRIORITY_COLORS = {
+  'High':'var(--red)','Medium':'var(--amber)','Low':'var(--green)'
+};
+
+function renderIssuesPanel(projectId){
+  const el=document.getElementById('main');
+  if(!el) return;
+  const issues=(DB.get('issues')||[]).filter(x=>x.projectId===projectId);
+  const ints=DB.get('interactions')||[];
+  const iLinks=DB.get('issue_interactions')||[];
+
+  // Build toolbar
+  const toolbar=el.querySelector('.toolbar');
+  if(toolbar){
+    toolbar.innerHTML=`
+      <select class="fsel" id="iss-status" onchange="renderIssuesPanel('${projectId}')">
+        <option value="">All statuses</option>
+        ${ISSUE_STATUSES.map(s=>`<option${(S.issStatus||'')=== s?' selected':''}>${s}</option>`).join('')}
+      </select>
+      <select class="fsel" id="iss-cat" onchange="renderIssuesPanel('${projectId}')">
+        <option value="">All categories</option>
+        ${ISSUE_CATEGORIES.map(c=>`<option${(S.issCat||'')=== c?' selected':''}>${c}</option>`).join('')}
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="openIssueModal(null,'${projectId}')">+ New issue</button>`;
+    // Bind filter state
+    document.getElementById('iss-status').onchange=function(){S.issStatus=this.value;renderIssuesPanel(projectId);};
+    document.getElementById('iss-cat').onchange=function(){S.issCat=this.value;renderIssuesPanel(projectId);};
+  }
+
+  // Filter
+  let filtered=issues;
+  if(S.issStatus) filtered=filtered.filter(x=>x.status===S.issStatus);
+  if(S.issCat) filtered=filtered.filter(x=>x.category===S.issCat);
+
+  // Build list panel
+  const listPanel=el.querySelector('.list-panel')||el.querySelector('.pane-left');
+  if(!listPanel) return;
+
+  if(!filtered.length){
+    listPanel.innerHTML=`<div class="pane-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5"/><circle cx="12" cy="15.5" r=".8" fill="currentColor"/></svg><div>No issues yet</div><div style="font-size:12px;color:var(--fog);margin-top:4px">Click "+ New issue" to log a concern</div></div>`;
+    return;
+  }
+
+  listPanel.innerHTML=filtered.map(iss=>{
+    const linkCount=(iLinks.filter(l=>String(l.issueId)===String(iss.id))||[]).length;
+    const sc=STATUS_COLORS[iss.status]||'var(--slate)';
+    const pc=PRIORITY_COLORS[iss.priority]||'var(--slate)';
+    const isSelected=S.selIssue===iss.id;
+    return`<div class="lrow${isSelected?' selected':''}" onclick="S.selIssue='${iss.id}';renderIssuesPanel('${projectId}')" style="cursor:pointer">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+          <span style="font-size:11px;font-weight:700;color:${sc};background:${sc}22;padding:1px 7px;border-radius:10px">${iss.status||'Open'}</span>
+          <span style="font-size:11px;color:${pc};background:${pc}22;padding:1px 7px;border-radius:10px">${iss.priority||'Medium'}</span>
+        </div>
+        <div class="lrow-name" style="font-size:13px">${iss.title||'Untitled'}</div>
+        <div class="lrow-org">${iss.category||''}${linkCount?' · '+linkCount+' linked interaction'+(linkCount!==1?'s':''):''}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Render detail pane if one is selected
+  const detPanel=el.querySelector('.pane-right')||el.querySelector('.detail-pane');
+  if(!detPanel) return;
+  const sel=filtered.find(x=>x.id===S.selIssue)||filtered[0];
+  if(!sel){detPanel.innerHTML='<div class="pane-empty" style="padding:40px;color:var(--slate)">Select an issue</div>';return;}
+  S.selIssue=sel.id;
+
+  const linked=iLinks.filter(l=>String(l.issueId)===String(sel.id));
+  const linkedInts=linked.map(l=>ints.find(i=>String(i.id)===String(l.interactionId))).filter(Boolean);
+  const stakes=DB.get('stakeholders')||[];
+
+  detPanel.innerHTML=`
+    <div style="padding:20px;overflow-y:auto;height:100%">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+        <div>
+          <div style="font-size:16px;font-weight:700;color:var(--white);margin-bottom:6px">${sel.title||'Untitled'}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <span style="font-size:11px;font-weight:700;color:${STATUS_COLORS[sel.status]||'var(--slate)'};background:${STATUS_COLORS[sel.status]||'var(--slate)'}22;padding:2px 8px;border-radius:10px">${sel.status||'Open'}</span>
+            <span style="font-size:11px;color:${PRIORITY_COLORS[sel.priority]||'var(--slate)'};background:${PRIORITY_COLORS[sel.priority]||'var(--slate)'}22;padding:2px 8px;border-radius:10px">${sel.priority||'Medium'} priority</span>
+            <span style="font-size:11px;color:var(--slate);background:rgba(255,255,255,.06);padding:2px 8px;border-radius:10px">${sel.category||'Uncategorized'}</span>
+          </div>
+        </div>
+        <button class="btn btn-sm" onclick="openIssueModal('${sel.id}','${projectId}')">Edit</button>
+      </div>
+      ${sel.description?`<div style="font-size:13px;color:var(--mist);line-height:1.6;margin-bottom:16px">${sel.description}</div>`:''}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;font-size:12px">
+        <div><span style="color:var(--slate)">Date raised:</span> <span style="color:var(--mist)">${sel.dateRaised||'—'}</span></div>
+        <div><span style="color:var(--slate)">Date resolved:</span> <span style="color:var(--mist)">${sel.dateResolved||'—'}</span></div>
+        <div><span style="color:var(--slate)">Assigned to:</span> <span style="color:var(--mist)">${sel.assignedTo||'—'}</span></div>
+        <div><span style="color:var(--slate)">Logged by:</span> <span style="color:var(--mist)">${sel.createdBy||'—'}</span></div>
+      </div>
+      ${sel.resolutionSummary?`<div style="background:rgba(40,168,112,.08);border:1px solid rgba(40,168,112,.2);border-radius:6px;padding:10px 14px;margin-bottom:16px"><div style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:4px">RESOLUTION</div><div style="font-size:13px;color:var(--mist);line-height:1.5">${sel.resolutionSummary}</div></div>`:''}
+      ${sel.notes?`<div style="font-size:12px;color:var(--slate);margin-bottom:16px"><span style="font-weight:600">Notes:</span> ${sel.notes}</div>`:''}
+      <div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Linked interactions (${linkedInts.length})</div>
+      ${linkedInts.length?linkedInts.map(i=>{
+        const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
+        return`<div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:12px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+            <span style="color:var(--sky-lt);font-weight:600">${i.date}</span>
+            <span style="color:var(--slate)">${i.channel}</span>
+          </div>
+          <div style="color:var(--mist)">${i.summary||''}</div>
+          ${s?`<div style="color:var(--slate);margin-top:2px">${s.firstName||''} ${s.lastName||''}</div>`:''}
+        </div>`;
+      }).join(''):`<div style="color:var(--slate);font-size:12px;font-style:italic">No interactions linked yet. Edit this issue to link interactions.</div>`}
+    </div>`;
+}
+
+function openIssueModal(id, projectId){
+  S.editId=id||null;
+  const all=DB.get('issues')||[];
+  const iss=id?all.find(x=>x.id===id)||{}:{};
+  const ints=DB.get('interactions')||[];
+  const iLinks=DB.get('issue_interactions')||[];
+  const linkedIds=id?iLinks.filter(l=>String(l.issueId)===String(id)).map(l=>String(l.interactionId)):[];
+  const projInts=ints.filter(i=>i.projectId===projectId);
+  const stakes=DB.get('stakeholders')||[];
+
+  openM(id?'Edit issue':'New issue',`
+  <div class="fgrid fg2f">
+    <div class="fr" style="grid-column:1/-1"><label>Issue title *</label><input id="iss-title" value="${iss.title||''}"></div>
+  </div>
+  <div class="fgrid fg2f">
+    <div class="fr"><label>Category</label><select id="iss-cat-f">${ISSUE_CATEGORIES.map(c=>`<option${(iss.category||'')=== c?' selected':''}>${c}</option>`).join('')}</select></div>
+    <div class="fr"><label>Status</label><select id="iss-status-f">${ISSUE_STATUSES.map(s=>`<option${(iss.status||'Open')=== s?' selected':''}>${s}</option>`).join('')}</select></div>
+  </div>
+  <div class="fgrid fg2f">
+    <div class="fr"><label>Priority</label><select id="iss-pri">${ISSUE_PRIORITIES.map(p=>`<option${(iss.priority||'Medium')=== p?' selected':''}>${p}</option>`).join('')}</select></div>
+    <div class="fr"><label>Assigned to</label><input id="iss-assigned" value="${iss.assignedTo||''}" placeholder="Name or team member"></div>
+  </div>
+  <div class="fgrid fg2f">
+    <div class="fr"><label>Date raised</label><input type="date" id="iss-raised" value="${iss.dateRaised||''}"></div>
+    <div class="fr"><label>Date resolved</label><input type="date" id="iss-resolved" value="${iss.dateResolved||''}"></div>
+  </div>
+  <div class="fr"><label>Description</label><textarea id="iss-desc" style="height:70px">${iss.description||''}</textarea></div>
+  <div class="fr"><label>Resolution summary</label><textarea id="iss-resolution" style="height:60px" placeholder="What was done to address this issue?">${iss.resolutionSummary||''}</textarea></div>
+  <div class="fr"><label>Logged by</label><select id="iss-by"><option value="">— Select —</option>${['JP','SH','SB'].map(i=>`<option${(iss.createdBy||'')=== i?' selected':''}>${i}</option>`).join('')}</select></div>
+  <div class="fr"><label>Notes</label><textarea id="iss-notes">${iss.notes||''}</textarea></div>
+  <div class="fr"><label>Link interactions <span style="font-weight:400;color:var(--fog)">(hold Ctrl/Cmd for multiple)</span></label>
+    <select id="iss-int-links" multiple style="height:100px">${projInts.map(i=>{
+      const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
+      const name=s?(s.firstName+' '+s.lastName).trim():'Anonymous';
+      const sel=linkedIds.includes(String(i.id))?' selected':'';
+      return`<option value="${i.id}"${sel}>${i.date} — ${name} — ${(i.summary||'').slice(0,40)}</option>`;
+    }).join('')}</select>
+  </div>`,
+  `${id?`<button class="btn btn-danger btn-sm" onclick="deleteIssue('${id}','${projectId}')">Delete</button>`:''}
+   <button class="btn" onclick="closeM()">Cancel</button>
+   <button class="btn btn-primary" onclick="saveIssue('${projectId}')">Save issue</button>`);
+}
+
+async function saveIssue(projectId){
+  const v=id=>document.getElementById(id)?.value||'';
+  const title=v('iss-title').trim();
+  if(!title){alert('Issue title is required.');return;}
+
+  const linkedSel=Array.from(document.getElementById('iss-int-links')?.selectedOptions||[]).map(o=>o.value);
+
+  const data={
+    id:S.editId||DB.uid(),
+    projectId,
+    title,
+    category:v('iss-cat-f'),
+    status:v('iss-status-f')||'Open',
+    priority:v('iss-pri')||'Medium',
+    assignedTo:v('iss-assigned'),
+    dateRaised:v('iss-raised')||new Date().toISOString().slice(0,10),
+    dateResolved:v('iss-resolved')||'',
+    description:document.getElementById('iss-desc')?.value||'',
+    resolutionSummary:document.getElementById('iss-resolution')?.value||'',
+    createdBy:v('iss-by'),
+    notes:document.getElementById('iss-notes')?.value||''
+  };
+
+  const all=DB.get('issues')||[];
+  if(S.editId){
+    const idx=all.findIndex(x=>x.id===S.editId);
+    if(idx>-1) all[idx]=data; else all.push(data);
+  } else {
+    all.push(data);
+  }
+  await DB.set('issues',all);
+
+  // Save issue-interaction links
+  const iLinks=(DB.get('issue_interactions')||[]).filter(l=>String(l.issueId)!==String(data.id));
+  for(const intId of linkedSel){
+    iLinks.push({id:DB.uid(),issueId:data.id,interactionId:intId});
+  }
+  await DB.set('issue_interactions',iLinks);
+
+  S.selIssue=data.id;
+  closeM();
+  S.skView='issues';
+  renderStakeholders(document.getElementById('main'));
+}
+
+async function deleteIssue(id, projectId){
+  if(!confirm('Delete this issue? This cannot be undone.')) return;
+  const all=(DB.get('issues')||[]).filter(x=>x.id!==id);
+  await DB.set('issues',all);
+  const iLinks=(DB.get('issue_interactions')||[]).filter(l=>String(l.issueId)!==String(id));
+  await DB.set('issue_interactions',iLinks);
+  S.selIssue=null;
+  closeM();
+  S.skView='issues';
+  renderStakeholders(document.getElementById('main'));
 }
 
 function selectStake(id){

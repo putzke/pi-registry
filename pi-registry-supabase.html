@@ -372,6 +372,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       Events
       <span class="nav-badge" id="meetings-badge" style="display:none"></span>
     </button>
+    <button class="nav-btn" id="nav-issues" onclick="setView('issues')">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v3"/><circle cx="8" cy="11" r=".8" fill="currentColor"/></svg>
+      Issues
+      <span class="nav-badge" id="issues-badge" style="display:none"></span>
+    </button>
     <button class="nav-btn" id="nav-reports" onclick="setView('reports')">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="14" height="14" rx="1.5"/><path d="M4 11V8M7 11V5M10 11V7M13 11V4"/></svg>
       Reports
@@ -933,6 +938,7 @@ const S={
   stakeTab:'info',
   skView:'list',
   issStatus:'', issCat:'', selIssue:null,
+  issViewProj:'', issViewStatus:'', issViewCat:'', issViewPri:'', selIssueView:null,
   delTab:'scope',
   projTab:'active',
   editId:null,
@@ -1009,11 +1015,16 @@ function refreshBadges(){
   const fuEl=document.getElementById('nb-fu');
   fuEl.textContent=openFU;
   fuEl.classList.toggle('hide',openFU===0);
-  // Meetings badge - show count of planned upcoming meetings
-  const meetings=DB.get('meetings')||[];
-  const plannedMeetings=meetings.filter(m=>m.status==='Planned').length;
+  // Meetings badge
   const mbEl=document.getElementById('meetings-badge');
   if(mbEl){mbEl.style.display='none';}
+  // Issues badge — show count of open/in-progress issues
+  const openIssues=(DB.get('issues')||[]).filter(i=>i.status==='Open'||i.status==='In Progress').length;
+  const ibEl=document.getElementById('issues-badge');
+  if(ibEl){
+    if(openIssues>0){ibEl.textContent=openIssues;ibEl.style.display='';}
+    else{ibEl.style.display='none';}
+  }
 }
 function buildProjList(){
   const allProjs=DB.get('projects');
@@ -1052,6 +1063,7 @@ function render(){
   else if(S.view==='deliverables')renderDeliverables(m);
   else if(S.view==='reports')renderReports(m);
   else if(S.view==='meetings')renderMeetings(m);
+  else if(S.view==='issues')renderIssuesView(m);
   else if(S.view==='projects')renderProjects(m);
 }
 
@@ -1807,15 +1819,13 @@ async function saveIssue(projectId){
   await DB.set('issues', all);
 
   // Give _syncCache time to update with the real ID from sbAdd
-  await new Promise(res=>setTimeout(res,600));
+  await new Promise(res=>setTimeout(res,400));
 
   // Resolve real ID — for new records tmp_ gets replaced in _syncCache after sbAdd
   let realId=tmpId;
   if(!S.editId){
-    // Try finding by tmp_ replacement first
     const byTmp=(_syncCache['issues']||[]).find(x=>x.id&&!/^tmp_/.test(x.id)&&x.title===data.title&&x.projectId===data.projectId);
     if(byTmp&&byTmp.id) realId=byTmp.id;
-    console.log('saveIssue: tmpId=',tmpId,'realId=',realId,'cache=',JSON.stringify(_syncCache['issues']||[]));
   }
 
   // If still tmp_ the sbAdd failed — warn and stop
@@ -3210,6 +3220,124 @@ function delProj(id){
 }
 
 // ── REPORTS VIEW ──────────────────────────────────
+// ── ISSUES VIEW (cross-project) ────────────────────────────────────
+function renderIssuesView(el){
+  const issues=DB.get('issues')||[];
+  const projs=DB.get('projects')||[];
+  const ints=DB.get('interactions')||[];
+  const iLinks=DB.get('issue_interactions')||[];
+  const stakes=DB.get('stakeholders')||[];
+
+  // Filters
+  const projF=S.issViewProj||'';
+  const statF=S.issViewStatus||'';
+  const catF=S.issViewCat||'';
+  const priF=S.issViewPri||'';
+
+  let filtered=issues;
+  if(projF) filtered=filtered.filter(x=>x.projectId===projF);
+  if(statF) filtered=filtered.filter(x=>x.status===statF);
+  if(catF) filtered=filtered.filter(x=>x.category===catF);
+  if(priF) filtered=filtered.filter(x=>x.priority===priF);
+
+  const sel=S.selIssueView;
+  const selIss=filtered.find(x=>x.id===sel)||(filtered.length?filtered[0]:null);
+  if(selIss) S.selIssueView=selIss.id;
+
+  el.innerHTML=`
+  <div class="topbar">
+    <div><div class="topbar-title">Issues tracker</div>
+    <div class="topbar-sub">${filtered.length} issue${filtered.length!==1?'s':''} · ${filtered.filter(x=>x.status==='Open'||x.status==='In Progress').length} open</div></div>
+    <div class="topbar-sp"></div>
+  </div>
+  <div class="toolbar">
+    <select class="fsel" onchange="S.issViewProj=this.value;renderIssuesView(document.getElementById('main'))">
+      <option value="">All projects</option>
+      ${projs.map(p=>`<option value="${p.id}"${projF===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}
+    </select>
+    <select class="fsel" onchange="S.issViewStatus=this.value;renderIssuesView(document.getElementById('main'))">
+      <option value="">All statuses</option>
+      ${ISSUE_STATUSES.map(s=>`<option${statF===s?' selected':''}>${s}</option>`).join('')}
+    </select>
+    <select class="fsel" onchange="S.issViewCat=this.value;renderIssuesView(document.getElementById('main'))">
+      <option value="">All categories</option>
+      ${ISSUE_CATEGORIES.map(c=>`<option${catF===c?' selected':''}>${c}</option>`).join('')}
+    </select>
+    <select class="fsel" onchange="S.issViewPri=this.value;renderIssuesView(document.getElementById('main'))">
+      <option value="">All priorities</option>
+      ${ISSUE_PRIORITIES.map(p=>`<option${priF===p?' selected':''}>${p}</option>`).join('')}
+    </select>
+    <div class="tb-sp"></div>
+    <span class="tb-info">${filtered.length} issue${filtered.length!==1?'s':''}</span>
+  </div>
+  <div class="content">
+    <div class="split">
+      <div class="list-pane">
+        <div class="data-list">
+        ${!filtered.length?`<div class="pane-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5"/><circle cx="12" cy="15.5" r=".8" fill="currentColor"/></svg><div class="pe-title">No issues found</div><div class="pe-sub">Try adjusting your filters or select a project and go to its Issues tab to create one.</div></div>`
+        :filtered.map(iss=>{
+          const p=projs.find(x=>x.id===iss.projectId);
+          const sc=STATUS_COLORS[iss.status]||'var(--slate)';
+          const pc=PRIORITY_COLORS[iss.priority]||'var(--slate)';
+          const linkCount=(iLinks.filter(l=>String(l.issueId)===String(iss.id))||[]).length;
+          return`<div class="lrow${iss.id===S.selIssueView?' sel':''}" onclick="S.selIssueView='${iss.id}';renderIssuesView(document.getElementById('main'))" style="cursor:pointer">
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
+                <span style="font-size:11px;font-weight:700;color:${sc};background:${sc}22;padding:1px 7px;border-radius:10px">${iss.status}</span>
+                <span style="font-size:11px;color:${pc};background:${pc}22;padding:1px 7px;border-radius:10px">${iss.priority}</span>
+              </div>
+              <div class="lrow-name" style="font-size:13px">${iss.title||'Untitled'}</div>
+              <div class="lrow-sub">${p?p.pid+' — '+p.name:''}${iss.category?' · '+iss.category:''}${linkCount?' · '+linkCount+' linked':''}</div>
+            </div>
+          </div>`;
+        }).join('')}
+        </div>
+      </div>
+      <div class="detail-pane" id="issues-view-detail">
+      ${selIss?(()=>{
+        const p=projs.find(x=>x.id===selIss.projectId);
+        const linked=iLinks.filter(l=>String(l.issueId)===String(selIss.id));
+        const linkedInts=linked.map(l=>ints.find(i=>String(i.id)===String(l.interactionId))).filter(Boolean);
+        const sc=STATUS_COLORS[selIss.status]||'var(--slate)';
+        const pc=PRIORITY_COLORS[selIss.priority]||'var(--slate)';
+        return`<div style="padding:20px;overflow-y:auto;height:100%">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+            <div>
+              <div style="font-size:16px;font-weight:700;color:var(--white);margin-bottom:6px">${selIss.title||'Untitled'}</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+                <span style="font-size:11px;font-weight:700;color:${sc};background:${sc}22;padding:2px 8px;border-radius:10px">${selIss.status||'Open'}</span>
+                <span style="font-size:11px;color:${pc};background:${pc}22;padding:2px 8px;border-radius:10px">${selIss.priority||'Medium'} priority</span>
+                <span style="font-size:11px;color:var(--slate);background:rgba(255,255,255,.06);padding:2px 8px;border-radius:10px">${selIss.category||'Uncategorized'}</span>
+              </div>
+              ${p?`<div style="font-size:12px;color:var(--sky-lt);cursor:pointer" onclick="filterByProject('${p.id}');S.skView='issues';setView('stakeholders')">${p.pid} — ${p.name} →</div>`:''}
+            </div>
+            <button class="btn btn-sm" onclick="filterByProject('${selIss.projectId}');S.skView='issues';S.selIssue='${selIss.id}';setView('stakeholders')">Edit</button>
+          </div>
+          ${selIss.description?`<div style="font-size:13px;color:var(--mist);line-height:1.6;margin-bottom:16px">${selIss.description}</div>`:''}
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;font-size:12px">
+            <div><span style="color:var(--slate)">Date raised:</span> <span style="color:var(--mist)">${selIss.dateRaised||'—'}</span></div>
+            <div><span style="color:var(--slate)">Date resolved:</span> <span style="color:var(--mist)">${selIss.dateResolved||'—'}</span></div>
+            <div><span style="color:var(--slate)">Assigned to:</span> <span style="color:var(--mist)">${selIss.assignedTo||'—'}</span></div>
+            <div><span style="color:var(--slate)">Logged by:</span> <span style="color:var(--mist)">${selIss.createdBy||'—'}</span></div>
+          </div>
+          ${selIss.resolutionSummary?`<div style="background:rgba(40,168,112,.08);border:1px solid rgba(40,168,112,.2);border-radius:6px;padding:10px 14px;margin-bottom:16px"><div style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:4px">RESOLUTION</div><div style="font-size:13px;color:var(--mist);line-height:1.5">${selIss.resolutionSummary}</div></div>`:''}
+          ${selIss.notes?`<div style="font-size:12px;color:var(--slate);margin-bottom:16px"><span style="font-weight:600">Notes:</span> ${selIss.notes}</div>`:''}
+          <div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Linked interactions (${linkedInts.length})</div>
+          ${linkedInts.length?linkedInts.map(i=>{
+            const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
+            return`<div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:12px">
+              <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--sky-lt);font-weight:600">${i.date}</span><span style="color:var(--slate)">${i.channel}</span></div>
+              <div style="color:var(--mist)">${i.summary||''}</div>
+              ${s?`<div style="color:var(--slate);margin-top:2px">${s.firstName||''} ${s.lastName||''}</div>`:''}
+            </div>`;
+          }).join(''):`<div style="color:var(--slate);font-size:12px;font-style:italic">No interactions linked yet.</div>`}
+        </div>`;
+      })():`<div class="pane-empty"><div class="pe-title">Select an issue</div></div>`}
+      </div>
+    </div>
+  </div>`;
+}
+
 function renderReports(el){
   var projs=DB.get('projects');
   var ps=DB.get('project_stakeholders');

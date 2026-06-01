@@ -3249,6 +3249,8 @@ function renderIssuesView(el){
     <div><div class="topbar-title">Issues tracker</div>
     <div class="topbar-sub">${filtered.length} issue${filtered.length!==1?'s':''} · ${filtered.filter(x=>x.status==='Open'||x.status==='In Progress').length} open</div></div>
     <div class="topbar-sp"></div>
+    <button class="btn btn-sm" onclick="exportIssuesPdf()" style="margin-right:8px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px;margin-right:4px;vertical-align:-1px"><path d="M8 2v8M5 7l3 3 3-3"/><rect x="2" y="11" width="12" height="2" rx="1"/></svg>Export PDF</button>
+    <button class="btn btn-primary btn-sm" onclick="openNewIssueFromTracker()">+ New issue</button>
   </div>
   <div class="toolbar">
     <select class="fsel" onchange="S.issViewProj=this.value;renderIssuesView(document.getElementById('main'))">
@@ -3274,7 +3276,7 @@ function renderIssuesView(el){
     <div class="split">
       <div class="list-pane">
         <div class="data-list">
-        ${!filtered.length?`<div class="pane-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5"/><circle cx="12" cy="15.5" r=".8" fill="currentColor"/></svg><div class="pe-title">No issues found</div><div class="pe-sub">Try adjusting your filters or select a project and go to its Issues tab to create one.</div></div>`
+        ${!filtered.length?`<div class="pane-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5"/><circle cx="12" cy="15.5" r=".8" fill="currentColor"/></svg><div class="pe-title">No issues found</div><div class="pe-sub">Try adjusting your filters, or click &quot;+ New issue&quot; to log one.</div></div>`
         :filtered.map(iss=>{
           const p=projs.find(x=>x.id===iss.projectId);
           const sc=STATUS_COLORS[iss.status]||'var(--slate)';
@@ -3336,6 +3338,156 @@ function renderIssuesView(el){
       </div>
     </div>
   </div>`;
+}
+
+// ── NEW ISSUE FROM TRACKER ─────────────────────────────────────────
+function openNewIssueFromTracker(){
+  const projF=S.issViewProj||'';
+  if(projF){
+    openIssueModal(null,projF);
+    return;
+  }
+  const projs=DB.get('projects')||[];
+  const opts=projs.map(p=>'<option value="'+p.id+'">'+p.pid+' — '+p.name+'</option>').join('');
+  openM('New issue — select project',
+    '<div class="fr"><label>Project *</label><select id="new-iss-proj-pick"><option value="">— Select project —</option>'+opts+'</select></div>',
+    '<button class="btn btn-primary" onclick="var pid=document.getElementById("new-iss-proj-pick").value;if(!pid){alert("Please select a project.");return;}closeM();S.issViewProj=pid;openIssueModal(null,pid);">Continue</button>'
+  );
+}
+
+// ── ISSUES PDF EXPORT ───────────────────────────────────────────────
+function escHtml(str){
+  return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function exportIssuesPdf(){
+  const issues=DB.get('issues')||[];
+  const projs=DB.get('projects')||[];
+  const ints=DB.get('interactions')||[];
+  const iLinks=DB.get('issue_interactions')||[];
+  const projF=S.issViewProj||'';
+  const statF=S.issViewStatus||'';
+  const catF=S.issViewCat||'';
+  const priF=S.issViewPri||'';
+  let filtered=issues;
+  if(projF) filtered=filtered.filter(x=>x.projectId===projF);
+  if(statF) filtered=filtered.filter(x=>x.status===statF);
+  if(catF) filtered=filtered.filter(x=>x.category===catF);
+  if(priF) filtered=filtered.filter(x=>x.priority===priF);
+  if(!filtered.length){showToast('No issues to export with current filters.');return;}
+  showToast('Generating PDF — please wait...');
+
+  const stC={'Open':'#b32020','In Progress':'#b36b00','Resolved':'#1a7a50','Monitoring':'#1a5fb4'};
+  const prC={'High':'#b32020','Medium':'#b36b00','Low':'#1a7a50'};
+
+  const rows=filtered.map(iss=>{
+    const p=projs.find(x=>x.id===iss.projectId);
+    const lc=(iLinks.filter(l=>String(l.issueId)===String(iss.id))||[]).length;
+    const sc=stC[iss.status]||'#444';
+    const pc=prC[iss.priority]||'#444';
+    return '<tr>'+
+      '<td style="font-weight:600;color:#111">'+escHtml(iss.title||'Untitled')+'</td>'+
+      '<td><span style="background:'+sc+'22;color:'+sc+';border:1px solid '+sc+'44;border-radius:4px;padding:1px 6px;font-size:8px;font-weight:700">'+escHtml(iss.status||'Open')+'</span></td>'+
+      '<td><span style="background:'+pc+'22;color:'+pc+';border:1px solid '+pc+'44;border-radius:4px;padding:1px 6px;font-size:8px">'+escHtml(iss.priority||'—')+'</span></td>'+
+      '<td>'+escHtml(iss.category||'—')+'</td>'+
+      '<td>'+escHtml(p?p.pid+' — '+p.name:'—')+'</td>'+
+      '<td>'+escHtml(iss.dateRaised||'—')+'</td>'+
+      '<td style="text-align:center">'+(lc||'—')+'</td>'+
+    '</tr>';
+  }).join('');
+
+  const details=filtered.map(iss=>{
+    const p=projs.find(x=>x.id===iss.projectId);
+    const linked=(iLinks.filter(l=>String(l.issueId)===String(iss.id))||[]);
+    const linkedInts=linked.map(l=>ints.find(i=>String(i.id)===String(l.interactionId))).filter(Boolean);
+    const sc=stC[iss.status]||'#444';
+    const pc=prC[iss.priority]||'#444';
+    const intHtml=linkedInts.length?linkedInts.map(i=>'<tr><td>'+escHtml(i.date||'')+'</td><td>'+escHtml(i.channel||'')+'</td><td>'+escHtml(i.summary||'')+'</td></tr>').join(''):'<tr><td colspan="3" style="color:#888;font-style:italic">No interactions linked.</td></tr>';
+    return '<div style="margin-bottom:20px;padding:14px;border:1px solid #dde3ea;border-radius:6px">'+
+      '<div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">'+
+        '<div style="flex:1"><div style="font-size:12px;font-weight:700;color:#111;margin-bottom:4px">'+escHtml(iss.title||'Untitled')+'</div>'+
+        '<div style="font-size:10px;color:#555">'+escHtml(p?p.pid+' — '+p.name:'No project')+(iss.category?' &bull; '+escHtml(iss.category):'')+'</div></div>'+
+        '<span style="background:'+sc+'22;color:'+sc+';border:1px solid '+sc+'44;border-radius:4px;padding:2px 8px;font-size:9px;font-weight:700">'+escHtml(iss.status||'Open')+'</span>'+
+        (iss.priority?'<span style="background:'+pc+'22;color:'+pc+';border:1px solid '+pc+'44;border-radius:4px;padding:2px 8px;font-size:9px">'+escHtml(iss.priority)+'</span>':'')+
+      '</div>'+
+      (iss.description?'<div style="font-size:10px;color:#333;margin-bottom:8px;line-height:1.5">'+escHtml(iss.description)+'</div>':'')+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:9px;color:#555;margin-bottom:8px">'+
+        (iss.dateRaised?'<div><b>Date raised:</b> '+escHtml(iss.dateRaised)+'</div>':'')+
+        (iss.dateResolved?'<div><b>Date resolved:</b> '+escHtml(iss.dateResolved)+'</div>':'')+
+        (iss.assignedTo?'<div><b>Assigned to:</b> '+escHtml(iss.assignedTo)+'</div>':'')+
+        (iss.createdBy?'<div><b>Logged by:</b> '+escHtml(iss.createdBy)+'</div>':'')+
+      '</div>'+
+      (iss.resolutionSummary?'<div style="background:#f0f9f4;border:1px solid #c3e6d4;border-radius:4px;padding:8px 10px;font-size:9px;color:#1a7a50;margin-bottom:8px"><b>Resolution:</b> '+escHtml(iss.resolutionSummary)+'</div>':'')+
+      '<div style="font-size:9px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">Linked interactions ('+linkedInts.length+')</div>'+
+      '<table style="width:100%;border-collapse:collapse;font-size:9px"><thead><tr>'+
+        '<th style="text-align:left;padding:3px 6px;background:#e8eef4;color:#1a3a5c;font-weight:700">Date</th>'+
+        '<th style="text-align:left;padding:3px 6px;background:#e8eef4;color:#1a3a5c;font-weight:700">Channel</th>'+
+        '<th style="text-align:left;padding:3px 6px;background:#e8eef4;color:#1a3a5c;font-weight:700">Summary</th>'+
+      '</tr></thead><tbody>'+intHtml+'</tbody></table>'+
+    '</div>';
+  }).join('');
+
+  let filterLine='';
+  if(projF||statF||catF||priF){
+    const pObj=projs.find(x=>x.id===projF);
+    filterLine='<div style="font-size:9px;color:#555;margin-bottom:12px">Filters: '+
+      [pObj?'Project: '+pObj.pid+' — '+pObj.name:'',statF?'Status: '+statF:'',catF?'Category: '+catF:'',priF?'Priority: '+priF:''].filter(Boolean).join(' | ')+
+    '</div>';
+  }
+
+  const html='<div style="font-family:Arial,sans-serif;font-size:10px;color:#111;line-height:1.4">'+
+    '<div style="font-size:18px;font-weight:700;color:#1a3a5c;margin-bottom:4px">Issues Tracker</div>'+
+    '<div style="font-size:10px;color:#555;margin-bottom:4px">'+filtered.length+' issue'+(filtered.length!==1?'s':'')+' &bull; '+filtered.filter(x=>x.status==='Open'||x.status==='In Progress').length+' open &bull; Exported '+new Date().toLocaleDateString()+'</div>'+
+    filterLine+
+    '<table style="width:100%;border-collapse:collapse;margin-bottom:24px"><thead><tr>'+
+      '<th>Title</th><th>Status</th><th>Priority</th><th>Category</th><th>Project</th><th>Date Raised</th><th>Links</th>'+
+    '</tr></thead><tbody>'+rows+'</tbody></table>'+
+    '<div style="font-size:13px;font-weight:700;color:#1a3a5c;margin-bottom:12px;border-bottom:2px solid #1a3a5c;padding-bottom:4px">Issue Details</div>'+
+    details+
+  '</div>';
+
+  const wrapper=document.createElement('div');
+  wrapper.style.cssText='position:fixed;left:-9999px;top:0;width:816px;background:#fff;color:#111;font-family:Arial,sans-serif;font-size:10px;padding:0;line-height:1.4;-webkit-print-color-adjust:exact;print-color-adjust:exact';
+  const lhHeader=document.createElement('div');
+  lhHeader.style.cssText='width:100%;margin-bottom:16px';
+  lhHeader.innerHTML='<img src="'+window._srHeader+'" style="width:100%;display:block;" alt="Sunrise Engineering">';
+  wrapper.appendChild(lhHeader);
+  const contentDiv=document.createElement('div');
+  contentDiv.style.cssText='padding:0 32px 24px 32px';
+  contentDiv.innerHTML=html;
+  wrapper.appendChild(contentDiv);
+  wrapper.querySelectorAll('th').forEach(function(th){
+    th.style.background='#1a3a5c';th.style.color='#ffffff';th.style.fontWeight='700';
+    th.style.padding='5px 8px';th.style.fontSize='8px';th.style.textTransform='uppercase';th.style.textAlign='left';
+  });
+  wrapper.querySelectorAll('td').forEach(function(td){
+    td.style.padding='5px 8px';td.style.borderBottom='1px solid #e0e0e0';td.style.verticalAlign='top';
+  });
+  document.body.appendChild(wrapper);
+
+  html2canvas(wrapper,{scale:2,useCORS:true,logging:false,backgroundColor:'#ffffff'}).then(function(canvas){
+    document.body.removeChild(wrapper);
+    const imgData=canvas.toDataURL('image/png');
+    const pdf=new window.jspdf.jsPDF({orientation:'portrait',unit:'mm',format:'letter'});
+    const pdfW=pdf.internal.pageSize.getWidth();
+    const pdfH=pdf.internal.pageSize.getHeight();
+    const footerH=window._srFooter?14:0;
+    const imgW=pdfW;
+    const imgH=(canvas.height*pdfW)/canvas.width;
+    const contentH=pdfH-footerH;
+    const pages=Math.ceil(imgH/contentH);
+    for(let pageNum=0;pageNum<pages;pageNum++){
+      if(pageNum>0) pdf.addPage();
+      pdf.addImage(imgData,'PNG',0,-(pageNum*contentH),imgW,imgH);
+      if(window._srFooter) pdf.addImage(window._srFooter,'JPEG',0,pdfH-footerH,pdfW,footerH);
+    }
+    const fname='issues-tracker-'+(new Date().toISOString().slice(0,10))+'.pdf';
+    pdf.save(fname);
+    showToast('Issues PDF saved to your Downloads folder.');
+  }).catch(function(){
+    if(document.body.contains(wrapper)) document.body.removeChild(wrapper);
+    showToast('PDF generation failed. Try again.','error');
+  });
 }
 
 function renderReports(el){

@@ -1780,9 +1780,10 @@ async function saveIssue(projectId){
   if(!title){alert('Issue title is required.');return;}
 
   const linkedSel=Array.from(document.getElementById('iss-int-links')?.selectedOptions||[]).map(o=>o.value);
+  const tmpId=S.editId||DB.uid();
 
   const data={
-    id:S.editId||DB.uid(),
+    id:tmpId,
     projectId,
     title,
     category:v('iss-cat-f'),
@@ -1804,16 +1805,25 @@ async function saveIssue(projectId){
   } else {
     all.push(data);
   }
-  await DB.set('issues',all);
 
-  // Save issue-interaction links
-  const iLinks=(DB.get('issue_interactions')||[]).filter(l=>String(l.issueId)!==String(data.id));
-  for(const intId of linkedSel){
-    iLinks.push({id:DB.uid(),issueId:data.id,interactionId:intId});
+  // Await the sync so Supabase assigns a real numeric ID
+  await DB.set('issues', all);
+
+  // Resolve real ID — for new records tmp_ gets replaced in _syncCache after sbAdd
+  let realId=tmpId;
+  if(!S.editId){
+    const saved=(_syncCache['issues']||[]).find(x=>x.title===data.title&&x.projectId===data.projectId&&x.dateRaised===data.dateRaised);
+    if(saved&&saved.id) realId=saved.id;
   }
-  await DB.set('issue_interactions',iLinks);
 
-  S.selIssue=data.id;
+  // Save issue-interaction links using the real ID
+  const iLinks=(DB.get('issue_interactions')||[]).filter(l=>String(l.issueId)!==String(realId)&&String(l.issueId)!==String(tmpId));
+  for(const intId of linkedSel){
+    iLinks.push({id:DB.uid(), issueId:realId, interactionId:intId});
+  }
+  await DB.set('issue_interactions', iLinks);
+
+  S.selIssue=realId;
   closeM();
   S.skView='issues';
   renderStakeholders(document.getElementById('main'));

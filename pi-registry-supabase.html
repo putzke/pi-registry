@@ -1806,19 +1806,32 @@ async function saveIssue(projectId){
   // Await the sync so Supabase assigns a real numeric ID
   await DB.set('issues', all);
 
+  // Give _syncCache time to update with the real ID from sbAdd
+  await new Promise(res=>setTimeout(res,600));
+
   // Resolve real ID — for new records tmp_ gets replaced in _syncCache after sbAdd
   let realId=tmpId;
   if(!S.editId){
-    const saved=(_syncCache['issues']||[]).find(x=>x.title===data.title&&x.projectId===data.projectId&&x.dateRaised===data.dateRaised);
-    if(saved&&saved.id) realId=saved.id;
+    // Try finding by tmp_ replacement first
+    const byTmp=(_syncCache['issues']||[]).find(x=>x.id&&!/^tmp_/.test(x.id)&&x.title===data.title&&x.projectId===data.projectId);
+    if(byTmp&&byTmp.id) realId=byTmp.id;
+    console.log('saveIssue: tmpId=',tmpId,'realId=',realId,'cache=',JSON.stringify(_syncCache['issues']||[]));
+  }
+
+  // If still tmp_ the sbAdd failed — warn and stop
+  if(!S.editId && /^tmp_/.test(realId)){
+    alert('Issue could not be saved to the database. Please check your connection and try again.');
+    return;
   }
 
   // Save issue-interaction links using the real ID
-  const iLinks=(DB.get('issue_interactions')||[]).filter(l=>String(l.issueId)!==String(realId)&&String(l.issueId)!==String(tmpId));
-  for(const intId of linkedSel){
-    iLinks.push({id:DB.uid(), issueId:realId, interactionId:intId});
+  if(linkedSel.length){
+    const iLinks=(DB.get('issue_interactions')||[]).filter(l=>String(l.issueId)!==String(realId)&&String(l.issueId)!==String(tmpId));
+    for(const intId of linkedSel){
+      iLinks.push({id:DB.uid(), issueId:realId, interactionId:intId});
+    }
+    await DB.set('issue_interactions', iLinks);
   }
-  await DB.set('issue_interactions', iLinks);
 
   S.selIssue=realId;
   closeM();

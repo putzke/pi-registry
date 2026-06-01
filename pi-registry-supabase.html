@@ -3250,6 +3250,7 @@ function renderIssuesView(el){
     <div class="topbar-sub">${filtered.length} issue${filtered.length!==1?'s':''} · ${filtered.filter(x=>x.status==='Open'||x.status==='In Progress').length} open</div></div>
     <div class="topbar-sp"></div>
     <button class="btn btn-sm" onclick="exportIssuesPdf()" style="margin-right:8px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px;margin-right:4px;vertical-align:-1px"><path d="M8 2v8M5 7l3 3 3-3"/><rect x="2" y="11" width="12" height="2" rx="1"/></svg>Export PDF</button>
+    <button class="btn btn-sm" onclick="exportIssuesSummaryDocx()" style="margin-right:8px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px;margin-right:4px;vertical-align:-1px"><path d="M9 2H4a1 1 0 00-1 1v10a1 1 0 001 1h8a1 1 0 001-1V6L9 2z"/><path d="M9 2v4h4"/><path d="M5 9h6M5 11h4"/></svg>Export Word</button>
     <button class="btn btn-primary btn-sm" onclick="openNewIssueFromTracker()">+ New issue</button>
   </div>
   <div class="toolbar">
@@ -3313,7 +3314,10 @@ function renderIssuesView(el){
               </div>
               ${p?`<div style="font-size:12px;color:var(--sky-lt);cursor:pointer" onclick="filterByProject('${p.id}');S.skView='issues';setView('stakeholders')">${p.pid} — ${p.name} →</div>`:''}
             </div>
-            <button class="btn btn-sm" onclick="filterByProject('${selIss.projectId}');S.skView='issues';S.selIssue='${selIss.id}';setView('stakeholders')">Edit</button>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-sm" onclick="exportIssueSingleDocx('${selIss.id}')" title="Export this issue as Word doc"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px;margin-right:3px;vertical-align:-1px"><path d="M9 2H4a1 1 0 00-1 1v10a1 1 0 001 1h8a1 1 0 001-1V6L9 2z"/><path d="M9 2v4h4"/></svg>Word</button>
+              <button class="btn btn-sm" onclick="filterByProject('${selIss.projectId}');S.skView='issues';S.selIssue='${selIss.id}';setView('stakeholders')">Edit</button>
+            </div>
           </div>
           ${selIss.description?`<div style="font-size:13px;color:var(--mist);line-height:1.6;margin-bottom:16px">${selIss.description}</div>`:''}
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;font-size:12px">
@@ -3338,6 +3342,337 @@ function renderIssuesView(el){
       </div>
     </div>
   </div>`;
+}
+
+// ── ISSUES WORD EXPORT ──────────────────────────────────────────────
+
+// ─ Shared XML helpers (reuse same style tokens as the PI Report) ─
+function _issXml_helpers(){
+  var bodyRpr='<w:rPr><w:rFonts w:cstheme="minorHAnsi"/><w:color w:val="3B3838" w:themeColor="background2" w:themeShade="40"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>';
+  var bodyPpr='<w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/>'+bodyRpr+'</w:pPr>';
+  var boldRpr='<w:rPr><w:rFonts w:cstheme="minorHAnsi"/><w:b/><w:color w:val="3B3838" w:themeColor="background2" w:themeShade="40"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>';
+  var headingRpr='<w:rPr><w:rFonts w:cstheme="minorHAnsi"/><w:b/><w:color w:val="1F4E79"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>';
+  var titleRpr='<w:rPr><w:rFonts w:cstheme="minorHAnsi"/><w:b/><w:color w:val="1F4E79"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr>';
+  var grayRpr='<w:rPr><w:rFonts w:cstheme="minorHAnsi"/><w:color w:val="808080"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>';
+  var smallRpr='<w:rPr><w:rFonts w:cstheme="minorHAnsi"/><w:color w:val="555555"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr>';
+  var italicGrayRpr='<w:rPr><w:rFonts w:cstheme="minorHAnsi"/><w:i/><w:color w:val="808080"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr>';
+
+  function para(text,rpr){ rpr=rpr||bodyRpr; return'<w:p>'+bodyPpr+'<w:r>'+rpr+'<w:t xml:space="preserve">'+escXml(text)+'</w:t></w:r></w:p>'; }
+  function spacer(){ return'<w:p>'+bodyPpr+'</w:p>'; }
+  function heading(text){ return'<w:p><w:pPr><w:spacing w:before="240" w:after="120" w:line="240" w:lineRule="auto"/><w:pBdr><w:bottom w:val="single" w:sz="4" w:space="4" w:color="1F4E79"/></w:pBdr>'+headingRpr+'</w:pPr><w:r>'+headingRpr+'<w:t xml:space="preserve">'+escXml(text)+'</w:t></w:r></w:p>'; }
+  function bullet(text,level){ level=level||0; var ind=level===0?'<w:ind w:left="720" w:hanging="360"/>':'<w:ind w:left="1440" w:hanging="360"/>'; return'<w:p><w:pPr><w:pStyle w:val="ListParagraph"/><w:numPr><w:ilvl w:val="'+level+'"/><w:numId w:val="1"/></w:numPr><w:spacing w:after="40" w:line="240" w:lineRule="auto"/>'+ind+bodyRpr+'</w:pPr><w:r>'+bodyRpr+'<w:t xml:space="preserve">'+escXml(text)+'</w:t></w:r></w:p>'; }
+  function kv(label,value){ return'<w:p>'+bodyPpr+'<w:r>'+boldRpr+'<w:t xml:space="preserve">'+escXml(label+': ')+'</w:t></w:r><w:r>'+bodyRpr+'<w:t xml:space="preserve">'+escXml(value||'\u2014')+'</w:t></w:r></w:p>'; }
+  function sectionDivider(){ return'<w:p><w:pPr><w:spacing w:before="200" w:after="0" w:line="240" w:lineRule="auto"/><w:pBdr><w:top w:val="single" w:sz="4" w:space="4" w:color="CCCCCC"/></w:pBdr>'+italicGrayRpr+'</w:pPr><w:r>'+italicGrayRpr+'<w:t xml:space="preserve"> </w:t></w:r></w:p>'; }
+
+  var cellBdr='<w:tcBorders><w:top w:val="single" w:sz="4" w:color="CCCCCC"/><w:bottom w:val="single" w:sz="4" w:color="CCCCCC"/><w:left w:val="single" w:sz="4" w:color="CCCCCC"/><w:right w:val="single" w:sz="4" w:color="CCCCCC"/></w:tcBorders>';
+
+  return {bodyRpr,bodyPpr,boldRpr,headingRpr,titleRpr,grayRpr,smallRpr,italicGrayRpr,cellBdr,para,spacer,heading,bullet,kv,sectionDivider};
+}
+
+// ── 1. SUMMARY LIST EXPORT ───────────────────────────────────────────
+function exportIssuesSummaryDocx(){
+  var templateB64=window._piDocxTemplate;
+  if(!templateB64){alert('Document template not loaded. Please reload the page.');return;}
+  var issues=DB.get('issues')||[];
+  var projs=DB.get('projects')||[];
+  var ints=DB.get('interactions')||[];
+  var iLinks=DB.get('issue_interactions')||[];
+  var projF=S.issViewProj||'';
+  var statF=S.issViewStatus||'';
+  var catF=S.issViewCat||'';
+  var priF=S.issViewPri||'';
+  var filtered=issues;
+  if(projF) filtered=filtered.filter(function(x){return x.projectId===projF;});
+  if(statF) filtered=filtered.filter(function(x){return x.status===statF;});
+  if(catF)  filtered=filtered.filter(function(x){return x.category===catF;});
+  if(priF)  filtered=filtered.filter(function(x){return x.priority===priF;});
+  if(!filtered.length){showToast('No issues to export with current filters.');return;}
+  showToast('Generating Word document\u2026');
+
+  var H=_issXml_helpers();
+  var dateStr=new Date().toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'2-digit'});
+  var projLabel=projF?(function(){var p=projs.find(function(x){return x.id===projF;});return p?p.pid+' \u2014 '+p.name:'';})():'All Projects';
+  var openCount=filtered.filter(function(x){return x.status==='Open'||x.status==='In Progress';}).length;
+
+  var xml='';
+  // Title block
+  xml+=H.spacer();
+  xml+=H.para('Issues Tracker Report',H.titleRpr);
+  xml+=H.para(projLabel,H.headingRpr);
+  xml+=H.para('Generated: '+dateStr+' \u00b7 '+filtered.length+' issue'+(filtered.length!==1?'s':'')+' \u00b7 '+openCount+' open',H.grayRpr);
+  xml+=H.spacer();
+
+  // Summary table
+  var stC={'Open':'B32020','In Progress':'B36B00','Resolved':'1A7A50','Monitoring':'1A5FB4'};
+  var prC={'High':'B32020','Medium':'B36B00','Low':'1A7A50'};
+  var colWidths=[3200,1200,1000,1300,1260,1200,200];// title,status,priority,category,project,date,links — total=9360
+  var colWidthsFinal=[3200,1200,1000,1300,1460,1000,200];// adjust to exactly 9360
+  // Final column widths that sum to 9360:
+  // 2900+1300+1000+1400+1500+1060+200 = 9360
+  var cols=[2900,1300,1000,1400,1500,1060,200];
+  var hdrs=['Title','Status','Priority','Category','Project','Raised','Links'];
+  var hdrFill='<w:shd w:val="clear" w:color="auto" w:fill="1A3050"/>';
+  var hdrRpr='<w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr>';
+  var cellRpr='<w:rPr><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr>';
+  xml+='<w:tbl><w:tblPr><w:tblStyle w:val="TableGrid"/><w:tblW w:w="9360" w:type="dxa"/><w:tblCellMar><w:top w:w="80" w:type="dxa"/><w:left w:w="120" w:type="dxa"/><w:bottom w:w="80" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tblCellMar></w:tblPr>';
+  xml+='<w:tblGrid>';
+  cols.forEach(function(w){xml+='<w:gridCol w:w="'+w+'"/>';});
+  xml+='</w:tblGrid>';
+  // header row
+  xml+='<w:tr><w:trPr><w:tblHeader/></w:trPr>';
+  hdrs.forEach(function(h,ci){
+    xml+='<w:tc><w:tcPr><w:tcW w:w="'+cols[ci]+'" w:type="dxa"/>'+H.cellBdr+hdrFill+'</w:tcPr>';
+    xml+='<w:p><w:pPr><w:spacing w:after="0"/></w:pPr><w:r>'+hdrRpr+'<w:t>'+escXml(h)+'</w:t></w:r></w:p></w:tc>';
+  });
+  xml+='</w:tr>';
+  // data rows
+  filtered.forEach(function(iss,ri){
+    var p=projs.find(function(x){return x.id===iss.projectId;});
+    var lc=(iLinks.filter(function(l){return String(l.issueId)===String(iss.id);})||[]).length;
+    var sc=stC[iss.status]||'444444';
+    var pc=prC[iss.priority]||'444444';
+    var rowFill=ri%2!==0?'<w:shd w:val="clear" w:color="auto" w:fill="EEF4FB"/>':'';
+    var statusRpr='<w:rPr><w:b/><w:color w:val="'+sc+'"/><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr>';
+    var vals=[
+      iss.title||'Untitled',
+      null, // status — handled specially
+      iss.priority||'\u2014',
+      iss.category||'\u2014',
+      p?p.pid:'',
+      iss.dateRaised||'\u2014',
+      lc?String(lc):'\u2014'
+    ];
+    xml+='<w:tr>';
+    vals.forEach(function(v,ci){
+      var rpr=ci===1?statusRpr:cellRpr;
+      var txt=ci===1?(iss.status||'Open'):v;
+      xml+='<w:tc><w:tcPr><w:tcW w:w="'+cols[ci]+'" w:type="dxa"/>'+H.cellBdr+rowFill+'</w:tcPr>';
+      xml+='<w:p><w:pPr><w:spacing w:after="0"/></w:pPr><w:r>'+rpr+'<w:t xml:space="preserve">'+escXml(txt)+'</w:t></w:r></w:p></w:tc>';
+    });
+    xml+='</w:tr>';
+  });
+  xml+='</w:tbl>';
+  xml+=H.spacer();
+
+  // Detail sections for each issue
+  xml+=H.spacer();
+  xml+=H.heading('Issue Details');
+  filtered.forEach(function(iss){
+    var p=projs.find(function(x){return x.id===iss.projectId;});
+    var linked=(iLinks.filter(function(l){return String(l.issueId)===String(iss.id);})||[]);
+    var linkedInts=linked.map(function(l){return ints.find(function(i){return String(i.id)===String(l.interactionId);});}).filter(Boolean);
+    var stakes=DB.get('stakeholders')||[];
+    xml+=H.spacer();
+    // Issue title + badges
+    xml+='<w:p><w:pPr><w:spacing w:before="120" w:after="60" w:line="240" w:lineRule="auto"/></w:pPr><w:r>'+H.boldRpr+'<w:t xml:space="preserve">'+escXml(iss.title||'Untitled')+'</w:t></w:r></w:p>';
+    xml+=H.para((iss.status||'Open')+' \u00b7 '+(iss.priority||'')+' priority \u00b7 '+(iss.category||'Uncategorized')+(p?' \u00b7 '+p.pid+' \u2014 '+p.name:''),H.smallRpr);
+    xml+=H.kv('Date raised',iss.dateRaised);
+    if(iss.dateResolved) xml+=H.kv('Date resolved',iss.dateResolved);
+    if(iss.assignedTo)   xml+=H.kv('Assigned to',iss.assignedTo);
+    if(iss.createdBy)    xml+=H.kv('Logged by',iss.createdBy);
+    if(iss.description){
+      xml+=H.spacer();
+      xml+=H.para(iss.description);
+    }
+    if(iss.resolutionSummary){
+      xml+=H.spacer();
+      xml+='<w:p>'+H.bodyPpr+'<w:r>'+H.boldRpr+'<w:t xml:space="preserve">Resolution: </w:t></w:r><w:r>'+H.bodyRpr+'<w:t xml:space="preserve">'+escXml(iss.resolutionSummary)+'</w:t></w:r></w:p>';
+    }
+    if(iss.notes){
+      xml+='<w:p>'+H.bodyPpr+'<w:r>'+H.boldRpr+'<w:t xml:space="preserve">Notes: </w:t></w:r><w:r>'+H.bodyRpr+'<w:t xml:space="preserve">'+escXml(iss.notes)+'</w:t></w:r></w:p>';
+    }
+    // Linked interactions
+    xml+=H.spacer();
+    xml+=H.para('Linked interactions ('+linkedInts.length+'):',H.boldRpr);
+    if(linkedInts.length){
+      linkedInts.forEach(function(i){
+        var sk=stakes.find(function(x){return String(x.id)===String(i.stakeholderId);});
+        var name=sk?sk.firstName+' '+sk.lastName:'';
+        xml+=H.bullet((i.date||'')+' \u2014 '+(i.channel||'')+': '+(i.summary||'')+(name?' ('+name+')':''));
+      });
+    } else {
+      xml+=H.bullet('No interactions linked.');
+    }
+    xml+=H.sectionDivider();
+  });
+
+  // Footer
+  xml+=H.spacer();
+  xml+='<w:p><w:pPr><w:spacing w:before="200" w:after="0"/></w:pPr><w:r>'+H.italicGrayRpr+'<w:t xml:space="preserve">Exported from the PI Registry \u00b7 Sunrise Engineering</w:t></w:r></w:p>';
+
+  // Inject into template
+  var templateBin=atob(templateB64);
+  var templateArr=new Uint8Array(templateBin.length);
+  for(var i=0;i<templateBin.length;i++)templateArr[i]=templateBin.charCodeAt(i);
+
+  JSZip.loadAsync(templateArr).then(function(zip){
+    return zip.file('word/document.xml').async('string').then(function(docXml){
+      var sectIdx=docXml.indexOf('<w:sectPr');
+      if(sectIdx<0){alert('Template structure not recognized.');return Promise.reject('bad template');}
+      var bodyIdx=docXml.indexOf('<w:body>');
+      var beforeBody=docXml.substring(0,bodyIdx+8);
+      var sectAndAfter=docXml.substring(sectIdx);
+      zip.file('word/document.xml',beforeBody+xml+sectAndAfter);
+      return zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+    });
+  }).then(function(blob){
+    if(!blob)return;
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;
+    a.download='Issues_Summary_'+(new Date().toISOString().slice(0,10))+'.docx';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Issues summary exported as .docx');
+  }).catch(function(err){
+    console.error('Issues DOCX export error:',err);
+    alert('Export failed. See console for details.');
+  });
+}
+
+// ── 2. SINGLE ISSUE DETAIL EXPORT ───────────────────────────────────
+function exportIssueSingleDocx(issueId){
+  var templateB64=window._piDocxTemplate;
+  if(!templateB64){alert('Document template not loaded. Please reload the page.');return;}
+  var issues=DB.get('issues')||[];
+  var iss=issues.find(function(x){return String(x.id)===String(issueId);});
+  if(!iss){showToast('Issue not found.');return;}
+  var projs=DB.get('projects')||[];
+  var ints=DB.get('interactions')||[];
+  var iLinks=DB.get('issue_interactions')||[];
+  var stakes=DB.get('stakeholders')||[];
+  var p=projs.find(function(x){return x.id===iss.projectId;});
+  var linked=(iLinks.filter(function(l){return String(l.issueId)===String(issueId);})||[]);
+  var linkedInts=linked.map(function(l){return ints.find(function(i){return String(i.id)===String(l.interactionId);});}).filter(Boolean);
+  showToast('Generating Word document\u2026');
+
+  var H=_issXml_helpers();
+  var dateStr=new Date().toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'2-digit'});
+
+  var xml='';
+  xml+=H.spacer();
+  // Document title
+  xml+=H.para('Issue Detail Memo',H.titleRpr);
+  if(p) xml+=H.para(p.pid+' \u2014 '+p.name,H.headingRpr);
+  xml+=H.para('Generated: '+dateStr,H.grayRpr);
+  xml+=H.spacer();
+  xml+=H.sectionDivider();
+  xml+=H.spacer();
+
+  // Issue title + status/priority/category badges as text
+  xml+='<w:p><w:pPr><w:spacing w:before="120" w:after="60" w:line="240" w:lineRule="auto"/></w:pPr><w:r>'+H.titleRpr+'<w:t xml:space="preserve">'+escXml(iss.title||'Untitled')+'</w:t></w:r></w:p>';
+  xml+=H.spacer();
+
+  // Two-column meta grid using a table
+  var metaCols=[2340,2340,2340,2340]; // 4 cols × 2340 = 9360
+  var metaRpr='<w:rPr><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr>';
+  var metaBoldRpr='<w:rPr><w:b/><w:color w:val="555555"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr>';
+  function metaCell(label,value,w){
+    return'<w:tc><w:tcPr><w:tcW w:w="'+w+'" w:type="dxa"/><w:tcBorders><w:top w:val="none"/><w:bottom w:val="none"/><w:left w:val="none"/><w:right w:val="none"/></w:tcBorders></w:tcPr>'+
+      '<w:p><w:pPr><w:spacing w:after="60"/></w:pPr>'+
+      '<w:r>'+metaBoldRpr+'<w:t xml:space="preserve">'+escXml(label+': ')+'</w:t></w:r>'+
+      '<w:r>'+metaRpr+'<w:t xml:space="preserve">'+escXml(value||'\u2014')+'</w:t></w:r>'+
+      '</w:p></w:tc>';
+  }
+  xml+='<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/><w:tblBorders><w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/><w:insideH w:val="none"/><w:insideV w:val="none"/></w:tblBorders></w:tblPr>';
+  xml+='<w:tblGrid><w:gridCol w:w="2340"/><w:gridCol w:w="2340"/><w:gridCol w:w="2340"/><w:gridCol w:w="2340"/></w:tblGrid>';
+  xml+='<w:tr>'+metaCell('Status',iss.status||'Open',2340)+metaCell('Priority',(iss.priority||'\u2014')+' priority',2340)+metaCell('Category',iss.category||'\u2014',2340)+metaCell('Project',p?p.pid+' \u2014 '+p.name:'\u2014',2340)+'</w:tr>';
+  xml+='<w:tr>'+metaCell('Date raised',iss.dateRaised||'\u2014',2340)+metaCell('Date resolved',iss.dateResolved||'\u2014',2340)+metaCell('Assigned to',iss.assignedTo||'\u2014',2340)+metaCell('Logged by',iss.createdBy||'\u2014',2340)+'</w:tr>';
+  xml+='</w:tbl>';
+  xml+=H.spacer();
+
+  // Description
+  if(iss.description){
+    xml+=H.heading('Description');
+    xml+=H.para(iss.description);
+    xml+=H.spacer();
+  }
+
+  // Resolution
+  if(iss.resolutionSummary){
+    xml+=H.heading('Resolution');
+    xml+=H.para(iss.resolutionSummary);
+    xml+=H.spacer();
+  }
+
+  // Notes
+  if(iss.notes){
+    xml+=H.heading('Notes');
+    xml+=H.para(iss.notes);
+    xml+=H.spacer();
+  }
+
+  // Linked interactions table
+  xml+=H.heading('Linked Interactions ('+linkedInts.length+')');
+  if(linkedInts.length){
+    var intCols=[1000,1200,1500,3860,1800]; // date,channel,stakeholder,summary,followup — total=9360
+    var iHdrFill='<w:shd w:val="clear" w:color="auto" w:fill="1A3050"/>';
+    var iHdrRpr='<w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr>';
+    var iCellRpr='<w:rPr><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr>';
+    xml+='<w:tbl><w:tblPr><w:tblStyle w:val="TableGrid"/><w:tblW w:w="9360" w:type="dxa"/><w:tblCellMar><w:top w:w="80" w:type="dxa"/><w:left w:w="120" w:type="dxa"/><w:bottom w:w="80" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tblCellMar></w:tblPr>';
+    xml+='<w:tblGrid>';
+    intCols.forEach(function(w){xml+='<w:gridCol w:w="'+w+'"/>';});
+    xml+='</w:tblGrid>';
+    // header
+    xml+='<w:tr><w:trPr><w:tblHeader/></w:trPr>';
+    ['Date','Channel','Stakeholder','Summary','Follow-up'].forEach(function(h,ci){
+      xml+='<w:tc><w:tcPr><w:tcW w:w="'+intCols[ci]+'" w:type="dxa"/>'+H.cellBdr+iHdrFill+'</w:tcPr>';
+      xml+='<w:p><w:pPr><w:spacing w:after="0"/></w:pPr><w:r>'+iHdrRpr+'<w:t>'+escXml(h)+'</w:t></w:r></w:p></w:tc>';
+    });
+    xml+='</w:tr>';
+    linkedInts.forEach(function(i,ri){
+      var sk=stakes.find(function(x){return String(x.id)===String(i.stakeholderId);});
+      var name=sk?(sk.firstName||'')+' '+(sk.lastName||''):'';
+      var fu=i.followUp?(i.followUpDone?'Resolved':'Open\u2014'+(i.followUpDue||'no date')+(i.followUpNote?' | '+i.followUpNote:'')):'';
+      var rowFill=ri%2!==0?'<w:shd w:val="clear" w:color="auto" w:fill="EEF4FB"/>':'';
+      var vals=[i.date||'',i.channel||'',name,i.summary||'',fu];
+      xml+='<w:tr>';
+      vals.forEach(function(v,ci){
+        xml+='<w:tc><w:tcPr><w:tcW w:w="'+intCols[ci]+'" w:type="dxa"/>'+H.cellBdr+rowFill+'</w:tcPr>';
+        xml+='<w:p><w:pPr><w:spacing w:after="0"/></w:pPr><w:r>'+iCellRpr+'<w:t xml:space="preserve">'+escXml(v)+'</w:t></w:r></w:p></w:tc>';
+      });
+      xml+='</w:tr>';
+    });
+    xml+='</w:tbl>';
+  } else {
+    xml+=H.bullet('No interactions linked to this issue.');
+  }
+
+  // Footer
+  xml+=H.spacer();
+  xml+=H.spacer();
+  xml+='<w:p><w:pPr><w:spacing w:before="200" w:after="0"/></w:pPr><w:r>'+H.italicGrayRpr+'<w:t xml:space="preserve">PI Registry \u00b7 Sunrise Engineering \u00b7 Exported '+dateStr+'</w:t></w:r></w:p>';
+
+  // Inject into template
+  var templateBin=atob(templateB64);
+  var templateArr=new Uint8Array(templateBin.length);
+  for(var i=0;i<templateBin.length;i++)templateArr[i]=templateBin.charCodeAt(i);
+
+  JSZip.loadAsync(templateArr).then(function(zip){
+    return zip.file('word/document.xml').async('string').then(function(docXml){
+      var sectIdx=docXml.indexOf('<w:sectPr');
+      if(sectIdx<0){alert('Template structure not recognized.');return Promise.reject('bad template');}
+      var bodyIdx=docXml.indexOf('<w:body>');
+      var beforeBody=docXml.substring(0,bodyIdx+8);
+      var sectAndAfter=docXml.substring(sectIdx);
+      zip.file('word/document.xml',beforeBody+xml+sectAndAfter);
+      return zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+    });
+  }).then(function(blob){
+    if(!blob)return;
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;
+    var proj_pfx=p?p.pid+'_':'';
+    var safe_title=(iss.title||'Issue').replace(/[^a-zA-Z0-9_\-]/g,'_').slice(0,40);
+    a.download=proj_pfx+'Issue_'+safe_title+'_'+(new Date().toISOString().slice(0,10))+'.docx';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Issue memo exported as .docx');
+  }).catch(function(err){
+    console.error('Issue DOCX export error:',err);
+    alert('Export failed. See console for details.');
+  });
 }
 
 // ── NEW ISSUE FROM TRACKER ─────────────────────────────────────────
@@ -3532,14 +3867,16 @@ function renderReports(el){
     {id:'deliverable-status',name:'Deliverable / scope status',desc:'Scope items with contracted vs delivered quantities and progress',
       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>'},
     {id:'comment-matrix',name:'Public comment matrix',desc:'Public comments received with response status for formal documentation',
-      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h4"/></svg>'}
+      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h4"/></svg>'},
+    {id:'issues-report',name:'Issues tracker report',desc:'Open and resolved issues with linked interactions — export as PDF or Word',
+      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><circle cx="12" cy="12" r="9"/><path d="M12 7v5"/><circle cx="12" cy="15.5" r=".8" fill="currentColor"/></svg>'}
   ];
   var cardsHTML='';
   rptCards.forEach(function(r){
     cardsHTML+='<div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:18px 20px;cursor:pointer;transition:border-color .12s,transform .12s" '
       +'onmouseover="this.style.borderColor=\'rgba(45,125,210,.5)\';this.style.transform=\'translateY(-2px)\'" '
       +'onmouseout="this.style.borderColor=\'rgba(255,255,255,.14)\';this.style.transform=\'none\'" '
-      +'onclick="generateReport(\''+r.id+'\')">'
+      +'onclick="'+(r.id==="issues-report"?"generateIssuesReport()":("generateReport('"+r.id+"')"))+'">'+
       +'<div style="display:flex;align-items:flex-start;gap:12px">'
       +'<div style="color:var(--sky-lt);flex-shrink:0;margin-top:2px">'+r.icon+'</div>'
       +'<div><div style="font-size:14px;font-weight:600;color:var(--white);margin-bottom:5px">'+r.name+'</div>'
@@ -3649,9 +3986,26 @@ function renderReports(el){
     +'<div style="width:48px;height:48px;background:rgba(45,125,210,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="var(--sky-lt)" stroke-width="1.5" style="width:26px;height:26px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6M9 15l3 3 3-3"/></svg></div>'
     +'<div style="flex:1"><div style="font-size:15px;font-weight:600;color:var(--white);margin-bottom:4px">Generate PI Report (.docx)</div>'
     +'<div style="font-size:12px;color:var(--slate)">Build a customizable report with auto-populated and manual sections — export as a branded Word document</div></div>'
-    +'<button class="btn btn-primary" style="padding:12px 24px;font-size:14px;flex-shrink:0" onclick="openPIReport()">Open editor</button></div>'
+    +'<div style="display:flex;gap:10px;flex-shrink:0"><button class="btn btn-primary" style="padding:12px 24px;font-size:14px" onclick="openPIReport()">Open editor</button><button class="btn" style="padding:12px 18px;font-size:14px;background:rgba(45,125,210,.15);border-color:rgba(45,125,210,.4);color:var(--sky-lt)" onclick="generateIssuesReport()"><svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" style=\"width:13px;height:13px;margin-right:5px;vertical-align:-2px\"><path d=\"M9 2H4a1 1 0 00-1 1v10a1 1 0 001 1h8a1 1 0 001-1V6L9 2z\"/><path d=\"M9 2v4h4\"/><path d=\"M5 9h6M5 11h4\"/></svg>Issues (.docx)</button></div></div>'
     +'<div id="rpt-output"></div>'
     +'</div></div>';
+}
+
+function generateIssuesReport(){
+  // Set the project filter on the issues view state to match current Reports project filter,
+  // then offer PDF or Word export via a small modal
+  var projF=S.projectFilter;
+  var projs=DB.get('projects')||[];
+  var proj=projF?projs.find(function(p){return p.id===projF;}):null;
+  var issues=DB.get('issues')||[];
+  var filtered=projF?issues.filter(function(x){return x.projectId===projF;}):issues;
+  var openCount=filtered.filter(function(x){return x.status==='Open'||x.status==='In Progress';}).length;
+  var label=proj?proj.pid+' — '+proj.name:'All projects';
+
+  openM('Issues tracker report',
+    '<div style="margin-bottom:14px;font-size:13px;color:var(--mist)">'    +'<strong>'+label+'</strong><br>'    +(filtered.length+' issue'+(filtered.length!==1?'s':'')+' · '+openCount+' open')    +'</div>'    +'<div style="font-size:12px;color:var(--slate);margin-bottom:18px">Choose an export format. The report will include all issues for the selected project, with linked interaction details.</div>'    +'<div style="display:flex;flex-direction:column;gap:10px">'    +'<button class="btn" style="justify-content:flex-start;gap:12px;padding:14px 16px;background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.15)" onclick="closeM();S.issViewProj=\''+projF+'\';exportIssuesPdf()">'    +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:18px;height:18px;color:var(--red);flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h4"/></svg>'    +'<div><div style="font-size:13px;font-weight:600;color:var(--white)">Export as PDF</div><div style="font-size:11px;color:var(--slate)">Summary table + full issue details with linked interactions</div></div></button>'    +'<button class="btn" style="justify-content:flex-start;gap:12px;padding:14px 16px;background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.15)" onclick="closeM();S.issViewProj=\''+projF+'\';exportIssuesSummaryDocx()">'    +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:18px;height:18px;color:var(--sky-lt);flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h4"/></svg>'    +'<div><div style="font-size:13px;font-weight:600;color:var(--white)">Export as Word (.docx)</div><div style="font-size:11px;color:var(--slate)">Branded document using Sunrise Engineering template</div></div></button>'    +'</div>',
+    ''
+  );
 }
 
 function getReportTitle(type){

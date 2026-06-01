@@ -974,7 +974,7 @@ function chIco(ch){
 }
 
 // ── NAV ───────────────────────────────────────
-function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.masterSort='az';S.meetSearch='';
+function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;
   S.view=v;S.selStakeholder=null;S.selInteraction=null;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const nb=document.getElementById('nav-'+v);if(nb)nb.classList.add('active');

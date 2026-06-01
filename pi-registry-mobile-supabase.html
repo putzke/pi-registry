@@ -283,6 +283,11 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
         <span class="nav-label">Follow-ups</span>
         <span class="nav-badge" id="fu-badge" style="display:none"></span>
       </button>
+      <button class="nav-item" onclick="showScreen('screen-issues')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5"/><circle cx="12" cy="15.5" r=".8" fill="currentColor"/></svg>
+        <span class="nav-label">Issues</span>
+        <span class="nav-badge" id="iss-badge" style="display:none"></span>
+      </button>
     </nav>
   </div>
 
@@ -326,6 +331,11 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
         <span class="nav-label">Follow-ups</span>
         <span class="nav-badge" id="fu-badge2" style="display:none"></span>
+      </button>
+      <button class="nav-item" onclick="showScreen('screen-issues')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5"/><circle cx="12" cy="15.5" r=".8" fill="currentColor"/></svg>
+        <span class="nav-label">Issues</span>
+        <span class="nav-badge" id="iss-badge2" style="display:none"></span>
       </button>
     </nav>
   </div>
@@ -385,6 +395,11 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
         <span class="nav-label">Follow-ups</span>
         <span class="nav-badge" id="fu-badge3" style="display:none"></span>
       </button>
+      <button class="nav-item" onclick="showScreen('screen-issues')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5"/><circle cx="12" cy="15.5" r=".8" fill="currentColor"/></svg>
+        <span class="nav-label">Issues</span>
+        <span class="nav-badge" id="iss-badge3" style="display:none"></span>
+      </button>
     </nav>
   </div>
 
@@ -422,6 +437,75 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
         <span class="nav-label">Follow-ups</span>
         <span class="nav-badge" id="fu-badge4" style="display:none"></span>
+      </button>
+      <button class="nav-item" onclick="showScreen('screen-issues')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5"/><circle cx="12" cy="15.5" r=".8" fill="currentColor"/></svg>
+        <span class="nav-label">Issues</span>
+        <span class="nav-badge" id="iss-badge4" style="display:none"></span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SCREEN: ISSUES (read-only)
+  ══════════════════════════════════════════ -->
+  <div class="screen" id="screen-issues">
+    <div class="topbar">
+      <div style="flex:1;display:flex;align-items:center;gap:10px">
+        <div class="topbar-title" style="font-size:15px">Issues</div>
+      </div>
+    </div>
+    <div class="proj-selector">
+      <span class="proj-selector-label">Project</span>
+      <select id="iss-proj-filter" onchange="renderIssuesList()">
+        <option value="">All projects</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:6px;padding:6px 12px 0">
+      <select id="iss-status-filter" onchange="renderIssuesList()" style="flex:1;font-size:12px;padding:5px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text1)">
+        <option value="">All statuses</option>
+        <option>Open</option><option>In Progress</option><option>Resolved</option><option>Monitoring</option>
+      </select>
+      <select id="iss-pri-filter" onchange="renderIssuesList()" style="flex:1;font-size:12px;padding:5px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text1)">
+        <option value="">All priorities</option>
+        <option>High</option><option>Medium</option><option>Low</option>
+      </select>
+    </div>
+    <div style="overflow-y:auto;flex:1">
+      <div id="iss-list"></div>
+    </div>
+    <!-- Issue detail panel (slides up) -->
+    <div id="iss-detail-panel" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:150;overflow-y:auto;padding-bottom:env(safe-area-inset-bottom)">
+      <div style="position:sticky;top:0;background:var(--surface);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;gap:10px;z-index:10">
+        <button onclick="closeIssueDetail()" style="background:none;border:none;padding:4px;cursor:pointer;display:flex;align-items:center">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text1)" stroke-width="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        </button>
+        <div style="font-size:15px;font-weight:600;color:var(--text1)" id="iss-detail-title">Issue detail</div>
+      </div>
+      <div id="iss-detail-body" style="padding:16px"></div>
+    </div>
+    <nav class="bottom-nav">
+      <button class="nav-item" onclick="showScreen('screen-home')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        <span class="nav-label">Dashboard</span>
+      </button>
+      <button class="nav-item" onclick="showScreen('screen-contacts')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.85"/></svg>
+        <span class="nav-label">Contacts</span>
+      </button>
+      <button class="nav-item" onclick="showScreen('screen-interactions')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span class="nav-label">Log</span>
+      </button>
+      <button class="nav-item" onclick="showScreen('screen-followups')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+        <span class="nav-label">Follow-ups</span>
+        <span class="nav-badge" id="fu-badge5" style="display:none"></span>
+      </button>
+      <button class="nav-item active" onclick="showScreen('screen-issues')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5"/><circle cx="12" cy="15.5" r=".8" fill="currentColor"/></svg>
+        <span class="nav-label">Issues</span>
+        <span class="nav-badge" id="iss-badge5" style="display:none"></span>
       </button>
     </nav>
   </div>
@@ -754,7 +838,9 @@ const SB_TABLES = {
   project_stakeholders: 'pi_project_stakeholders',
   interactions:         'pi_interactions',
   deliverables:         'pi_deliverables',
-  meetings:             'pi_meetings'
+  meetings:             'pi_meetings',
+  issues:               'pi_issues',
+  issue_interactions:   'pi_issue_interactions'
 };
 
 // Map our internal field names to Supabase column names
@@ -796,6 +882,15 @@ const SB_TO_INT = {
     attendanceCount:'attendance_count', commentCards:'comment_cards',
     format:'format', keyConcerns:'key_concerns', actionItems:'action_items',
     notes:'notes'
+  },
+  pi_issues: {
+    id:'id', projectId:'project_id', title:'title', category:'category',
+    status:'status', priority:'priority', description:'description',
+    raisedBy:'raised_by', dateRaised:'date_raised', resolutionSummary:'resolution_summary',
+    notes:'notes'
+  },
+  pi_issue_interactions: {
+    id:'id', issueId:'issue_id', interactionId:'interaction_id'
   }
 };
 
@@ -899,7 +994,7 @@ function cacheClear(k) { delete _cache[k]; delete _cacheTime[k]; }
 const _syncCache = {};
 
 async function loadAllData() {
-  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings'];
+  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions'];
   await Promise.all(tables.map(async t => { _syncCache[t] = await sbGet(t); }));
 }
 
@@ -989,6 +1084,7 @@ function showScreen(id){
   if(id==='screen-contacts')renderContacts();
   if(id==='screen-interactions')renderInteractionsList();
   if(id==='screen-followups')renderFollowupsList();
+  if(id==='screen-issues')renderIssuesList();
 }
 
 // ── SHEET MANAGEMENT ───────────────────────────────────────────────────
@@ -1015,17 +1111,146 @@ function populateProjectDropdowns(){
     el.innerHTML=(isLog?'<option value="">— Select project —</option>':isAdd?'<option value="">— Master list only —</option>':'<option value="">All projects</option>')+
       projs.map(p=>`<option value="${p.id}"${p.id===cur?' selected':''}>${p.pid} — ${p.name}</option>`).join('');
   });
+  // also populate issues project filter (includes all statuses)
+  const issEl=document.getElementById('iss-proj-filter');
+  if(issEl){
+    const cur=issEl.value;
+    const allProjs=DB.get('projects')||[];
+    issEl.innerHTML='<option value="">All projects</option>'+allProjs.map(p=>`<option value="${p.id}"${p.id===cur?' selected':''}>${p.pid} — ${p.name}</option>`).join('');
+  }
 }
 
 // ── UPDATE FU BADGES ───────────────────────────────────────────────────
 function updateFUBadges(){
   const n=DB.get('interactions').filter(i=>i.followUp&&!i.followUpDone).length;
-  ['fu-badge','fu-badge2','fu-badge3','fu-badge4'].forEach(id=>{
+  ['fu-badge','fu-badge2','fu-badge3','fu-badge4','fu-badge5'].forEach(id=>{
     const el=document.getElementById(id);
     if(!el)return;
     el.textContent=n;
     el.style.display=n>0?'':'none';
   });
+}
+
+function updateIssBadges(){
+  const n=(DB.get('issues')||[]).filter(i=>i.status==='Open'||i.status==='In Progress').length;
+  ['iss-badge','iss-badge2','iss-badge3','iss-badge4','iss-badge5'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el)return;
+    el.textContent=n;
+    el.style.display=n>0?'':'none';
+  });
+}
+
+// ── ISSUES (read-only) ──────────────────────────────────────────────
+const ISS_STATUS_COLORS={'Open':'var(--red)','In Progress':'var(--amber)','Resolved':'var(--green)','Monitoring':'var(--sky)'};
+const ISS_PRI_COLORS={'High':'var(--red)','Medium':'var(--amber)','Low':'var(--green)'};
+
+function populateIssProjFilter(){
+  const sel=document.getElementById('iss-proj-filter');
+  if(!sel)return;
+  const cur=sel.value;
+  const projs=DB.get('projects')||[];
+  sel.innerHTML='<option value="">All projects</option>'+projs.map(p=>`<option value="${p.id}">${p.pid} — ${p.name}</option>`).join('');
+  if(cur)sel.value=cur;
+}
+
+function renderIssuesList(){
+  populateIssProjFilter();
+  const pF=(document.getElementById('iss-proj-filter')||{}).value||'';
+  const stF=(document.getElementById('iss-status-filter')||{}).value||'';
+  const priF=(document.getElementById('iss-pri-filter')||{}).value||'';
+  const projs=DB.get('projects')||[];
+  const iLinks=DB.get('issue_interactions')||[];
+  let issues=DB.get('issues')||[];
+  if(pF)issues=issues.filter(x=>x.projectId===pF);
+  if(stF)issues=issues.filter(x=>x.status===stF);
+  if(priF)issues=issues.filter(x=>x.priority===priF);
+  // sort: Open/In Progress first, then by dateRaised desc
+  issues.sort((a,b)=>{
+    const aO=a.status==='Open'||a.status==='In Progress';
+    const bO=b.status==='Open'||b.status==='In Progress';
+    if(aO&&!bO)return -1;if(!aO&&bO)return 1;
+    return(b.dateRaised||'').localeCompare(a.dateRaised||'');
+  });
+  const el=document.getElementById('iss-list');
+  if(!el)return;
+  if(issues.length===0){
+    el.innerHTML='<div class="empty" style="padding:48px 24px"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5"/><circle cx="12" cy="15.5" r=".8" fill="currentColor"/></svg><div class="empty-title">No issues found</div><div class="empty-sub">Issues logged in a project will appear here.</div></div>';
+    return;
+  }
+  el.innerHTML=issues.map(iss=>{
+    const p=projs.find(x=>x.id===iss.projectId);
+    const linkCt=(iLinks.filter(l=>String(l.issueId)===String(iss.id))||[]).length;
+    const stColor=ISS_STATUS_COLORS[iss.status]||'var(--text3)';
+    const priColor=ISS_PRI_COLORS[iss.priority]||'var(--text3)';
+    return`<div class="list-item" onclick="openIssueDetail('${iss.id}')">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:600;color:var(--text1);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${iss.title||'Untitled'}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:3px">
+          <span style="font-size:11px;font-weight:600;color:${stColor};background:${stColor}18;border-radius:10px;padding:1px 8px">${iss.status||'Open'}</span>
+          ${iss.priority?`<span style="font-size:11px;font-weight:600;color:${priColor};background:${priColor}18;border-radius:10px;padding:1px 8px">${iss.priority}</span>`:''}
+          ${iss.category?`<span style="font-size:11px;color:var(--text3)">${iss.category}</span>`:''}
+        </div>
+        <div style="font-size:12px;color:var(--text3)">${p?p.pid+' — '+p.name:'—'}${linkCt>0?' · '+linkCt+' interaction'+(linkCt!==1?'s':''):''}</div>
+      </div>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+    </div>`;
+  }).join('');
+}
+
+function openIssueDetail(id){
+  const issues=DB.get('issues')||[];
+  const iss=issues.find(x=>String(x.id)===String(id));
+  if(!iss)return;
+  const projs=DB.get('projects')||[];
+  const stakes=DB.get('stakeholders')||[];
+  const ints=DB.get('interactions')||[];
+  const iLinks=DB.get('issue_interactions')||[];
+  const p=projs.find(x=>x.id===iss.projectId);
+  const linked=iLinks.filter(l=>String(l.issueId)===String(id));
+  const linkedInts=linked.map(l=>ints.find(x=>String(x.id)===String(l.interactionId))).filter(Boolean);
+  const stColor=ISS_STATUS_COLORS[iss.status]||'var(--text3)';
+  const priColor=ISS_PRI_COLORS[iss.priority]||'var(--text3)';
+  document.getElementById('iss-detail-title').textContent=iss.title||'Issue detail';
+  document.getElementById('iss-detail-body').innerHTML=`
+    <div style="margin-bottom:16px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <span style="font-size:12px;font-weight:700;color:${stColor};background:${stColor}18;border-radius:12px;padding:3px 12px">${iss.status||'Open'}</span>
+        ${iss.priority?`<span style="font-size:12px;font-weight:700;color:${priColor};background:${priColor}18;border-radius:12px;padding:3px 12px">${iss.priority} Priority</span>`:''}
+      </div>
+      <div style="font-size:13px;color:var(--text3);margin-bottom:4px">${p?p.pid+' — '+p.name:'No project'}</div>
+      ${iss.category?`<div style="font-size:13px;color:var(--text3)">Category: ${iss.category}</div>`:''}
+    </div>
+    ${iss.description?`<div class="section-hdr">Description</div><div style="font-size:14px;color:var(--text2);line-height:1.5;margin-bottom:16px">${iss.description}</div>`:''}
+    ${iss.raisedBy||iss.dateRaised?`<div class="section-hdr">Details</div>
+    <div style="margin-bottom:16px">
+      ${iss.raisedBy?`<div class="list-item" style="cursor:default"><div style="font-size:12px;color:var(--text3);width:90px">Raised by</div><div style="font-size:14px">${iss.raisedBy}</div></div>`:''}
+      ${iss.dateRaised?`<div class="list-item" style="cursor:default"><div style="font-size:12px;color:var(--text3);width:90px">Date raised</div><div style="font-size:14px">${iss.dateRaised}</div></div>`:''}
+    </div>`:''}
+    ${iss.resolutionSummary?`<div class="section-hdr">Resolution</div><div style="font-size:14px;color:var(--text2);line-height:1.5;margin-bottom:16px">${iss.resolutionSummary}</div>`:''}
+    ${iss.notes?`<div class="section-hdr">Notes</div><div style="font-size:14px;color:var(--text2);line-height:1.5;margin-bottom:16px">${iss.notes}</div>`:''}
+    <div class="section-hdr">Linked interactions (${linkedInts.length})</div>
+    <div style="margin-bottom:20px">
+      ${linkedInts.length===0?'<div class="empty" style="padding:20px"><div class="empty-title">No linked interactions</div></div>':
+        linkedInts.map(i=>{
+          const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
+          return`<div class="list-item" style="cursor:default">
+            <div style="flex:1">
+              <div style="font-size:12px;color:var(--text3)">${i.date?fmt(i.date):''} · ${i.channel||''}</div>
+              <div style="font-size:14px;margin-top:2px">${i.summary||'—'}</div>
+              <div style="font-size:13px;color:var(--sky);margin-top:2px">${s?s.firstName+' '+s.lastName:'Unknown stakeholder'}</div>
+            </div>
+          </div>`;
+        }).join('')
+      }
+    </div>
+  `;
+  document.getElementById('iss-detail-panel').style.display='block';
+  document.getElementById('iss-detail-panel').scrollTop=0;
+}
+
+function closeIssueDetail(){
+  document.getElementById('iss-detail-panel').style.display='none';
 }
 
 // ── HOME SCREEN ────────────────────────────────────────────────────────
@@ -1073,6 +1298,7 @@ function refreshHome(){
   }
 
   updateFUBadges();
+  updateIssBadges();
 }
 
 // ── CONTACTS SCREEN ────────────────────────────────────────────────────
@@ -1312,6 +1538,7 @@ function resolveFollowup(id,e){
   refreshHome();
   renderFollowupsList();
   updateFUBadges();
+  updateIssBadges();
 }
 
 // ── LOG SHEET ──────────────────────────────────────────────────────────
@@ -1524,6 +1751,7 @@ async function saveInteraction(){
   showToast('Interaction logged ✓');
   refreshHome();
   updateFUBadges();
+  updateIssBadges();
 }
 
 // ── ADD STAKEHOLDER SHEET ──────────────────────────────────────────────
@@ -1647,6 +1875,7 @@ function init(){
   populateProjectDropdowns();
   refreshHome();
   updateFUBadges();
+  updateIssBadges();
 }
 
 async function initApp(){
@@ -1677,6 +1906,7 @@ _importChannel.addEventListener('message', e => {
       populateProjectDropdowns();
       refreshHome();
       updateFUBadges();
+  updateIssBadges();
       if (e.data.message) showToast(e.data.message);
     });
   }

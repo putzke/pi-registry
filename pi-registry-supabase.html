@@ -3876,7 +3876,7 @@ function renderReports(el){
     cardsHTML+='<div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:18px 20px;cursor:pointer;transition:border-color .12s,transform .12s" '
       +'onmouseover="this.style.borderColor=\'rgba(45,125,210,.5)\';this.style.transform=\'translateY(-2px)\'" '
       +'onmouseout="this.style.borderColor=\'rgba(255,255,255,.14)\';this.style.transform=\'none\'" '
-      +'onclick="'+(r.id==="issues-report"?"generateIssuesReport()":("generateReport('"+r.id+"')"))+'">'+
+      +'onclick="'+(r.id==="issues-report"?"generateIssuesReport()":("generateReport('"+r.id+"')"))+'">'  
       +'<div style="display:flex;align-items:flex-start;gap:12px">'
       +'<div style="color:var(--sky-lt);flex-shrink:0;margin-top:2px">'+r.icon+'</div>'
       +'<div><div style="font-size:14px;font-weight:600;color:var(--white);margin-bottom:5px">'+r.name+'</div>'

@@ -2941,6 +2941,16 @@ function saveEditLink(lid){
 }
 
 // INTERACTION MODAL
+function updateIntIssues(){
+  const projId=document.getElementById('f-ip')?.value;
+  const sel=document.getElementById('f-iissue');
+  if(!sel) return;
+  const issues=(DB.get('issues')||[]).filter(x=>!projId||x.projectId===projId);
+  const prev=sel.value;
+  sel.innerHTML='<option value="">— None —</option>'+
+    issues.map(iss=>`<option value="${iss.id}"${String(iss.id)===prev?' selected':''}>[${iss.status}] ${iss.title}</option>`).join('');
+}
+
 function updateIntStakeholders(){
   const projId=document.getElementById('f-ip')?.value;
   const sel=document.getElementById('f-is');
@@ -2966,7 +2976,7 @@ function openIntModal(preStake){
   const projs=DB.get('projects'),stakes=DB.get('stakeholders');
   openM('Log interaction',
   `<div class="fgrid fg2f">
-    <div class="fr"><label>Project *</label><select id="f-ip" onchange="updateIntStakeholders()"><option value="">— Select project —</option>${projs.map(p=>`<option value="${p.id}"${S.projectFilter===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
+    <div class="fr"><label>Project *</label><select id="f-ip" onchange="updateIntStakeholders();updateIntIssues()"><option value="">— Select project —</option>${projs.map(p=>`<option value="${p.id}"${S.projectFilter===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
     <div class="fr"><label>Stakeholder</label><select id="f-is"><option value="">— None / Anonymous —</option>${stakes.map(s=>`<option value="${s.id}"${s.id===preStake?' selected':''}>${dispName(s)}${(s.firstName||s.lastName)&&s.org?' — '+s.org:''}</option>`).join('')}</select></div>
     <div class="fr"><label>Date *</label><input type="date" id="f-id" value="${new Date().toISOString().slice(0,10)}"></div>
     <div class="fr"><label>Channel</label><select id="f-ic">${['Phone','Email','In-person','Public meeting','Public event','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'].map(c=>`<option>${c}</option>`).join('')}</select></div>
@@ -2976,6 +2986,11 @@ function openIntModal(preStake){
     <div class="fr"><label>Logged by</label><select id="f-il"><option value="">— Select —</option><option value="JP">JP</option><option value="SH">SH</option><option value="SB">SB</option></select></div>
   </div>
   <div class="fr"><label>Summary *</label><textarea id="f-isu" style="min-height:86px" placeholder="Describe the interaction in detail…"></textarea></div>
+  <div class="fr"><label>Link to issue <span style="font-weight:400;color:var(--fog)">(optional — tag this interaction to an existing issue)</span></label>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select id="f-iissue" style="flex:1"><option value="">— None —</option>${(DB.get('issues')||[]).filter(x=>!S.projectFilter||x.projectId===S.projectFilter).map(iss=>`<option value="${iss.id}">[${iss.status}] ${iss.title}</option>`).join('')}</select>
+    </div>
+  </div>
   <div class="fsec">Follow-up</div>
   <div class="fr"><div class="fcheck"><input type="checkbox" id="f-ifu" onchange="document.getElementById('fu-f').style.display=this.checked?'':'none'"><label for="f-ifu">This interaction requires a follow-up action</label></div></div>
   <div id="fu-f" style="display:none"><div class="fgrid fg2f">
@@ -2984,7 +2999,7 @@ function openIntModal(preStake){
   </div></div>`,
   `<button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-primary" onclick="saveInt()">Save interaction</button>`,true);
   // If a project is already selected (via filter), populate stakeholders for that project
-  if(S.projectFilter) updateIntStakeholders();
+  if(S.projectFilter){ updateIntStakeholders(); updateIntIssues(); }
 }
 function openEditIntModal(id){
   S.editId=id;
@@ -3000,6 +3015,14 @@ function openEditIntModal(id){
     <div class="fr"><label>Logged by</label><select id="f-il"><option value="">— Select —</option><option value="JP"${i.loggedBy==='JP'?' selected':''}>JP</option><option value="SH"${i.loggedBy==='SH'?' selected':''}>SH</option><option value="SB"${i.loggedBy==='SB'?' selected':''}>SB</option></select></div>
   </div>
   <div class="fr"><label>Summary</label><textarea id="f-isu" style="min-height:86px">${i.summary||''}</textarea></div>
+  <div class="fr"><label>Link to issue <span style="font-weight:400;color:var(--fog)">(optional)</span></label>
+    <select id="f-iissue">${(()=>{
+      const projIssues=(DB.get('issues')||[]).filter(x=>x.projectId===i.projectId);
+      const existingLink=(DB.get('issue_interactions')||[]).find(l=>String(l.interactionId)===String(id));
+      const linkedIssueId=existingLink?String(existingLink.issueId):'';
+      return '<option value="">— None —</option>'+projIssues.map(iss=>`<option value="${iss.id}"${String(iss.id)===linkedIssueId?' selected':''}>[${iss.status}] ${iss.title}</option>`).join('');
+    })()}</select>
+  </div>
   <div class="fsec">Follow-up</div>
   <div class="fr"><div class="fcheck"><input type="checkbox" id="f-ifu"${i.followUp?' checked':''} onchange="document.getElementById('fu-f').style.display=this.checked?'':'none'"><label for="f-ifu">Requires follow-up</label></div></div>
   <div id="fu-f" style="${i.followUp?'':'display:none'}"><div class="fgrid fg2f">
@@ -3026,6 +3049,17 @@ function saveInt(){
   const all=DB.get('interactions');
   if(S.editId){const i=all.findIndex(x=>x.id===S.editId);if(i>-1)all[i]=data;}else all.push(data);
   DB.set('interactions',all);
+
+  // Handle issue link
+  const selectedIssueId=document.getElementById('f-iissue')?.value||'';
+  const iLinks=DB.get('issue_interactions')||[];
+  // Remove any existing link for this interaction
+  const cleanedLinks=iLinks.filter(l=>String(l.interactionId)!==String(data.id));
+  if(selectedIssueId){
+    cleanedLinks.push({id:DB.uid(),issueId:selectedIssueId,interactionId:data.id});
+  }
+  DB.set('issue_interactions',cleanedLinks);
+
   closeM();refreshBadges();render();
 }
 function delInt(id){

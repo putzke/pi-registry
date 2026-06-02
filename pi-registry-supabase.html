@@ -200,10 +200,10 @@ hr.div{border:none;border-top:1px solid var(--border);margin:14px 0}
 /* STATS */
 .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
 .stat-card{background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:13px 16px}
-.stat-lbl{font-size:12px;color:var(--slate);margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px}
-.stat-val{font-size:26px;font-weight:600;letter-spacing:-.5px}
+.stat-lbl{font-size:13px;color:var(--slate);margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px}
+.stat-val{font-size:36px;font-weight:600;letter-spacing:-.5px}
 .sv-sky{color:var(--sky-lt)}.sv-green{color:var(--green)}.sv-amber{color:var(--amber)}.sv-red{color:var(--red)}
-.stat-sub{font-size:12px;color:var(--slate);margin-top:2px}
+.stat-sub{font-size:13px;color:var(--slate);margin-top:3px}
 
 /* PROGRESS */
 .pbar{height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;flex-shrink:0}
@@ -3957,7 +3957,7 @@ function renderReports(el){
       +'<svg width="'+sz+'" height="'+sz+'" viewBox="0 0 '+sz+' '+sz+'" style="transform:rotate(-90deg)">'
       +'<circle cx="'+sz/2+'" cy="'+sz/2+'" r="'+r+'" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="5"/>'
       +'<circle cx="'+sz/2+'" cy="'+sz/2+'" r="'+r+'" fill="none" stroke="'+color+'" stroke-width="5" stroke-dasharray="'+d2+' '+g+'" stroke-linecap="round"/>'
-      +'</svg><div style="position:absolute;font-size:11px;font-weight:700;color:var(--white)">'+pct+'%</div></div>';
+      +'</svg><div style="position:absolute;font-size:13px;font-weight:700;color:var(--white)">'+pct+'%</div></div>';
   }
 
   // Sentiment mini bar
@@ -3969,39 +3969,39 @@ function renderReports(el){
   var summaryBar='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px">'
     // Stakeholders card
     +'<div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:16px 18px">'
-    +'<div style="font-size:12px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Stakeholders</div>'
-    +'<div style="font-size:28px;font-weight:700;color:var(--white);margin-bottom:4px">'+projPS.length+'</div>'
-    +'<div style="display:flex;gap:10px;font-size:12px">'
+    +'<div style="font-size:13px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Stakeholders</div>'
+    +'<div style="font-size:42px;font-weight:700;line-height:1;color:var(--white);margin-bottom:6px">'+projPS.length+'</div>'
+    +'<div style="display:flex;gap:10px;font-size:14px">'
     +'<span style="color:var(--teal)">'+extPS.length+' external</span>'
     +'<span style="color:var(--sky-lt)">'+intPS.length+' internal</span></div>'
     +sentMiniBar
-    +'<div style="font-size:10px;color:var(--fog);margin-bottom:3px;font-style:italic">External contacts only</div>'
-    +'<div style="display:flex;gap:8px;font-size:11px">'
+    +'<div style="font-size:12px;color:var(--fog);margin-bottom:4px;font-style:italic">External contacts only</div>'
+    +'<div style="display:flex;gap:8px;font-size:13px">'
     +'<span style="color:var(--green)">'+champCt+' champ</span>'
     +'<span style="color:var(--slate)">'+neutCt+' neutral</span>'
     +'<span style="color:var(--red)">'+oppCt+' opp</span></div>'
     +'</div>'
     // Interactions card
     +'<div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:16px 18px">'
-    +'<div style="font-size:12px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Interactions</div>'
+    +'<div style="font-size:13px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Interactions</div>'
     +'<div style="font-size:28px;font-weight:700;color:var(--white);margin-bottom:4px">'+projInts.length+'</div>'
-    +'<div style="display:flex;gap:10px;font-size:12px">'
+    +'<div style="display:flex;gap:10px;font-size:14px">'
     +'<span style="color:var(--sky-lt)">'+projInts.filter(function(i){return i.direction==='Incoming'}).length+' incoming</span>'
     +'<span style="color:var(--green)">'+projInts.filter(function(i){return i.direction==='Outgoing'}).length+' outgoing</span></div>'
     +'</div>'
     // Follow-ups card
     +'<div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:16px 18px">'
-    +'<div style="font-size:12px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Follow-ups</div>'
-    +'<div style="font-size:28px;font-weight:700;color:'+(overdueFU>0?'var(--red)':openFUs>0?'var(--amber)':'var(--green)')+'">'+openFUs+'</div>'
-    +'<div style="font-size:12px;color:'+(overdueFU>0?'var(--red)':'var(--fog)')+'">'+(overdueFU>0?overdueFU+' overdue':openFUs>0?'All on track':'None pending')+'</div>'
+    +'<div style="font-size:13px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Follow-ups</div>'
+    +'<div style="font-size:42px;font-weight:700;line-height:1;color:'+(overdueFU>0?'var(--red)':openFUs>0?'var(--amber)':'var(--green)')+'">'+openFUs+'</div>'
+    +'<div style="font-size:14px;color:'+(overdueFU>0?'var(--red)':'var(--fog)')+'">'+(overdueFU>0?overdueFU+' overdue':openFUs>0?'All on track':'None pending')+'</div>'
     +'</div>'
     // Deliverables card with donut
     +'<div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:16px 18px">'
-    +'<div style="font-size:12px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Deliverables</div>'
+    +'<div style="font-size:13px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Deliverables</div>'
     +'<div style="display:flex;align-items:center;gap:14px">'
-    +miniDonut(delPctR,delPctR>=75?'#28A870':delPctR>=40?'#5BA4CF':'#D9A544',52)
-    +'<div><div style="font-size:14px;font-weight:600;color:var(--white)">'+doneDels+' of '+projDels.length+'</div>'
-    +'<div style="font-size:12px;color:var(--fog)">complete</div></div></div>'
+    +miniDonut(delPctR,delPctR>=75?'#28A870':delPctR>=40?'#5BA4CF':'#D9A544',64)
+    +'<div><div style="font-size:18px;font-weight:600;color:var(--white)">'+doneDels+' of '+projDels.length+'</div>'
+    +'<div style="font-size:14px;color:var(--fog)">complete</div></div></div>'
     +'</div></div>';
 
   var groupPanel='<div style="margin-bottom:24px;background:#0E1E30;border:1px solid rgba(255,255,255,.13);border-radius:12px;padding:16px 20px">'

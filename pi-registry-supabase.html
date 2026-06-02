@@ -1138,72 +1138,104 @@ function renderDash(el){
 
   // ── PROJECT ACTIVITY SWIM LANES ─────────────────────────────────
   function buildSwimLanes(){
+    var RAMPS=[
+      ['#0e3a5c','#0f5485','#1070b0','#1a8fd4','#38aef0','#72cbff'],
+      ['#174d3a','#136a4e','#128a64','#16aa7c','#30C896','#70E8BA'],
+      ['#3d2d6a','#543d94','#6e4fbe','#8e6ee0','#AE94F8','#CEB8FF']
+    ];
     var today=new Date();
-    var CHAN_COLORS={
-      'Phone':'#4A9BE8','Email':'#28A870','Public meeting':'#b08ff5','Public event':'#b08ff5',
-      'Mail':'#E8A020','In-person':'#b08ff5','Social media':'#4A9BE8',
-      'Media inquiry':'#e87070','Door-to-door':'#60c89a',
-      'Comment card':'#E8A020','Agency coordination':'#1D9E75'
-    };
-
+    var DAYS=28;
     var allActivity=[].concat(
-      ints.map(function(i){return{date:i.date,channel:i.channel||'Other',projId:i.projectId};}),
-      (DB.get('meetings')||[]).map(function(m){return{date:m.date,channel:m.type||'Meeting',projId:m.projectId};})
+      ints.map(function(i){return{date:i.date,projId:i.projectId};}),
+      (DB.get('meetings')||[]).map(function(m){return{date:m.date,projId:m.projectId};})
     );
-
     var activeProjs=projs.filter(function(p){return p.status==='Active'||p.status==='On hold';});
-    if(!activeProjs.length) return '<div style="font-size:12px;color:var(--fog)">No active projects.</div>';
+    if(!activeProjs.length)return'<div style="font-size:12px;color:var(--fog)">No active projects.</div>';
 
-    var LANE_H=18,SWIM_PAD_L=80,totalDays=28;
-    var html='<div style="position:relative">';
+    function abbrev(name){
+      var s=name.replace(/^\d+\s*[-–]\s*/,'').replace(/\s*-\s*/g,' ');
+      var words=s.split(' ').filter(Boolean);
+      var out='';
+      for(var i=0;i<words.length;i++){
+        var candidate=out?out+' '+words[i]:words[i];
+        if(candidate.length>14)break;
+        out=candidate;
+      }
+      return out||words[0].slice(0,14);
+    }
 
-    // Week divider lines
-    html+='<div style="position:absolute;top:0;left:'+SWIM_PAD_L+'px;right:0;bottom:18px;pointer-events:none">';
-    [7,14,21].forEach(function(d){
-      html+='<div style="position:absolute;top:0;bottom:0;left:'+(d/totalDays*100).toFixed(1)+'%;'
-        +'width:1px;background:rgba(255,255,255,.07)"></div>';
+    // Build day counts per project
+    var projData=activeProjs.map(function(p){
+      var counts=[];
+      for(var d=0;d<DAYS;d++)counts.push(0);
+      allActivity.forEach(function(a){
+        if(a.projId!==p.id||!a.date)return;
+        var daysAgo=Math.floor((today-new Date(a.date+'T00:00:00'))/86400000);
+        if(daysAgo>=0&&daysAgo<DAYS)counts[daysAgo]++;
+      });
+      return{p:p,counts:counts,max:Math.max(1,Math.max.apply(null,counts))};
+    });
+
+    function cellBg(ramp,count,max){
+      if(count===0)return'rgba(255,255,255,.04)';
+      var idx=Math.max(0,Math.min(ramp.length-1,Math.round((count/max)*(ramp.length-1))));
+      return ramp[idx];
+    }
+
+    function dayLbl(daysAgo){
+      var d=new Date(today);d.setDate(today.getDate()-daysAgo);
+      return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    }
+
+    var CELL=17,GAP=3,PAD_L=90;
+    var html='<div>';
+
+    // Axis — today on left, oldest on right
+    html+='<div style="display:flex;align-items:center;gap:'+GAP+'px;margin-bottom:6px;margin-left:'+PAD_L+'px">';
+    for(var d=0;d<DAYS;d++){
+      var axTxt=d===0?'▼':d===13?'2w':d===27?'4w':'';
+      html+='<div style="width:'+CELL+'px;flex-shrink:0;font-size:10px;color:var(--slate);text-align:center">'+axTxt+'</div>';
+    }
+    html+='</div>';
+
+    // One row per project
+    projData.forEach(function(pd,pi){
+      var ramp=RAMPS[pi%3];
+      var short=abbrev(pd.p.name);
+      html+='<div style="display:flex;align-items:center;gap:'+GAP+'px;margin-bottom:5px">';
+      // Two-line label
+      html+='<div style="width:'+PAD_L+'px;flex-shrink:0;padding-right:8px;text-align:right;line-height:1.3">'
+        +'<div style="font-size:11px;font-weight:500;color:'+ramp[4]+';font-family:var(--mono);white-space:nowrap">'+pd.p.pid+'</div>'
+        +'<div style="font-size:10px;color:'+ramp[2]+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+short+'</div>'
+        +'</div>';
+      // Cells — day 0 = today (left), day 27 = oldest (right)
+      for(var d=0;d<DAYS;d++){
+        var ct=pd.counts[d];
+        var bg=cellBg(ramp,ct,pd.max);
+        var bdr=ct===0?'border:1px solid rgba(255,255,255,.06);':'';
+        var title=pd.p.pid+' · '+pd.p.name+' · '+dayLbl(d)+': '+ct+' activit'+(ct===1?'y':'ies');
+        html+='<div title="'+title+'" style="width:'+CELL+'px;height:'+CELL+'px;border-radius:3px;'
+          +'flex-shrink:0;background:'+bg+';'+bdr+'cursor:default"></div>';
+      }
+      html+='</div>';
+    });
+
+    // Legend
+    html+='<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.07)">';
+    projData.forEach(function(pd,pi){
+      var ramp=RAMPS[pi%3];
+      var short=abbrev(pd.p.name);
+      html+='<div style="display:flex;align-items:center;gap:3px">';
+      ramp.forEach(function(c){
+        html+='<div style="width:9px;height:9px;border-radius:2px;background:'+c+'"></div>';
+      });
+      html+='<span style="font-size:10px;color:'+ramp[3]+';font-family:var(--mono);margin-left:3px">'+pd.p.pid+'</span>';
+      html+='<span style="font-size:10px;color:var(--slate);margin-left:2px">· '+short+'</span>';
+      html+='</div>';
     });
     html+='</div>';
 
-    // One lane per project
-    activeProjs.slice(0,6).forEach(function(p,pi){
-      var projAct=allActivity.filter(function(a){return a.projId===p.id;});
-      var dayCounts={};
-      projAct.forEach(function(a){
-        if(!a.date)return;
-        var daysAgo=Math.floor((today-new Date(a.date+'T00:00:00'))/86400000);
-        if(daysAgo>=0&&daysAgo<28){dayCounts[27-daysAgo]=(dayCounts[27-daysAgo]||0)+1;}
-      });
-      var col=acol(p.name);
-      html+='<div style="display:flex;align-items:center;margin-bottom:5px">';
-      // Label
-      html+='<div style="width:'+SWIM_PAD_L+'px;flex-shrink:0;padding-right:8px;font-size:10px;'
-        +'color:var(--mist);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right">'
-        +'<span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:'+col
-        +';margin-right:4px;vertical-align:middle"></span>'+p.pid+'</div>';
-      // Track
-      html+='<div style="flex:1;height:'+LANE_H+'px;background:rgba(255,255,255,.04);'
-        +'border-radius:3px;position:relative;overflow:hidden">';
-      Object.keys(dayCounts).forEach(function(di){
-        var ct=dayCounts[di];
-        var pct=(parseInt(di)/27*100).toFixed(1);
-        var bh=Math.min(LANE_H,Math.max(5,ct*5));
-        var bt=Math.floor((LANE_H-bh)/2);
-        html+='<div style="position:absolute;left:calc('+pct+'% - 3px);top:'+bt+'px;width:6px;'
-          +'height:'+bh+'px;background:'+col+';border-radius:3px;opacity:.85;'
-          +'animation:barRise .35s ease '+(pi*40+parseInt(di)*5)+'ms both" title="'
-          +p.name+': '+ct+' activit'+(ct===1?'y':'ies')+'"></div>';
-      });
-      html+='</div></div>';
-    });
-
-    // Axis labels
-    html+='<div style="display:flex;margin-left:'+SWIM_PAD_L+'px;margin-top:1px">';
-    ['4w ago','3w ago','2w ago','1w ago','Today'].forEach(function(lbl,i){
-      html+='<div style="flex:1;font-size:11px;color:var(--mist);'
-        +(i===0?'text-align:left':i===4?'text-align:right':'text-align:center')+'">'+lbl+'</div>';
-    });
-    html+='</div></div>';
+    html+='</div>';
     return html;
   }
 
@@ -1359,9 +1391,9 @@ function renderDash(el){
     </div>
 
     <!-- ROW 3: Swim lanes + Live feed -->
-    <div style="display:grid;grid-template-columns:3fr 2fr;gap:14px;margin-bottom:20px">
+    <div style="display:grid;grid-template-columns:2fr 2fr;gap:14px;margin-bottom:20px">
       <div class="dash-anim" style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:14px 18px;animation-delay:420ms">
-        <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:10px">Project activity <span style="font-size:11px;font-weight:400;color:var(--mist);margin-left:6px">past 4 weeks</span></div>
+        <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:10px">Project activity <span style="font-size:11px;font-weight:400;color:var(--mist);margin-left:6px">today → 4 weeks back</span></div>
         ${buildSwimLanes()}
       </div>
       <div class="dash-anim" style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:14px 18px;animation-delay:480ms">
@@ -2715,7 +2747,7 @@ function renderProjects(el){
     <div style="padding:20px">
     ${projs.length===0
       ? `<div style="text-align:center;padding:60px;color:var(--fog);font-size:14px">${tab==='active'?'No active projects. Create one to get started.':'No archived projects yet.'}</div>`
-      : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:14px">
+      : `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px">
       ${projs.map(p=>{
         const psSt=ps.filter(x=>x.projectId===p.id);
         const champ=psSt.filter(x=>x.support==='Champion').length;

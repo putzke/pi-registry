@@ -3854,6 +3854,10 @@ function renderReports(el){
       +'<span class="badge b-dark" style="font-size:10px;margin-left:4px">'+ct+'</span></label>';
   });
 
+  // Internal stakeholder toggle
+  var internalCt=projPS.filter(function(x){return(x.stakeholderRole||'External')==='Internal'}).length;
+  var internalToggle='<label style="display:flex;align-items:center;gap:7px;cursor:pointer;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:8px;padding:8px 14px;margin-left:8px">'    +'<input type="checkbox" id="rpt-include-internal" style="accent-color:var(--sky);width:15px;height:15px">'    +'<span style="font-size:13px;color:var(--slate)">Include internal stakeholders in interaction log</span>'    +'<span class="badge b-dark" style="font-size:10px;margin-left:4px">'+internalCt+'</span></label>';
+
   // Report type cards data
   var rptCards=[
     {id:'contact-list',name:'Stakeholder contact list',desc:'Formatted roster with contact info, support levels, and distribution groups',
@@ -3970,7 +3974,7 @@ function renderReports(el){
 
   var groupPanel='<div style="margin-bottom:24px;background:#0E1E30;border:1px solid rgba(255,255,255,.13);border-radius:12px;padding:16px 20px">'
     +'<div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:10px">Distribution groups — select who receives this report</div>'
-    +'<div style="display:flex;flex-wrap:wrap;gap:10px">'+grpHTML+'</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">'+grpHTML+internalToggle+'</div>'
     +'<div style="margin-top:10px;font-size:12px;color:var(--fog)">'+projPS.length+' stakeholders across all groups</div></div>';
 
   var reportCards='<div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:14px">Select a report to generate</div>'
@@ -4050,10 +4054,15 @@ function generateReport(type){
     return (a.s.lastName||'').toLowerCase().localeCompare((b.s.lastName||'').toLowerCase());
   });
 
+  // Internal toggle
+  var includeInternal=!!(document.getElementById('rpt-include-internal')&&document.getElementById('rpt-include-internal').checked);
+
   // External-only stakeholders (for interaction/sentiment/follow-up/comment reports)
   var externalPS=ps.filter(function(lk){return(lk.stakeholderRole||'External')==='External'});
   var externalStakeIds=externalPS.map(function(lk){return lk.stakeholderId});
   var externalInts=ints.filter(function(i){return externalStakeIds.indexOf(i.stakeholderId)>=0});
+  // For interaction log: respect the toggle
+  var logInts=includeInternal?ints:externalInts;
 
   // External-only filtered stakes for sentiment report
   var externalFilteredPS=filteredPS.filter(function(lk){return(lk.stakeholderRole||'External')==='External'});
@@ -4128,7 +4137,7 @@ function generateReport(type){
     if(sortedStakes.length===0)body='<div style="padding:32px;text-align:center;color:var(--fog)">No stakeholders match the selected distribution groups.</div>';
 
   } else if(type==='interaction-log'){
-    var sorted=externalInts.slice().sort(function(a,b){return b.date.localeCompare(a.date)});
+    var sorted=logInts.slice().sort(function(a,b){return b.date.localeCompare(a.date)});
     body='<table style="width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed"><thead><tr>'
       +'<th style="width:10%;padding:4px 6px;background:#1a3a5c;color:#fff;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Date</th>'
       +'<th style="width:16%;padding:4px 6px;background:#1a3a5c;color:#fff;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Stakeholder</th>'
@@ -4148,7 +4157,7 @@ function generateReport(type){
     body+='</tbody></table>';
 
   } else if(type==='followup-status'){
-    var fuItems=externalInts.filter(function(i){return i.followUp});
+    var fuItems=ints.filter(function(i){return i.followUp}); // all interactions, not just external
     var overdue=fuItems.filter(function(i){return !i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<now}).length;
     var openCt=fuItems.filter(function(i){return !i.followUpDone}).length;
     var resolvedCt=fuItems.filter(function(i){return i.followUpDone}).length;
@@ -4500,7 +4509,7 @@ function getSectionDesc(type){
   var descs={
     'auto-concerns':'Auto-populates from External stakeholder interactions logged during the report period.',
     'auto-contacts':'Auto-populates a formatted stakeholder roster filtered by selected distribution groups.',
-    'auto-intlog':'Auto-populates a chronological log of all External stakeholder interactions.',
+    'auto-intlog':'Auto-populates a chronological log of stakeholder interactions (External by default; toggle above to include Internal).',
     'auto-followups':'Auto-populates all open and resolved follow-up action items with due dates.',
     'auto-sentiment':'Auto-populates stakeholder positions grouped by Champion, Neutral, and Opponent.',
     'auto-del':'Auto-populates deliverable progress showing contracted vs delivered counts.',
@@ -4920,7 +4929,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
       var allProjInts=DB.get('interactions').filter(function(i){return i.projectId===proj.id});
       var extIds3=externalPS.map(function(lk){return lk.stakeholderId});
       var pastInts=allProjInts.filter(function(i){
-        if(extIds3.indexOf(i.stakeholderId)<0)return false;
+        if(!includeInternal&&extIds3.indexOf(i.stakeholderId)<0)return false;
         if(saved.periodStart&&i.date>=saved.periodStart)return false;
         return true;
       });

@@ -566,7 +566,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
           </div>
           <div class="form-group">
             <label class="form-label">Logged by</label>
-            <div style="font-size:15px;font-weight:600;color:var(--sky);padding:8px 0;min-height:24px" id="log-by-display">—</div>
+            <div style="font-size:15px;font-weight:600;color:var(--sky);padding:8px 0 8px 4px;min-height:24px" id="log-by-display">—</div>
             <input type="hidden" id="log-by">
           </div>
         </div>
@@ -642,7 +642,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
     <div class="sheet">
       <div class="sheet-handle"></div>
       <div class="sheet-header">
-        <div class="sheet-title">Add stakeholder</div>
+        <div class="sheet-title" id="stake-sheet-title">Add stakeholder</div>
         <button class="sheet-close" onclick="closeSheet('sheet-add-stakeholder')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
         </button>
@@ -708,7 +708,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
         </div>
             </div>
       <div class="sheet-footer">
-        <button class="btn-primary" onclick="saveStakeholder()">Add stakeholder</button>
+        <button class="btn-primary" id="stake-sheet-btn" onclick="saveStakeholder()">Add stakeholder</button>
       </div>
     </div>
   </div>
@@ -1391,6 +1391,10 @@ function showContactDetail(id){
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         <span>Log</span>
       </button>
+      <button class="contact-action" onclick="openEditStakeholder('${id}')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        <span>Edit</span>
+      </button>
     </div>
     <!-- Info -->
     <div class="section-hdr">Contact info</div>
@@ -1761,6 +1765,7 @@ async function saveInteraction(){
 
 // ── ADD STAKEHOLDER SHEET ──────────────────────────────────────────────
 function prepAddStakeholderSheet(){
+  window._editStakeId=null;
   document.getElementById('add-fn').value='';
   document.getElementById('add-ln').value='';
   document.getElementById('add-org').value='';
@@ -1771,6 +1776,11 @@ function prepAddStakeholderSheet(){
   document.getElementById('name-fields').style.opacity='1';
   document.getElementById('add-fn').disabled=false;
   document.getElementById('add-ln').disabled=false;
+  // Reset title and button for add mode
+  document.getElementById('stake-sheet-title').textContent='Add stakeholder';
+  const btn=document.getElementById('stake-sheet-btn');
+  btn.textContent='Add stakeholder';
+  btn.onclick=saveStakeholder;
 }
 
 function saveStakeholder(){
@@ -1827,6 +1837,87 @@ function saveStakeholder(){
   showToast(`${fn} ${ln} added ✓`);
   renderContacts();
   updateLogStakeholders();
+}
+
+// ── EDIT STAKEHOLDER ─────────────────────────────────────────────────
+function openEditStakeholder(id){
+  const s=(DB.get('stakeholders')||[]).find(x=>x.id===id);
+  if(!s)return;
+  window._editStakeId=id;
+  // Pre-populate fields
+  document.getElementById('add-fn').value=s.firstName||'';
+  document.getElementById('add-ln').value=s.lastName||'';
+  document.getElementById('add-org').value=s.org||'';
+  document.getElementById('add-title').value=s.title||'';
+  document.getElementById('add-email').value=s.email||'';
+  document.getElementById('add-phone').value=s.phone||'';
+  document.getElementById('add-parcel').value=s.parcelId||'';
+  document.getElementById('add-type').value=s.type||'Property Owner';
+  document.getElementById('add-master').checked=s.isMaster!==false;
+  document.getElementById('name-fields').style.opacity='1';
+  document.getElementById('add-fn').disabled=false;
+  document.getElementById('add-ln').disabled=false;
+  // Update sheet title and button
+  document.getElementById('stake-sheet-title').textContent='Edit stakeholder';
+  const btn=document.getElementById('stake-sheet-btn');
+  btn.textContent='Save changes';
+  btn.onclick=updateStakeholder;
+  openSheet('sheet-add-stakeholder');
+}
+
+async function updateStakeholder(){
+  const id=window._editStakeId;
+  if(!id)return;
+  const fn=document.getElementById('add-fn').value.trim();
+  const ln=document.getElementById('add-ln').value.trim();
+  const email=document.getElementById('add-email').value.trim();
+  const rawPhone=document.getElementById('add-phone').value.trim();
+  if(!fn&&!ln&&!document.getElementById('add-org').value.trim()){showToast('First and last name, or Organization required','error');return;}
+  const phoneErr=validatePhone(rawPhone);
+  if(phoneErr){showToast(phoneErr,'error');return;}
+  const phone=rawPhone?formatPhone(cleanPhone(rawPhone)):'';
+  const stakes=DB.get('stakeholders')||[];
+  const idx=stakes.findIndex(x=>x.id===id);
+  if(idx<0){showToast('Stakeholder not found','error');return;}
+  stakes[idx]={
+    ...stakes[idx],
+    firstName:fn,
+    lastName:ln,
+    org:document.getElementById('add-org').value.trim(),
+    title:document.getElementById('add-title').value.trim(),
+    email,
+    phone,
+    parcelId:document.getElementById('add-parcel').value.trim(),
+    type:document.getElementById('add-type').value,
+    isMaster:document.getElementById('add-master').checked
+  };
+  // Push to Supabase
+  try{
+    const row={
+      first_name:stakes[idx].firstName||null,
+      last_name:stakes[idx].lastName||null,
+      org:stakes[idx].org||null,
+      title:stakes[idx].title||null,
+      email:stakes[idx].email||null,
+      phone:stakes[idx].phone||null,
+      parcel_id:stakes[idx].parcelId||null,
+      stakeholder_type:stakes[idx].type||null,
+      is_master:stakes[idx].isMaster
+    };
+    const resp=await fetch(SUPA_URL+'/rest/v1/pi_stakeholders?id=eq.'+id,{
+      method:'PATCH',
+      headers:{...getAuthHeaders(),'Prefer':'return=minimal'},
+      body:JSON.stringify(row)
+    });
+    if(!resp.ok)throw new Error(await resp.text());
+    DB.set('stakeholders',stakes);
+    closeSheet('sheet-add-stakeholder');
+    showToast((fn+' '+ln).trim()+' updated ✓');
+    showContactDetail(id);
+  }catch(e){
+    console.error('Update stakeholder error:',e);
+    showToast('Save failed — check connection','error');
+  }
 }
 
 // ── EDIT FOLLOW-UP ────────────────────────────────────────────────────

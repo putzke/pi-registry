@@ -566,12 +566,8 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
           </div>
           <div class="form-group">
             <label class="form-label">Logged by</label>
-            <select class="form-input form-select" id="log-by">
-            <option value="">— Select —</option>
-            <option value="JP">JP</option>
-            <option value="SH">SH</option>
-            <option value="SB">SB</option>
-          </select>
+            <div style="font-size:15px;color:var(--white);padding:10px 0" id="log-by-display"></div>
+            <input type="hidden" id="log-by">
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -746,6 +742,13 @@ function getSession() {
   catch(e) { return null; }
 }
 function setSession(data) { sessionStorage.setItem('pi_session', JSON.stringify(data)); }
+function getLoggedBy(){
+  var sess=getSession();
+  if(!sess||!sess.user||!sess.user.email)return'';
+  var prefix=sess.user.email.split('@')[0];
+  var clean=prefix.replace(/[^a-zA-Z]/g,'');
+  return clean.slice(0,3).toUpperCase();
+}
 function clearSession() { sessionStorage.removeItem('pi_session'); }
 
 function getAuthHeaders() {
@@ -1855,7 +1858,9 @@ function openLogEdit(id){
     document.getElementById('log-subject').value=i.subject||'General';
     document.getElementById('log-direction').value=i.direction||'Incoming';
     document.getElementById('log-summary').value=i.summary||'';
-    document.getElementById('log-by').value=i.loggedBy||'';
+    document.getElementById('log-by').value=i.loggedBy||getLoggedBy();
+    var _lbd=document.getElementById('log-by-display');
+    if(_lbd)_lbd.textContent=i.loggedBy||getLoggedBy()||'—';
     const fuCb=document.getElementById('log-fu');
     fuCb.checked=i.followUp||false;
     toggleLogFU();
@@ -1887,13 +1892,10 @@ async function initApp(){
     await loadAllData();
     // Auto-set logged by
     const logByEl = document.getElementById('log-by');
-    if(logByEl && window._currentUserInitials){
-      const opt = document.createElement('option');
-      opt.value = window._currentUserInitials;
-      opt.textContent = window._currentUserInitials;
-      logByEl.insertBefore(opt, logByEl.firstChild);
-      logByEl.value = window._currentUserInitials;
-    }
+    const logByDisp = document.getElementById('log-by-display');
+    const lb = getLoggedBy();
+    if(logByEl) logByEl.value = lb;
+    if(logByDisp) logByDisp.textContent = lb || '—';
     init();
   } catch(e){
     console.error('Supabase init error:', e);

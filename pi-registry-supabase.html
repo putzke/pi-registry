@@ -465,6 +465,14 @@ function clearSession() {
   sessionStorage.removeItem('pi_session');
 }
 
+function getLoggedBy(){
+  var sess=getSession();
+  if(!sess||!sess.user||!sess.user.email)return'';
+  var prefix=sess.user.email.split('@')[0];
+  var clean=prefix.replace(/[^a-zA-Z]/g,'');
+  return clean.slice(0,3).toUpperCase();
+}
+
 function getAuthHeaders() {
   const sess = getSession();
   const token = sess ? sess.access_token : SUPA_KEY;
@@ -3038,7 +3046,7 @@ function openIntModal(preStake){
     <div class="fr"><label>Direction</label><select id="f-idr">${['Incoming','Outgoing','In-person'].map(d=>`<option>${d}</option>`).join('')}</select></div>
     <div class="fr"><label>Subject</label><select id="f-isub">${['General','Traffic','Property','Environmental','Utility Service'].map(s=>`<option>${s}</option>`).join('')}</select></div>
     <div class="fr"><label>Nature</label><select id="f-inat"><option>Inquiry</option><option>Complaint</option><option>Compliment</option></select></div>
-    <div class="fr"><label>Logged by</label><select id="f-il"><option value="">— Select —</option><option value="JP">JP</option><option value="SH">SH</option><option value="SB">SB</option></select></div>
+    <div class="fr"><label>Logged by</label><div style="font-size:13px;color:var(--white);padding:6px 0" id="f-il-display"></div><input type="hidden" id="f-il"></div>
   </div>
   <div class="fr"><label>Summary *</label><textarea id="f-isu" style="min-height:86px" placeholder="Describe the interaction in detail…"></textarea></div>
   <div class="fr"><label>Link to issue <span style="font-weight:400;color:var(--fog)">(optional — tag this interaction to an existing issue)</span></label>
@@ -3055,6 +3063,8 @@ function openIntModal(preStake){
   `<button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-primary" onclick="saveInt()">Save interaction</button>`,true);
   // If a project is already selected (via filter), populate stakeholders for that project
   if(S.projectFilter){ updateIntStakeholders(); updateIntIssues(); }
+  // Auto-populate Logged by from session
+  (function(){var lb=getLoggedBy();var d=document.getElementById('f-il-display');var h=document.getElementById('f-il');if(d)d.textContent=lb||'—';if(h)h.value=lb;})();
 }
 function openEditIntModal(id){
   S.editId=id;
@@ -3067,7 +3077,7 @@ function openEditIntModal(id){
     <div class="fr"><label>Date</label><input type="date" id="f-id" value="${i.date||''}"></div>
     <div class="fr"><label>Channel</label><select id="f-ic">${['Phone','Email','In-person','Public meeting','Public event','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'].map(c=>`<option${i.channel===c?' selected':''}>${c}</option>`).join('')}</select></div>
     <div class="fr"><label>Direction</label><select id="f-idr">${['Incoming','Outgoing','In-person'].map(d=>`<option${i.direction===d?' selected':''}>${d}</option>`).join('')}</select></div>
-    <div class="fr"><label>Logged by</label><select id="f-il"><option value="">— Select —</option><option value="JP"${i.loggedBy==='JP'?' selected':''}>JP</option><option value="SH"${i.loggedBy==='SH'?' selected':''}>SH</option><option value="SB"${i.loggedBy==='SB'?' selected':''}>SB</option></select></div>
+    <div class="fr"><label>Logged by</label><div style="font-size:13px;color:var(--white);padding:6px 0" id="f-il-display">${i.loggedBy||getLoggedBy()}</div><input type="hidden" id="f-il" value="${i.loggedBy||getLoggedBy()}"></div>
   </div>
   <div class="fr"><label>Summary</label><textarea id="f-isu" style="min-height:86px">${i.summary||''}</textarea></div>
   <div class="fr"><label>Link to issue <span style="font-weight:400;color:var(--fog)">(optional)</span></label>
@@ -3718,7 +3728,7 @@ function openNewIssueFromTracker(){
   const opts=projs.map(p=>'<option value="'+p.id+'">'+p.pid+' — '+p.name+'</option>').join('');
   openM('New issue — select project',
     '<div class="fr"><label>Project *</label><select id="new-iss-proj-pick"><option value="">— Select project —</option>'+opts+'</select></div>',
-    '<button class="btn btn-primary" onclick="var pid=document.getElementById("new-iss-proj-pick").value;if(!pid){alert("Please select a project.");return;}closeM();S.issViewProj=pid;openIssueModal(null,pid);">Continue</button>'
+    '<button class="btn btn-primary" onclick="var pid=document.getElementById(\'new-iss-proj-pick\').value;if(!pid){alert(\'Please select a project.\');return;}closeM();S.issViewProj=pid;openIssueModal(null,pid);">Continue</button>'
   );
 }
 

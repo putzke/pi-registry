@@ -1783,7 +1783,7 @@ function prepAddStakeholderSheet(){
   btn.onclick=saveStakeholder;
 }
 
-function saveStakeholder(){
+async function saveStakeholder(){
   const fn=document.getElementById('add-fn').value.trim();
   const ln=document.getElementById('add-ln').value.trim();
   const email=document.getElementById('add-email').value.trim();
@@ -1813,30 +1813,39 @@ function saveStakeholder(){
     notes:''
   };
 
-  const stakes=DB.get('stakeholders');
-  stakes.push(newS);
-  DB.set('stakeholders',stakes);
+  try{
+    showToast('Saving...','info');
+    const stakes=DB.get('stakeholders');
+    stakes.push(newS);
+    await DB.set('stakeholders',stakes);
 
-  // Link to project if selected
-  if(projId){
-    const ps=DB.get('project_stakeholders');
-    ps.push({
-      id:DB.uid(),
-      projectId:projId,
-      stakeholderId:newS.id,
-      stakeholderRole:'External',
-      support:'Neutral',
-      distributionGroups:'',
-      issueTags:'',
-      addedDate:today()
-    });
-    DB.set('project_stakeholders',ps);
+    // Link to project if selected
+    if(projId){
+      const ps=DB.get('project_stakeholders');
+      // Update stakeholderId in case it was replaced by Supabase numeric id
+      const saved=(_syncCache['stakeholders']||[]).find(x=>x.firstName===fn&&x.lastName===ln&&x.email===email);
+      const realId=saved?saved.id:newS.id;
+      ps.push({
+        id:DB.uid(),
+        projectId:projId,
+        stakeholderId:realId,
+        stakeholderRole:'External',
+        support:'Neutral',
+        distributionGroups:'',
+        issueTags:'',
+        addedDate:today()
+      });
+      await DB.set('project_stakeholders',ps);
+    }
+
+    closeSheet('sheet-add-stakeholder');
+    showToast(`${fn} ${ln} added ✓`);
+    renderContacts();
+    updateLogStakeholders();
+  }catch(e){
+    console.error('Save stakeholder error:',e);
+    showToast('Save failed — check connection','error');
   }
-
-  closeSheet('sheet-add-stakeholder');
-  showToast(`${fn} ${ln} added ✓`);
-  renderContacts();
-  updateLogStakeholders();
 }
 
 // ── EDIT STAKEHOLDER ─────────────────────────────────────────────────

@@ -566,7 +566,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
           </div>
           <div class="form-group">
             <label class="form-label">Logged by</label>
-            <div style="font-size:15px;color:var(--white);padding:10px 0" id="log-by-display"></div>
+            <div style="font-size:15px;font-weight:600;color:var(--sky);padding:8px 0;min-height:24px" id="log-by-display">—</div>
             <input type="hidden" id="log-by">
           </div>
         </div>
@@ -1858,9 +1858,18 @@ function openLogEdit(id){
     document.getElementById('log-subject').value=i.subject||'General';
     document.getElementById('log-direction').value=i.direction||'Incoming';
     document.getElementById('log-summary').value=i.summary||'';
-    document.getElementById('log-by').value=i.loggedBy||getLoggedBy();
+    var _lbVal=i.loggedBy||getLoggedBy()||'';
+    document.getElementById('log-by').value=_lbVal;
     var _lbd=document.getElementById('log-by-display');
-    if(_lbd)_lbd.textContent=i.loggedBy||getLoggedBy()||'—';
+    if(_lbd)_lbd.textContent=_lbVal||'—';
+    // Re-apply after sheet animation completes
+    setTimeout(function(){
+      var lb2=i.loggedBy||getLoggedBy()||'';
+      var el=document.getElementById('log-by');
+      var disp=document.getElementById('log-by-display');
+      if(el)el.value=lb2;
+      if(disp)disp.textContent=lb2||'—';
+    },300);
     const fuCb=document.getElementById('log-fu');
     fuCb.checked=i.followUp||false;
     toggleLogFU();
@@ -1891,11 +1900,15 @@ async function initApp(){
     showToast('Loading...','info');
     await loadAllData();
     // Auto-set logged by
-    const logByEl = document.getElementById('log-by');
-    const logByDisp = document.getElementById('log-by-display');
     const lb = getLoggedBy();
-    if(logByEl) logByEl.value = lb;
-    if(logByDisp) logByDisp.textContent = lb || '—';
+    // Store globally for reuse
+    window._piLoggedBy = lb;
+    setTimeout(function(){
+      const logByEl = document.getElementById('log-by');
+      const logByDisp = document.getElementById('log-by-display');
+      if(logByEl) logByEl.value = lb;
+      if(logByDisp) logByDisp.textContent = lb || '—';
+    }, 100);
     init();
   } catch(e){
     console.error('Supabase init error:', e);

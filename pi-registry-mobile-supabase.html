@@ -958,7 +958,7 @@ async function sbAdd(table, obj) {
     headers: getAuthHeaders(),
     body: JSON.stringify(body)
   });
-  if (!r.ok) { const e = await r.text(); console.error('SB ADD error:', r.status, e); return null; }
+  if (!r.ok) { const e = await r.text(); console.error('SB ADD error:', r.status, e); showToast('DB error '+r.status+': '+e.slice(0,80),'error'); return null; }
   const rows = await r.json();
   cacheClear(table);
   return rows[0] ? String(rows[0].id) : null;

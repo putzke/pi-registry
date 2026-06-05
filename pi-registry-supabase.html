@@ -2506,12 +2506,44 @@ function renderDelScope(pF){
       </div>
       ${dels.length===0?`<div style="text-align:center;padding:12px;color:var(--fog);font-size:13px">No deliverables yet. <button class="btn btn-sm btn-primary" style="margin-left:8px" onclick="openTplApply('${proj.id}')">Apply template</button></div>`:`
       <div style="overflow-x:auto"><table class="dtable">
-        <thead><tr><th>Type</th><th>Scope</th><th style="width:60px;text-align:center">Contr.</th><th style="width:100px">Delivered</th><th style="width:80px">Status</th><th>Milestone / freq</th><th style="width:110px">Distribution</th><th style="width:60px"></th></tr></thead>
+        <thead><tr><th>Type</th><th>Scope</th><th style="width:60px;text-align:center">Contr.</th><th style="width:100px">Delivered</th><th style="width:80px">Status</th><th>Milestone / freq</th><th style="width:80px">Due date</th><th style="width:90px">Next due</th><th style="width:110px">Distribution</th><th style="width:60px"></th></tr></thead>
         <tbody>${dels.map(d=>{
           const rawPct2=d.contractedQty>0?Math.round((d.deliveredCount||0)/d.contractedQty*100):d.progress;
           const pct2=Math.min(rawPct2,100);
           const isOver2=d.contractedQty>0&&(d.deliveredCount||0)>d.contractedQty;
           const overAmt2=isOver2?((d.deliveredCount||0)-d.contractedQty):0;
+          // ── Pace algorithm ──
+          var _paceHTML='—';var _dueHTML=d.dueDate?fmt(d.dueDate):'—';
+          var _projStart=proj.preconDate||proj.startDate;
+          if(d.contractedQty>0&&d.dueDate&&_projStart&&d.status!=='Complete'&&d.status!=='Cancelled'){
+            var _start=new Date(_projStart+'T00:00:00');
+            var _end=new Date(d.dueDate+'T00:00:00');
+            var _now=new Date();
+            var _totalDays=(_end-_start)/(86400000);
+            var _elapsedDays=(_now-_start)/(86400000);
+            var _remaining=d.contractedQty-(d.deliveredCount||0);
+            if(_totalDays>0&&_remaining>0){
+              // Expected delivered by now
+              var _expectedByNow=Math.floor((_elapsedDays/_totalDays)*d.contractedQty);
+              var _delivered=d.deliveredCount||0;
+              var _interval=_totalDays/d.contractedQty;
+              // Next due date = start + (delivered+1) * interval
+              var _nextDueDate=new Date(_start.getTime()+((_delivered+1)*_interval*86400000));
+              var _daysToNext=Math.round((_nextDueDate-_now)/86400000);
+              var _nextDueFmt=_nextDueDate.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+              // Pace status
+              var _behind=_delivered<_expectedByNow-1;
+              var _ahead=_delivered>_expectedByNow;
+              var _paceColor=_behind?'var(--red)':_daysToNext<14?'var(--amber)':'var(--green)';
+              var _paceLabel=_behind?'Behind':_ahead?'Ahead':'On pace';
+              _paceHTML='<div style="font-size:11px;color:'+_paceColor+';font-weight:500">'+_nextDueFmt+'</div>'
+                +'<div style="font-size:10px;color:'+_paceColor+'">'+_paceLabel+'</div>';
+            } else if(_remaining<=0){
+              _paceHTML='<span style="font-size:11px;color:var(--green)">Done</span>';
+            }
+          } else if(d.status==='Complete'){
+            _paceHTML='<span style="font-size:11px;color:var(--green)">✓ Complete</span>';
+          }
           return`<tr>
             <td><div style="display:flex;align-items:center;gap:6px"><span style="color:var(--sky-lt);flex-shrink:0">${delGroupIcon(d.type)}</span><span class="badge b-dark" style="font-size:11px">${d.type}</span></div></td>
             <td><span class="badge ${d.scopeType==='recurring'?'b-sky':d.scopeType==='milestone'?'b-purple':'b-gray'}" style="font-size:11px">${d.scopeType}</span></td>
@@ -2531,6 +2563,8 @@ function renderDelScope(pF){
             </div></td>
             <td><div style="display:flex;align-items:center;gap:4px"><span class="badge badge-btn ${d.status==='Complete'?'b-green':d.status==='In progress'?'b-sky':d.status==='On hold'?'b-amber':d.status==='Cancelled'?'b-red':'b-gray'}" style="font-size:11px;cursor:pointer;user-select:none" onclick="cycleDelStatus('${d.id}')" title="Click to change status">${d.status}</span>${isOver2?'<span class="badge b-amber" style="font-size:10px" title="Delivered exceeds contracted quantity">+'+overAmt2+' over</span>':''}</div></td>
             <td style="font-size:12px;color:var(--slate)">${d.scopeType==='recurring'?d.freq:d.milestoneStart||'—'}</td>
+            <td style="font-size:12px;color:var(--slate)">${_dueHTML}</td>
+            <td>${_paceHTML}</td>
             <td style="font-size:12px;color:var(--mist);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.distList||'—'}</td>
             <td><button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="openDelModal('${d.id}')">Edit</button></td>
           </tr>`;

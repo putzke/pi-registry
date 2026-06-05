@@ -5830,5 +5830,136 @@ async function delMeeting(id){
 }
 
 </script>
+<!-- ============================================================
+     PI REGISTRY — RUNTIME ERROR OVERLAY
+     Catches unhandled JS errors + promise rejections during use.
+     Displays a dismissible badge in the bottom-right corner.
+     Remove or set OVERLAY_ENABLED = false to disable.
+     ============================================================ -->
+<script>
+(function () {
+  const OVERLAY_ENABLED = true;
+  if (!OVERLAY_ENABLED) return;
+
+  /* ── Styles ─────────────────────────────────────────────── */
+  const style = document.createElement('style');
+  style.textContent = `
+    #pi-err-badge {
+      position: fixed; bottom: 14px; right: 14px; z-index: 99999;
+      background: #c0392b; color: #fff;
+      font: 600 12px/1 'Segoe UI', sans-serif;
+      padding: 6px 10px; border-radius: 20px;
+      cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.35);
+      display: none; user-select: none;
+    }
+    #pi-err-badge:hover { background: #a93226; }
+    #pi-err-panel {
+      position: fixed; bottom: 50px; right: 14px; z-index: 99999;
+      background: #1e1e1e; color: #f8f8f2;
+      font: 12px/1.5 'Consolas','Courier New',monospace;
+      width: min(520px, 92vw); max-height: 320px; overflow-y: auto;
+      border-radius: 8px; padding: 12px 14px;
+      box-shadow: 0 4px 20px rgba(0,0,0,.5);
+      display: none;
+    }
+    #pi-err-panel h4 {
+      margin: 0 0 8px; color: #ff6b6b; font-size: 13px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    #pi-err-panel h4 span { cursor: pointer; opacity: .7; font-size: 16px; }
+    #pi-err-panel h4 span:hover { opacity: 1; }
+    .pi-err-entry {
+      border-bottom: 1px solid #333; padding: 6px 0; font-size: 11px;
+    }
+    .pi-err-entry:last-child { border-bottom: none; }
+    .pi-err-msg { color: #ff6b6b; font-weight: 600; }
+    .pi-err-src { color: #8be9fd; font-size: 10px; margin-top: 2px; }
+    .pi-err-time { color: #6272a4; font-size: 10px; }
+    #pi-err-clear {
+      margin-top: 10px; background: #333; color: #ccc; border: none;
+      border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 11px;
+    }
+    #pi-err-clear:hover { background: #444; }
+  `;
+  document.head.appendChild(style);
+
+  /* ── DOM elements ────────────────────────────────────────── */
+  const badge = document.createElement('div');
+  badge.id = 'pi-err-badge';
+  badge.title = 'Click to view JS errors';
+
+  const panel = document.createElement('div');
+  panel.id = 'pi-err-panel';
+  panel.innerHTML = `
+    <h4>JS Errors <span id="pi-err-close" title="Close">✕</span></h4>
+    <div id="pi-err-list"></div>
+    <button id="pi-err-clear">Clear all</button>
+  `;
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.body.appendChild(badge);
+    document.body.appendChild(panel);
+
+    badge.addEventListener('click', () => {
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    });
+    document.getElementById('pi-err-close').addEventListener('click', () => {
+      panel.style.display = 'none';
+    });
+    document.getElementById('pi-err-clear').addEventListener('click', () => {
+      errors = [];
+      document.getElementById('pi-err-list').innerHTML = '';
+      badge.style.display = 'none';
+      panel.style.display = 'none';
+    });
+  });
+
+  /* ── Error tracking ──────────────────────────────────────── */
+  let errors = [];
+
+  function addError(msg, source, lineno, colno) {
+    const time = new Date().toLocaleTimeString();
+    errors.push({ msg, source, lineno, colno, time });
+
+    const list = document.getElementById('pi-err-list');
+    if (list) {
+      const entry = document.createElement('div');
+      entry.className = 'pi-err-entry';
+      const srcShort = (source || '').replace(/.*\//, '');
+      entry.innerHTML = `
+        <div class="pi-err-msg">${escHtml(msg)}</div>
+        <div class="pi-err-src">${escHtml(srcShort)} ${lineno ? 'line ' + lineno : ''}${colno ? ':' + colno : ''}</div>
+        <div class="pi-err-time">${time}</div>
+      `;
+      list.appendChild(entry);
+    }
+
+    if (badge) {
+      badge.textContent = '⚠ ' + errors.length + ' error' + (errors.length > 1 ? 's' : '');
+      badge.style.display = 'block';
+    }
+
+    // Also log to console with full detail
+    console.error('[PI Error Overlay]', msg, source, lineno);
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  /* ── Listeners ───────────────────────────────────────────── */
+  window.addEventListener('error', (e) => {
+    addError(e.message || 'Unknown error', e.filename, e.lineno, e.colno);
+  });
+
+  window.addEventListener('unhandledrejection', (e) => {
+    const msg = e.reason instanceof Error
+      ? e.reason.message
+      : (typeof e.reason === 'string' ? e.reason : 'Unhandled promise rejection');
+    addError('Promise: ' + msg, '', '', '');
+  });
+})();
+</script>
+
 </body>
 </html>

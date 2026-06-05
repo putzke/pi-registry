@@ -2291,10 +2291,8 @@ function renderFollowups(el){
                 <th style="width:108px;cursor:pointer;user-select:none" onclick="setFuSort('dueDate')">${S.fuSortCol==='dueDate'?(S.fuSortDir==='asc'?' ▲':' ▼'):''} Due date</th>
                 <th style="cursor:pointer;user-select:none" onclick="setFuSort('action')">${S.fuSortCol==='action'?(S.fuSortDir==='asc'?' ▲':' ▼'):''} Action required</th>
                 <th style="width:160px;cursor:pointer;user-select:none" onclick="setFuSort('stakeholder')">${S.fuSortCol==='stakeholder'?(S.fuSortDir==='asc'?' ▲':' ▼'):''} Stakeholder</th>
-                <th style="width:95px;cursor:pointer;user-select:none" onclick="setFuSort('channel')">${S.fuSortCol==='channel'?(S.fuSortDir==='asc'?' ▲':' ▼'):''} Channel</th>
                 <th style="cursor:pointer;user-select:none" onclick="setFuSort('summary')">${S.fuSortCol==='summary'?(S.fuSortDir==='asc'?' ▲':' ▼'):''} Interaction summary</th>
                 <th style="width:85px;cursor:pointer;user-select:none" onclick="setFuSort('loggedBy')">${S.fuSortCol==='loggedBy'?(S.fuSortDir==='asc'?' ▲':' ▼'):''} Logged by</th>
-                <th style="width:82px;cursor:pointer;user-select:none" onclick="setFuSort('date')">${S.fuSortCol==='date'?(S.fuSortDir==='asc'?' ▲':' ▼'):''} Log date</th>
 </thead>
               <tbody>
               ${pitems.map(i=>{
@@ -2305,16 +2303,16 @@ function renderFollowups(el){
                   <td>
                     <div style="font-weight:600;color:${od?'var(--red)':i.followUpDone?'var(--green)':'var(--amber)'};font-size:12px">${dueTxt}</div>
                     ${od?'<div style="font-size:11px;color:var(--red);font-weight:700;letter-spacing:.3px">OVERDUE</div>':''}
-                    ${i.followUpDone?'<div style="font-size:11px;color:var(--green)">✓ Resolved</div>':''}
+                    ${i.followUpDone?'<div style="font-size:11px;color:var(--green)">✓ Resolved'+(i.followUpResolved?' · '+new Date(i.followUpResolved+'T00:00:00').toLocaleDateString('en-US',{month:"short",day:"numeric",year:"numeric"}):'')+'</div>':''}
                   </td>
                   <td style="font-weight:500;color:var(--white)">${i.followUpNote||'—'}</td>
                   <td style="white-space:nowrap">
                     <div class="td-link" onclick="filterByProject('${projId}');selectStake('${i.stakeholderId}');setView('stakeholders')">${s?dispName(s):'Unknown'}</div>
                   </td>
-                  <td><span class="badge ${chCls(i.channel)}">${i.channel}</span></td>
+
                   <td style="min-width:180px"><div style="font-size:12px;color:var(--slate);white-space:normal;line-height:1.5">${i.summary}</div></td>
                   <td style="font-size:12px;color:var(--slate)">${i.loggedBy||'—'}</td>
-                  <td class="td-mono" style="white-space:nowrap">${i.date}</td>
+
                   <td style="white-space:nowrap">
                     ${!i.followUpDone
                       ?`<button class="btn btn-success btn-xs" onclick="resolveFollowUp('${i.id}')">✓ Resolve</button>`
@@ -3875,10 +3873,20 @@ function exportIssuesPdf(){
     const imgH=(canvas.height*pdfW)/canvas.width;
     const contentH=pdfH-footerH;
     const pages=Math.ceil(imgH/contentH);
+    // Build project label for footer
+    var issProjs=DB.get('projects')||[];
+    var isssProjF=S.issViewProj||S.projectFilter||'';
+    var issProj=isssProjF?issProjs.find(function(p){return p.id===isssProjF;}):null;
+    var issProjLabel=issProj?issProj.pid+' — '+issProj.name:'All Projects';
     for(let pageNum=0;pageNum<pages;pageNum++){
       if(pageNum>0) pdf.addPage();
       pdf.addImage(imgData,'PNG',0,-(pageNum*contentH),imgW,imgH);
       if(window._srFooter) pdf.addImage(window._srFooter,'JPEG',0,pdfH-footerH,pdfW,footerH);
+      // Page number + project label overlay on footer
+      pdf.setFontSize(7);
+      pdf.setTextColor(120,120,120);
+      pdf.text(issProjLabel+' · Issues Tracker',10,pdfH-4);
+      pdf.text('Page '+(pageNum+1)+' of '+pages,pdfW-10,pdfH-4,{align:'right'});
     }
     const fname='issues-tracker-'+(new Date().toISOString().slice(0,10))+'.pdf';
     pdf.save(fname);
@@ -4158,6 +4166,13 @@ function generateReport(type){
     +'<button class="btn btn-sm" onclick="document.getElementById(\'rpt-output\').innerHTML=\'\'">Close</button></div></div>'
     +(recipientNames.length>0?'<div style="margin-bottom:14px;padding:10px 14px;background:#e8eef4;border:1px solid #b0c4d8;border-radius:8px;font-size:12px"><span style="color:#444;text-transform:uppercase;letter-spacing:.5px;font-weight:600">Distributed to: </span><span style="color:#111">'+recipientNames.join(', ')+'</span><span style="color:var(--fog)"> ('+selGroups.join(', ')+')</span></div>':'');
 
+  // Summary/narrative block — shown above report output, included in PDF
+  var summaryBlock='<div id="rpt-summary-wrap" style="margin-bottom:18px;padding:14px 16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);border-radius:10px">'
+    +'<div style="font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Report summary / narrative <span style="font-weight:400;font-style:italic;text-transform:none;letter-spacing:0">(optional — prints before report data)</span></div>'
+    +'<textarea id="rpt-summary-text" placeholder="Enter an executive summary, narrative overview, or context for this report..." '
+    +'style="width:100%;min-height:90px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:10px 12px;resize:vertical;font-family:inherit;line-height:1.6;box-sizing:border-box"></textarea>'
+    +'</div>';
+
   var body='';
 
   if(type==='contact-list'){
@@ -4239,7 +4254,7 @@ function generateReport(type){
         +'<td style="font-weight:600;color:'+(od?'var(--red)':i.followUpDone?'var(--green)':'var(--amber)')+'">'+(i.followUpDue||'No date')+(od?' OVERDUE':'')+'</td>'
         +'<td style="font-weight:500;color:var(--white)">'+(i.followUpNote||'—')+'</td>'
         +'<td>'+(s?dispName(s):'Unknown')+'</td>'
-        +'<td>'+(i.followUpDone?'<span class="badge b-green">Resolved</span>':'<span class="badge b-amber">Open</span>')+'</td>'
+        +'<td>'+(i.followUpDone?'<span class="badge b-green">Resolved</span>'+(i.followUpResolved?'<div style="font-size:10px;color:var(--green);margin-top:2px">'+new Date(i.followUpResolved+'T00:00:00').toLocaleDateString('en-US',{month:"short",day:"numeric",year:"numeric"})+'</div>':''):'<span class="badge b-amber">Open</span>')+'</td>'
         +'<td class="td-mono">'+i.date+'</td>'
         +'<td style="font-size:12px;color:var(--slate)">'+(i.loggedBy||'—')+'</td></tr>';
     });
@@ -4313,7 +4328,7 @@ function generateReport(type){
     body+='</tbody></table>';
   }
 
-  out.innerHTML=hdr+body;
+  out.innerHTML=hdr+summaryBlock+body;
   out.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
@@ -4351,7 +4366,26 @@ function saveAsPdf(){
     '.badge{font-size:8px!important;padding:1px 4px!important}'+
     'h2{font-size:14px!important}';
   contentDiv.insertBefore(printStyle, contentDiv.firstChild);
-  contentDiv.innerHTML=output.innerHTML;
+  // Extract summary text and inject before report content
+  var summaryEl=output.querySelector('#rpt-summary-text');
+  var summaryTxt=summaryEl?summaryEl.value.trim():'';
+  // Clone output HTML without the summary textarea wrapper
+  var summaryWrap=output.querySelector('#rpt-summary-wrap');
+  var outputClone=output.cloneNode(true);
+  var wrapClone=outputClone.querySelector('#rpt-summary-wrap');
+  if(wrapClone)wrapClone.remove();
+  contentDiv.innerHTML=outputClone.innerHTML;
+  // Inject summary block at top if text was entered
+  if(summaryTxt){
+    var summDiv=document.createElement('div');
+    summDiv.style.cssText='margin-bottom:18px;padding:12px 14px;background:#f0f4f8;border-left:4px solid #1a3a5c;border-radius:0 6px 6px 0;font-size:10px;color:#222;line-height:1.7;white-space:pre-wrap;word-wrap:break-word';
+    var summLabel=document.createElement('div');
+    summLabel.style.cssText='font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#1a3a5c;margin-bottom:6px';
+    summLabel.textContent='Summary';
+    summDiv.insertBefore(summLabel,summDiv.firstChild);
+    summDiv.appendChild(document.createTextNode(summaryTxt));
+    contentDiv.insertBefore(summDiv,contentDiv.firstChild);
+  }
   wrapper.appendChild(contentDiv);
   // Footer will be added per-page in jsPDF instead
 
@@ -4479,6 +4513,15 @@ function saveAsPdf(){
     var footerH=22; // mm - footer height on page
     var contentH=pdfH-footerH; // usable content height per page
 
+    // Gather project + report label for footer
+    var rptProjs=DB.get('projects')||[];
+    var rptProjF=S.projectFilter||'';
+    var rptProj=rptProjF?rptProjs.find(function(p){return p.id===rptProjF;}):null;
+    var rptProjLabel=rptProj?rptProj.pid+' — '+rptProj.name:'';
+    var rptTitleEl=wrapper.querySelector('h2')||output.querySelector('h2');
+    var rptTitle=rptTitleEl?rptTitleEl.textContent:'PI Report';
+    var totalPages=Math.ceil(imgH/contentH);
+
     var y=0;
     var pageNum=0;
     while(y<imgH){
@@ -4489,6 +4532,12 @@ function saveAsPdf(){
       if(window._srFooter){
         pdf.addImage(window._srFooter,'JPEG',0,pdfH-footerH,pdfW,footerH);
       }
+      // Page number + project label overlay
+      pdf.setFontSize(7);
+      pdf.setTextColor(120,120,120);
+      var footerLeft=rptProjLabel?(rptProjLabel+' · '+rptTitle):rptTitle;
+      pdf.text(footerLeft,10,pdfH-4);
+      pdf.text('Page '+(pageNum+1)+' of '+totalPages,pdfW-10,pdfH-4,{align:'right'});
       y+=contentH;
       pageNum++;
     }
@@ -4614,7 +4663,7 @@ function openPIReport(){
       +'</div>'
       +(isAuto?'<div style="font-size:12px;color:var(--fog);line-height:1.5;margin-left:62px">'+getSectionDesc(sec.type)+'</div>'
         :'<textarea class="rpt-sec-content" data-idx="'+idx+'" style="width:100%;min-height:100px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;color:var(--mist);font-family:var(--font);font-size:13px;padding:10px 12px;outline:none;resize:vertical;line-height:1.6" placeholder="Each line becomes a bullet. Indent with spaces for sub-bullets.">'+(sec.content||'')+'</textarea>')
-      +'</div>';
+      +'<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.07)">'      +'<div style="font-size:11px;color:var(--slate);margin-bottom:5px;font-style:italic">Section summary <span style="color:var(--fog)">(optional — prints after section data in Word export)</span></div>'      +'<textarea class="rpt-sec-summary" data-idx="'+idx+'" style="width:100%;min-height:60px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;color:var(--mist);font-family:var(--font);font-size:12px;padding:8px 12px;outline:none;resize:vertical;line-height:1.6" placeholder="Optional narrative or summary for this section...">'+(sec.summary||'')+'</textarea>'      +'</div>'      +'</div>';
   });
 
   var available=getAvailableSections();
@@ -4686,6 +4735,11 @@ function captureFormState(){
   for(var i=0;i<contentAreas.length;i++){
     var idx=parseInt(contentAreas[i].getAttribute('data-idx'));
     if(idx>=0&&idx<saved.sections.length)saved.sections[idx].content=contentAreas[i].value;
+  }
+  var summaryAreas=document.querySelectorAll('.rpt-sec-summary');
+  for(var si=0;si<summaryAreas.length;si++){
+    var sidx=parseInt(summaryAreas[si].getAttribute('data-idx'));
+    if(sidx>=0&&sidx<saved.sections.length)saved.sections[sidx].summary=summaryAreas[si].value;
   }
   var titleInputs=document.querySelectorAll('.rpt-sec-title');
   for(var t=0;t<titleInputs.length;t++){
@@ -5131,6 +5185,13 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
         });
       }
     }
+
+    // Section summary — prints after data block if present
+    if(sec.summary&&sec.summary.trim()){
+      xml+=spacer();
+      xml+='<w:p><w:pPr><w:spacing w:before="80" w:after="80" w:line="276" w:lineRule="auto"/>'+italicGrayRpr+'</w:pPr><w:r>'+italicGrayRpr+'<w:t xml:space="preserve">'+escXml(sec.summary.trim())+'</w:t></w:r></w:p>';
+    }
+
   });
 
   // ── FOOTER NOTE ────────────────────────────────

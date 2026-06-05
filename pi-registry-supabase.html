@@ -616,7 +616,7 @@ const SB_TO_INT = {
     date:'interaction_date', channel:'channel', subject:'subject',
     nature:'nature', direction:'direction', summary:'summary',
     loggedBy:'logged_by', followUp:'follow_up', followUpDue:'follow_up_due',
-    followUpNote:'follow_up_note', followUpDone:'follow_up_done', meetingId:'meeting_id'
+    followUpNote:'follow_up_note', followUpDone:'follow_up_done', followUpResolved:'follow_up_resolved', meetingId:'meeting_id'
   },
   pi_deliverables: {
     id:'id', projectId:'project_id', type:'deliverable_type', scopeType:'scope_type',
@@ -1828,6 +1828,15 @@ async function saveIssue(projectId){
   const title=v('iss-title').trim();
   if(!title){alert('Issue title is required.');return;}
 
+  // Validate resolution fields coupling
+  const resDate=v('iss-resolved').trim();
+  const resSummary=(document.getElementById('iss-resolution')?.value||'').trim();
+  const issStatus=v('iss-status-f')||'Open';
+  if(resDate&&!resSummary){alert('Please add a Resolution Summary — a date resolved was entered.');return;}
+  if(resSummary&&!resDate){alert('Please add a Date Resolved — a resolution summary was entered.');return;}
+  if(issStatus==='Resolved'&&!resDate){alert('A Date Resolved is required when status is Resolved.');return;}
+  if(issStatus==='Resolved'&&!resSummary){alert('A Resolution Summary is required when status is Resolved.');return;}
+
   const linkedSel=Array.from(document.getElementById('iss-int-links')?.selectedOptions||[]).map(o=>o.value);
   const tmpId=S.editId||DB.uid();
 
@@ -2091,7 +2100,7 @@ function renderStakeDetail(s,link){
         <div class="log-sum">${i.summary}</div>
         ${i.followUp?`<div class="log-fu${i.followUpDone?' done':''}">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">${i.followUpDone?'<path d="M3 8l4 4 6-6"/>':'<circle cx="8" cy="8" r="6"/><path d="M8 5v4M8 11v1"/>'}</svg>
-          <span>${i.followUpDone?'Resolved: ':'Follow-up: '}<strong>${i.followUpNote}</strong>${!i.followUpDone&&i.followUpDue?' — due '+fmt(i.followUpDue):''}</span>
+          <span>${i.followUpDone?'Resolved: ':'Follow-up: '}<strong>${i.followUpNote}</strong>${i.followUpDone&&i.followUpResolved?' — '+fmt(i.followUpResolved):''}${!i.followUpDone&&i.followUpDue?' — due '+fmt(i.followUpDue):''}</span>
           ${!i.followUpDone?`<button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" style="margin-left:auto" onclick="resolveFollowUp('${i.id}')">Resolve</button>`:''}
         </div>`:''}
         <div style="margin-top:6px"><button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="openEditIntModal('${i.id}')">Edit</button></div>
@@ -2859,6 +2868,12 @@ function validatePhone(raw){
   if(d.length!==10) return 'Phone number must be exactly 10 digits (got '+d.length+').';
   return null;
 }
+function validateEmail(email){
+  if(!email||!email.trim()) return null; // optional — blank is fine
+  var re=/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+  if(!re.test(email.trim())) return 'Email address appears invalid. Please check the format (e.g. name@example.com).';
+  return null;
+}
 // ───────────────────────────────────────────────────────────────────────
 
 function saveStake(){
@@ -2866,6 +2881,8 @@ function saveStake(){
   const rawPhone=v('f-ph');
   const phoneErr=validatePhone(rawPhone);
   if(phoneErr){alert(phoneErr);return;}
+  const emailErr=validateEmail(v('f-em'));
+  if(emailErr){alert(emailErr);return;}
   const data={id:S.editId||DB.uid(),firstName:document.getElementById('f-fn')?.value||'',lastName:document.getElementById('f-ln')?.value||'',org:v('f-org'),title:v('f-ti'),email:v('f-em'),phone:rawPhone.trim()?formatPhone(cleanPhone(rawPhone)):'',address:v('f-ad'),parcelId:v('f-parc'),type:v('f-st'),isMaster:true,notes:v('f-no'),isAnonymous:false};
   if(!data.firstName&&!data.lastName&&!data.org){alert('First and last name, or Organization name required.');return}
   const all=DB.get('stakeholders');
@@ -3059,7 +3076,9 @@ function openIntModal(preStake){
   <div id="fu-f" style="display:none"><div class="fgrid fg2f">
     <div class="fr"><label>Follow-up action</label><input id="f-ifun" placeholder="What needs to be done?"></div>
     <div class="fr"><label>Due date</label><input type="date" id="f-ifud"></div>
-  </div></div>`,
+  </div>
+  <div class="fr"><div class="fcheck"><input type="checkbox" id="f-ifudo" onchange="document.getElementById('fu-rdate').style.display=this.checked?'':'none'"><label for="f-ifudo">Follow-up resolved</label></div></div>
+  <div id="fu-rdate" style="display:none"><div class="fr"><label>Date resolved</label><input type="date" id="f-ifudr" value="${new Date().toISOString().slice(0,10)}"></div></div></div>`,
   `<button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-primary" onclick="saveInt()">Save interaction</button>`,true);
   // If a project is already selected (via filter), populate stakeholders for that project
   if(S.projectFilter){ updateIntStakeholders(); updateIntIssues(); }
@@ -3094,7 +3113,8 @@ function openEditIntModal(id){
     <div class="fr"><label>Action</label><input id="f-ifun" value="${i.followUpNote||''}"></div>
     <div class="fr"><label>Due date</label><input type="date" id="f-ifud" value="${i.followUpDue||''}"></div>
   </div>
-  <div class="fr"><div class="fcheck"><input type="checkbox" id="f-ifudo"${i.followUpDone?' checked':''}><label for="f-ifudo">Follow-up resolved</label></div></div></div>`,
+  <div class="fr"><div class="fcheck"><input type="checkbox" id="f-ifudo"${i.followUpDone?' checked':''} onchange="document.getElementById('fu-rdate').style.display=this.checked?'':'none'"><label for="f-ifudo">Follow-up resolved</label></div></div>
+  <div id="fu-rdate" style="${i.followUpDone?'':'display:none'}"><div class="fr"><label>Date resolved</label><input type="date" id="f-ifudr" value="${i.followUpResolved||new Date().toISOString().slice(0,10)}"></div></div></div>`,
   `<button class="btn btn-danger btn-sm" onclick="delInt('${id}')">Delete</button>
   <button class="btn" onclick="closeM()">Cancel</button>
   <button class="btn btn-primary" onclick="saveInt()">Save changes</button>`,true);
@@ -3105,7 +3125,9 @@ function saveInt(){
   const projId=v('f-ip'),stakeId=v('f-is')||null;
   if(!projId){alert('Project required.');return}
   if(!v('f-isu')){alert('Summary required.');return}
-  const data={id:S.editId||DB.uid(),projectId:projId,stakeholderId:stakeId,date:vDate('f-id'),channel:v('f-ic'),direction:v('f-idr'),subject:v('f-isub')||'General',nature:v('f-inat')||'Inquiry',summary:v('f-isu'),loggedBy:v('f-il'),followUp:document.getElementById('f-ifu')?.checked||false,followUpNote:v('f-ifun'),followUpDue:vDate('f-ifud'),followUpDone:document.getElementById('f-ifudo')?.checked||false};
+  const fuDone=document.getElementById('f-ifudo')?.checked||false;
+  const fuResolved=fuDone?(vDate('f-ifudr')||new Date().toISOString().slice(0,10)):'';
+  const data={id:S.editId||DB.uid(),projectId:projId,stakeholderId:stakeId,date:vDate('f-id'),channel:v('f-ic'),direction:v('f-idr'),subject:v('f-isub')||'General',nature:v('f-inat')||'Inquiry',summary:v('f-isu'),loggedBy:v('f-il'),followUp:document.getElementById('f-ifu')?.checked||false,followUpNote:v('f-ifun'),followUpDue:vDate('f-ifud'),followUpDone:fuDone,followUpResolved:fuResolved};
   const psAll=DB.get('project_stakeholders');
   if(stakeId&&!psAll.find(x=>x.projectId===projId&&x.stakeholderId===stakeId)){
     psAll.push({id:DB.uid(),projectId:projId,stakeholderId:stakeId,support:'Neutral',issueTags:'',addedDate:data.date,notes:'Auto-linked via interaction log.',distributionGroups:'',stakeholderRole:'External'});
@@ -3134,7 +3156,7 @@ function delInt(id){
 function resolveFollowUp(id){
   const all=DB.get('interactions');
   const i=all.findIndex(x=>x.id===id);
-  if(i>-1) all[i]={...all[i], followUpDone:true};
+  if(i>-1) all[i]={...all[i], followUpDone:true, followUpResolved:new Date().toISOString().slice(0,10)};
   DB.set('interactions',all);refreshBadges();render();
 }
 function reopenFollowUp(id){

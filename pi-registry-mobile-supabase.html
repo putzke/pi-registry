@@ -626,6 +626,20 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
               <label class="form-label">Action required</label>
               <input type="text" class="form-input" id="log-fu-note" placeholder="What needs to happen…">
             </div>
+            <div class="toggle-row" style="padding:0">
+              <div><div class="toggle-label">Follow-up resolved</div></div>
+              <label class="toggle">
+                <input type="checkbox" id="log-fu-done" onchange="document.getElementById('log-fu-rdate-wrap').style.display=this.checked?'block':'none'">
+                <div class="toggle-track"></div>
+                <div class="toggle-thumb"></div>
+              </label>
+            </div>
+            <div id="log-fu-rdate-wrap" style="display:none">
+              <div class="form-group">
+                <label class="form-label">Date resolved</label>
+                <input type="date" class="form-input" id="log-fu-rdate">
+              </div>
+            </div>
           </div>
         </div>
             </div>
@@ -873,7 +887,7 @@ const SB_TO_INT = {
     date:'interaction_date', channel:'channel', subject:'subject',
     nature:'nature', direction:'direction', summary:'summary',
     loggedBy:'logged_by', followUp:'follow_up', followUpDue:'follow_up_due',
-    followUpNote:'follow_up_note', followUpDone:'follow_up_done', meetingId:'meeting_id'
+    followUpNote:'follow_up_note', followUpDone:'follow_up_done', followUpResolved:'follow_up_resolved', meetingId:'meeting_id'
   },
   pi_deliverables: {
     id:'id', projectId:'project_id', type:'deliverable_type', scopeType:'scope_type',
@@ -1066,6 +1080,12 @@ function validatePhone(raw){
   if(!raw||!raw.trim()) return null; // optional — blank is fine
   const d=cleanPhone(raw);
   if(d.length!==10) return 'Phone number must be exactly 10 digits (got '+d.length+').';
+  return null;
+}
+function validateEmail(email){
+  if(!email||!email.trim()) return null;
+  var re=new RegExp('^[^\s@]+@[^\s@]+\.[^\s@]{2,}$');
+  if(!re.test(email.trim())) return 'Email address appears invalid. Please check the format (e.g. name@example.com).';
   return null;
 }
 // ───────────────────────────────────────────────────────────────────────
@@ -1424,7 +1444,7 @@ function showContactDetail(id){
           <span class="int-date">${i.date}</span>
           <span class="badge b-gray" style="font-size:12px">${i.channel}</span>
           <span class="badge b-sky" style="font-size:12px">${i.subject||'General'}</span>
-          ${i.followUp?`<span class="badge ${i.followUpDone?'b-green':'b-amber'}" style="font-size:10px">${i.followUpDone?'Resolved':'Open F/U'}</span>`:''}
+          ${i.followUp?`<span class="badge ${i.followUpDone?'b-green':'b-amber'}" style="font-size:10px">${i.followUpDone?'Resolved'+(i.followUpResolved?' '+fmtShort(i.followUpResolved):''):'Open F/U'}</span>`:''}
         </div>
         <div class="int-summary">${i.summary}</div>
         ${i.followUpNote&&!i.followUpDone?`<div style="margin-top:6px;padding:8px 10px;background:#FEF3CD;border-radius:6px;font-size:12px;color:#6B4400">→ ${i.followUpNote}${i.followUpDue?' ('+fmtShort(i.followUpDue)+')':''}</div>`:''}
@@ -1541,7 +1561,7 @@ function resolveFollowup(id,e){
   const ints=DB.get('interactions');
   const i=ints.findIndex(x=>x.id===id);
   if(i<0)return;
-  ints[i]={...ints[i], followUpDone:true};
+  ints[i]={...ints[i], followUpDone:true, followUpResolved:today()};
   DB.set('interactions',ints);
   showToast('Follow-up resolved ✓');
   refreshHome();
@@ -1720,6 +1740,8 @@ async function saveInteraction(){
   const fuChecked=document.getElementById('log-fu').checked;
   const fuDate=document.getElementById('log-fu-date').value;
   const fuNote=document.getElementById('log-fu-note').value.trim();
+  const fuDone=document.getElementById('log-fu-done')?.checked||false;
+  const fuRDate=fuDone?(document.getElementById('log-fu-rdate')?.value||today()):'';
 
   const data={
     id:DB.uid(),
@@ -1735,7 +1757,8 @@ async function saveInteraction(){
     followUp:fuChecked,
     followUpDue:fuChecked?(fuDate||null):null,
     followUpNote:fuChecked?fuNote:'',
-    followUpDone:false
+    followUpDone:fuDone,
+    followUpResolved:fuRDate
   };
 
   const ints=DB.get('interactions');
@@ -1754,6 +1777,11 @@ async function saveInteraction(){
   document.getElementById('log-fu').checked=false;
   document.getElementById('log-fu-fields').style.display='none';
   document.getElementById('log-fu-note').value='';
+  if(document.getElementById('log-fu-done')){
+    document.getElementById('log-fu-done').checked=false;
+    document.getElementById('log-fu-rdate-wrap').style.display='none';
+    document.getElementById('log-fu-rdate').value='';
+  }
   window._detailStakeId=null;
 
   closeSheet('sheet-log');
@@ -1793,6 +1821,8 @@ async function saveStakeholder(){
   if(!email&&!rawPhone){showToast('Email or phone required','error');return;}
   const phoneErr=validatePhone(rawPhone);
   if(phoneErr){showToast(phoneErr,'error');return;}
+  const emailErr=validateEmail(email);
+  if(emailErr){showToast(emailErr,'error');return;}
   const phone=rawPhone?formatPhone(cleanPhone(rawPhone)):'';
 
   const isMaster=document.getElementById('add-master').checked;
@@ -1883,6 +1913,8 @@ async function updateStakeholder(){
   if(!fn&&!ln&&!document.getElementById('add-org').value.trim()){showToast('First and last name, or Organization required','error');return;}
   const phoneErr=validatePhone(rawPhone);
   if(phoneErr){showToast(phoneErr,'error');return;}
+  const emailErr2=validateEmail(email);
+  if(emailErr2){showToast(emailErr2,'error');return;}
   const phone=rawPhone?formatPhone(cleanPhone(rawPhone)):'';
   const stakes=DB.get('stakeholders')||[];
   const idx=stakes.findIndex(x=>x.id===id);
@@ -1975,6 +2007,9 @@ function openLogEdit(id){
     if(i.followUp){
       document.getElementById('log-fu-date').value=i.followUpDue||'';
       document.getElementById('log-fu-note').value=i.followUpNote||'';
+      document.getElementById('log-fu-done').checked=i.followUpDone||false;
+      document.getElementById('log-fu-rdate-wrap').style.display=i.followUpDone?'block':'none';
+      document.getElementById('log-fu-rdate').value=i.followUpResolved||'';
     }
   },100);
 

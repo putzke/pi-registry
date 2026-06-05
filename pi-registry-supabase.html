@@ -1128,14 +1128,14 @@ function renderDash(el){
   const recent30=ints.filter(i=>new Date(i.date+'T00:00:00')>=d30).length;
 
   function donut(pct,color,size,label){
-    var r=size/2-4,c=2*Math.PI*r,dash=pct/100*c,gap=c-dash;
+    var sw=Math.max(6,Math.round(size*0.07)),r=size/2-sw/2-1,c=2*Math.PI*r,dash=pct/100*c,gap=c-dash;
     return'<div style="position:relative;width:'+size+'px;height:'+size+'px;display:flex;align-items:center;justify-content:center">'
       +'<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'" style="transform:rotate(-90deg)">'
-      +'<circle cx="'+size/2+'" cy="'+size/2+'" r="'+r+'" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="6"/>'
-      +'<circle cx="'+size/2+'" cy="'+size/2+'" r="'+r+'" fill="none" stroke="'+color+'" stroke-width="6" stroke-dasharray="'+dash+' '+gap+'" stroke-linecap="round"/>'
+      +'<circle cx="'+size/2+'" cy="'+size/2+'" r="'+r+'" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="'+sw+'"/>'
+      +'<circle cx="'+size/2+'" cy="'+size/2+'" r="'+r+'" fill="none" stroke="'+color+'" stroke-width="'+sw+'" stroke-dasharray="'+dash+' '+gap+'" stroke-linecap="round"/>'
       +'</svg>'
-      +'<div style="position:absolute;text-align:center"><div style="font-size:16px;font-weight:700;color:var(--white)">'+pct+'%</div>'
-      +'<div style="font-size:10px;color:var(--fog)">'+label+'</div></div></div>';
+      +'<div style="position:absolute;text-align:center"><div style="font-size:'+(Math.round(size*0.18))+'px;font-weight:700;color:var(--white)">'+pct+'%</div>'
+      +'<div style="font-size:'+(Math.round(size*0.11))+'px;color:var(--fog)">'+label+'</div></div></div>';
   }
 
   var sentBar='<div style="display:flex;height:10px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.06)">'
@@ -1310,8 +1310,9 @@ function renderDash(el){
         name:m.title,
         sub:(p?p.pid+' · ':'')+m.location};
     });
-    var combined=feedInts.concat(feedMeets).sort(function(a,b){return b.ts-a.ts;}).slice(0,8);
-    if(!combined.length)return'<div style="font-size:12px;color:var(--fog);padding:10px 0">No activity recorded yet.</div>';
+    var cutoff=Date.now()-30*86400000;
+    var combined=feedInts.concat(feedMeets).filter(function(a){return a.ts>=cutoff;}).sort(function(a,b){return b.ts-a.ts;}).slice(0,8);
+    if(!combined.length)return'<div style="font-size:12px;color:var(--fog);padding:10px 0">No activity in the last 30 days.</div>';
     function relTime(ts){
       var diff=Date.now()-ts,days=Math.floor(diff/86400000);
       if(days===0)return'Today';if(days===1)return'Yesterday';
@@ -1366,13 +1367,13 @@ function renderDash(el){
 
     <!-- ROW 2: Visual panels -->
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:20px">
-      <div class="dash-anim" style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:18px;display:flex;flex-direction:column;align-items:center;animation-delay:240ms">
-        <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:14px;align-self:flex-start">Deliverable progress</div>
-        ${donut(delPct,delPct>=75?'#28A870':delPct>=40?'#5BA4CF':'#D9A544',90,'complete')}
-        <div style="display:flex;gap:16px;margin-top:14px;font-size:12px">
-          <span style="color:var(--green)">${completeDels} done</span>
-          <span style="color:var(--sky-lt)">${inProgDels} active</span>
-          <span style="color:var(--fog)">${notStartedDels} pending</span>
+      <div class="dash-anim" style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:18px 18px 22px;display:flex;flex-direction:column;align-items:center;animation-delay:240ms">
+        <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:18px;align-self:flex-start">Deliverable progress</div>
+        ${donut(delPct,delPct>=75?'#28A870':delPct>=40?'#5BA4CF':'#D9A544',140,'complete')}
+        <div style="display:flex;gap:24px;margin-top:20px">
+          <div style="text-align:center"><div style="font-size:20px;font-weight:700;color:var(--green)">${completeDels}</div><div style="font-size:11px;color:var(--fog);margin-top:2px">done</div></div>
+          <div style="text-align:center"><div style="font-size:20px;font-weight:700;color:var(--sky-lt)">${inProgDels}</div><div style="font-size:11px;color:var(--fog);margin-top:2px">active</div></div>
+          <div style="text-align:center"><div style="font-size:20px;font-weight:700;color:var(--slate)">${notStartedDels}</div><div style="font-size:11px;color:var(--fog);margin-top:2px">pending</div></div>
         </div>
       </div>
       <div class="dash-anim" style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:18px;animation-delay:300ms">
@@ -1405,7 +1406,7 @@ function renderDash(el){
         ${buildSwimLanes()}
       </div>
       <div class="dash-anim" style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:14px 18px;animation-delay:480ms">
-        <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:10px">Recent activity</div>
+        <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px"><div style="font-size:13px;font-weight:600;color:var(--white)">Recent activity</div><div style="font-size:11px;color:var(--fog)">Last 30 days</div></div>
         <div style="overflow-y:auto;max-height:180px">${buildFeed()}</div>
       </div>
     </div>
@@ -2167,7 +2168,7 @@ function setFuSort(col){
   renderFollowups(document.getElementById('main'));
 }
 function sortDeliverables(dels){
-  const col=S.delSortCol||'type';
+  const col=S.delSortCol||'project';
   const dir=S.delSortDir||'asc';
   return dels.slice().sort(function(a,b){
     let av,bv;
@@ -2184,7 +2185,13 @@ function sortDeliverables(dels){
     let cmp;
     if(numCols.includes(col)){cmp=parseFloat(av)-parseFloat(bv);}
     else{cmp=av.toLowerCase().localeCompare(bv.toLowerCase());}
-    return dir==='asc'?cmp:-cmp;
+    if(cmp!==0)return dir==='asc'?cmp:-cmp;
+    // secondary sort: nearest due date asc, then type
+    const da=(a.dueDate||'9999'),db=(b.dueDate||'9999');
+    if(da<db)return -1;if(da>db)return 1;
+    const ta=(a.type||'').toLowerCase(),tb=(b.type||'').toLowerCase();
+    if(ta<tb)return -1;if(ta>tb)return 1;
+    return 0;
   });
 }
 function setDelSort(col){
@@ -2581,7 +2588,7 @@ function renderDelAll(pF){
   const projs=DB.get('projects');
   const stF=S.delStatus||'';
   if(stF)dels=dels.filter(d=>d.status===stF);
-  dels=dels.map(d=>{const p=projs.find(x=>x.id===d.projectId);return Object.assign({},d,{_projName:p?p.pid+' '+p.name:'zz'});});
+  dels=dels.map(d=>{const p=projs.find(x=>String(x.id)===String(d.projectId));return Object.assign({},d,{_projName:p?p.pid+' '+p.name:'zz'});});
   dels=sortDeliverables(dels);
   return`<div style="padding:16px">
     <div style="display:flex;gap:8px;margin-bottom:14px">
@@ -2595,17 +2602,58 @@ function renderDelAll(pF){
         <option${S.delStatus==='Cancelled'?' selected':''}>Cancelled</option>
       </select>
     </div>
+
+    ${(()=>{
+      // Build per-project stacked bar summary
+      const allProjs=DB.get('projects');
+      const projIds=[...new Set(dels.map(d=>d.projectId))];
+      if(projIds.length<2)return''; // only show in all-projects view
+      const rows=projIds.map(pid=>{
+        const proj=allProjs.find(x=>String(x.id)===String(pid));
+        const pdels=dels.filter(d=>String(d.projectId)===String(pid));
+        const ns=pdels.filter(d=>d.status==='Not started').length;
+        const ip=pdels.filter(d=>d.status==='In progress').length;
+        const co=pdels.filter(d=>d.status==='Complete').length;
+        const total=pdels.length;
+        return{pid:proj?proj.pid:'?',name:proj?proj.name:'Unknown',ns,ip,co,total};
+      }).sort((a,b)=>a.pid.localeCompare(b.pid));
+      const maxTotal=Math.max(...rows.map(r=>r.total),1);
+      return'<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:14px">'
+        +'<div style="font-size:11px;font-weight:600;color:var(--fog);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">Deliverable status by project</div>'
+        +rows.map(r=>{
+          const nsPct=r.total?Math.round(r.ns/r.total*100):0;
+          const ipPct=r.total?Math.round(r.ip/r.total*100):0;
+          const coPct=r.total?Math.round(r.co/r.total*100):0;
+          const barW=Math.round(r.total/maxTotal*100);
+          return'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
+            +'<span style="font-family:var(--mono);font-size:11px;color:var(--mist);width:52px;flex-shrink:0;text-align:right">'+r.pid+'</span>'
+            +'<div style="flex:1;height:18px;background:rgba(255,255,255,.05);border-radius:3px;overflow:hidden">'
+            +'<div style="display:flex;height:100%;width:'+barW+'%">'
+            +(r.co?'<div style="width:'+coPct+'%;background:#28A870;transition:width .3s" title="Complete: '+r.co+'"></div>':'')
+            +(r.ip?'<div style="width:'+ipPct+'%;background:#5BA4CF;transition:width .3s" title="In progress: '+r.ip+'"></div>':'')
+            +(r.ns?'<div style="width:'+nsPct+'%;background:rgba(255,255,255,.15);transition:width .3s" title="Not started: '+r.ns+'"></div>':'')
+            +'</div></div>'
+            +'<span style="font-size:11px;color:var(--fog);width:28px;flex-shrink:0">'+r.total+'</span>'
+            +'</div>';
+        }).join('')
+        +'<div style="display:flex;gap:14px;margin-top:6px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)">'
+        +'<span style="font-size:11px;color:var(--fog);display:flex;align-items:center;gap:5px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#28A870"></span>Complete</span>'
+        +'<span style="font-size:11px;color:var(--fog);display:flex;align-items:center;gap:5px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#5BA4CF"></span>In progress</span>'
+        +'<span style="font-size:11px;color:var(--fog);display:flex;align-items:center;gap:5px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:rgba(255,255,255,.15)"></span>Not started</span>'
+        +'</div>'
+        +'</div>';
+    })()}
     <div style="overflow-x:auto"><table class="dtable">
-      <thead><tr><th style="cursor:pointer;user-select:none" onclick="setDelSort('project')">${S.delSortCol==='project'?(S.delSortDir==='asc'?' ▲':' ▼'):''} Project</th><th style="cursor:pointer;user-select:none" onclick="setDelSort('type')">${S.delSortCol==='type'?(S.delSortDir==='asc'?' ▲':' ▼'):''} Type</th><th style="cursor:pointer;user-select:none" onclick="setDelSort('scope')">${S.delSortCol==='scope'?(S.delSortDir==='asc'?' ▲':' ▼'):''} Scope</th><th style="cursor:pointer;user-select:none" onclick="setDelSort('contracted')">${S.delSortCol==='contracted'?(S.delSortDir==='asc'?' ▲':' ▼'):''} Contracted</th><th style="cursor:pointer;user-select:none" onclick="setDelSort('delivered')">${S.delSortCol==='delivered'?(S.delSortDir==='asc'?' ▲':' ▼'):''} Delivered</th><th style="cursor:pointer;user-select:none" onclick="setDelSort('progress')">${S.delSortCol==='progress'?(S.delSortDir==='asc'?' ▲':' ▼'):''} Progress</th><th style="cursor:pointer;user-select:none" onclick="setDelSort('status')">${S.delSortCol==='status'?(S.delSortDir==='asc'?' ▲':' ▼'):''} Status</th><th style="cursor:pointer;user-select:none" onclick="setDelSort('due')">${S.delSortCol==='due'?(S.delSortDir==='asc'?' ▲':' ▼'):''} Due</th><th>Distribution</th><th></th></tr></thead>
-      <tbody>${dels.length===0?`<tr><td colspan="11" style="text-align:center;padding:32px;color:var(--fog)">No deliverables.</td></tr>`
+      <thead><tr><th style="cursor:pointer;user-select:none" onclick="setDelSort('project')">${S.delSortCol==='project'?(S.delSortDir==='asc'?' ▲':' ▼'):''} Project</th><th style="cursor:pointer;user-select:none" onclick="setDelSort('type')">${S.delSortCol==='type'?(S.delSortDir==='asc'?' ▲':' ▼'):''} Type</th><th style="cursor:pointer;user-select:none" onclick="setDelSort('scope')">${S.delSortCol==='scope'?(S.delSortDir==='asc'?' ▲':' ▼'):''} Scope</th><th style="cursor:pointer;user-select:none" onclick="setDelSort('contracted')">${S.delSortCol==='contracted'?(S.delSortDir==='asc'?' ▲':' ▼'):''} Contracted</th><th style="cursor:pointer;user-select:none" onclick="setDelSort('delivered')">${S.delSortCol==='delivered'?(S.delSortDir==='asc'?' ▲':' ▼'):''} Delivered</th><th style="cursor:pointer;user-select:none" onclick="setDelSort('progress')">${S.delSortCol==='progress'?(S.delSortDir==='asc'?' ▲':' ▼'):''} Progress</th><th style="cursor:pointer;user-select:none" onclick="setDelSort('status')">${S.delSortCol==='status'?(S.delSortDir==='asc'?' ▲':' ▼'):''} Status</th><th style="cursor:pointer;user-select:none" onclick="setDelSort('due')">${S.delSortCol==='due'?(S.delSortDir==='asc'?' ▲':' ▼'):''} Due</th><th></th></tr></thead>
+      <tbody>${dels.length===0?`<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--fog)">No deliverables.</td></tr>`
       :dels.map(d=>{
-        const p=projs.find(x=>x.id===d.projectId);
+        const p=projs.find(x=>String(x.id)===String(d.projectId));
         const rawPct=d.contractedQty>0?Math.round((d.deliveredCount||0)/d.contractedQty*100):d.progress;
         const pct=Math.min(rawPct,100);
         const isOver=d.contractedQty>0&&(d.deliveredCount||0)>d.contractedQty;
         const overAmt=isOver?((d.deliveredCount||0)-d.contractedQty):0;
         return`<tr>
-          <td class="td-mono"><span class="badge b-dark">${p?p.pid:'?'}</span></td>
+          <td class="td-mono" style="min-width:68px"><span class="badge b-dark">${p?p.pid:'?'}</span>${p?`<div style="font-size:10px;color:var(--slate);margin-top:3px;max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${p.name}">${p.name.replace(/^\d+\s*[-–]\s*/,'').split(' ').reduce((o,w)=>{const c=o?o+' '+w:w;return c.length>13?o:c;},'').slice(0,13)}</div>`:''}  </td>
           <td><div style="display:flex;align-items:center;gap:6px"><span style="color:var(--sky-lt);flex-shrink:0">${delGroupIcon(d.type)}</span><span class="badge b-dark" style="font-size:11px">${d.type}</span></div></td>
           <td><span class="badge ${d.scopeType==='recurring'?'b-sky':d.scopeType==='milestone'?'b-purple':'b-gray'}" style="font-size:11px">${d.scopeType}</span></td>
           <td style="text-align:center">${d.contractedQty||'—'}</td>
@@ -2623,7 +2671,6 @@ function renderDelAll(pF){
           <td><div style="display:flex;align-items:center;gap:5px"><div class="del-pbar" style="width:60px" title="${isOver?'+'+overAmt+' over contracted':''}" ><div class="del-pbar-fill ${isOver?'amber':pct===100?'done':''}" style="width:${pct}%"></div></div><span style="font-size:12px;color:${isOver?'var(--amber)':'inherit'}">${isOver?rawPct+'%':pct+'%'}</span></div></td>
           <td><div style="display:flex;align-items:center;gap:4px"><span class="badge badge-btn ${d.status==='Complete'?'b-green':d.status==='In progress'?'b-sky':d.status==='On hold'?'b-amber':d.status==='Cancelled'?'b-red':'b-gray'}" style="font-size:11px;cursor:pointer;user-select:none" onclick="cycleDelStatus('${d.id}')" title="Click to change status">${d.status}</span>${isOver?'<span class="badge b-amber" style="font-size:10px" title="Delivered exceeds contracted quantity">+'+overAmt+' over</span>':''}</div></td>
           <td style="font-size:12px;color:var(--slate)">${d.dueDate||'—'}</td>
-          <td style="font-size:12px;color:var(--mist);max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.distList||'—'}</td>
           <td><button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="openDelModal('${d.id}')">Edit</button></td>
         </tr>`;
       }).join('')}</tbody>

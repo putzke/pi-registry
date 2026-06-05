@@ -2540,14 +2540,21 @@ function renderDelAll(pF){
   let dels=DB.get('deliverables');
   if(pF)dels=dels.filter(d=>d.projectId===pF);
   const projs=DB.get('projects');
-  const stF=document.getElementById('del-st')?.value||'';
+  const stF=S.delStatus||'';
   if(stF)dels=dels.filter(d=>d.status===stF);
   dels=dels.map(d=>{const p=projs.find(x=>x.id===d.projectId);return Object.assign({},d,{_projName:p?p.pid+' '+p.name:'zz'});});
   dels=sortDeliverables(dels);
   return`<div style="padding:16px">
     <div style="display:flex;gap:8px;margin-bottom:14px">
       ${['Not started','In progress','Complete'].map(st=>{const ct=dels.filter(d=>d.status===st).length;return`<div class="scope-stat"><b style="color:${st==='Complete'?'var(--green)':st==='In progress'?'var(--sky-lt)':'var(--fog)'}">${ct}</b><span style="font-size:12px;color:var(--fog)">${st}</span></div>`;}).join('')}
-      <select class="fsel" id="del-st" onchange="renderDeliverables(document.getElementById('main'))" style="margin-left:auto"><option value="">All statuses</option><option>Not started</option><option>In progress</option><option>Complete</option><option>On hold</option><option>Cancelled</option></select>
+      <select class="fsel" id="del-st" onchange="S.delStatus=this.value;renderDeliverables(document.getElementById('main'))" style="margin-left:auto">
+        <option value="">All statuses</option>
+        <option${S.delStatus==='Not started'?' selected':''}>Not started</option>
+        <option${S.delStatus==='In progress'?' selected':''}>In progress</option>
+        <option${S.delStatus==='Complete'?' selected':''}>Complete</option>
+        <option${S.delStatus==='On hold'?' selected':''}>On hold</option>
+        <option${S.delStatus==='Cancelled'?' selected':''}>Cancelled</option>
+      </select>
     </div>
     <div style="overflow-x:auto"><table class="dtable">
       <thead><tr><th style="cursor:pointer;user-select:none" onclick="setDelSort('project')">${S.delSortCol==='project'?(S.delSortDir==='asc'?' ▲':' ▼'):''} Project</th><th style="cursor:pointer;user-select:none" onclick="setDelSort('type')">${S.delSortCol==='type'?(S.delSortDir==='asc'?' ▲':' ▼'):''} Type</th><th style="cursor:pointer;user-select:none" onclick="setDelSort('scope')">${S.delSortCol==='scope'?(S.delSortDir==='asc'?' ▲':' ▼'):''} Scope</th><th style="cursor:pointer;user-select:none" onclick="setDelSort('contracted')">${S.delSortCol==='contracted'?(S.delSortDir==='asc'?' ▲':' ▼'):''} Contracted</th><th style="cursor:pointer;user-select:none" onclick="setDelSort('delivered')">${S.delSortCol==='delivered'?(S.delSortDir==='asc'?' ▲':' ▼'):''} Delivered</th><th style="cursor:pointer;user-select:none" onclick="setDelSort('progress')">${S.delSortCol==='progress'?(S.delSortDir==='asc'?' ▲':' ▼'):''} Progress</th><th style="cursor:pointer;user-select:none" onclick="setDelSort('status')">${S.delSortCol==='status'?(S.delSortDir==='asc'?' ▲':' ▼'):''} Status</th><th style="cursor:pointer;user-select:none" onclick="setDelSort('due')">${S.delSortCol==='due'?(S.delSortDir==='asc'?' ▲':' ▼'):''} Due</th><th>Distribution</th><th></th></tr></thead>

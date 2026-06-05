@@ -2516,9 +2516,10 @@ function renderDelScope(pF){
           var _paceHTML='—';var _dueHTML=d.dueDate?fmt(d.dueDate):'—';
           try{
             var _projStart=proj.preconDate||proj.startDate;
-            if(d.contractedQty>0&&d.dueDate&&_projStart&&d.status!=='Complete'&&d.status!=='Cancelled'){
+            var _endDate=d.dueDate||proj.endDate;
+            if(d.contractedQty>0&&_endDate&&_projStart&&d.status!=='Complete'&&d.status!=='Cancelled'){
               var _start=new Date(_projStart+'T00:00:00');
-              var _end=new Date(d.dueDate+'T00:00:00');
+              var _end=new Date(_endDate+'T00:00:00');
               var _now=new Date();
               var _totalDays=(_end-_start)/(86400000);
               var _elapsedDays=(_now-_start)/(86400000);
@@ -3319,6 +3320,13 @@ function saveProj(){
   if(!data.pid||!/^\d{3,5}$/.test(data.pid)){alert('Project ID must be 3 to 5 digits.');return}
   if(!data.name){alert('Project name is required.');return}
   if(!data.startDate&&!data.preconDate){alert('Please enter at least a Start date or Precon date — this is required for deliverable scheduling.');return}
+  if(!data.endDate){alert('End date is required — this is used for deliverable pace calculations.');return}
+  var _sd=data.startDate?new Date(data.startDate+'T00:00:00'):null;
+  var _pd=data.preconDate?new Date(data.preconDate+'T00:00:00'):null;
+  var _ed=new Date(data.endDate+'T00:00:00');
+  if(_sd&&_ed<=_sd){alert('End date must be later than Start date.');return}
+  if(_pd&&_ed<=_pd){alert('End date must be later than Precon date.');return}
+  if(_sd&&_pd&&_pd<_sd){alert('Precon date must be on or after Start date.');return}
   const isNew=!S.editId;
   const all=DB.get('projects');
   if(S.editId){const i=all.findIndex(x=>x.id===S.editId);if(i>-1)all[i]=data;}else all.push(data);

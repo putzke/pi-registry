@@ -1774,6 +1774,7 @@ async function runIntImport() {
     if (!stakeholderId) { skipped++; continue; }
 
     const row = r.row;
+    // Only send core fields — omit follow_up booleans as column types vary
     const rec = {
       project_id:       projectId ? Number(projectId) : null,
       stakeholder_id:   Number(stakeholderId),
@@ -1783,14 +1784,8 @@ async function runIntImport() {
       summary:          row.summary || '',
       logged_by:        row.loggedBy || '',
       direction:        row.direction || 'Incoming',
-      nature:           'Informational',
-      follow_up:        false,
-      follow_up_note:   '',
-      follow_up_done:   false,
-      follow_up_resolved: false
+      nature:           'Informational'
     };
-    // Only include follow_up_due if we have a value — null can cause type errors
-    if (row.followUpDue) rec.follow_up_due = row.followUpDue;
 
     try {
       console.log('[Int insert]', JSON.stringify(rec));

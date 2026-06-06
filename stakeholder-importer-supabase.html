@@ -1016,12 +1016,13 @@ function updateImportCount() {
 
 // ── RUN IMPORT ────────────────────────────────────────────────
 async function runImport() {
-  // Disable button to prevent double-submit
   const btn = document.getElementById('btn-import');
   btn.disabled = true;
   btn.textContent = 'Importing…';
 
   let added=0, updated=0, linked=0, skipped=0;
+
+  try {
 
   // Load current project_stakeholders to check for existing links
   const existingLinks = await cacheLoad('project_stakeholders');
@@ -1071,7 +1072,7 @@ async function runImport() {
 
     // Link to project if context selected
     if (stakeholderId && state.selectedProject) {
-      const alreadyLinked = existingLinks.find(x => x.projectId === state.selectedProject && x.stakeholderId === stakeholderId);
+      const alreadyLinked = existingLinks.find(x => String(x.projectId) === String(state.selectedProject) && String(x.stakeholderId) === String(stakeholderId));
       if (!alreadyLinked) {
         await sbAdd('project_stakeholders', {
           id: DB.uid(),
@@ -1111,6 +1112,13 @@ async function runImport() {
     <div class="sum-card"><div class="sum-val" style="color:var(--purple)">${linked}</div><div class="sum-lbl">Project links</div></div>
     <div class="sum-card"><div class="sum-val" style="color:var(--fog)">${skipped}</div><div class="sum-lbl">Skipped</div></div>`;
   goToStep(4);
+
+  } catch(err) {
+    console.error('Import error:', err);
+    alert('Import failed: ' + err.message + '\n\nCheck the browser console (F12) for details.');
+    btn.disabled = false;
+    btn.textContent = 'Import selected';
+  }
 }
 
 function resetImport() {

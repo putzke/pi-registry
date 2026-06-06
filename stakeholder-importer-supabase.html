@@ -1262,14 +1262,14 @@ function renderReviewTable() {
 
     const actions = matchType === 'new'
       ? `<div class="action-sel">
-          <button class="action-btn ${action==='add'?'sel-add':''}" onclick="setAction(${realIdx},'add')">Add</button>
+          <button class="action-btn ${action==='add'?'sel-add':''}" onclick="setAction(${realIdx},'add')">Add &amp; link</button>
           <button class="action-btn ${action==='skip'?'sel-skip':''}" onclick="setAction(${realIdx},'skip')">Skip</button>
         </div>`
       : `<div class="action-sel">
           ${state.selectedProject ? `<button class="action-btn ${action==='link'?'sel-link':''}" onclick="setAction(${realIdx},'link')">Link to project</button>` : ''}
           <button class="action-btn ${action==='skip'?'sel-skip':''}" onclick="setAction(${realIdx},'skip')">Skip</button>
-          <button class="action-btn ${action==='update'?'sel-update':''}" onclick="setAction(${realIdx},'update')">Update</button>
-          <button class="action-btn ${action==='add'?'sel-add':''}" onclick="setAction(${realIdx},'add')">Add as new</button>
+          <button class="action-btn ${action==='update'?'sel-update':''}" onclick="setAction(${realIdx},'update')">Update &amp; link</button>
+          <button class="action-btn ${action==='add'?'sel-add':''}" onclick="setAction(${realIdx},'add')">Add new &amp; link</button>
         </div>`;
 
     return `<tr class="${rowClass}" id="rrow-${realIdx}">

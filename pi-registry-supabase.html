@@ -5559,7 +5559,7 @@ async function exportProject(projectId) {
     }
 
     // Freeze header row
-    ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft' };
+    ws['!views'] = [{ state: 'frozen', xSplit: 0, ySplit: 1, topLeftCell: 'A2' }];
 
     // Column widths
     if (colWidths) ws['!cols'] = colWidths.map(w => ({ wch: w }));
@@ -5658,7 +5658,7 @@ async function exportProject(projectId) {
     return [
       iss.dateRaised||'', iss.title||'', iss.category||'', iss.status||'', iss.priority||'',
       iss.description||'', iss.assignedTo||'', iss.dateResolved||'',
-      iss.resolutionNotes||'', relNames
+      iss.resolutionSummary||'', relNames
     ];
   });
   const ws5 = XLSX.utils.aoa_to_sheet([issHeaders, ...issRows]);

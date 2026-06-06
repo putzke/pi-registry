@@ -1956,14 +1956,23 @@ async function runIntImport() {
   btn.textContent = 'Importing…';
 
   const projectId = intState.selectedProject;
-  let added = 0, skipped = 0;
+  let added = 0;
+  const skippedRows = []; // track each skipped row with reason
 
   for (const r of intState.reviewed) {
     const stakeholderId = r.chosenId;
-    if (!stakeholderId) { skipped++; continue; }
-
     const row = r.row;
-    // Only send core fields — omit follow_up booleans as column types vary
+    const displayName = [row.firstName, row.lastName].filter(Boolean).join(' ') || row._fullName || 'Unknown';
+
+    if (!stakeholderId) {
+      skippedRows.push({
+        name: displayName,
+        date: row.date || '—',
+        reason: r.match.type === 'none' ? 'No matching stakeholder found in registry' : 'No stakeholder selected'
+      });
+      continue;
+    }
+
     const rec = {
       project_id:       projectId ? Number(projectId) : null,
       stakeholder_id:   Number(stakeholderId),
@@ -1986,10 +1995,15 @@ async function runIntImport() {
       if (!res.ok) {
         const e = await res.text();
         console.error('[Int insert failed]', e);
-        skipped++;
+        skippedRows.push({ name: displayName, date: row.date || '—', reason: 'Insert failed: ' + e.slice(0,100) });
       } else { added++; }
-    } catch(e) { skipped++; console.warn('Int insert error:', e); }
+    } catch(e) {
+      skippedRows.push({ name: displayName, date: row.date || '—', reason: 'Error: ' + e.message });
+    }
   }
+
+  // Also include pre-review rejections
+  const rejected = intState.intRejected || [];
 
   // Signal main app
   try {
@@ -1998,11 +2012,42 @@ async function runIntImport() {
     bc.close();
   } catch(e) {}
 
+  // Build skipped list HTML
+  const allSkipped = [
+    ...skippedRows,
+    ...rejected.map(r => ({ name: r.name, date: '—', reason: r.reason + ' (removed before review)' }))
+  ];
+
+  const skippedHTML = allSkipped.length > 0 ? `
+    <div style="margin-top:20px;text-align:left;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">
+      <div style="background:var(--navy-mid);padding:10px 14px;font-size:12px;font-weight:600;color:var(--white);border-bottom:1px solid var(--border)">
+        ${allSkipped.length} row${allSkipped.length!==1?'s':''} skipped — add these stakeholders to the registry first, then re-import
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead>
+          <tr style="background:var(--navy-rim)">
+            <th style="padding:7px 12px;text-align:left;color:var(--fog);font-weight:600;border-bottom:1px solid var(--border)">Stakeholder (from file)</th>
+            <th style="padding:7px 12px;text-align:left;color:var(--fog);font-weight:600;border-bottom:1px solid var(--border)">Date</th>
+            <th style="padding:7px 12px;text-align:left;color:var(--fog);font-weight:600;border-bottom:1px solid var(--border)">Reason skipped</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${allSkipped.map((s,i) => `
+            <tr style="${i%2===1?'background:var(--navy-rim)':''}">
+              <td style="padding:7px 12px;color:var(--mist);border-bottom:1px solid var(--border)">${sanitizeHTML(s.name)}</td>
+              <td style="padding:7px 12px;color:var(--slate);border-bottom:1px solid var(--border);white-space:nowrap">${sanitizeHTML(s.date)}</td>
+              <td style="padding:7px 12px;color:var(--amber);border-bottom:1px solid var(--border)">${sanitizeHTML(s.reason)}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : '';
+
   document.getElementById('int-complete-msg').textContent =
     `${added} interaction${added!==1?'s':''} added to PI Registry.`;
   document.getElementById('int-complete-summary').innerHTML =
     `<div class="sum-card"><div class="sum-val" style="color:var(--green)">${added}</div><div class="sum-lbl">Imported</div></div>
-     <div class="sum-card"><div class="sum-val" style="color:var(--fog)">${skipped}</div><div class="sum-lbl">Skipped</div></div>`;
+     <div class="sum-card"><div class="sum-val" style="color:var(--fog)">${allSkipped.length}</div><div class="sum-lbl">Skipped</div></div>
+     ${skippedHTML}`;
   intGoToStep(4);
 }
 

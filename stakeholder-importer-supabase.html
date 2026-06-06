@@ -1312,8 +1312,12 @@ function updateReviewSummary() {
     </div>${state.rejected && state.rejected.length > 0 ?
       `<div class="alert alert-warn">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v4M8 11v1"/></svg>
-        <div><strong>${state.rejected.length} row${state.rejected.length>1?'s':''} skipped</strong> — fix these in your file and re-import:
-        <ul style="margin:6px 0 0 16px;padding:0">${state.rejected.map(r=>`<li><strong>${r.name}</strong> — ${r.reason}</li>`).join('')}</ul></div>
+        <div><strong>${state.rejected.length} row${state.rejected.length>1?'s':''} skipped</strong> — these rows could not be imported due to missing or invalid data:
+        <ul style="margin:6px 0 0 16px;padding:0">${state.rejected.map(r=>`<li><strong>${r.name}</strong> — ${r.reason}</li>`).join('')}</ul>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(180,83,9,.2);font-weight:600;color:var(--amber)">
+          ⓘ Recommended: click <strong>Back</strong> to fix your import file and re-upload before importing.
+          Rows already imported will be detected as duplicates on re-import and skipped automatically.
+        </div></div>
       </div>` : ''}`;
 }
 
@@ -1927,8 +1931,12 @@ function intBuildReview() {
   const rejected = intState.intRejected || [];
   if (rejected.length > 0) {
     rejBanner.innerHTML = `<div class="alert alert-warn" style="margin-top:10px">
-      <strong>${rejected.length} row${rejected.length>1?'s':''} removed before review</strong> — fix these in your file and re-import:
+      <strong>${rejected.length} row${rejected.length>1?'s':''} removed before review</strong> — these rows could not be imported due to missing or invalid data:
       <ul style="margin:6px 0 0 16px;padding:0">${rejected.map(r=>`<li><strong>${sanitizeHTML(r.name)}</strong> — ${sanitizeHTML(r.reason)}</li>`).join('')}</ul>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(180,83,9,.2);font-weight:600;color:var(--amber)">
+        ⓘ Recommended: click <strong>Back</strong> to fix your import file and re-upload before importing.
+        Rows already imported will be detected as duplicates on re-import and skipped automatically.
+      </div>
     </div>`;
   } else {
     rejBanner.innerHTML = '';

@@ -179,6 +179,11 @@ body{padding:0}
 .int-badge-warn{background:var(--amber-lt);color:var(--amber);}
 .int-badge-err{background:var(--red-lt);color:var(--red);}
 
+/* STEP NAV BAR */
+.step-nav{display:flex;align-items:center;justify-content:space-between;padding:10px 0 14px;border-bottom:1px solid var(--border);margin-bottom:20px;}
+.step-nav .btn{min-width:120px;}
+.step-nav-center{flex:1;display:flex;justify-content:center;}
+
 </style>
 </head>
 <body>
@@ -205,15 +210,27 @@ body{padding:0}
 
   <!-- TAB: STAKEHOLDERS -->
   <div class="imp-tab-pane active" id="tabpane-stakeholders">
-  <!-- STEPS -->
-  <div class="steps">
-    <div class="step active" id="step-1"><div class="step-num">1</div>Upload file</div>
-    <div class="step-arrow">›</div>
-    <div class="step" id="step-2"><div class="step-num">2</div>Map columns</div>
-    <div class="step-arrow">›</div>
-    <div class="step" id="step-3"><div class="step-num">3</div>Review &amp; resolve</div>
-    <div class="step-arrow">›</div>
-    <div class="step" id="step-4"><div class="step-num">4</div>Import complete</div>
+  <!-- STEP NAV BAR -->
+  <div class="step-nav">
+    <button class="btn" id="nav-back-btn" onclick="navBack()" style="visibility:hidden">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3l-5 5 5 5"/></svg>
+      Back
+    </button>
+    <div class="step-nav-center">
+      <div class="steps" style="border-bottom:none;padding:0;margin:0">
+        <div class="step active" id="step-1"><div class="step-num">1</div>Upload file</div>
+        <div class="step-arrow">›</div>
+        <div class="step" id="step-2"><div class="step-num">2</div>Map columns</div>
+        <div class="step-arrow">›</div>
+        <div class="step" id="step-3"><div class="step-num">3</div>Review &amp; resolve</div>
+        <div class="step-arrow">›</div>
+        <div class="step" id="step-4"><div class="step-num">4</div>Import complete</div>
+      </div>
+    </div>
+    <button class="btn btn-primary" id="nav-next-btn" onclick="navNext()" disabled>
+      Next: Map columns
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+    </button>
   </div>
 
   <!-- STEP 1: UPLOAD -->
@@ -251,12 +268,7 @@ body{padding:0}
       <div id="file-status" class="hidden" style="margin-top:12px"></div>
     </div>
 
-    <div style="display:flex;justify-content:flex-end">
-      <button class="btn btn-primary" id="btn-to-2" onclick="goToStep(2)" disabled>
-        Next: Map columns
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
-      </button>
-    </div>
+
   </div>
 
   <!-- STEP 2: MAP COLUMNS -->
@@ -279,16 +291,7 @@ body{padding:0}
       </div>
     </div>
 
-    <div style="display:flex;justify-content:space-between">
-      <button class="btn" onclick="goToStep(1)">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3l-5 5 5 5"/></svg>
-        Back
-      </button>
-      <button class="btn btn-primary" id="btn-to-3" onclick="goToStep(3)">
-        Next: Review duplicates
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
-      </button>
-    </div>
+
   </div>
 
   <!-- STEP 3: REVIEW -->
@@ -329,19 +332,13 @@ body{padding:0}
       </div>
     </div>
 
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <button class="btn" onclick="goToStep(2)">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3l-5 5 5 5"/></svg>
-        Back
-      </button>
-      <div style="display:flex;align-items:center;gap:10px">
+      <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:16px">
         <span id="import-count-label" style="font-size:12px;color:var(--slate)"></span>
         <button class="btn btn-primary" id="btn-import" onclick="runImport()">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg>
           Import selected
         </button>
       </div>
-    </div>
   </div>
 
   <!-- STEP 4: COMPLETE -->
@@ -517,6 +514,45 @@ body{padding:0}
 </div>
 
 <script>
+
+// ── TOP NAV BAR — Back / Next for stakeholder import steps ──────────────────
+function syncNavBar(step) {
+  const backBtn = document.getElementById('nav-back-btn');
+  const nextBtn = document.getElementById('nav-next-btn');
+  if (!backBtn || !nextBtn) return;
+
+  // Back button: hidden on step 1 and 4
+  backBtn.style.visibility = (step === 1 || step === 4) ? 'hidden' : 'visible';
+
+  // Next button: changes label and action per step
+  if (step === 1) {
+    nextBtn.textContent = '';
+    nextBtn.innerHTML = 'Next: Map columns <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>';
+    nextBtn.disabled = document.getElementById('btn-to-2')?.disabled !== false;
+    nextBtn.style.visibility = 'visible';
+  } else if (step === 2) {
+    nextBtn.innerHTML = 'Next: Review duplicates <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>';
+    nextBtn.disabled = false;
+    nextBtn.style.visibility = 'visible';
+  } else if (step === 3) {
+    // On step 3 show the import button in nav bar, hide next
+    nextBtn.style.visibility = 'hidden';
+  } else if (step === 4) {
+    nextBtn.style.visibility = 'hidden';
+  }
+}
+
+function navBack() {
+  const cur = state.step || 1;
+  if (cur > 1) goToStep(cur - 1);
+}
+
+function navNext() {
+  const cur = state.step || 1;
+  if (cur === 1) goToStep(2);
+  else if (cur === 2) goToStep(3);
+}
+
 // ── SUPABASE CONFIG ────────────────────────────────────────────
 const SUPA_URL = 'https://ncfbblhlsiglxkoiounv.supabase.co';
 const SUPA_REST = SUPA_URL + '/rest/v1';
@@ -1011,6 +1047,7 @@ function onFileParsed() {
   const { rawHeaders, rawRows, file } = state;
   document.getElementById('file-status').innerHTML = `<div class="alert alert-success"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8l4 4 6-6"/></svg>Loaded <strong>${file.name}</strong> — ${rawRows.length} rows, ${rawHeaders.length} columns detected.</div>`;
   document.getElementById('btn-to-2').disabled = false;
+  syncNavBar(1);
   // Build auto column map
   state.columnMap = {};
   rawHeaders.forEach((h, i) => { state.columnMap[i] = autoSuggest(h); });
@@ -1018,6 +1055,7 @@ function onFileParsed() {
 
 // ── STEP NAVIGATION ───────────────────────────────────────────
 async function goToStep(n) {
+  syncNavBar(n);
   if (n === 2 && state.rawRows.length === 0) return;
   if (n === 3) {
     buildParsed();

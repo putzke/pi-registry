@@ -504,7 +504,11 @@ function signOut() {
 
 async function refreshSession() {
   const sess = getSession();
-  if (!sess || !sess.refresh_token) { signOut(); return; }
+  if (!sess || !sess.refresh_token) {
+    showToast('Session expired — please sign in again.');
+    signOut();
+    return;
+  }
   try {
     const res = await fetch(SUPA_URL + '/auth/v1/token?grant_type=refresh_token', {
       method: 'POST',
@@ -512,9 +516,16 @@ async function refreshSession() {
       body: JSON.stringify({ refresh_token: sess.refresh_token })
     });
     const data = await res.json();
-    if (!res.ok) { console.warn('Token refresh failed — signing out:', data); signOut(); return; }
+    if (!res.ok) {
+      console.warn('Token refresh failed — signing out:', data);
+      showToast('Session expired — please sign in again.');
+      signOut();
+      return;
+    }
     setSession({ access_token: data.access_token, refresh_token: data.refresh_token, user: data.user });
+    console.log('Session refreshed successfully');
   } catch(e) {
+    // Network error — don't sign out, will retry next interval
     console.warn('Token refresh error (will retry next interval):', e);
   }
 }
@@ -1026,6 +1037,15 @@ async function initApp(){
     render();
     // Refresh Supabase token every 45 min (tokens expire after 1 hour)
     setInterval(refreshSession, 45 * 60 * 1000);
+
+    // Warn user 5 minutes before each token expiry (at 55 min mark)
+    // Token expires at 60 min, refresh runs at 45 min — warn at 55 min
+    // First warning: 55 min after login
+    setTimeout(function scheduleExpiryWarning() {
+      showToast('⚠️ Your session expires in 5 minutes. Save your work.', 'warn', 8000);
+      // Schedule next warning 45 min after this one (aligns with next refresh cycle)
+      setTimeout(scheduleExpiryWarning, 45 * 60 * 1000);
+    }, 55 * 60 * 1000);
   } catch(e) {
     console.error('Supabase init error:', e);
     showToast('Error loading data from Supabase', 'error');
@@ -5473,14 +5493,29 @@ function openImportTool(projectId) {
 }
 
 // Toast notification
-function showToast(msg) {
+function showToast(msg, type, duration) {
+  // type: 'info' (default), 'warn', 'error'
+  // duration: ms before fade (default 3200)
+  const dur = duration || 3200;
+  const styles = {
+    info:  'background:#1E4068;border:1px solid var(--sky);color:var(--sky-lt)',
+    warn:  'background:#3d2a00;border:1px solid var(--amber);color:var(--amber)',
+    error: 'background:#3d0000;border:1px solid var(--red);color:var(--red)'
+  };
+  const icons = {
+    info:  '<path d="M3 8l4 4 6-6"/>',
+    warn:  '<path d="M8 4v5M8 11v1"/><circle cx="8" cy="8" r="6"/>',
+    error: '<path d="M4 4l8 8M12 4l-8 8"/>'
+  };
+  const st = styles[type] || styles.info;
+  const ic = icons[type] || icons.info;
   const t = document.createElement('div');
-  t.style.cssText = `position:fixed;bottom:24px;right:24px;background:#1E4068;border:1px solid var(--sky);border-radius:var(--radius-lg);padding:12px 18px;font-size:13px;color:var(--sky-lt);z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.4);display:flex;align-items:center;gap:8px;max-width:320px`;
-  t.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8l4 4 6-6"/></svg>${msg}`;
+  t.style.cssText = `position:fixed;bottom:24px;right:24px;${st};border-radius:var(--radius-lg);padding:12px 18px;font-size:13px;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.4);display:flex;align-items:center;gap:8px;max-width:360px`;
+  t.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">${ic}</svg>${msg}`;
   document.body.appendChild(t);
-  setTimeout(() => t.style.opacity='0', 3200);
-  setTimeout(() => t.remove(), 3600);
   t.style.transition = 'opacity .4s';
+  setTimeout(() => t.style.opacity='0', dur);
+  setTimeout(() => t.remove(), dur + 400);
 }
 
 // Listen for import completion via BroadcastChannel (importer runs in a separate tab)

@@ -1100,12 +1100,12 @@ function validateEmail(email){
 // ───────────────────────────────────────────────────────────────────────
 function isOverdue(d){return d&&new Date(d+'T00:00:00')<new Date()}
 
-function showToast(msg,type='success'){
+function showToast(msg,type='success',duration=2500){
   const t=document.getElementById('toast');
   t.textContent=msg;
   t.style.background=type==='error'?'#C0392B':type==='warn'?'#D4860A':'#1A3050';
   t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'),2500);
+  setTimeout(()=>t.classList.remove('show'),duration);
 }
 
 // ── SCREEN MANAGEMENT ──────────────────────────────────────────────────
@@ -2038,6 +2038,11 @@ function init(){
 
 async function initApp(){
   setInterval(refreshSession, 45 * 60 * 1000);
+  // Warn 5 minutes before token expiry
+  setTimeout(function scheduleExpiryWarning() {
+    showToast('⚠️ Session expires in 5 minutes', 'warn', 8000);
+    setTimeout(scheduleExpiryWarning, 45 * 60 * 1000);
+  }, 55 * 60 * 1000);
   try{
     showToast('Loading...','info');
     await loadAllData();

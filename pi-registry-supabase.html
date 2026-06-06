@@ -5527,40 +5527,10 @@ async function exportProject(projectId) {
 
   const wb = XLSX.utils.book_new();
 
-  // ── Helper: style a worksheet ──────────────────────────────
+  // ── Helper: set column widths and freeze header ──────────
   function styleSheet(ws, colWidths) {
-    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
-    const totalCols = range.e.c + 1;
-    const totalRows = range.e.r + 1;
-
-    // Header row style (row 0) — dark navy background, white bold text
-    for (let c = 0; c <= range.e.c; c++) {
-      const cellAddr = XLSX.utils.encode_cell({r:0, c});
-      if (!ws[cellAddr]) continue;
-      ws[cellAddr].s = {
-        font:    { bold: true, color: { rgb: 'FFFFFF' }, sz: 10 },
-        fill:    { fgColor: { rgb: '1A3050' }, patternType: 'solid' },
-        alignment: { vertical: 'center', wrapText: false },
-        border: {
-          bottom: { style: 'thin', color: { rgb: '2D7DD2' } }
-        }
-      };
-    }
-
-    // Alternating row shading for data rows
-    for (let r = 1; r <= range.e.r; r++) {
-      if (r % 2 === 0) continue; // only shade odd rows
-      for (let c = 0; c <= range.e.c; c++) {
-        const cellAddr = XLSX.utils.encode_cell({r, c});
-        if (!ws[cellAddr]) ws[cellAddr] = {t:'s', v:''};
-        ws[cellAddr].s = ws[cellAddr].s || {};
-        ws[cellAddr].s.fill = { fgColor: { rgb: 'F0F4F8' }, patternType: 'solid' };
-      }
-    }
-
     // Freeze header row
     ws['!views'] = [{ state: 'frozen', xSplit: 0, ySplit: 1, topLeftCell: 'A2' }];
-
     // Column widths
     if (colWidths) ws['!cols'] = colWidths.map(w => ({ wch: w }));
   }
@@ -5668,8 +5638,19 @@ async function exportProject(projectId) {
   // ── DOWNLOAD ───────────────────────────────────────────────
   const dateStr  = new Date().toISOString().slice(0,10);
   const safeName = (proj.name||'Project').replace(/[/\\:*?"<>|]/g, '-');
-  const filename = `${proj.pid||'Export'} — ${safeName} — PI Export ${dateStr}.xlsx`;
-  XLSX.writeFile(wb, filename);
+  const filename = `${proj.pid||'Export'} - ${safeName} - PI Export ${dateStr}.xlsx`;
+
+  // Use Blob download — works reliably on GitHub Pages / HTTPS
+  const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const blob  = new Blob([wbOut], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url   = URL.createObjectURL(blob);
+  const a     = document.createElement('a');
+  a.href      = url;
+  a.download  = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+
   showToast(`Exported: ${filename}`);
 }
 

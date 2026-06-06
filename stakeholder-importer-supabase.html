@@ -705,11 +705,17 @@ async function sbGet(table) {
 async function sbAdd(table, obj) {
   const sbTable = SB_TABLES[table];
   const body = toSB(table, obj);
+  console.log('[sbAdd]', table, JSON.stringify(body).slice(0, 200));
   const r = await fetch(SUPA_REST + '/' + sbTable, {
     method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(body)
   });
-  if (!r.ok) { const e = await r.text(); console.error('SB ADD error:', r.status, e); return null; }
+  if (!r.ok) {
+    const e = await r.text();
+    console.error('[sbAdd] FAILED', r.status, table, e);
+    throw new Error('Supabase insert failed (' + r.status + ') on ' + table + ': ' + e.slice(0, 200));
+  }
   const rows = await r.json();
+  console.log('[sbAdd] OK', table, 'id=', rows[0]?.id);
   return rows[0] ? rows[0].id : null;
 }
 

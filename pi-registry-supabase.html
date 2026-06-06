@@ -5486,15 +5486,15 @@ _importChannel.addEventListener('message', e => {
 
 // ── PROJECT DATA EXPORT (Supabase) ───────────────────────────
 function exportProject(projectId) {
+  try {
 
-  // Load xlsx-style on demand then re-call
-  // To revert to plain SheetJS: change the src URL back to
-  //   https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js
-  // and change XLSXStyle.write -> XLSX.write below.
-  if (typeof XLSXStyle === 'undefined') {
+  // Load xlsx-style on demand then re-call.
+  // xlsx-style exposes window.XLSX (same global as SheetJS).
+  // We use a flag to know it's loaded.
+  if (!window._xlsxStyleLoaded) {
     const s = document.createElement('script');
     s.src = 'https://cdn.jsdelivr.net/npm/xlsx-style@0.8.13/dist/xlsx.full.min.js';
-    s.onload = () => exportProject(projectId);
+    s.onload = () => { window._xlsxStyleLoaded = true; exportProject(projectId); };
     s.onerror = () => alert('xlsx-style could not be loaded. Check your internet connection.');
     document.body.appendChild(s);
     return;
@@ -5663,7 +5663,7 @@ function exportProject(projectId) {
   const filename = `${proj.pid||'Export'} - ${safeName} - PI Export ${dateStr}.xlsx`;
 
   // Use Blob download — works reliably on GitHub Pages / HTTPS
-  const wbOut = XLSXStyle.write(wb, { bookType: 'xlsx', type: 'array' });
+  const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   const blob  = new Blob([wbOut], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url   = URL.createObjectURL(blob);
   const a     = document.createElement('a');
@@ -5674,6 +5674,11 @@ function exportProject(projectId) {
   setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
 
   showToast(`Exported: ${filename}`);
+
+  } catch(err) {
+    console.error('Export error:', err);
+    alert('Export failed: ' + err.message);
+  }
 }
 
 // ── INIT ──────────────────────────────────────

@@ -5485,20 +5485,16 @@ _importChannel.addEventListener('message', e => {
 
 
 // ── PROJECT DATA EXPORT (Supabase) ───────────────────────────
-async function exportProject(projectId) {
+function exportProject(projectId) {
 
-  // Load SheetJS on demand
+  // Load SheetJS on demand then re-call
   if (typeof XLSX === 'undefined') {
-    await new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-      s.onload = resolve;
-      s.onerror = () => reject(new Error('SheetJS failed to load'));
-      document.body.appendChild(s);
-    }).catch(() => {
-      alert('Excel export requires an internet connection. SheetJS library could not be loaded.');
-      return;
-    });
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = () => exportProject(projectId);
+    s.onerror = () => alert('SheetJS could not be loaded. Check your internet connection.');
+    document.body.appendChild(s);
+    return;
   }
 
   showToast('Building export\u2026');
@@ -5506,15 +5502,13 @@ async function exportProject(projectId) {
   const proj = (DB.get('projects') || []).find(x => x.id === projectId);
   if (!proj) return;
 
-  // Pull all data fresh from Supabase
-  const [allStake, projLinks, ints, dels, meetings, issues] = await Promise.all([
-    cacheLoad('stakeholders'),
-    cacheLoad('project_stakeholders'),
-    cacheLoad('interactions'),
-    cacheLoad('deliverables'),
-    cacheLoad('meetings'),
-    cacheLoad('issues'),
-  ]);
+  // Read from the app's in-memory sync cache (already loaded on app init)
+  const allStake  = DB.get('stakeholders')         || [];
+  const projLinks = DB.get('project_stakeholders') || [];
+  const ints      = DB.get('interactions')         || [];
+  const dels      = DB.get('deliverables')         || [];
+  const meetings  = DB.get('meetings')             || [];
+  const issues    = DB.get('issues')               || [];
 
   const ps   = projLinks.filter(x => x.projectId === projectId);
   const pInts = ints.filter(x => x.projectId === projectId)

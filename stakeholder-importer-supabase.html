@@ -1715,37 +1715,107 @@ function intUpdatePreview() {
 }
 
 // ── PARSE ROWS ────────────────────────────────────────────────
+// ── VALID OPTION LISTS ───────────────────────────────────────
+const VALID_DIRECTIONS = ['Incoming', 'Outgoing', 'Internal'];
+
+function intNormalizeDate(val) {
+  if (!val) return { date: null, _dateWarn: 'Missing date' };
+  const s = String(val).trim();
+  // Already ISO
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const d = new Date(s + 'T00:00:00');
+    if (isNaN(d)) return { date: 'INVALID:' + s, _dateWarn: 'Invalid date: ' + s };
+    return { date: s };
+  }
+  // Try JS Date parsing for common formats
+  const d = new Date(s);
+  if (!isNaN(d)) return { date: d.toISOString().slice(0,10), _dateWarn: s !== d.toISOString().slice(0,10) ? 'Date reformatted from "' + s + '"' : null };
+  return { date: 'INVALID:' + s, _dateWarn: 'Unrecognized date format: "' + s + '"' };
+}
+
+function intNormalizeChannel(val) {
+  if (!val) return { channel: '', _channelWarn: 'Missing channel — will default to Other' };
+  const chLower = val.toLowerCase().trim();
+  const exact = VALID_CHANNELS.find(c => c.toLowerCase() === chLower);
+  if (exact) return { channel: exact };
+  const partial = VALID_CHANNELS.find(c => chLower.includes(c.toLowerCase().split(' ')[0]));
+  if (partial) return { channel: partial, _channelWarn: 'Channel "' + val + '" normalized to "' + partial + '"' };
+  return { channel: val, _channelWarn: 'Unrecognized channel: "' + val + '" — will be stored as-is' };
+}
+
+function intNormalizeDirection(val) {
+  if (!val) return { direction: 'Incoming', _dirWarn: 'Missing direction — defaulting to Incoming' };
+  const exact = VALID_DIRECTIONS.find(d => d.toLowerCase() === val.toLowerCase().trim());
+  if (exact) return { direction: exact };
+  return { direction: val, _dirWarn: 'Unrecognized direction: "' + val + '" — will be stored as-is' };
+}
+
 function intBuildParsed() {
   const { rawRows, columnMap } = intState;
+  intState.intRejected = [];
+
   intState.parsed = rawRows.map((row, rowIdx) => {
-    const obj = { _rowIdx: rowIdx };
+    const obj = { _rowIdx: rowIdx, _warnings: [] };
     Object.entries(columnMap).forEach(([ci, field]) => {
       if (field === 'ignore') return;
       const val = (row[ci]||'').toString().trim();
-      if (!val) return;
       if (field === 'fullName') {
-        const parts = val.trim().split(/\s+/);
+        const v = val;
+        const parts = v.trim().split(/\s+/);
         obj.firstName = obj.firstName || parts[0] || '';
         obj.lastName  = obj.lastName  || parts.slice(1).join(' ') || '';
-        obj._fullName = val;
+        obj._fullName = v;
+      } else if (field === 'firstName') {
+        obj.firstName = val;
+      } else if (field === 'lastName') {
+        obj.lastName = val;
       } else if (field === 'date') {
-        // Normalize date to YYYY-MM-DD
-        const d = new Date(val);
-        obj.date = !isNaN(d) ? d.toISOString().slice(0,10) : val;
+        const { date, _dateWarn } = intNormalizeDate(val);
+        obj.date = date;
+        if (_dateWarn) obj._warnings.push(_dateWarn);
       } else if (field === 'channel') {
-        // Try to normalize channel value
-        const chLower = val.toLowerCase();
-        const match = VALID_CHANNELS.find(c => c.toLowerCase() === chLower) ||
-                      VALID_CHANNELS.find(c => chLower.includes(c.toLowerCase().split(' ')[0]));
-        obj.channel = match || val;
+        const { channel, _channelWarn } = intNormalizeChannel(val);
+        obj.channel = channel;
+        if (_channelWarn) obj._warnings.push(_channelWarn);
+      } else if (field === 'direction') {
+        const { direction, _dirWarn } = intNormalizeDirection(val);
+        obj.direction = direction;
+        if (_dirWarn) obj._warnings.push(_dirWarn);
       } else {
         obj[field] = val;
       }
     });
+
+    // Check for missing channel/direction if not mapped
+    if (!obj.channel && !obj._warnings.some(w => w.includes('channel'))) {
+      const { channel, _channelWarn } = intNormalizeChannel('');
+      obj.channel = channel;
+      if (_channelWarn) obj._warnings.push(_channelWarn);
+    }
+    if (!obj.direction && !obj._warnings.some(w => w.includes('direction'))) {
+      const { direction, _dirWarn } = intNormalizeDirection('');
+      obj.direction = direction;
+      if (_dirWarn) obj._warnings.push(_dirWarn);
+    }
+
+    // Warn on missing optional fields
+    if (!obj.summary) obj._warnings.push('No summary / notes provided');
+    if (!obj.loggedBy) obj._warnings.push('Logged by is blank');
+
     return obj;
-  }).filter(obj => {
-    // Must have a stakeholder name and a date
-    return (obj.firstName || obj.lastName) && obj.date;
+  }).filter((obj, idx) => {
+    const hasName = (obj.firstName || '').trim() || (obj.lastName || '').trim();
+    const hasDate = obj.date && !String(obj.date).startsWith('INVALID:');
+    const displayName = [obj.firstName, obj.lastName].filter(Boolean).join(' ') || obj._fullName || `Row ${idx + 2}`;
+    if (!hasName) {
+      intState.intRejected.push({ name: displayName, reason: 'No stakeholder name' });
+      return false;
+    }
+    if (!hasDate) {
+      intState.intRejected.push({ name: displayName, reason: obj._warnings.find(w => w.includes('date') || w.includes('Date')) || 'Missing or invalid date' });
+      return false;
+    }
+    return true;
   });
 }
 
@@ -1774,25 +1844,46 @@ function intMatchStakeholder(row, existing) {
 
 function intBuildReview() {
   const existing = intState.existingStakeholders || [];
-  let ok = 0, warn = 0, skip = 0;
+  let ok = 0, warn = 0, skip = 0, warnings = 0;
 
   intState.reviewed = intState.parsed.map(row => {
     const match = intMatchStakeholder(row, existing);
     if (match.type === 'ok' || match.type === 'partial') ok++;
-    else if (match.type === 'ambiguous') { warn++; }
+    else if (match.type === 'ambiguous') warn++;
     else skip++;
+    if ((row._warnings||[]).length > 0) warnings++;
     return { row, match, chosenId: match.chosen ? match.chosen.id : null };
   });
 
   const tbody = document.getElementById('int-review-tbody');
   tbody.innerHTML = intState.reviewed.map((r, idx) => {
-    const { row, match, chosenId } = r;
-    const rowClass = match.type === 'none' ? 'int-match-err' : match.type === 'ambiguous' ? 'int-match-warn' : 'int-match-ok';
+    const { row, match } = r;
+    const hasWarnings = (row._warnings||[]).length > 0;
+    const rowClass = match.type === 'none'
+      ? 'int-match-err'
+      : match.type === 'ambiguous'
+        ? 'int-match-warn'
+        : hasWarnings ? 'int-match-warn' : 'int-match-ok';
+
     const nameTxt = sanitizeHTML([row.firstName, row.lastName].filter(Boolean).join(' ') || row._fullName || '—');
     const dateTxt = sanitizeHTML(row.date || '—');
     const chanTxt = sanitizeHTML(row.channel || '—');
     const sumTxt  = sanitizeHTML((row.summary||'').slice(0,80) + ((row.summary||'').length>80?'…':''));
     const logTxt  = sanitizeHTML(row.loggedBy || '—');
+
+    // Inline warning chips under affected cells
+    const dateWarn   = (row._warnings||[]).filter(w => w.toLowerCase().includes('date'));
+    const chanWarn   = (row._warnings||[]).filter(w => w.toLowerCase().includes('channel'));
+    const dirWarn    = (row._warnings||[]).filter(w => w.toLowerCase().includes('direction'));
+    const otherWarns = (row._warnings||[]).filter(w =>
+      !w.toLowerCase().includes('date') &&
+      !w.toLowerCase().includes('channel') &&
+      !w.toLowerCase().includes('direction')
+    );
+
+    const warnChip = (msgs) => msgs.length
+      ? `<div style="margin-top:3px;font-size:10px;color:var(--amber);font-weight:500">⚠ ${sanitizeHTML(msgs[0])}</div>`
+      : '';
 
     let matchCell = '';
     if (match.type === 'ok') {
@@ -1810,19 +1901,42 @@ function intBuildReview() {
       matchCell = `<span class="int-badge int-badge-err">No match — skip</span>`;
     }
 
+    // Other warnings shown under match cell
+    const otherWarnHTML = otherWarns.map(w =>
+      `<div style="margin-top:3px;font-size:10px;color:var(--amber);font-weight:500">⚠ ${sanitizeHTML(w)}</div>`
+    ).join('');
+
     return `<tr class="${rowClass}">
       <td>${nameTxt}</td>
-      <td>${dateTxt}</td>
-      <td>${chanTxt}</td>
+      <td>${dateTxt}${warnChip(dateWarn)}</td>
+      <td>${chanTxt}${warnChip(chanWarn)}${warnChip(dirWarn)}</td>
       <td style="max-width:200px;word-break:break-word">${sumTxt}</td>
       <td>${logTxt}</td>
-      <td>${matchCell}</td>
+      <td>${matchCell}${otherWarnHTML}</td>
     </tr>`;
   }).join('');
 
+  // Rejected rows banner
+  const rejBanner = document.getElementById('int-rejected-banner') || (() => {
+    const d = document.createElement('div');
+    d.id = 'int-rejected-banner';
+    document.getElementById('int-review-summary').after(d);
+    return d;
+  })();
+
+  const rejected = intState.intRejected || [];
+  if (rejected.length > 0) {
+    rejBanner.innerHTML = `<div class="alert alert-warn" style="margin-top:10px">
+      <strong>${rejected.length} row${rejected.length>1?'s':''} removed before review</strong> — fix these in your file and re-import:
+      <ul style="margin:6px 0 0 16px;padding:0">${rejected.map(r=>`<li><strong>${sanitizeHTML(r.name)}</strong> — ${sanitizeHTML(r.reason)}</li>`).join('')}</ul>
+    </div>`;
+  } else {
+    rejBanner.innerHTML = '';
+  }
+
   const importable = intState.reviewed.filter(r => r.match.type !== 'none').length;
   document.getElementById('int-review-summary').innerHTML =
-    `<strong>${intState.reviewed.length}</strong> rows parsed — <strong style="color:var(--green)">${ok}</strong> matched, <strong style="color:var(--amber)">${warn}</strong> need selection, <strong style="color:var(--red)">${skip}</strong> will be skipped.`;
+    `<strong>${intState.reviewed.length}</strong> rows in review — <strong style="color:var(--green)">${ok}</strong> matched, <strong style="color:var(--amber)">${warn + warnings}</strong> with warnings, <strong style="color:var(--red)">${skip}</strong> will be skipped.`;
   document.getElementById('int-import-count-label').textContent = `${importable} interaction${importable!==1?'s':''} ready to import`;
   document.getElementById('int-btn-import').disabled = importable === 0;
 }

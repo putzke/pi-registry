@@ -347,24 +347,102 @@ function sanitizeHTML(str) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function getImporterToken() {
-  const urlToken = new URLSearchParams(window.location.search).get('token');
-  if (urlToken) return urlToken;
+function getSession() {
   try {
     const s = sessionStorage.getItem('pi_session');
-    if (s) { const d = JSON.parse(s); if (d.access_token) return d.access_token; }
-  } catch(e) {}
-  return SUPA_KEY;
+    return s ? JSON.parse(s) : null;
+  } catch(e) { return null; }
+}
+
+function setSession(data) {
+  sessionStorage.setItem('pi_session', JSON.stringify(data));
+}
+
+function clearSession() {
+  sessionStorage.removeItem('pi_session');
 }
 
 function getAuthHeaders() {
+  const sess = getSession();
+  // Also accept a token passed via URL param (when opened from the main app)
+  const urlToken = new URLSearchParams(window.location.search).get('token');
+  const token = urlToken || (sess ? sess.access_token : SUPA_KEY);
   return {
     'Content-Type': 'application/json',
     'apikey': SUPA_KEY,
-    'Authorization': 'Bearer ' + getImporterToken(),
+    'Authorization': 'Bearer ' + token,
     'Prefer': 'return=representation',
     'X-Client-Info': 'supabase-js/2.0.0'
   };
+}
+
+async function signIn(email, password) {
+  const res = await fetch(SUPA_URL + '/auth/v1/token?grant_type=password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPA_KEY },
+    body: JSON.stringify({ email, password })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error_description || data.msg || 'Login failed');
+  setSession({ access_token: data.access_token, refresh_token: data.refresh_token, user: data.user });
+  return data;
+}
+
+function showLoginOverlay() {
+  const overlay = document.createElement('div');
+  overlay.id = 'login-overlay';
+  overlay.style.cssText = `
+    position:fixed;inset:0;background:#0B1929;display:flex;align-items:center;
+    justify-content:center;z-index:99999;font-family:'Segoe UI',sans-serif;
+  `;
+  overlay.innerHTML = `
+    <div style="background:#112236;border:1px solid #1A3350;border-radius:12px;padding:40px 36px;width:320px;box-shadow:0 8px 40px rgba(0,0,0,.6);">
+      <div style="text-align:center;margin-bottom:24px;">
+        <div style="font-size:15px;font-weight:600;color:#E2E8F0;">PI Registry</div>
+        <div style="font-size:11px;letter-spacing:1.2px;color:#64748B;text-transform:uppercase;margin-top:4px;">Stakeholder Import Tool</div>
+      </div>
+      <p style="font-size:12px;color:#64748B;margin:0 0 20px;text-align:center;">Sign in to continue</p>
+      <div id="imp-login-error" style="display:none;background:#2D1B1B;border:1px solid #7F1D1D;border-radius:6px;padding:10px 12px;font-size:12px;color:#FCA5A5;margin-bottom:16px;"></div>
+      <label style="font-size:11px;color:#94A3B8;display:block;margin-bottom:4px;">Email</label>
+      <input id="imp-login-email" type="email" autocomplete="username" placeholder="your@email.com"
+        style="width:100%;box-sizing:border-box;background:#0B1929;border:1px solid #1A3350;border-radius:6px;padding:9px 12px;font-size:13px;color:#E2E8F0;margin-bottom:14px;outline:none;" />
+      <label style="font-size:11px;color:#94A3B8;display:block;margin-bottom:4px;">Password</label>
+      <input id="imp-login-password" type="password" autocomplete="current-password" placeholder="••••••••"
+        style="width:100%;box-sizing:border-box;background:#0B1929;border:1px solid #1A3350;border-radius:6px;padding:9px 12px;font-size:13px;color:#E2E8F0;margin-bottom:22px;outline:none;" />
+      <button id="imp-login-btn" onclick="doImporterLogin()"
+        style="width:100%;background:#1D4ED8;border:none;border-radius:6px;padding:10px;font-size:14px;font-weight:500;color:#fff;cursor:pointer;">
+        Sign In
+      </button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.getElementById('imp-login-email').focus();
+  document.getElementById('imp-login-password').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doImporterLogin();
+  });
+  document.getElementById('imp-login-email').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('imp-login-password').focus();
+  });
+}
+
+async function doImporterLogin() {
+  const email = document.getElementById('imp-login-email').value.trim();
+  const password = document.getElementById('imp-login-password').value;
+  const btn = document.getElementById('imp-login-btn');
+  const errDiv = document.getElementById('imp-login-error');
+  errDiv.style.display = 'none';
+  btn.textContent = 'Signing in…';
+  btn.disabled = true;
+  try {
+    await signIn(email, password);
+    document.getElementById('login-overlay').remove();
+    populateProjectSelect();
+  } catch(e) {
+    errDiv.textContent = e.message;
+    errDiv.style.display = 'block';
+    btn.textContent = 'Sign In';
+    btn.disabled = false;
+  }
 }
 
 // ⚠️  DEV BYPASS — set to false before deploying to GitHub Pages
@@ -638,7 +716,18 @@ function updateContext() {
   state.importContext = val === 'master' ? 'master' : val;
   state.selectedProject = val === 'master' ? null : val;
 }
-populateProjectSelect();
+// ── STARTUP: check auth before making any Supabase calls ──────────────
+(function initImporter() {
+  const sess = getSession();
+  const urlToken = new URLSearchParams(window.location.search).get('token');
+  if (urlToken || (sess && sess.access_token)) {
+    // Valid session (or token passed by main app) — load projects immediately
+    populateProjectSelect();
+  } else {
+    // No session — show login; populateProjectSelect() called after successful login
+    document.addEventListener('DOMContentLoaded', showLoginOverlay);
+  }
+})();
 
 // ── DRAG AND DROP ─────────────────────────────────────────────
 function dragOver(e) { e.preventDefault(); document.getElementById('dropzone').classList.add('drag'); }
@@ -1116,136 +1205,5 @@ function goToApp() {
   else alert('Switch back to the PI Registry tab in your browser.');
 }
 </script>
-<!-- ============================================================
-     PI REGISTRY — RUNTIME ERROR OVERLAY
-     Catches unhandled JS errors + promise rejections during use.
-     Displays a dismissible badge in the bottom-right corner.
-     Remove or set OVERLAY_ENABLED = false to disable.
-     ============================================================ -->
-<script>
-(function () {
-  const OVERLAY_ENABLED = true;
-  if (!OVERLAY_ENABLED) return;
-
-  /* ── Styles ─────────────────────────────────────────────── */
-  const style = document.createElement('style');
-  style.textContent = `
-    #pi-err-badge {
-      position: fixed; bottom: 14px; right: 14px; z-index: 99999;
-      background: #c0392b; color: #fff;
-      font: 600 12px/1 'Segoe UI', sans-serif;
-      padding: 6px 10px; border-radius: 20px;
-      cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.35);
-      display: none; user-select: none;
-    }
-    #pi-err-badge:hover { background: #a93226; }
-    #pi-err-panel {
-      position: fixed; bottom: 50px; right: 14px; z-index: 99999;
-      background: #1e1e1e; color: #f8f8f2;
-      font: 12px/1.5 'Consolas','Courier New',monospace;
-      width: min(520px, 92vw); max-height: 320px; overflow-y: auto;
-      border-radius: 8px; padding: 12px 14px;
-      box-shadow: 0 4px 20px rgba(0,0,0,.5);
-      display: none;
-    }
-    #pi-err-panel h4 {
-      margin: 0 0 8px; color: #ff6b6b; font-size: 13px;
-      display: flex; justify-content: space-between; align-items: center;
-    }
-    #pi-err-panel h4 span { cursor: pointer; opacity: .7; font-size: 16px; }
-    #pi-err-panel h4 span:hover { opacity: 1; }
-    .pi-err-entry {
-      border-bottom: 1px solid #333; padding: 6px 0; font-size: 11px;
-    }
-    .pi-err-entry:last-child { border-bottom: none; }
-    .pi-err-msg { color: #ff6b6b; font-weight: 600; }
-    .pi-err-src { color: #8be9fd; font-size: 10px; margin-top: 2px; }
-    .pi-err-time { color: #6272a4; font-size: 10px; }
-    #pi-err-clear {
-      margin-top: 10px; background: #333; color: #ccc; border: none;
-      border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 11px;
-    }
-    #pi-err-clear:hover { background: #444; }
-  `;
-  document.head.appendChild(style);
-
-  /* ── DOM elements ────────────────────────────────────────── */
-  const badge = document.createElement('div');
-  badge.id = 'pi-err-badge';
-  badge.title = 'Click to view JS errors';
-
-  const panel = document.createElement('div');
-  panel.id = 'pi-err-panel';
-  panel.innerHTML = `
-    <h4>JS Errors <span id="pi-err-close" title="Close">✕</span></h4>
-    <div id="pi-err-list"></div>
-    <button id="pi-err-clear">Clear all</button>
-  `;
-
-  document.addEventListener('DOMContentLoaded', () => {
-    document.body.appendChild(badge);
-    document.body.appendChild(panel);
-
-    badge.addEventListener('click', () => {
-      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-    });
-    document.getElementById('pi-err-close').addEventListener('click', () => {
-      panel.style.display = 'none';
-    });
-    document.getElementById('pi-err-clear').addEventListener('click', () => {
-      errors = [];
-      document.getElementById('pi-err-list').innerHTML = '';
-      badge.style.display = 'none';
-      panel.style.display = 'none';
-    });
-  });
-
-  /* ── Error tracking ──────────────────────────────────────── */
-  let errors = [];
-
-  function addError(msg, source, lineno, colno) {
-    const time = new Date().toLocaleTimeString();
-    errors.push({ msg, source, lineno, colno, time });
-
-    const list = document.getElementById('pi-err-list');
-    if (list) {
-      const entry = document.createElement('div');
-      entry.className = 'pi-err-entry';
-      const srcShort = (source || '').replace(/.*\//, '');
-      entry.innerHTML = `
-        <div class="pi-err-msg">${escHtml(msg)}</div>
-        <div class="pi-err-src">${escHtml(srcShort)} ${lineno ? 'line ' + lineno : ''}${colno ? ':' + colno : ''}</div>
-        <div class="pi-err-time">${time}</div>
-      `;
-      list.appendChild(entry);
-    }
-
-    if (badge) {
-      badge.textContent = '⚠ ' + errors.length + ' error' + (errors.length > 1 ? 's' : '');
-      badge.style.display = 'block';
-    }
-
-    // Also log to console with full detail
-    console.error('[PI Error Overlay]', msg, source, lineno);
-  }
-
-  function escHtml(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
-
-  /* ── Listeners ───────────────────────────────────────────── */
-  window.addEventListener('error', (e) => {
-    addError(e.message || 'Unknown error', e.filename, e.lineno, e.colno);
-  });
-
-  window.addEventListener('unhandledrejection', (e) => {
-    const msg = e.reason instanceof Error
-      ? e.reason.message
-      : (typeof e.reason === 'string' ? e.reason : 'Unhandled promise rejection');
-    addError('Promise: ' + msg, '', '', '');
-  });
-})();
-</script>
-
 </body>
 </html>

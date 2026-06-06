@@ -916,6 +916,9 @@ const SB_TO_INT = {
 // Convert our internal object to Supabase column names
 const DATE_FIELDS = new Set(['interaction_date','follow_up_due','due_date','start_date','end_date','precon_date','added_date','meeting_date']);
 
+// Integer FK columns that Supabase expects as numbers, not strings
+const SB_INT_FIELDS = new Set(['project_id','stakeholder_id','issue_id','interaction_id','meeting_id']);
+
 function toSB(table, obj) {
   const sbTable = SB_TABLES[table];
   const map = SB_TO_INT[sbTable];
@@ -925,7 +928,13 @@ function toSB(table, obj) {
     let val = obj[intKey];
     if (DATE_FIELDS.has(sbCol) && (val === '' || val === undefined)) val = null;
     if (val !== undefined && val !== null) {
-      result[sbCol] = val;
+      // Cast FK integer columns to numbers so Supabase accepts them
+      if (SB_INT_FIELDS.has(sbCol) && val !== '') {
+        const n = Number(val);
+        result[sbCol] = isNaN(n) ? val : n;
+      } else {
+        result[sbCol] = val;
+      }
     } else if (DATE_FIELDS.has(sbCol)) {
       result[sbCol] = null;
     }
@@ -943,7 +952,7 @@ function fromSB(table, row) {
     result[intKey] = row[sbCol] !== undefined ? row[sbCol] : (intKey.startsWith('is') ? false : '');
   }
   // Normalize booleans
-  ['isMaster','isAnonymous','followUp','followUpDone'].forEach(f => {
+  ['isMaster','followUp','followUpDone'].forEach(f => {
     if (result[f] !== undefined) result[f] = result[f] === true || result[f] === 1;
   });
   return result;
@@ -1724,7 +1733,6 @@ async function saveInteraction(){
         email:cem,phone:cph,
         type:'Motorist/Passerby',
         isMaster:false,
-        isAnonymous:false,
         notes:'Auto-created from interaction log'
       };
       const allStakes=DB.get('stakeholders');

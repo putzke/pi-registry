@@ -647,7 +647,7 @@ const SB_TO_INT = {
     id:'id', firstName:'first_name', lastName:'last_name', org:'org',
     title:'title', email:'email', phone:'phone', address:'address',
     parcelId:'parcel_id', type:'stakeholder_type', influenceTier:'influence_tier',
-    prefContact:'pref_contact', isMaster:'is_master', isAnonymous:'is_anonymous',
+    prefContact:'pref_contact', isMaster:'is_master',
     notes:'notes'
   },
   pi_project_stakeholders: {
@@ -1324,7 +1324,6 @@ async function runImport() {
         influenceTier: row.influenceTier || 'Medium',
         prefContact:   row.prefContact   || 'Email',
         isMaster:  row.isMaster !== undefined ? row.isMaster : true,
-        isAnonymous: false,
         notes:     row.notes     || '',
       };
       const newId = await sbAdd('stakeholders', newS);

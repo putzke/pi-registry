@@ -138,7 +138,7 @@ body{padding:0}
 .fi-sel:focus{border-color:var(--sky)}
 
 /* SCROLLABLE AREA */
-.review-wrap{max-height:calc(100vh - 320px);min-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-lg)}
+.review-wrap{max-height:calc(100vh - 320px);min-height:300px;overflow-y:scroll;border:1px solid var(--border);border-radius:var(--radius-lg)}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:2px}
@@ -451,7 +451,7 @@ body{padding:0}
         <div class="card" style="max-height:calc(100vh - 200px);overflow-y:auto;">
           <div class="card-title">Review &amp; stakeholder matching</div>
           <div class="card-sub">Each row has been matched to a stakeholder in the registry by name. Review matches before importing. Rows flagged in amber matched multiple contacts — pick the correct one. Rows in red found no match and will be skipped.</div>
-          <div style="max-height:calc(100vh - 380px);min-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-lg);margin-top:12px">
+          <div style="max-height:calc(100vh - 380px);min-height:200px;overflow-y:scroll;border:1px solid var(--border);border-radius:var(--radius-lg);margin-top:12px">
             <table class="int-review-table">
               <thead>
                 <tr>

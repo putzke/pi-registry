@@ -528,7 +528,7 @@ function syncNavBar(step) {
   if (step === 1) {
     nextBtn.textContent = '';
     nextBtn.innerHTML = 'Next: Map columns <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>';
-    nextBtn.disabled = document.getElementById('btn-to-2')?.disabled !== false;
+    nextBtn.disabled = false;
     nextBtn.style.visibility = 'visible';
   } else if (step === 2) {
     nextBtn.innerHTML = 'Next: Review duplicates <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>';
@@ -1046,7 +1046,8 @@ function showFileError(msg) {
 function onFileParsed() {
   const { rawHeaders, rawRows, file } = state;
   document.getElementById('file-status').innerHTML = `<div class="alert alert-success"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8l4 4 6-6"/></svg>Loaded <strong>${file.name}</strong> — ${rawRows.length} rows, ${rawHeaders.length} columns detected.</div>`;
-  document.getElementById('btn-to-2').disabled = false;
+  const _nb = document.getElementById('nav-next-btn');
+  if (_nb) _nb.disabled = false;
   syncNavBar(1);
   // Build auto column map
   state.columnMap = {};
@@ -1439,7 +1440,8 @@ function resetImport() {
   state = { step:1, file:null, rawHeaders:[], rawRows:[], columnMap:{}, importContext:'master', selectedProject:null, parsed:[], reviewed:[], existingStakeholders:[] };
   document.getElementById('file-status').className = 'hidden';
   document.getElementById('file-input').value = '';
-  document.getElementById('btn-to-2').disabled = true;
+  const _nb2 = document.getElementById('nav-next-btn');
+  if (_nb2) _nb2.disabled = true;
   populateProjectSelect();
   goToStep(1);
 }

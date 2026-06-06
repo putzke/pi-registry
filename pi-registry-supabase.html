@@ -650,6 +650,9 @@ const SB_TO_INT = {
 // Date fields that must be null (not '') when empty
 const DATE_FIELDS = new Set(['interaction_date','follow_up_due','due_date','start_date','end_date','precon_date','added_date','meeting_date','date_raised','date_resolved']);
 
+// Integer FK columns that Supabase expects as numbers
+const SB_INT_FIELDS = new Set(['project_id','stakeholder_id','issue_id','interaction_id','meeting_id']);
+
 function toSB(table, obj) {
   const sbTable = SB_TABLES[table];
   const map = SB_TO_INT[sbTable];
@@ -660,9 +663,15 @@ function toSB(table, obj) {
     // Convert empty strings to null for date columns
     if (DATE_FIELDS.has(sbCol) && (val === '' || val === undefined)) val = null;
     if (val !== undefined && val !== null) {
-      result[sbCol] = val;
+      // Cast FK integer columns to numbers so Supabase accepts them
+      if (SB_INT_FIELDS.has(sbCol) && val !== '') {
+        const n = Number(val);
+        result[sbCol] = isNaN(n) ? val : n;
+      } else {
+        result[sbCol] = val;
+      }
     } else if (DATE_FIELDS.has(sbCol)) {
-      result[sbCol] = null; // explicitly send null for date fields
+      result[sbCol] = null;
     }
   }
   return result;

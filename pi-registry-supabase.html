@@ -5484,99 +5484,193 @@ _importChannel.addEventListener('message', e => {
 });
 
 
-// ── PROJECT ARCHIVE EXPORT ────────────────────────────────────
-function exportProject(projectId) {
-  if(typeof XLSX==='undefined'){
-    var s=document.createElement('script');
-    s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-    s.onload=function(){exportProject(projectId)};
-    s.onerror=function(){alert('Excel export requires internet connection. SheetJS library could not be loaded. Try disabling Tracking Prevention in Edge settings, or use the Word report export instead.')};
-    document.body.appendChild(s);
-    return;
+// ── PROJECT DATA EXPORT (Supabase) ───────────────────────────
+async function exportProject(projectId) {
+
+  // Load SheetJS on demand
+  if (typeof XLSX === 'undefined') {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload = resolve;
+      s.onerror = () => reject(new Error('SheetJS failed to load'));
+      document.body.appendChild(s);
+    }).catch(() => {
+      alert('Excel export requires an internet connection. SheetJS library could not be loaded.');
+      return;
+    });
   }
-  const p = DB.get('projects').find(x=>x.id===projectId);
-  if (!p) return;
-  const ps       = DB.get('project_stakeholders').filter(x=>x.projectId===projectId);
-  const allS     = DB.get('stakeholders');
-  const ints     = DB.get('interactions').filter(x=>x.projectId===projectId);
-  const dels     = DB.get('deliverables').filter(x=>x.projectId===projectId);
+
+  showToast('Building export\u2026');
+
+  const proj = (DB.get('projects') || []).find(x => x.id === projectId);
+  if (!proj) return;
+
+  // Pull all data fresh from Supabase
+  const [allStake, projLinks, ints, dels, meetings, issues] = await Promise.all([
+    cacheLoad('stakeholders'),
+    cacheLoad('project_stakeholders'),
+    cacheLoad('interactions'),
+    cacheLoad('deliverables'),
+    cacheLoad('meetings'),
+    cacheLoad('issues'),
+  ]);
+
+  const ps   = projLinks.filter(x => x.projectId === projectId);
+  const pInts = ints.filter(x => x.projectId === projectId)
+                    .sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  const pDels = dels.filter(x => x.projectId === projectId);
+  const pMeet = meetings.filter(x => x.projectId === projectId)
+                        .sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  const pIss  = issues.filter(x => x.projectId === projectId)
+                      .sort((a,b) => (b.dateRaised||'').localeCompare(a.dateRaised||''));
 
   const wb = XLSX.utils.book_new();
 
-  // ── TAB 1: Project details ──────────────────────────────────
-  const projRows = [
-    ['Field','Value'],
-    ['Project ID', p.pid],
-    ['Project name', p.name],
-    ['Client / agency', p.client||''],
-    ['Project type', p.type||''],
-    ['County / region', p.county||''],
-    ['Phase', p.phase||''],
-    ['Status', p.status||''],
-    ['Start date', p.startDate||''],
-    ['End date', p.endDate||''],
-    ['Precon date', p.preconDate||''],
-    ['Notes', p.notes||''],
-    ['Export date', new Date().toLocaleDateString('en-US')],
+  // ── Helper: style a worksheet ──────────────────────────────
+  function styleSheet(ws, colWidths) {
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+    const totalCols = range.e.c + 1;
+    const totalRows = range.e.r + 1;
+
+    // Header row style (row 0) — dark navy background, white bold text
+    for (let c = 0; c <= range.e.c; c++) {
+      const cellAddr = XLSX.utils.encode_cell({r:0, c});
+      if (!ws[cellAddr]) continue;
+      ws[cellAddr].s = {
+        font:    { bold: true, color: { rgb: 'FFFFFF' }, sz: 10 },
+        fill:    { fgColor: { rgb: '1A3050' }, patternType: 'solid' },
+        alignment: { vertical: 'center', wrapText: false },
+        border: {
+          bottom: { style: 'thin', color: { rgb: '2D7DD2' } }
+        }
+      };
+    }
+
+    // Alternating row shading for data rows
+    for (let r = 1; r <= range.e.r; r++) {
+      if (r % 2 === 0) continue; // only shade odd rows
+      for (let c = 0; c <= range.e.c; c++) {
+        const cellAddr = XLSX.utils.encode_cell({r, c});
+        if (!ws[cellAddr]) ws[cellAddr] = {t:'s', v:''};
+        ws[cellAddr].s = ws[cellAddr].s || {};
+        ws[cellAddr].s.fill = { fgColor: { rgb: 'F0F4F8' }, patternType: 'solid' };
+      }
+    }
+
+    // Freeze header row
+    ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft' };
+
+    // Column widths
+    if (colWidths) ws['!cols'] = colWidths.map(w => ({ wch: w }));
+  }
+
+  // ── TAB 1: Stakeholders ────────────────────────────────────
+  const stakeHeaders = [
+    'First Name','Last Name','Organization','Title / Role',
+    'Email','Phone','Stakeholder Type','Influence Tier',
+    'Preferred Contact','Project Role','Support Level',
+    'Distribution Groups','Issue Tags','Address','Parcel ID',
+    'Master List','Anonymous','Project Notes'
   ];
-  const ws1 = XLSX.utils.aoa_to_sheet(projRows);
-  ws1['!cols'] = [{wch:22},{wch:48}];
-  XLSX.utils.book_append_sheet(wb, ws1, 'Project details');
-
-  // ── TAB 2: Stakeholder contact list ────────────────────────
-  const stakeHeaders = ['First name','Last name','Organization','Title','Email','Phone','Type','Role','Support level','Issue tags','Distribution groups','Address','Master list','Project notes'];
-  const stakeRows = ps.map(lk=>{
-    const s = allS.find(x=>String(x.id)===String(lk.stakeholderId));
+  const stakeRows = ps.map(lk => {
+    const s = allStake.find(x => String(x.id) === String(lk.stakeholderId));
     if (!s) return null;
-    return [s.firstName||'',s.lastName||'',s.org||'',s.title||'',s.email||'',s.phone||'',s.type||'',lk.stakeholderRole||'External',lk.support||'',lk.issueTags||'',lk.distributionGroups||'',s.address||'',s.isMaster?'Yes':'No',lk.notes||''];
+    return [
+      s.firstName||'', s.lastName||'', s.org||'', s.title||'',
+      s.email||'', s.phone||'', s.type||'', s.influenceTier||'',
+      s.prefContact||'', lk.stakeholderRole||'External', lk.support||'Neutral',
+      lk.distributionGroups||'', lk.issueTags||'', s.address||'', s.parcelId||'',
+      s.isMaster ? 'Yes' : 'No', s.isAnonymous ? 'Yes' : 'No', lk.notes||''
+    ];
   }).filter(Boolean);
-  const ws2 = XLSX.utils.aoa_to_sheet([stakeHeaders, ...stakeRows]);
-  ws2['!cols'] = [{wch:13},{wch:16},{wch:28},{wch:22},{wch:30},{wch:16},{wch:14},{wch:16},{wch:12},{wch:12},{wch:22},{wch:30},{wch:10},{wch:30}];
-  XLSX.utils.book_append_sheet(wb, ws2, 'Stakeholder list');
+  const ws1 = XLSX.utils.aoa_to_sheet([stakeHeaders, ...stakeRows]);
+  styleSheet(ws1, [12,14,28,22,30,16,16,14,14,12,12,22,20,30,12,10,10,30]);
+  XLSX.utils.book_append_sheet(wb, ws1, 'Stakeholders');
 
-  // ── TAB 3: Interaction log ──────────────────────────────────
-  const intHeaders = ['Date','Stakeholder','Organization','Channel','Direction','Summary','Follow-up required','Follow-up action','Follow-up due','Follow-up resolved','Logged by'];
-  const intRows = ints.sort((a,b)=>b.date.localeCompare(a.date)).map(i=>{
-    const s = allS.find(x=>String(x.id)===String(i.stakeholderId));
-    return [i.date||'',s?dispName(s):'Unknown',s?s.org||'':'',i.channel||'',i.direction||'',i.summary||'',i.followUp?'Yes':'No',i.followUpNote||'',i.followUpDue||'',i.followUpDone?'Yes':'No',i.loggedBy||''];
+  // ── TAB 2: Interactions ────────────────────────────────────
+  const intHeaders = [
+    'Date','Stakeholder','Organization','Channel','Direction',
+    'Subject','Summary / Notes','Logged By',
+    'Follow-Up Required','Follow-Up Action','Follow-Up Due',
+    'Follow-Up Resolved'
+  ];
+  const intRows = pInts.map(i => {
+    const s = allStake.find(x => String(x.id) === String(i.stakeholderId));
+    return [
+      i.date||'', s ? dispName(s) : 'Unknown', s ? s.org||'' : '',
+      i.channel||'', i.direction||'', i.subject||'', i.summary||'',
+      i.loggedBy||'', i.followUp ? 'Yes' : 'No',
+      i.followUpNote||'', i.followUpDue||'',
+      i.followUpDone ? 'Yes' : 'No'
+    ];
   });
-  const ws3 = XLSX.utils.aoa_to_sheet([intHeaders, ...intRows]);
-  ws3['!cols'] = [{wch:11},{wch:22},{wch:26},{wch:14},{wch:11},{wch:60},{wch:10},{wch:36},{wch:12},{wch:10},{wch:14}];
-  XLSX.utils.book_append_sheet(wb, ws3, 'Interaction log');
+  const ws2 = XLSX.utils.aoa_to_sheet([intHeaders, ...intRows]);
+  styleSheet(ws2, [11,22,26,14,11,24,60,14,10,36,12,10]);
+  XLSX.utils.book_append_sheet(wb, ws2, 'Interactions');
 
-  // ── TAB 4: Deliverables ─────────────────────────────────────
-  const delHeaders = ['Type','Scope type','Status','Contracted qty','Delivered count','Progress %','Due date','Milestone / frequency','Distribution list','Notes'];
-  const delRows = dels.map(d=>[d.type||'',d.scopeType||'',d.status||'',d.contractedQty||0,d.deliveredCount||0,d.progress||0,d.dueDate||'',d.scopeType==='recurring'?d.freq||'':d.milestoneStart||'',d.distList||'',d.notes||'']);
-  const ws4 = XLSX.utils.aoa_to_sheet([delHeaders, ...delRows]);
-  ws4['!cols'] = [{wch:22},{wch:34},{wch:12},{wch:13},{wch:11},{wch:12},{wch:10},{wch:12},{wch:24},{wch:32},{wch:30},{wch:36}];
-  XLSX.utils.book_append_sheet(wb, ws4, 'Deliverables');
+  // ── TAB 3: Deliverables ────────────────────────────────────
+  const delHeaders = [
+    'Deliverable Type','Title','Scope Type','Status',
+    'Contracted Qty','Delivered Count','Progress %',
+    'Due Date / Milestone','Frequency','Distribution List','Notes'
+  ];
+  const delRows = pDels.map(d => [
+    d.type||'', d.title||'', d.scopeType||'', d.status||'',
+    d.contractedQty||0, d.deliveredCount||0, d.progress||0,
+    d.scopeType === 'recurring' ? '' : (d.milestoneStart||''),
+    d.scopeType === 'recurring' ? (d.freq||'') : '',
+    d.distList||'', d.notes||''
+  ]);
+  const ws3 = XLSX.utils.aoa_to_sheet([delHeaders, ...delRows]);
+  styleSheet(ws3, [22,30,12,14,13,14,11,20,16,28,36]);
+  XLSX.utils.book_append_sheet(wb, ws3, 'Deliverables');
 
-  // ── TAB 5: Follow-up resolution log ────────────────────────
-  const fuHeaders = ['Date','Stakeholder','Organization','Follow-up action','Due date','Resolved','Logged by','Interaction summary'];
-  const fuRows = ints.filter(i=>i.followUp).sort((a,b)=>b.date.localeCompare(a.date)).map(i=>{
-    const s = allS.find(x=>String(x.id)===String(i.stakeholderId));
-    return [i.date||'',s?dispName(s):'Unknown',s?s.org||'':'',i.followUpNote||'',i.followUpDue||'',i.followUpDone?'Yes':'No',i.loggedBy||'',i.summary||''];
+  // ── TAB 4: Meetings / Events ──────────────────────────────
+  const meetHeaders = [
+    'Date','Title','Meeting Type','Location','Format','Status',
+    'Attendance Count','Comment Cards',
+    'Agenda','Key Concerns','Action Items',
+    'Handouts / Materials','Notes'
+  ];
+  const meetRows = pMeet.map(m => [
+    m.date||'', m.title||'', m.type||'', m.location||'',
+    m.format||'', m.status||'',
+    m.attendanceCount||0, m.commentCards||0,
+    m.agenda||'', m.keyConcerns||'', m.actionItems||'',
+    m.handouts||'', m.notes||''
+  ]);
+  const ws4 = XLSX.utils.aoa_to_sheet([meetHeaders, ...meetRows]);
+  styleSheet(ws4, [11,34,22,28,12,12,10,10,40,40,40,30,36]);
+  XLSX.utils.book_append_sheet(wb, ws4, 'Meetings & Events');
+
+  // ── TAB 5: Issues ──────────────────────────────────────────
+  const issHeaders = [
+    'Date Raised','Title','Category','Status','Priority',
+    'Description','Assigned To','Date Resolved',
+    'Resolution Notes','Related Stakeholder(s)'
+  ];
+  const issRows = pIss.map(iss => {
+    // Gather related stakeholder names if available
+    const relNames = (iss.stakeholderIds || [])
+      .map(sid => { const s = allStake.find(x => String(x.id) === String(sid)); return s ? dispName(s) : ''; })
+      .filter(Boolean).join(', ');
+    return [
+      iss.dateRaised||'', iss.title||'', iss.category||'', iss.status||'', iss.priority||'',
+      iss.description||'', iss.assignedTo||'', iss.dateResolved||'',
+      iss.resolutionNotes||'', relNames
+    ];
   });
-  const ws5 = XLSX.utils.aoa_to_sheet([fuHeaders, ...fuRows]);
-  ws5['!cols'] = [{wch:11},{wch:22},{wch:26},{wch:36},{wch:12},{wch:10},{wch:14},{wch:55}];
-  XLSX.utils.book_append_sheet(wb, ws5, 'Follow-up log');
+  const ws5 = XLSX.utils.aoa_to_sheet([issHeaders, ...issRows]);
+  styleSheet(ws5, [11,30,18,12,10,50,18,12,40,30]);
+  XLSX.utils.book_append_sheet(wb, ws5, 'Issues');
 
-  // ── TAB 6: Public comment matrix ───────────────────────────
-  const cmHeaders = ['Date','Name','Organization','Channel','Comment summary','Response status','Response notes','Logged by'];
-  const cmRows = ints.filter(i=>['Comment card','Public meeting','Mail','In-person'].includes(i.channel)).sort((a,b)=>b.date.localeCompare(a.date)).map(i=>{
-    const s = allS.find(x=>String(x.id)===String(i.stakeholderId));
-    return [i.date||'',s?dispName(s):'Unknown',s?s.org||'':'',i.channel||'',i.summary||'',i.followUpDone?'Responded':'Pending',i.followUpNote||'',i.loggedBy||''];
-  });
-  const ws6 = XLSX.utils.aoa_to_sheet([cmHeaders, ...cmRows]);
-  ws6['!cols'] = [{wch:11},{wch:22},{wch:26},{wch:14},{wch:55},{wch:12},{wch:36},{wch:14}];
-  XLSX.utils.book_append_sheet(wb, ws6, 'Comment matrix');
-
-  // ── DOWNLOAD ────────────────────────────────────────────────
-  const filename = `${p.pid}_PI_Archive_${new Date().toISOString().slice(0,10)}.xlsx`;
+  // ── DOWNLOAD ───────────────────────────────────────────────
+  const dateStr  = new Date().toISOString().slice(0,10);
+  const safeName = (proj.name||'Project').replace(/[/\\:*?"<>|]/g, '-');
+  const filename = `${proj.pid||'Export'} — ${safeName} — PI Export ${dateStr}.xlsx`;
   XLSX.writeFile(wb, filename);
-
-  // Show a brief toast confirmation
-  showToast(`Exported ${filename}`);
+  showToast(`Exported: ${filename}`);
 }
 
 // ── INIT ──────────────────────────────────────
@@ -5830,136 +5924,5 @@ async function delMeeting(id){
 }
 
 </script>
-<!-- ============================================================
-     PI REGISTRY — RUNTIME ERROR OVERLAY
-     Catches unhandled JS errors + promise rejections during use.
-     Displays a dismissible badge in the bottom-right corner.
-     Remove or set OVERLAY_ENABLED = false to disable.
-     ============================================================ -->
-<script>
-(function () {
-  const OVERLAY_ENABLED = true;
-  if (!OVERLAY_ENABLED) return;
-
-  /* ── Styles ─────────────────────────────────────────────── */
-  const style = document.createElement('style');
-  style.textContent = `
-    #pi-err-badge {
-      position: fixed; bottom: 14px; right: 14px; z-index: 99999;
-      background: #c0392b; color: #fff;
-      font: 600 12px/1 'Segoe UI', sans-serif;
-      padding: 6px 10px; border-radius: 20px;
-      cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.35);
-      display: none; user-select: none;
-    }
-    #pi-err-badge:hover { background: #a93226; }
-    #pi-err-panel {
-      position: fixed; bottom: 50px; right: 14px; z-index: 99999;
-      background: #1e1e1e; color: #f8f8f2;
-      font: 12px/1.5 'Consolas','Courier New',monospace;
-      width: min(520px, 92vw); max-height: 320px; overflow-y: auto;
-      border-radius: 8px; padding: 12px 14px;
-      box-shadow: 0 4px 20px rgba(0,0,0,.5);
-      display: none;
-    }
-    #pi-err-panel h4 {
-      margin: 0 0 8px; color: #ff6b6b; font-size: 13px;
-      display: flex; justify-content: space-between; align-items: center;
-    }
-    #pi-err-panel h4 span { cursor: pointer; opacity: .7; font-size: 16px; }
-    #pi-err-panel h4 span:hover { opacity: 1; }
-    .pi-err-entry {
-      border-bottom: 1px solid #333; padding: 6px 0; font-size: 11px;
-    }
-    .pi-err-entry:last-child { border-bottom: none; }
-    .pi-err-msg { color: #ff6b6b; font-weight: 600; }
-    .pi-err-src { color: #8be9fd; font-size: 10px; margin-top: 2px; }
-    .pi-err-time { color: #6272a4; font-size: 10px; }
-    #pi-err-clear {
-      margin-top: 10px; background: #333; color: #ccc; border: none;
-      border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 11px;
-    }
-    #pi-err-clear:hover { background: #444; }
-  `;
-  document.head.appendChild(style);
-
-  /* ── DOM elements ────────────────────────────────────────── */
-  const badge = document.createElement('div');
-  badge.id = 'pi-err-badge';
-  badge.title = 'Click to view JS errors';
-
-  const panel = document.createElement('div');
-  panel.id = 'pi-err-panel';
-  panel.innerHTML = `
-    <h4>JS Errors <span id="pi-err-close" title="Close">✕</span></h4>
-    <div id="pi-err-list"></div>
-    <button id="pi-err-clear">Clear all</button>
-  `;
-
-  document.addEventListener('DOMContentLoaded', () => {
-    document.body.appendChild(badge);
-    document.body.appendChild(panel);
-
-    badge.addEventListener('click', () => {
-      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-    });
-    document.getElementById('pi-err-close').addEventListener('click', () => {
-      panel.style.display = 'none';
-    });
-    document.getElementById('pi-err-clear').addEventListener('click', () => {
-      errors = [];
-      document.getElementById('pi-err-list').innerHTML = '';
-      badge.style.display = 'none';
-      panel.style.display = 'none';
-    });
-  });
-
-  /* ── Error tracking ──────────────────────────────────────── */
-  let errors = [];
-
-  function addError(msg, source, lineno, colno) {
-    const time = new Date().toLocaleTimeString();
-    errors.push({ msg, source, lineno, colno, time });
-
-    const list = document.getElementById('pi-err-list');
-    if (list) {
-      const entry = document.createElement('div');
-      entry.className = 'pi-err-entry';
-      const srcShort = (source || '').replace(/.*\//, '');
-      entry.innerHTML = `
-        <div class="pi-err-msg">${escHtml(msg)}</div>
-        <div class="pi-err-src">${escHtml(srcShort)} ${lineno ? 'line ' + lineno : ''}${colno ? ':' + colno : ''}</div>
-        <div class="pi-err-time">${time}</div>
-      `;
-      list.appendChild(entry);
-    }
-
-    if (badge) {
-      badge.textContent = '⚠ ' + errors.length + ' error' + (errors.length > 1 ? 's' : '');
-      badge.style.display = 'block';
-    }
-
-    // Also log to console with full detail
-    console.error('[PI Error Overlay]', msg, source, lineno);
-  }
-
-  function escHtml(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
-
-  /* ── Listeners ───────────────────────────────────────────── */
-  window.addEventListener('error', (e) => {
-    addError(e.message || 'Unknown error', e.filename, e.lineno, e.colno);
-  });
-
-  window.addEventListener('unhandledrejection', (e) => {
-    const msg = e.reason instanceof Error
-      ? e.reason.message
-      : (typeof e.reason === 'string' ? e.reason : 'Unhandled promise rejection');
-    addError('Promise: ' + msg, '', '', '');
-  });
-})();
-</script>
-
 </body>
 </html>

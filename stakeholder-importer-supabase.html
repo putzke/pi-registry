@@ -110,7 +110,7 @@ body{padding:0}
 .review-table tr.dup-exact td{background:rgba(232,160,32,.05)}
 .review-table tr.dup-fuzzy td{background:rgba(217,64,64,.04)}
 .review-table tr.skip-row td{background:rgba(255,255,255,.02);opacity:.5}
-.action-sel{display:flex;gap:4px;flex-wrap:wrap}
+.action-sel{display:grid;grid-template-columns:1fr 1fr;gap:4px;min-width:190px}
 .action-btn{padding:3px 9px;border-radius:var(--radius);border:1px solid var(--border-md);background:transparent;color:var(--slate);font-family:var(--font);font-size:11px;cursor:pointer;transition:all .1s}
 .action-btn:hover{color:var(--white)}
 .action-btn.sel-add{background:var(--green-lt);border-color:var(--green);color:#1a7a50}
@@ -138,7 +138,7 @@ body{padding:0}
 .fi-sel:focus{border-color:var(--sky)}
 
 /* SCROLLABLE AREA */
-.review-wrap{max-height:460px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-lg)}
+.review-wrap{max-height:calc(100vh - 320px);min-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-lg)}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:2px}
@@ -380,15 +380,27 @@ body{padding:0}
 
     <div class="int-body" id="int-body">
 
-      <!-- INT STEP INDICATOR -->
-      <div class="steps" id="int-steps">
-        <div class="step active" id="int-step-1"><div class="step-num">1</div>Upload file</div>
-        <div class="step-arrow">›</div>
-        <div class="step" id="int-step-2"><div class="step-num">2</div>Map columns</div>
-        <div class="step-arrow">›</div>
-        <div class="step" id="int-step-3"><div class="step-num">3</div>Review &amp; match</div>
-        <div class="step-arrow">›</div>
-        <div class="step" id="int-step-4"><div class="step-num">4</div>Import complete</div>
+      <!-- INT STEP NAV BAR -->
+      <div class="step-nav">
+        <button class="btn" id="int-nav-back-btn" onclick="intNavBack()" style="visibility:hidden">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3l-5 5 5 5"/></svg>
+          Back
+        </button>
+        <div class="step-nav-center">
+          <div class="steps" id="int-steps" style="border-bottom:none;padding:0;margin:0">
+            <div class="step active" id="int-step-1"><div class="step-num">1</div>Upload file</div>
+            <div class="step-arrow">›</div>
+            <div class="step" id="int-step-2"><div class="step-num">2</div>Map columns</div>
+            <div class="step-arrow">›</div>
+            <div class="step" id="int-step-3"><div class="step-num">3</div>Review &amp; match</div>
+            <div class="step-arrow">›</div>
+            <div class="step" id="int-step-4"><div class="step-num">4</div>Import complete</div>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="int-nav-next-btn" onclick="intNavNext()" disabled>
+          Next: Map columns
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+        </button>
       </div>
 
       <!-- INT STEP 1: UPLOAD -->
@@ -412,12 +424,7 @@ body{padding:0}
           </div>
           <div id="int-file-status" class="hidden" style="margin-top:12px"></div>
         </div>
-        <div style="display:flex;justify-content:flex-end">
-          <button class="btn btn-primary" id="int-btn-to-2" onclick="intGoToStep(2)" disabled>
-            Next: Map columns
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
-          </button>
-        </div>
+
       </div>
 
       <!-- INT STEP 2: MAP -->
@@ -436,16 +443,7 @@ body{padding:0}
             <div style="overflow-x:auto"><table class="preview-table" id="int-preview-table"></table></div>
           </div>
         </div>
-        <div style="display:flex;justify-content:space-between">
-          <button class="btn" onclick="intGoToStep(1)">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3l-5 5 5 5"/></svg>
-            Back
-          </button>
-          <button class="btn btn-primary" id="int-btn-to-3" onclick="intGoToStep(3)">
-            Next: Review &amp; match
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
-          </button>
-        </div>
+
       </div>
 
       <!-- INT STEP 3: REVIEW -->
@@ -470,18 +468,12 @@ body{padding:0}
           </div>
           <div id="int-review-summary" style="margin-top:12px;font-size:12px;color:var(--slate)"></div>
         </div>
-        <div style="display:flex;justify-content:space-between;margin-top:16px">
-          <button class="btn" onclick="intGoToStep(2)">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3l-5 5 5 5"/></svg>
-            Back
+        <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:16px">
+          <span id="int-import-count-label" style="font-size:12px;color:var(--slate)"></span>
+          <button class="btn btn-primary" id="int-btn-import" onclick="runIntImport()">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg>
+            Import interactions
           </button>
-          <div style="display:flex;align-items:center;gap:10px">
-            <span id="int-import-count-label" style="font-size:12px;color:var(--slate)"></span>
-            <button class="btn btn-primary" id="int-btn-import" onclick="runIntImport()">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg>
-              Import interactions
-            </button>
-          </div>
         </div>
       </div>
 
@@ -1505,6 +1497,38 @@ const INT_AUTO_MAP = {
 
 const VALID_CHANNELS = ['Phone','Email','In-person','Public meeting','Mail','Social media','Media inquiry','Door-to-door','Comment card','Letter','Text','Other'];
 
+// ── INT TAB NAV BAR ──────────────────────────────────────────────────────────
+function syncIntNavBar(step) {
+  const backBtn = document.getElementById('int-nav-back-btn');
+  const nextBtn = document.getElementById('int-nav-next-btn');
+  if (!backBtn || !nextBtn) return;
+
+  backBtn.style.visibility = (step === 1 || step === 4) ? 'hidden' : 'visible';
+
+  if (step === 1) {
+    nextBtn.innerHTML = 'Next: Map columns <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>';
+    nextBtn.disabled = intState.rawRows.length === 0;
+    nextBtn.style.visibility = 'visible';
+  } else if (step === 2) {
+    nextBtn.innerHTML = 'Next: Review &amp; match <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>';
+    nextBtn.disabled = false;
+    nextBtn.style.visibility = 'visible';
+  } else if (step === 3 || step === 4) {
+    nextBtn.style.visibility = 'hidden';
+  }
+}
+
+function intNavBack() {
+  const cur = intState.step || 1;
+  if (cur > 1 && cur < 4) intGoToStep(cur - 1);
+}
+
+function intNavNext() {
+  const cur = intState.step || 1;
+  if (cur === 1) intGoToStep(2);
+  else if (cur === 2) intGoToStep(3);
+}
+
 // ── INT STATE ─────────────────────────────────────────────────
 let intState = {
   step: 1,
@@ -1623,13 +1647,16 @@ function intAutoSuggest(header) {
 function intOnFileParsed() {
   const { rawHeaders, rawRows, file } = intState;
   document.getElementById('int-file-status').innerHTML = `<div class="alert alert-success"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8l4 4 6-6"/></svg>Loaded <strong>${sanitizeHTML(file.name)}</strong> — ${rawRows.length} rows, ${rawHeaders.length} columns.</div>`;
-  document.getElementById('int-btn-to-2').disabled = false;
+  const _inb = document.getElementById('int-nav-next-btn');
+  if (_inb) { _inb.disabled = false; syncIntNavBar(1); }
   intState.columnMap = {};
   rawHeaders.forEach((h, i) => { intState.columnMap[i] = intAutoSuggest(h); });
 }
 
 // ── STEP NAVIGATION ───────────────────────────────────────────
 async function intGoToStep(n) {
+  syncIntNavBar(n);
+  intState.step = n;
   if (n === 2 && intState.rawRows.length === 0) return;
   if (n === 3) {
     intBuildParsed();
@@ -1861,7 +1888,8 @@ function resetIntImport() {
   intState = { step:1, file:null, rawHeaders:[], rawRows:[], columnMap:{}, selectedProject:intState.selectedProject, parsed:[], reviewed:[], existingStakeholders:[] };
   document.getElementById('int-file-status').className = 'hidden';
   document.getElementById('int-file-input').value = '';
-  document.getElementById('int-btn-to-2').disabled = true;
+  const _inb2 = document.getElementById('int-nav-next-btn');
+  if (_inb2) _inb2.disabled = true;
   intGoToStep(1);
 }
 

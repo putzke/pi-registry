@@ -5488,14 +5488,12 @@ _importChannel.addEventListener('message', e => {
 function exportProject(projectId) {
   try {
 
-  // Load xlsx-style on demand then re-call.
-  // xlsx-style exposes window.XLSX (same global as SheetJS).
-  // We use a flag to know it's loaded.
-  if (!window._xlsxStyleLoaded) {
+  // Load SheetJS on demand then re-call
+  if (typeof XLSX === 'undefined' || !XLSX.utils) {
     const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/xlsx-style@0.8.13/dist/xlsx.full.min.js';
-    s.onload = () => { window._xlsxStyleLoaded = true; exportProject(projectId); };
-    s.onerror = () => alert('xlsx-style could not be loaded. Check your internet connection.');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = () => exportProject(projectId);
+    s.onerror = () => alert('SheetJS could not be loaded. Check your internet connection.');
     document.body.appendChild(s);
     return;
   }
@@ -5524,36 +5522,9 @@ function exportProject(projectId) {
 
   const wb = XLSX.utils.book_new();
 
-  // ── Helper: style worksheet (xlsx-style supports .s properties) ──
-  // To revert: remove the for-loops below, keep only !views and !cols lines.
+  // ── Helper: column widths and freeze header ──────────────
   function styleSheet(ws, colWidths) {
-    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
-
-    // Header row — dark navy fill, white bold text
-    for (let c = 0; c <= range.e.c; c++) {
-      const addr = XLSX.utils.encode_cell({ r: 0, c });
-      if (!ws[addr]) continue;
-      ws[addr].s = {
-        font:      { bold: true, color: { rgb: 'FFFFFF' }, sz: 10, name: 'Calibri' },
-        fill:      { fgColor: { rgb: '1A3050' }, patternType: 'solid' },
-        alignment: { vertical: 'center', horizontal: 'left' }
-      };
-    }
-
-    // Alternating row shading — light gray on even data rows (r=2,4,6...)
-    for (let r = 2; r <= range.e.r; r += 2) {
-      for (let c = 0; c <= range.e.c; c++) {
-        const addr = XLSX.utils.encode_cell({ r, c });
-        if (!ws[addr]) ws[addr] = { t: 's', v: '' };
-        ws[addr].s = Object.assign({}, ws[addr].s || {}, {
-          fill: { fgColor: { rgb: 'EEF2F7' }, patternType: 'solid' }
-        });
-      }
-    }
-
-    // Freeze header row
     ws['!views'] = [{ state: 'frozen', xSplit: 0, ySplit: 1, topLeftCell: 'A2' }];
-    // Column widths
     if (colWidths) ws['!cols'] = colWidths.map(w => ({ wch: w }));
   }
 

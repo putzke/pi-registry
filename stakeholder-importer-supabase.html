@@ -1793,13 +1793,17 @@ async function runIntImport() {
     if (row.followUpDue) rec.follow_up_due = row.followUpDue;
 
     try {
+      console.log('[Int insert]', JSON.stringify(rec));
       const res = await fetch(SUPA_REST + '/pi_interactions', {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify(rec)
       });
-      if (res.ok) added++;
-      else { skipped++; console.warn('Int insert failed:', await res.text()); }
+      if (!res.ok) {
+        const e = await res.text();
+        console.error('[Int insert failed]', e);
+        skipped++;
+      } else { added++; }
     } catch(e) { skipped++; console.warn('Int insert error:', e); }
   }
 

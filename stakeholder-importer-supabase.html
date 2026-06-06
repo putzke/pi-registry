@@ -1957,7 +1957,24 @@ async function runIntImport() {
 
   const projectId = intState.selectedProject;
   let added = 0;
-  const skippedRows = []; // track each skipped row with reason
+  const skippedRows = [];
+
+  // ── Load existing interactions for this project to detect duplicates ───────
+  let existingFingerprints = new Set();
+  try {
+    const existingRes = await fetch(
+      SUPA_REST + '/pi_interactions?project_id=eq.' + projectId + '&select=stakeholder_id,interaction_date,channel,subject,summary&limit=5000',
+      { headers: getAuthHeaders() }
+    );
+    if (existingRes.ok) {
+      const existing = await existingRes.json();
+      existing.forEach(e => {
+        const fp = [e.stakeholder_id, e.interaction_date, (e.channel||'').toLowerCase(),
+                    (e.subject||'').toLowerCase().trim(), (e.summary||'').toLowerCase().trim()].join('|');
+        existingFingerprints.add(fp);
+      });
+    }
+  } catch(e) { console.warn('Could not load existing interactions for dupe check:', e); }
 
   for (const r of intState.reviewed) {
     const stakeholderId = r.chosenId;
@@ -1969,6 +1986,20 @@ async function runIntImport() {
         name: displayName,
         date: row.date || '—',
         reason: r.match.type === 'none' ? 'No matching stakeholder found in registry' : 'No stakeholder selected'
+      });
+      continue;
+    }
+
+    // ── Duplicate fingerprint check ───────────────────────────────────────────
+    const fp = [Number(stakeholderId), row.date,
+                (row.channel||'Other').toLowerCase(),
+                (row.subject||'').toLowerCase().trim(),
+                (row.summary||'').toLowerCase().trim()].join('|');
+    if (existingFingerprints.has(fp)) {
+      skippedRows.push({
+        name: displayName,
+        date: row.date || '—',
+        reason: 'Duplicate — identical interaction already exists in registry'
       });
       continue;
     }
@@ -1996,7 +2027,11 @@ async function runIntImport() {
         const e = await res.text();
         console.error('[Int insert failed]', e);
         skippedRows.push({ name: displayName, date: row.date || '—', reason: 'Insert failed: ' + e.slice(0,100) });
-      } else { added++; }
+      } else {
+        added++;
+        // Add to fingerprint set so intra-file duplicates are caught too
+        existingFingerprints.add(fp);
+      }
     } catch(e) {
       skippedRows.push({ name: displayName, date: row.date || '—', reason: 'Error: ' + e.message });
     }

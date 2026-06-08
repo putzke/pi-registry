@@ -4964,8 +4964,7 @@ function openPIReport(){
     +'<div class="fr"><label>Period start</label><input type="date" id="rpt-pstart" value="'+periodStart+'"></div>'
     +'<div class="fr"><label>Period end</label><input type="date" id="rpt-pend" value="'+periodEnd+'"></div>'
     +'</div>'
-    +'<div style="margin-top:12px;font-size:12px;color:var(--fog)">The report period controls which interactions appear in the auto-populated sections.</div>'
-    +'</div>'
+    +'<div style="margin-top:12px;font-size:12px;color:var(--fog)">The report period controls which interactions appear in the auto-populated sections.</div>'    +'<div class="fr" style="margin-top:14px"><label>Overall summary <span style="font-weight:400;font-style:italic;color:var(--fog)">(optional — prints before first section)</span></label>'    +'<textarea id="rpt-overall-summary" rows="4" placeholder="Enter an overall project summary, narrative, or context to print before the first report section..." style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:10px 12px;resize:vertical;font-family:inherit;line-height:1.6;box-sizing:border-box">'+escHtml(saved.overallSummary||'')+'</textarea></div>'    +'</div>'
     +'<div style="margin-bottom:24px;background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:20px">'
     +'<div style="font-size:14px;font-weight:600;color:var(--white);margin-bottom:10px">Distribution</div>'
     +'<div style="font-size:12px;color:var(--fog);margin-bottom:10px">Internal stakeholders from the selected groups will appear on the distribution list in the exported report.</div>'
@@ -4995,6 +4994,7 @@ function captureFormState(){
   var rs=document.getElementById('rpt-subtitle');if(rs)saved.reportSubtitle=rs.value;
   var ps2=document.getElementById('rpt-pstart');if(ps2)saved.periodStart=ps2.value;
   var pe=document.getElementById('rpt-pend');if(pe)saved.periodEnd=pe.value;
+  var os=document.getElementById('rpt-overall-summary');if(os)saved.overallSummary=os.value;
   if(!saved.sections)saved.sections=getDefaultSections();
   var contentAreas=document.querySelectorAll('.rpt-sec-content');
   for(var i=0;i<contentAreas.length;i++){
@@ -5209,8 +5209,11 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
   if(proj.client)titleText+=' | '+proj.client;
   titleText+=' \u2013 '+(saved.reportTitle||'PI Update');
   if(saved.reportNum)titleText+=' #'+saved.reportNum;
-  if(saved.reportSubtitle)titleText+=' ('+saved.reportSubtitle+')';
   xml+='<w:p><w:pPr><w:spacing w:after="60" w:line="240" w:lineRule="auto"/>'+titleRpr+'</w:pPr><w:r>'+titleRpr+'<w:t xml:space="preserve">'+escXml(titleText)+'</w:t></w:r></w:p>';
+  // Subtitle on its own line
+  if(saved.reportSubtitle){
+    xml+='<w:p><w:pPr><w:spacing w:after="40" w:line="240" w:lineRule="auto"/>'+headingRpr+'</w:pPr><w:r>'+headingRpr+'<w:t xml:space="preserve">'+escXml(saved.reportSubtitle)+'</w:t></w:r></w:p>';
+  }
 
   // Date
   var dateStr=new Date().toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'2-digit'});
@@ -5223,6 +5226,15 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
   }
 
   xml+=spacer();
+
+  // ── OVERALL SUMMARY (prints before first section) ───────────
+  if(saved.overallSummary&&saved.overallSummary.trim()){
+    xml+=heading('Overall Summary:');
+    saved.overallSummary.trim().split('\n').forEach(function(line){
+      xml+=para(line.trim()||' ',bodyRpr);
+    });
+    xml+=spacer();
+  }
 
   // ── RENDER SECTIONS IN SAVED ORDER ──────────────
   var reportSaved=JSON.parse(localStorage.getItem('pir4_pi_reports_'+proj.id)||'{}');
@@ -5243,6 +5255,11 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
     xml+=heading(sec.title+':');
 
     if(sec.type==='auto-concerns'){
+      // Period label
+      if(saved.periodStart||saved.periodEnd){
+        var pLabel='Report period: '+(saved.periodStart||'—')+' to '+(saved.periodEnd||'—');
+        xml+=para(pLabel,italicGrayRpr);
+      }
       if(periodInts.length===0){
         xml+=bullet('None');
       } else {
@@ -5311,6 +5328,10 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
 
     } else if(sec.type==='auto-intlog'){
       // Past interactions — everything BEFORE the report period (excludes what's in Recent Concerns)
+      if(saved.periodStart||saved.periodEnd){
+        var pLabelLog='Report period: '+(saved.periodStart||'—')+' to '+(saved.periodEnd||'—');
+        xml+=para(pLabelLog,italicGrayRpr);
+      }
       var allProjInts=DB.get('interactions').filter(function(i){return i.projectId===proj.id});
       var extIds3=externalPS.map(function(lk){return lk.stakeholderId});
       var pastInts=allProjInts.filter(function(i){

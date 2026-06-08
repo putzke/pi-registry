@@ -5354,8 +5354,8 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
 
     } else if(sec.type==='auto-followups'){
       var allInts=DB.get('interactions').filter(function(i){return i.projectId===proj.id});
-      var extIds=externalPS.map(function(lk){return lk.stakeholderId});
-      var fuItems=allInts.filter(function(i){return i.followUp&&extIds.indexOf(i.stakeholderId)>=0});
+      // Include all project follow-ups (internal + external) — internal action items are equally relevant
+      var fuItems=allInts.filter(function(i){return i.followUp});
       var openFU=fuItems.filter(function(i){return!i.followUpDone});
       var resolvedFU=fuItems.filter(function(i){return i.followUpDone});
       xml+=para('Open: '+openFU.length+' | Resolved: '+resolvedFU.length+' | Total: '+fuItems.length);

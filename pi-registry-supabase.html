@@ -5165,6 +5165,8 @@ function escXml(s){
 
 function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
   var xml='';
+  // Read include-internal toggle (same checkbox used by generateReport)
+  var includeInternal=!!(document.getElementById('rpt-include-internal')&&document.getElementById('rpt-include-internal').checked);
 
   // Common paragraph properties matching the template style
   var bodyRpr='<w:rPr><w:rFonts w:cstheme="minorHAnsi"/><w:color w:val="3B3838" w:themeColor="background2" w:themeShade="40"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>';

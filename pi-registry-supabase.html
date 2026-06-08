@@ -4629,7 +4629,7 @@ function saveAsPdf(){
   var wrapClone=outputClone.querySelector('#rpt-summary-wrap');
   if(wrapClone)wrapClone.remove();
   contentDiv.innerHTML=outputClone.innerHTML;
-  // Inject summary block at top if text was entered
+  // Inject summary block after the distributed-to banner (if present)
   if(summaryTxt){
     var summDiv=document.createElement('div');
     summDiv.style.cssText='margin-bottom:18px;padding:12px 14px;background:#f0f4f8;border-left:4px solid #1a3a5c;border-radius:0 6px 6px 0;font-size:10px;color:#222;line-height:1.7;white-space:pre-wrap;word-wrap:break-word';
@@ -4638,7 +4638,18 @@ function saveAsPdf(){
     summLabel.textContent='Summary';
     summDiv.insertBefore(summLabel,summDiv.firstChild);
     summDiv.appendChild(document.createTextNode(summaryTxt));
-    contentDiv.insertBefore(summDiv,contentDiv.firstChild);
+    // Find the distributed-to banner and insert summary after it, not at top
+    var distBanner=contentDiv.querySelector('[style*="background:#e8eef4"]');
+    if(distBanner && distBanner.nextSibling){
+      contentDiv.insertBefore(summDiv, distBanner.nextSibling);
+    } else if(distBanner){
+      distBanner.parentNode.appendChild(summDiv);
+    } else {
+      // No dist banner — insert after the report header block
+      var firstTable=contentDiv.querySelector('table');
+      if(firstTable){contentDiv.insertBefore(summDiv,firstTable);}
+      else{contentDiv.insertBefore(summDiv,contentDiv.firstChild);}
+    }
   }
   wrapper.appendChild(contentDiv);
   // Footer will be added per-page in jsPDF instead

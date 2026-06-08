@@ -4818,18 +4818,7 @@ function saveAsPdf(){
     console.error(e);
   });
 }
-function getAvailableSections(){
-  return[
-    {id:'concerns',title:'Recent public concerns and inquiries',type:'auto-concerns'},
-    {id:'contact-list',title:'Stakeholder contact list',type:'auto-contacts'},
-    {id:'interaction-log',title:'Interaction log (Past)',type:'auto-intlog'},
-    {id:'followup-status',title:'Follow-up status',type:'auto-followups'},
-    {id:'sentiment',title:'Sentiment / support summary',type:'auto-sentiment'},
-    {id:'deliverables',title:'Deliverable / scope status',type:'auto-del'},
-    {id:'comment-matrix',title:'Public comment matrix',type:'auto-comments'},
-    {id:'issues',title:'Issues tracker',type:'auto-issues'}
-  ];
-}
+
 
 function getDefaultSections(){
   return[
@@ -4848,7 +4837,8 @@ function getAvailableSections(){
     {id:'followup-status',title:'Follow-up status',type:'auto-followups'},
     {id:'sentiment',title:'Sentiment / support summary',type:'auto-sentiment'},
     {id:'deliverables',title:'Deliverable / scope status',type:'auto-del'},
-    {id:'comment-matrix',title:'Public comment matrix',type:'auto-comments'}
+    {id:'comment-matrix',title:'Public comment matrix',type:'auto-comments'},
+    {id:'issues',title:'Issues tracker',type:'auto-issues'}
   ];
 }
 

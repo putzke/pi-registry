@@ -5518,7 +5518,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
       var colHdr3={Opponent:'Opponents',Neutral:'Neutrals',Champion:'Champions'};
       var quadLabels3={'High-Opponent':'Manage Closely','High-Neutral':'Keep Satisfied','High-Champion':'Key Ally','Medium-Opponent':'Monitor','Medium-Neutral':'Keep Informed','Medium-Champion':'Engage Actively','Low-Opponent':'Watch','Low-Neutral':'Minimal Effort','Low-Champion':'Leverage'};
       var matrixStakes=allStakes.map(function(sk){
-        var lk=allPS.find(function(x){return String(x.stakeholderId)===String(sk.id)});
+        var lk=ps.find(function(x){return String(x.stakeholderId)===String(sk.id)});
         if(!lk)return null;
         return{name:((sk.firstName||'')+' '+(sk.lastName||'')).trim()||(sk.org||'Unknown'),org:sk.org||'',influence:sk.influenceTier||'Medium',sentiment:lk.support||'Neutral'};
       }).filter(Boolean);

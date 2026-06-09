@@ -4530,13 +4530,11 @@ function renderReports(el){
     +'<div style="font-size:42px;font-weight:700;line-height:1;color:'+(overdueFU>0?'var(--red)':openFUs>0?'var(--amber)':'var(--green)')+'">'+openFUs+'</div>'
     +'<div style="font-size:14px;color:'+(overdueFU>0?'var(--red)':'var(--fog)')+'">'+(overdueFU>0?overdueFU+' overdue':openFUs>0?'All on track':'None pending')+'</div>'
     +'</div>'
-    // Deliverables card with donut
+    // Deliverables card
     +'<div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:16px 18px">'
     +'<div style="font-size:13px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Deliverables</div>'
-    +'<div style="display:flex;align-items:center;gap:14px">'
-    +miniDonut(delPctR,delPctR>=75?'#28A870':delPctR>=40?'#5BA4CF':'#D9A544',64)
-    +'<div><div style="font-size:18px;font-weight:600;color:var(--white)">'+doneDels+' of '+projDels.length+'</div>'
-    +'<div style="font-size:14px;color:var(--fog)">complete</div></div></div>'
+    +'<div style="font-size:42px;font-weight:700;line-height:1;color:var(--white)">'+doneDels+'</div>'
+    +'<div style="font-size:14px;color:var(--fog);margin-top:4px">of '+projDels.length+' complete · '+delPctR+'%</div>'
     +'</div></div>';
 
   var groupPanel='<div style="margin-bottom:24px;background:#0E1E30;border:1px solid rgba(255,255,255,.13);border-radius:12px;padding:16px 20px">'

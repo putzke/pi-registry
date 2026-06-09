@@ -4291,14 +4291,16 @@ function renderReports(el){
     {id:'comment-matrix',name:'Public comment matrix',desc:'Public comments received with response status for formal documentation',
       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h4"/></svg>'},
     {id:'issues-report',name:'Issues tracker report',desc:'Open and resolved issues with linked interactions — export as PDF or Word',
-      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><circle cx="12" cy="12" r="9"/><path d="M12 7v5"/><circle cx="12" cy="15.5" r=".8" fill="currentColor"/></svg>'}
+      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><circle cx="12" cy="12" r="9"/><path d="M12 7v5"/><circle cx="12" cy="15.5" r=".8" fill="currentColor"/></svg>'},
+    {id:'stakeholder-map',name:'Stakeholder map',desc:'Interactive map of stakeholder locations with sentiment color-coding — print to PDF',
+      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M12 2C8.686 2 6 4.686 6 8c0 5 6 12 6 12s6-7 6-12c0-3.314-2.686-6-6-6z"/><circle cx="12" cy="8" r="2"/></svg>'}
   ];
   var cardsHTML='';
   rptCards.forEach(function(r){
     cardsHTML+='<div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:18px 20px;cursor:pointer;transition:border-color .12s,transform .12s" '
       +'onmouseover="this.style.borderColor=\'rgba(45,125,210,.5)\';this.style.transform=\'translateY(-2px)\'" '
       +'onmouseout="this.style.borderColor=\'rgba(255,255,255,.14)\';this.style.transform=\'none\'" '
-      +'onclick="'+(r.id==="issues-report"?"generateIssuesReport()":("generateReport('"+r.id+"')"))+'">'  
+      +'onclick="'+(r.id==="issues-report"?"generateIssuesReport()":r.id==="stakeholder-map"?"generateMapReport()":("generateReport('"+r.id+"')"))+'">'  
       +'<div style="display:flex;align-items:flex-start;gap:12px">'
       +'<div style="color:var(--sky-lt);flex-shrink:0;margin-top:2px">'+r.icon+'</div>'
       +'<div><div style="font-size:14px;font-weight:600;color:var(--white);margin-bottom:5px">'+r.name+'</div>'
@@ -6679,6 +6681,119 @@ function printEngagementMatrix(projectId) {
 }
 // ══════════════════════════════════════════════════════════════════
 // END STAKEHOLDER ENGAGEMENT MATRIX
+// ══════════════════════════════════════════════════════════════════
+
+
+// ══════════════════════════════════════════════════════════════════
+// STAKEHOLDER MAP REPORT — Report view version
+// Renders in rpt-output panel with Print to PDF button
+// ══════════════════════════════════════════════════════════════════
+function generateMapReport() {
+  var projF = S.projectFilter;
+  if (!projF) { showToast('Select a project first.', 'warn', 3000); return; }
+  var proj = DB.get('projects').find(function(p){ return String(p.id)===String(projF); });
+  if (!proj) return;
+
+  var psLinks = DB.get('project_stakeholders').filter(function(x){ return String(x.projectId)===String(projF); });
+  var allStakes = DB.get('stakeholders');
+  var withAddr = psLinks.map(function(lk){
+    var s = allStakes.find(function(x){ return String(x.id)===String(lk.stakeholderId); });
+    return s && s.address && s.address.trim() ? {s:s, lk:lk} : null;
+  }).filter(Boolean);
+
+  var out = document.getElementById('rpt-output');
+  if (!out) return;
+
+  // Build header (reuse existing hdr pattern)
+  var today = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  var hdr = '<div style="border-bottom:1px solid var(--border);padding-bottom:14px;margin-bottom:18px">'    +'<div style="font-size:22px;font-weight:700;color:var(--white);margin-bottom:4px">Stakeholder Map</div>'    +'<div style="font-size:13px;color:var(--slate)">'+(proj.name)+' — '+proj.pid+'</div>'    +'<div style="font-size:12px;color:var(--fog)">Generated '+today+'</div>'    +'</div>';
+
+  if (withAddr.length === 0) {
+    out.innerHTML = hdr + '<div style="padding:40px;text-align:center;color:var(--fog);font-size:13px">No stakeholders with addresses found for this project.<br><span style="font-size:12px">Add mailing addresses to stakeholders to enable map view.</span></div>';
+    out.scrollIntoView({behavior:'smooth',block:'start'});
+    return;
+  }
+
+  // Legend + print button (wired via addEventListener to avoid escaping projF)
+  var legend = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">'    +'<div style="display:flex;gap:16px;font-size:12px;color:var(--slate)">'    +'<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#28A870;margin-right:4px"></span>Champion</span>'    +'<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#5a87c6;margin-right:4px"></span>Neutral</span>'    +'<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#C0392B;margin-right:4px"></span>Opponent</span>'    +'<span style="color:var(--fog)">'+withAddr.length+' stakeholder'+(withAddr.length!==1?'s':'')+' with addresses</span>'    +'</div>'    +'<button id="rpt-map-print-btn" class="btn btn-sm">'    +'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M4 6V2h8v4"/><rect x="2" y="6" width="12" height="7" rx="1"/><path d="M4 10h8M4 13h5"/></svg> Print / PDF</button>'    +'</div>';
+
+  var mapDiv = '<div id="rpt-map-container" style="width:100%;height:500px;border-radius:10px;background:#1a2a3a;border:1px solid var(--border);overflow:hidden">'    +'<div id="rpt-map-loading" style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--slate);font-size:13px">'    +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:20px;height:20px;margin-right:8px;animation:spin 1s linear infinite"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>'    +'Geocoding addresses...</div></div>'    +'<div id="rpt-map-errors" style="display:none;margin-top:8px;font-size:11px;color:var(--fog)"></div>';
+
+  out.innerHTML = hdr + legend + mapDiv;
+  out.scrollIntoView({behavior:'smooth',block:'start'});
+  // Wire print button via JS (avoids string escaping of projF in onclick HTML)
+  var printBtn=document.getElementById('rpt-map-print-btn');
+  if(printBtn) printBtn.addEventListener('click',function(){printStakeholderMap(projF);});
+
+  // Geocode and render — reuses _smapGeocodeAndRender with rpt-map-container
+  loadGoogleMaps();
+  _smapGeocodeAndRenderInEl('rpt-map-container', 'rpt-map-loading', 'rpt-map-errors', projF, withAddr.map(function(x){return x.s;}));
+}
+
+// Variant of _smapGeocodeAndRender that targets a specific container id
+async function _smapGeocodeAndRenderInEl(containerId, loadingId, errorsId, projectId, stakes) {
+  var waited = 0;
+  while (!window.google || !window.google.maps) {
+    await new Promise(function(r){ setTimeout(r, 200); });
+    waited += 200;
+    if (waited > 5000) {
+      var ld = document.getElementById(loadingId);
+      if (ld) ld.textContent = 'Google Maps failed to load. Check your connection.';
+      return;
+    }
+  }
+  var geocoded = [];
+  var errors = [];
+  var geocoder = new window.google.maps.Geocoder();
+  for (var si = 0; si < stakes.length; si++) {
+    var s = stakes[si];
+    try {
+      var result = await new Promise(function(resolve, reject){
+        geocoder.geocode({address: s.address}, function(results, status){
+          if (status === 'OK' && results[0]) resolve(results[0]); else reject(status);
+        });
+      });
+      var ps = DB.get('project_stakeholders').find(function(x){ return String(x.projectId)===String(projectId)&&String(x.stakeholderId)===String(s.id); });
+      var support = ps ? (ps.support||'Neutral') : 'Neutral';
+      geocoded.push({stake:s, support:support, lat:result.geometry.location.lat(), lng:result.geometry.location.lng(), formatted:result.formatted_address});
+    } catch(e) { errors.push(s.address); }
+  }
+
+  var container = document.getElementById(containerId);
+  var loading = document.getElementById(loadingId);
+  if (!container) return;
+  if (geocoded.length === 0) { if(loading) loading.textContent = 'No addresses could be geocoded.'; return; }
+  if (loading) loading.style.display = 'none';
+
+  var map = new window.google.maps.Map(container, {
+    zoom:11, center:{lat:geocoded[0].lat,lng:geocoded[0].lng}, mapTypeId:'roadmap',
+    styles:[{elementType:'geometry',stylers:[{color:'#1d2c4d'}]},{elementType:'labels.text.fill',stylers:[{color:'#8ec3b9'}]},{elementType:'labels.text.stroke',stylers:[{color:'#1a3646'}]},{featureType:'road',elementType:'geometry',stylers:[{color:'#304a7d'}]},{featureType:'water',elementType:'geometry',stylers:[{color:'#0e1626'}]}]
+  });
+  var pinColors = {Champion:'#28A870',Neutral:'#5a87c6',Opponent:'#C0392B'};
+  var infoWindow = new window.google.maps.InfoWindow();
+  var bounds = new window.google.maps.LatLngBounds();
+  geocoded.forEach(function(g){
+    var color = pinColors[g.support]||pinColors.Neutral;
+    var name = ((g.stake.firstName||'')+' '+(g.stake.lastName||'')).trim()||g.stake.org||'Unknown';
+    var marker = new window.google.maps.Marker({
+      position:{lat:g.lat,lng:g.lng}, map:map, title:name,
+      icon:{path:window.google.maps.SymbolPath.CIRCLE,scale:9,fillColor:color,fillOpacity:.95,strokeColor:'#ffffff',strokeWeight:2}
+    });
+    bounds.extend({lat:g.lat,lng:g.lng});
+    marker.addListener('click', function(){
+      infoWindow.setContent('<div style="font-family:sans-serif;font-size:13px;min-width:180px"><div style="font-weight:600;margin-bottom:4px">'+name+'</div>'+(g.stake.org?'<div style="color:#555;margin-bottom:3px">'+g.stake.org+'</div>':'')+(g.stake.type?'<div style="color:#777;font-size:11px;margin-bottom:3px">'+g.stake.type+'</div>':'')+'<div style="margin-top:5px;padding-top:5px;border-top:1px solid #eee"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+color+';margin-right:4px"></span><span style="color:'+color+';font-weight:600">'+g.support+'</span></div><div style="font-size:11px;color:#888;margin-top:4px">'+g.formatted+'</div></div>');
+      infoWindow.open(map, marker);
+    });
+  });
+  if (geocoded.length > 1) map.fitBounds(bounds);
+  window._smapInstance = {map:map, projectId:projectId, projectName:'', geocoded:geocoded};
+  if (errors.length > 0) {
+    var errDiv = document.getElementById(errorsId);
+    if (errDiv) { errDiv.style.display='block'; errDiv.textContent='Could not geocode '+errors.length+' address'+(errors.length>1?'es':'')+': '+errors.join(', '); }
+  }
+}
+// ══════════════════════════════════════════════════════════════════
+// END STAKEHOLDER MAP REPORT
 // ══════════════════════════════════════════════════════════════════
 
 </script>

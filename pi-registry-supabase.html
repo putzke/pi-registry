@@ -4932,7 +4932,8 @@ function getAvailableSections(){
     {id:'sentiment',title:'Sentiment / support summary',type:'auto-sentiment'},
     {id:'deliverables',title:'Deliverable / scope status',type:'auto-del'},
     {id:'comment-matrix',title:'Public comment matrix',type:'auto-comments'},
-    {id:'issues',title:'Issues tracker',type:'auto-issues'}
+    {id:'issues',title:'Issues tracker',type:'auto-issues'},
+    {id:'matrix',title:'Stakeholder engagement matrix',type:'auto-matrix'}
   ];
 }
 
@@ -4976,7 +4977,8 @@ function getSectionDesc(type){
     'auto-sentiment':'Auto-populates stakeholder positions grouped by Champion, Neutral, and Opponent.',
     'auto-del':'Auto-populates deliverable progress showing contracted vs delivered counts.',
     'auto-comments':'Auto-populates public comments received with response status for formal documentation.',
-    'auto-issues':'Auto-populates open and resolved issues with priority, status, category, and linked interaction details.'
+    'auto-issues':'Auto-populates open and resolved issues with priority, status, category, and linked interaction details.',
+    'auto-matrix':'Auto-populates a 3x3 stakeholder engagement matrix showing influence tier vs. sentiment with stakeholder names in each quadrant.'
   };
   return descs[type]||'';
 }
@@ -5509,6 +5511,45 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
           xml+=bullet(line);
         });
       }
+
+    } else if(sec.type==='auto-matrix'){
+      var rows3=['High','Medium','Low'];
+      var cols3=['Opponent','Neutral','Champion'];
+      var colHdr3={Opponent:'Opponents',Neutral:'Neutrals',Champion:'Champions'};
+      var quadLabels3={'High-Opponent':'Manage Closely','High-Neutral':'Keep Satisfied','High-Champion':'Key Ally','Medium-Opponent':'Monitor','Medium-Neutral':'Keep Informed','Medium-Champion':'Engage Actively','Low-Opponent':'Watch','Low-Neutral':'Minimal Effort','Low-Champion':'Leverage'};
+      var matrixStakes=allStakes.map(function(sk){
+        var lk=allPS.find(function(x){return String(x.stakeholderId)===String(sk.id)});
+        if(!lk)return null;
+        return{name:((sk.firstName||'')+' '+(sk.lastName||'')).trim()||(sk.org||'Unknown'),org:sk.org||'',influence:sk.influenceTier||'Medium',sentiment:lk.support||'Neutral'};
+      }).filter(Boolean);
+      var tblHdr='<w:tc><w:tcPr><w:tcW w:w="1200" w:type="dxa"/><w:shd w:val="clear" w:color="auto" w:fill="1A3050"/></w:tcPr><w:p><w:r><w:rPr><w:color w:val="FFFFFF"/><w:b/><w:sz w:val="16"/></w:rPr><w:t>Influence</w:t></w:r></w:p></w:tc>';
+      cols3.forEach(function(c){
+        var fill=c==='Champion'?'D5F5E3':c==='Opponent'?'FADBD8':'D6EAF8';
+        var tc=c==='Champion'?'1E8449':c==='Opponent'?'922B21':'1A5276';
+        tblHdr+='<w:tc><w:tcPr><w:tcW w:w="2400" w:type="dxa"/><w:shd w:val="clear" w:color="auto" w:fill="'+fill+'"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:color w:val="'+tc+'"/><w:b/><w:sz w:val="18"/></w:rPr><w:t>'+colHdr3[c]+'</w:t></w:r></w:p></w:tc>';
+      });
+      xml+='<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/><w:tblBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/><w:left w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/><w:right w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/></w:tblBorders></w:tblPr><w:tr>'+tblHdr+'</w:tr>';
+      rows3.forEach(function(inf){
+        var rowCells='<w:tc><w:tcPr><w:tcW w:w="1200" w:type="dxa"/><w:shd w:val="clear" w:color="auto" w:fill="1A3050"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:color w:val="FFFFFF"/><w:b/><w:sz w:val="18"/></w:rPr><w:t>'+inf+'</w:t></w:r></w:p></w:tc>';
+        cols3.forEach(function(sent){
+          var key3=inf+'-'+sent;
+          var fill3=sent==='Champion'?'F2FBF6':sent==='Opponent'?'FDF3F2':'F8FAFE';
+          var tc3=sent==='Champion'?'1E8449':sent==='Opponent'?'922B21':'1A5276';
+          var grp=matrixStakes.filter(function(s){return s.influence===inf&&s.sentiment===sent});
+          var cellXml='<w:tc><w:tcPr><w:tcW w:w="2400" w:type="dxa"/><w:shd w:val="clear" w:color="auto" w:fill="'+fill3+'"/></w:tcPr>';
+          cellXml+='<w:p><w:r><w:rPr><w:color w:val="'+tc3+'"/><w:b/><w:sz w:val="14"/><w:i/></w:rPr><w:t>'+escXml(quadLabels3[key3]||'')+'</w:t></w:r></w:p>';
+          if(grp.length===0){
+            cellXml+='<w:p><w:r><w:rPr><w:color w:val="AAAAAA"/><w:sz w:val="14"/><w:i/></w:rPr><w:t>None</w:t></w:r></w:p>';
+          } else {
+            grp.forEach(function(s){
+              cellXml+='<w:p><w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t xml:space="preserve">'+escXml(s.name+(s.org?' ('+s.org+')':''))+'</w:t></w:r></w:p>';
+            });
+          }
+          rowCells+=cellXml+'</w:tc>';
+        });
+        xml+='<w:tr>'+rowCells+'</w:tr>';
+      });
+      xml+='</w:tbl><w:p/>';
 
     } else if(sec.type==='auto-issues'){
       var projIssues=(DB.get('issues')||[]).filter(function(x){return x.projectId===proj.id;});

@@ -2324,7 +2324,9 @@ function renderStakeDetail(s,link){
       ${projSections}`;
     }).join('');
 
-    const toggleLabel=showAll?`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px"><path d="M2 8h12M8 3l5 5-5 5"/></svg> Showing all projects (${allInts.length})`:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.5"/><circle cx="8" cy="11" r=".8" fill="currentColor" stroke="none"/></svg> Filtered to current project — show all (${allInts.length})`;
+    const activeProjObj=S.projectFilter?DB.get('projects').find(p=>p.id===S.projectFilter):null;
+    const activeProjTag=activeProjObj?` <span style="font-family:var(--mono);font-size:10px;background:var(--sky-dim);color:var(--sky-lt);padding:1px 6px;border-radius:4px;margin-left:2px">${activeProjObj.pid}</span>`:'';
+    const toggleLabel=showAll?`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px"><path d="M2 8h12M8 3l5 5-5 5"/></svg> Showing all projects (${allInts.length})`:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.5"/><circle cx="8" cy="11" r=".8" fill="currentColor" stroke="none"/></svg> Filtered to${activeProjTag} — show all (${allInts.length})`;
     const toggleBtn=S.projectFilter?`<span class="eh-all-toggle${showAll?' active':''}" onclick="S.ehShowAll=${showAll?'false':'true'};${cb}">${toggleLabel}</span>`:'';
 
     S._ehHTML=`<div class="det-body">

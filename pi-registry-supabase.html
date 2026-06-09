@@ -2289,7 +2289,7 @@ function renderFollowups(el){
   if(statusF==='open')ints=ints.filter(i=>!i.followUpDone);
   else if(statusF==='overdue')ints=ints.filter(i=>!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<now);
   else if(statusF==='resolved')ints=ints.filter(i=>i.followUpDone);
-  if(projF)ints=ints.filter(i=>i.projectId===projF);
+  if(projF)ints=ints.filter(i=>String(i.projectId)===String(projF));
   if(search)ints=ints.filter(i=>{
     const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
     return(i.followUpNote||'').toLowerCase().includes(search)||(s&&(s.firstName+' '+s.lastName).toLowerCase().includes(search));
@@ -2299,7 +2299,7 @@ function renderFollowups(el){
   const stakes_fu=DB.get('stakeholders');
   ints=sortFollowups(ints,stakes_fu);
 
-  const allFU=DB.get('interactions').filter(i=>i.followUp&&(!projF||i.projectId===projF));
+  const allFU=DB.get('interactions').filter(i=>i.followUp&&(!projF||String(i.projectId)===String(projF)));
   const openCt=allFU.filter(i=>!i.followUpDone).length;
   const overdueCt=allFU.filter(i=>!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<now).length;
   const resolvedCt=allFU.filter(i=>i.followUpDone).length;
@@ -3356,7 +3356,7 @@ function openEditIntModal(id){
   <button class="btn" onclick="closeM()">Cancel</button>
   <button class="btn btn-primary" onclick="saveInt()">Save changes</button>`,true);
 }
-function saveInt(){
+async function saveInt(){
   const v=id=>document.getElementById(id)?.value||'';
   const vDate=id=>{const val=document.getElementById(id)?.value||'';return val||null;};
   const projId=v('f-ip'),stakeId=v('f-is')||null;
@@ -3372,7 +3372,7 @@ function saveInt(){
   }
   const all=DB.get('interactions');
   if(S.editId){const i=all.findIndex(x=>x.id===S.editId);if(i>-1)all[i]=data;}else all.push(data);
-  DB.set('interactions',all);
+  await DB.set('interactions',all);
 
   // Handle issue link
   const selectedIssueId=document.getElementById('f-iissue')?.value||'';
@@ -3382,7 +3382,7 @@ function saveInt(){
   if(selectedIssueId){
     cleanedLinks.push({id:DB.uid(),issueId:selectedIssueId,interactionId:data.id});
   }
-  DB.set('issue_interactions',cleanedLinks);
+  await DB.set('issue_interactions',cleanedLinks);
 
   closeM();refreshBadges();render();
 }
@@ -3390,17 +3390,17 @@ function delInt(id){
   DB.set('interactions',DB.get('interactions').filter(x=>x.id!==id));
   closeM();refreshBadges();render();
 }
-function resolveFollowUp(id){
+async function resolveFollowUp(id){
   const all=DB.get('interactions');
   const i=all.findIndex(x=>x.id===id);
   if(i>-1) all[i]={...all[i], followUpDone:true, followUpResolved:new Date().toISOString().slice(0,10)};
-  DB.set('interactions',all);refreshBadges();render();
+  await DB.set('interactions',all);refreshBadges();render();
 }
-function reopenFollowUp(id){
+async function reopenFollowUp(id){
   const all=DB.get('interactions');
   const i=all.findIndex(x=>x.id===id);
   if(i>-1) all[i]={...all[i], followUpDone:false};
-  DB.set('interactions',all);refreshBadges();render();
+  await DB.set('interactions',all);refreshBadges();render();
 }
 
 // DELIVERABLE MODAL

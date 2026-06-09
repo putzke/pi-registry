@@ -2031,6 +2031,39 @@ async function runIntImport() {
         added++;
         // Add to fingerprint set so intra-file duplicates are caught too
         existingFingerprints.add(fp);
+        // ── Ensure project_stakeholders link exists for this interaction ──────
+        if (projectId && stakeholderId) {
+          try {
+            const linkCheck = await fetch(
+              SUPA_REST + '/pi_project_stakeholders?project_id=eq.' + projectId + '&stakeholder_id=eq.' + stakeholderId + '&select=id&limit=1',
+              { headers: getAuthHeaders() }
+            );
+            if (linkCheck.ok) {
+              const existing = await linkCheck.json();
+              if (!existing || existing.length === 0) {
+                // No link exists — create one
+                const linkRec = {
+                  project_id:        Number(projectId),
+                  stakeholder_id:    Number(stakeholderId),
+                  stakeholder_role:  'External',
+                  support:           'Neutral',
+                  distribution_groups: '',
+                  issue_tags:        '',
+                  added_date:        new Date().toISOString().slice(0,10),
+                  notes:             'Auto-linked via interaction import.'
+                };
+                await fetch(SUPA_REST + '/pi_project_stakeholders', {
+                  method: 'POST',
+                  headers: getAuthHeaders(),
+                  body: JSON.stringify(linkRec)
+                });
+                console.log('[Auto-link] Created project_stakeholders link for stakeholder', stakeholderId, 'project', projectId);
+              }
+            }
+          } catch(linkErr) {
+            console.warn('[Auto-link] Could not verify/create project link:', linkErr);
+          }
+        }
       }
     } catch(e) {
       skippedRows.push({ name: displayName, date: row.date || '—', reason: 'Error: ' + e.message });

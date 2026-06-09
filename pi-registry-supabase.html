@@ -4284,7 +4284,7 @@ function renderReports(el){
       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'},
     {id:'followup-status',name:'Follow-up status report',desc:'All open and resolved action items with due dates and status',
       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M9 16l2 2 4-4"/></svg>'},
-    {id:'sentiment-summary',name:'Sentiment / support summary',desc:'Stakeholder positions grouped by Champion, Neutral, and Opponent',
+    {id:'sentiment-summary',name:'Sentiment & engagement matrix',desc:'Stakeholder positions grouped by Champion, Neutral, and Opponent',
       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>'},
     {id:'deliverable-status',name:'Deliverable / scope status',desc:'Scope items with contracted vs delivered quantities and progress',
       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>'},
@@ -4962,11 +4962,10 @@ function getAvailableSections(){
     {id:'contact-list',title:'Stakeholder contact list',type:'auto-contacts'},
     {id:'interaction-log',title:'Interaction log (Past)',type:'auto-intlog'},
     {id:'followup-status',title:'Follow-up status',type:'auto-followups'},
-    {id:'sentiment',title:'Sentiment / support summary',type:'auto-sentiment'},
+    {id:'sentiment',title:'Sentiment & engagement matrix',type:'auto-sentiment'},
     {id:'deliverables',title:'Deliverable / scope status',type:'auto-del'},
     {id:'comment-matrix',title:'Public comment matrix',type:'auto-comments'},
-    {id:'issues',title:'Issues tracker',type:'auto-issues'},
-    {id:'matrix',title:'Stakeholder engagement matrix',type:'auto-matrix'}
+    {id:'issues',title:'Issues tracker',type:'auto-issues'}
   ];
 }
 
@@ -5007,11 +5006,10 @@ function getSectionDesc(type){
     'auto-contacts':'Auto-populates a formatted stakeholder roster filtered by selected distribution groups.',
     'auto-intlog':'Auto-populates a chronological log of stakeholder interactions (External by default; toggle above to include Internal).',
     'auto-followups':'Auto-populates all open and resolved follow-up action items with due dates.',
-    'auto-sentiment':'Auto-populates stakeholder positions grouped by Champion, Neutral, and Opponent.',
+    'auto-sentiment':'Auto-populates a 3x3 stakeholder engagement matrix plus stakeholder positions grouped by Champion, Neutral, and Opponent.',
     'auto-del':'Auto-populates deliverable progress showing contracted vs delivered counts.',
     'auto-comments':'Auto-populates public comments received with response status for formal documentation.',
-    'auto-issues':'Auto-populates open and resolved issues with priority, status, category, and linked interaction details.',
-    'auto-matrix':'Auto-populates a 3x3 stakeholder engagement matrix showing influence tier vs. sentiment with stakeholder names in each quadrant.'
+    'auto-issues':'Auto-populates open and resolved issues with priority, status, category, and linked interaction details.'
   };
   return descs[type]||'';
 }
@@ -5492,6 +5490,50 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
       if(fuItems.length===0)xml+=bullet('No follow-up items.');
 
     } else if(sec.type==='auto-sentiment'){
+      // ── 3x3 Engagement Matrix (all project stakeholders) ──────
+      var sRows=['High','Medium','Low'];
+      var sCols=['Opponent','Neutral','Champion'];
+      var sColHdr={Opponent:'Opponents',Neutral:'Neutrals',Champion:'Champions'};
+      var sLabels={'High-Opponent':'Manage Closely','High-Neutral':'Keep Satisfied','High-Champion':'Key Ally','Medium-Opponent':'Monitor','Medium-Neutral':'Keep Informed','Medium-Champion':'Engage Actively','Low-Opponent':'Watch','Low-Neutral':'Minimal Effort','Low-Champion':'Leverage'};
+      var sMatStakes=allStakes.map(function(sk){
+        var lk=ps.find(function(x){return String(x.stakeholderId)===String(sk.id)});
+        if(!lk)return null;
+        return{name:((sk.firstName||'')+' '+(sk.lastName||'')).trim()||(sk.org||'Unknown'),org:sk.org||'',influence:sk.influenceTier||'Medium',sentiment:lk.support||'Neutral'};
+      }).filter(Boolean);
+      // Matrix sub-heading
+      xml+=para('Stakeholder Engagement Matrix (all project stakeholders):',boldRpr);
+      // Table header
+      var sTblHdr='<w:tc><w:tcPr><w:tcW w:w="1000" w:type="dxa"/><w:shd w:val="clear" w:color="auto" w:fill="1A3050"/></w:tcPr><w:p><w:r><w:rPr><w:color w:val="FFFFFF"/><w:b/><w:sz w:val="14"/></w:rPr><w:t>Influence</w:t></w:r></w:p></w:tc>';
+      sCols.forEach(function(c){
+        var fill=c==='Champion'?'D5F5E3':c==='Opponent'?'FADBD8':'D6EAF8';
+        var tc=c==='Champion'?'1E8449':c==='Opponent'?'922B21':'1A5276';
+        sTblHdr+='<w:tc><w:tcPr><w:tcW w:w="2600" w:type="dxa"/><w:shd w:val="clear" w:color="auto" w:fill="'+fill+'"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:color w:val="'+tc+'"/><w:b/><w:sz w:val="18"/></w:rPr><w:t>'+sColHdr[c]+'</w:t></w:r></w:p></w:tc>';
+      });
+      xml+='<w:tbl><w:tblPr><w:tblW w:w="8800" w:type="dxa"/><w:tblBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/><w:left w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/><w:right w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/></w:tblBorders></w:tblPr><w:tr>'+sTblHdr+'</w:tr>';
+      sRows.forEach(function(inf){
+        var rowCells='<w:tc><w:tcPr><w:tcW w:w="1000" w:type="dxa"/><w:shd w:val="clear" w:color="auto" w:fill="1A3050"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:color w:val="FFFFFF"/><w:b/><w:sz w:val="18"/></w:rPr><w:t>'+inf+'</w:t></w:r></w:p></w:tc>';
+        sCols.forEach(function(sent){
+          var key=inf+'-'+sent;
+          var fill3=sent==='Champion'?'F2FBF6':sent==='Opponent'?'FDF3F2':'F8FAFE';
+          var tc3=sent==='Champion'?'1E8449':sent==='Opponent'?'922B21':'1A5276';
+          var grp=sMatStakes.filter(function(s){return s.influence===inf&&s.sentiment===sent});
+          var cellXml='<w:tc><w:tcPr><w:tcW w:w="2600" w:type="dxa"/><w:shd w:val="clear" w:color="auto" w:fill="'+fill3+'"/></w:tcPr>';
+          cellXml+='<w:p><w:r><w:rPr><w:color w:val="'+tc3+'"/><w:b/><w:sz w:val="13"/><w:i/></w:rPr><w:t>'+escXml(sLabels[key]||'')+'</w:t></w:r></w:p>';
+          if(grp.length===0){
+            cellXml+='<w:p><w:r><w:rPr><w:color w:val="AAAAAA"/><w:sz w:val="14"/><w:i/></w:rPr><w:t>None</w:t></w:r></w:p>';
+          } else {
+            grp.forEach(function(s){
+              cellXml+='<w:p><w:r><w:rPr><w:sz w:val="15"/></w:rPr><w:t xml:space="preserve">'+escXml(s.name+(s.org?' ('+s.org+')':''))+'</w:t></w:r></w:p>';
+            });
+          }
+          rowCells+=cellXml+'</w:tc>';
+        });
+        xml+='<w:tr>'+rowCells+'</w:tr>';
+      });
+      xml+='</w:tbl><w:p/>';
+      xml+=spacer();
+      // ── Sentiment detail (external stakeholders) ───────────────
+      xml+=para('External Stakeholder Positions:',boldRpr);
       var groups={Champion:[],Neutral:[],Opponent:[]};
       externalPS.forEach(function(lk){
         var sk=allStakes.find(function(x){return String(x.id)===String(lk.stakeholderId)});
@@ -5503,7 +5545,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
           xml+=bullet('None',1);
         } else {
           groups[g].forEach(function(sk){
-            xml+=bullet(sk.firstName+' '+sk.lastName+(sk.org?' \u2014 '+sk.org:''),1);
+            xml+=bullet(sk.firstName+' '+sk.lastName+(sk.org?' — '+sk.org:''),1);
           });
         }
       });

@@ -181,6 +181,45 @@ hr.div{border:none;border-top:1px solid var(--border);margin:14px 0}
 .log-fu{display:flex;align-items:flex-start;gap:5px;background:rgba(232,160,32,.08);border:1px solid rgba(232,160,32,.2);border-radius:var(--radius);padding:6px 9px;font-size:12px;color:var(--amber)}
 .log-fu.done{background:rgba(40,168,112,.06);border-color:rgba(40,168,112,.2);color:var(--green)}
 .log-fu svg{width:11px;height:11px;flex-shrink:0;margin-top:1px}
+/* ── Engagement History Tab ── */
+.eh-stat-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:18px}
+.eh-stat{background:var(--navy-mid);padding:12px 14px}
+.eh-stat-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);margin-bottom:4px}
+.eh-stat-val{font-size:18px;font-weight:700;color:var(--white);line-height:1}
+.eh-stat-sub{font-size:11px;color:var(--fog);margin-top:3px}
+.eh-ch-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.eh-ch-pill{display:flex;align-items:center;gap:5px;padding:4px 9px;border-radius:20px;font-size:11px;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--mist)}
+.eh-ch-pill svg{width:11px;height:11px;opacity:.7}
+.eh-yr-hd{display:flex;align-items:center;gap:10px;margin:18px 0 10px;cursor:pointer;user-select:none}
+.eh-yr-hd:first-child{margin-top:0}
+.eh-yr-line{flex:1;height:1px;background:var(--border)}
+.eh-yr-lbl{font-size:11px;font-weight:700;color:var(--sky-lt);letter-spacing:.5px;text-transform:uppercase;white-space:nowrap}
+.eh-yr-ct{font-size:10px;color:var(--slate);white-space:nowrap}
+.eh-proj-grp{margin-bottom:12px}
+.eh-proj-lbl{display:flex;align-items:center;gap:7px;margin-bottom:8px;padding:5px 0}
+.eh-proj-pid{font-family:var(--mono);font-size:10px;color:var(--sky-lt);background:var(--sky-dim);padding:2px 7px;border-radius:4px}
+.eh-proj-name{font-size:12px;color:var(--slate)}
+.eh-entry{display:flex;gap:10px;padding:8px 0 8px 2px;border-bottom:1px solid rgba(255,255,255,.06)}
+.eh-entry:last-child{border-bottom:none}
+.eh-dot-col{display:flex;flex-direction:column;align-items:center;width:20px;flex-shrink:0;padding-top:3px}
+.eh-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.eh-vline{width:1px;flex:1;min-height:8px;background:rgba(255,255,255,.08);margin-top:4px}
+.eh-ico{width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.eh-ico svg{width:11px;height:11px}
+.eh-body{flex:1;min-width:0}
+.eh-row1{display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap}
+.eh-date{font-size:11px;color:var(--slate);margin-left:auto}
+.eh-sum{font-size:12px;color:var(--mist);line-height:1.5}
+.eh-fu-tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 7px;border-radius:4px;margin-top:4px}
+.eh-fu-open{background:rgba(232,160,32,.1);color:var(--amber);border:1px solid rgba(232,160,32,.2)}
+.eh-fu-done{background:rgba(40,168,112,.1);color:var(--green);border:1px solid rgba(40,168,112,.2)}
+.eh-fu-tag svg{width:10px;height:10px}
+.eh-all-toggle{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--slate);cursor:pointer;margin-bottom:14px;padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:rgba(255,255,255,.04);transition:background .1s}
+.eh-all-toggle:hover{background:rgba(255,255,255,.08);color:var(--mist)}
+.eh-all-toggle.active{background:var(--sky-dim);color:var(--sky-lt);border-color:rgba(45,125,210,.4)}
+.eh-trend{display:flex;align-items:center;gap:3px;margin-top:5px}
+.eh-trend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.eh-empty{padding:28px 0;text-align:center;color:var(--slate);font-size:13px}
 
 /* FULL TABLE */
 .full-view{display:flex;flex-direction:column;flex:1;overflow:hidden}
@@ -989,7 +1028,7 @@ const S={
   projectFilter:null,
   selStakeholder:null,
   selInteraction:null,
-  stakeTab:'info',
+  stakeTab:'info',ehShowAll:false,
   skView:'list',
   issStatus:'', issCat:'', selIssue:null,
   issViewProj:'', issViewStatus:'', issViewCat:'', issViewPri:'', selIssueView:null,
@@ -2211,6 +2250,102 @@ function renderStakeDetail(s,link){
       </div>
     </div>`).join('')}
   </div>`;
+  // ── ENGAGEMENT HISTORY TAB ────────────────────────────────────────────
+  (function(){
+    // allInts: all interactions for this stakeholder across every project (not project-filtered)
+    const allInts=DB.get('interactions').filter(i=>String(i.stakeholderId)===String(s.id));
+    const showAll=S.ehShowAll;
+    const viewInts=showAll?allInts:ints; // ints already respects S.projectFilter
+
+    // ── Stats bar ─────────────────────────────────────────────────────
+    const total=viewInts.length;
+    const incoming=viewInts.filter(i=>i.direction==='Incoming').length;
+    const outgoing=total-incoming;
+    const openFU=viewInts.filter(i=>i.followUp&&!i.followUpDone).length;
+    const sorted=[...viewInts].sort((a,b)=>a.date.localeCompare(b.date));
+    const firstDate=sorted.length?fmt(sorted[0].date):'—';
+    const lastDate=sorted.length?fmt(sorted[sorted.length-1].date):'—';
+
+    // ── Channel breakdown pills ───────────────────────────────────────
+    const chMap={};
+    viewInts.forEach(i=>{chMap[i.channel]=(chMap[i.channel]||0)+1;});
+    const chPills=Object.entries(chMap).sort((a,b)=>b[1]-a[1])
+      .map(([ch,ct])=>`<span class="eh-ch-pill">${chIco(ch)}<span>${ch}</span><strong style="color:var(--white)">${ct}</strong></span>`).join('');
+
+    // ── Group by year → project ────────────────────────────────────────
+    const byYear={};
+    viewInts.forEach(i=>{
+      const yr=i.date?i.date.slice(0,4):'Unknown';
+      if(!byYear[yr])byYear[yr]=[];
+      byYear[yr].push(i);
+    });
+    const years=Object.keys(byYear).sort((a,b)=>b.localeCompare(a));
+
+    const timelineHTML=years.map(yr=>{
+      const yInts=byYear[yr].slice().sort((a,b)=>b.date.localeCompare(a.date));
+      // Group by project within year
+      const byProj={};
+      yInts.forEach(i=>{
+        const pid=i.projectId||'__none__';
+        if(!byProj[pid])byProj[pid]=[];
+        byProj[pid].push(i);
+      });
+      const projSections=Object.entries(byProj).map(([pid,pInts])=>{
+        const proj=pid==='__none__'?null:DB.get('projects').find(p=>p.id===pid);
+        const projLabel=proj?`<span class="eh-proj-pid">${proj.pid}</span><span class="eh-proj-name">${proj.name}</span>`:'<span class="eh-proj-name" style="color:var(--fog)">No project</span>';
+        const entries=pInts.map((i,idx,arr)=>{
+          const dotColor=i.direction==='Incoming'?'var(--sky)':'var(--green)';
+          const fuTag=i.followUp
+            ?`<div><span class="eh-fu-tag ${i.followUpDone?'eh-fu-done':'eh-fu-open'}">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">${i.followUpDone?'<path d="M3 8l4 4 6-6"/>':'<circle cx="8" cy="8" r="6"/><path d="M8 5v3.5"/><circle cx="8" cy="11" r=".8" fill="currentColor" stroke="none"/>'}</svg>
+                ${i.followUpDone?'Resolved':'Follow-up'}: ${i.followUpNote||''}${!i.followUpDone&&i.followUpDue?' · due '+fmt(i.followUpDue):''}
+              </span></div>`:'';
+          return`<div class="eh-entry">
+            <div class="eh-dot-col"><div class="eh-dot" style="background:${dotColor}"></div>${idx<arr.length-1?'<div class="eh-vline"></div>':''}</div>
+            <div class="eh-ico ${chCls(i.channel)}" style="margin-top:1px">${chIco(i.channel)}</div>
+            <div class="eh-body">
+              <div class="eh-row1">
+                <span class="badge ${i.direction==='Incoming'?'b-sky':'b-green'}" style="font-size:10px">${i.direction}</span>
+                <span class="badge b-gray" style="font-size:10px">${i.channel}</span>
+                ${i.loggedBy?`<span style="font-size:11px;color:var(--fog)">${i.loggedBy}</span>`:''}
+                <span class="eh-date">${fmt(i.date)}</span>
+              </div>
+              <div class="eh-sum">${i.summary}</div>
+              ${fuTag}
+            </div>
+          </div>`;
+        }).join('');
+        return`<div class="eh-proj-grp">
+          <div class="eh-proj-lbl">${projLabel}<span style="margin-left:auto;font-size:11px;color:var(--fog)">${pInts.length} interaction${pInts.length!==1?'s':''}</span></div>
+          ${entries}
+        </div>`;
+      }).join('');
+      return`<div class="eh-yr-hd"><div class="eh-yr-line"></div><span class="eh-yr-lbl">${yr}</span><span class="eh-yr-ct">${yInts.length} interaction${yInts.length!==1?'s':''}</span><div class="eh-yr-line"></div></div>
+      ${projSections}`;
+    }).join('');
+
+    const toggleLabel=showAll?`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px"><path d="M2 8h12M8 3l5 5-5 5"/></svg> Showing all projects (${allInts.length})`:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.5"/><circle cx="8" cy="11" r=".8" fill="currentColor" stroke="none"/></svg> Filtered to current project — show all (${allInts.length})`;
+    const toggleBtn=S.projectFilter?`<span class="eh-all-toggle${showAll?' active':''}" onclick="S.ehShowAll=${showAll?'false':'true'};${cb}">${toggleLabel}</span>`:'';
+
+    S._ehHTML=`<div class="det-body">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <span class="sec-t">Engagement history</span>
+        <button class="btn btn-primary btn-xs" onclick="openIntModal('${s.id}')">+ Log</button>
+      </div>
+      ${toggleBtn}
+      ${total===0?`<div class="eh-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" style="width:28px;height:28px;display:block;margin:0 auto 8px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>No interactions logged yet for this contact.</div>`:`
+      <div class="eh-stat-bar">
+        <div class="eh-stat"><div class="eh-stat-lbl">Total</div><div class="eh-stat-val">${total}</div><div class="eh-stat-sub">${incoming} in · ${outgoing} out</div></div>
+        <div class="eh-stat"><div class="eh-stat-lbl">Open follow-ups</div><div class="eh-stat-val" style="color:${openFU>0?'var(--amber)':'var(--green)'}">${openFU}</div><div class="eh-stat-sub">${openFU>0?'need attention':'all resolved'}</div></div>
+        <div class="eh-stat"><div class="eh-stat-lbl">First contact</div><div class="eh-stat-val" style="font-size:13px;font-weight:600;margin-top:2px">${firstDate}</div></div>
+        <div class="eh-stat"><div class="eh-stat-lbl">Last contact</div><div class="eh-stat-val" style="font-size:13px;font-weight:600;margin-top:2px">${lastDate}</div></div>
+      </div>
+      ${chPills?`<div class="eh-ch-bar">${chPills}</div>`:''}
+      ${timelineHTML}`}
+    </div>`;
+  })();
+  const historyHTML=S._ehHTML||'';
+  // ── END ENGAGEMENT HISTORY TAB ────────────────────────────────────────
   return`<div class="det-hdr">
     <div class="det-hero">
       <div class="det-avatar" style="background:${col}22;color:${col}">${ini(s.firstName,s.lastName)}</div>
@@ -2236,10 +2371,11 @@ function renderStakeDetail(s,link){
     </div>
   </div>
   <div class="dtabs">
-    <button class="dtab${tab==='info'?' active':''}" onclick="S.stakeTab='info';${cb}">Profile & project</button>
-    <button class="dtab${tab==='log'?' active':''}" onclick="S.stakeTab='log';${cb}">Interaction log (${ints.length})</button>
+    <button class="dtab${tab==='info'?' active':''}" onclick="S.stakeTab='info';S.ehShowAll=false;${cb}">Profile & project</button>
+    <button class="dtab${tab==='log'?' active':''}" onclick="S.stakeTab='log';S.ehShowAll=false;${cb}">Interaction log (${ints.length})</button>
+    <button class="dtab${tab==='history'?' active':''}" onclick="S.stakeTab='history';${cb}">Engagement history</button>
   </div>
-  ${tab==='info'?infoHTML:logHTML}`;
+  ${tab==='info'?infoHTML:tab==='log'?logHTML:historyHTML}`;
 }
 
 

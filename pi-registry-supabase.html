@@ -446,6 +446,11 @@ window.onGoogleMapsReady = function() {
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="14" height="14" rx="1.5"/><path d="M4 11V8M7 11V5M10 11V7M13 11V4"/></svg>
       Reports
     </button>
+    <button class="nav-btn" id="nav-settings" onclick="setView('settings')">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg>
+      Settings
+      <span class="nav-badge" id="integrity-badge" style="display:none;background:var(--amber)"></span>
+    </button>
   </div>
   <div style="margin:8px 10px 0;background:#0E1E30;border:1px solid rgba(255,255,255,.13);border-radius:var(--radius-lg);flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0">
     <div style="padding:8px 16px 6px;border-bottom:1px solid rgba(255,255,255,.1);flex-shrink:0">
@@ -1189,6 +1194,7 @@ function render(){
   else if(S.view==='meetings')renderMeetings(m);
   else if(S.view==='issues')renderIssuesView(m);
   else if(S.view==='projects')renderProjects(m);
+  else if(S.view==='settings')renderSettings(m);
 }
 
 // ── DASHBOARD ─────────────────────────────────
@@ -2293,6 +2299,9 @@ function renderStakeDetail(s,link){
       const projSections=Object.entries(byProj).map(([pid,pInts])=>{
         const proj=pid==='__none__'?null:DB.get('projects').find(p=>p.id===pid);
         const projLabel=proj?`<span class="eh-proj-pid">${proj.pid}</span><span class="eh-proj-name">${proj.name}</span>`:'<span class="eh-proj-name" style="color:var(--fog)">No project</span>';
+        // Check if stakeholder is formally linked to this project
+        const isLinked=pid==='__none__'||DB.get('project_stakeholders').some(ps=>String(ps.projectId)===String(pid)&&String(ps.stakeholderId)===String(s.id));
+        const orphanTag=(!isLinked&&proj)?`<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--amber);background:rgba(232,160,32,.1);border:1px solid rgba(232,160,32,.25);padding:1px 7px;border-radius:4px;margin-left:4px" title="Interaction exists but stakeholder is not formally linked to this project"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:9px;height:9px"><circle cx="8" cy="8" r="6"/><path d="M8 5v3"/><circle cx="8" cy="11" r=".8" fill="currentColor" stroke="none"/></svg> Not linked</span>`:'';
         const entries=pInts.map((i,idx,arr)=>{
           const dotColor=i.direction==='Incoming'?'var(--sky)':'var(--green)';
           const fuTag=i.followUp
@@ -2316,7 +2325,7 @@ function renderStakeDetail(s,link){
           </div>`;
         }).join('');
         return`<div class="eh-proj-grp">
-          <div class="eh-proj-lbl">${projLabel}<span style="margin-left:auto;font-size:11px;color:var(--fog)">${pInts.length} interaction${pInts.length!==1?'s':''}</span></div>
+          <div class="eh-proj-lbl">${projLabel}${orphanTag}<span style="margin-left:auto;font-size:11px;color:var(--fog)">${pInts.length} interaction${pInts.length!==1?'s':''}</span></div>
           ${entries}
         </div>`;
       }).join('');
@@ -6082,6 +6091,205 @@ refreshBadges();render();
 
 
 
+
+
+// ── SETTINGS VIEW ──────────────────────────────────────────────────────────
+async function renderSettings(el) {
+  el.innerHTML = `
+    <div style="padding:28px 32px;max-width:860px">
+      <div style="margin-bottom:24px">
+        <div style="font-size:20px;font-weight:700;color:var(--white);margin-bottom:4px">Settings & Administration</div>
+        <div style="font-size:13px;color:var(--slate)">Data tools and app configuration</div>
+      </div>
+
+      <div style="background:var(--navy-mid);border:1px solid var(--border);border-radius:var(--radius-xl);margin-bottom:20px;overflow:hidden">
+        <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:16px;height:16px;color:var(--amber)"><circle cx="8" cy="8" r="6"/><path d="M8 5v3"/><circle cx="8" cy="11" r=".8" fill="currentColor" stroke="none"/></svg>
+          <span style="font-size:14px;font-weight:600;color:var(--white)">Data Integrity</span>
+        </div>
+        <div style="padding:18px 20px">
+          <div style="font-size:13px;color:var(--mist);margin-bottom:6px;font-weight:500">Orphaned interaction scan</div>
+          <div style="font-size:12px;color:var(--slate);margin-bottom:16px;line-height:1.6">
+            Finds stakeholders who have interaction records logged under a project but are not formally linked to that project in <code style="font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);padding:1px 5px;border-radius:3px">pi_project_stakeholders</code>.
+            This can happen when interactions are imported without a corresponding project link.
+            Running this scan and fixing orphans ensures accurate project contact counts, bubble charts, and reports.
+          </div>
+          <button class="btn btn-primary" id="scan-btn" onclick="runIntegrityScan()">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 1.5"/></svg>
+            Scan for orphaned interactions
+          </button>
+        </div>
+        <div id="scan-results" style="display:none;border-top:1px solid var(--border);padding:18px 20px"></div>
+      </div>
+
+      <div style="background:var(--navy-mid);border:1px solid var(--border);border-radius:var(--radius-xl);overflow:hidden">
+        <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:16px;height:16px;color:var(--sky-lt)"><circle cx="8" cy="8" r="6"/><path d="M8 5v3"/><circle cx="8" cy="11" r=".8" fill="currentColor" stroke="none"/></svg>
+          <span style="font-size:14px;font-weight:600;color:var(--white)">About PI Registry</span>
+        </div>
+        <div style="padding:18px 20px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div><div style="font-size:11px;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Version</div><div style="font-size:13px;color:var(--mist)">Supabase edition</div></div>
+          <div><div style="font-size:11px;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Hosting</div><div style="font-size:13px;color:var(--mist)">GitHub Pages</div></div>
+          <div><div style="font-size:11px;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Database</div><div style="font-size:13px;color:var(--mist)">Supabase (PostgreSQL)</div></div>
+          <div><div style="font-size:11px;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Built by</div><div style="font-size:13px;color:var(--mist)">Sunrise Engineering PI Services</div></div>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function runIntegrityScan() {
+  const btn = document.getElementById('scan-btn');
+  const resultsEl = document.getElementById('scan-results');
+  btn.disabled = true;
+  btn.textContent = 'Scanning…';
+
+  try {
+    const interactions = DB.get('interactions');
+    const projectStakeholders = DB.get('project_stakeholders');
+    const stakeholders = DB.get('stakeholders');
+    const projects = DB.get('projects');
+
+    // Find interactions where stakeholder is not linked to that project
+    const orphans = [];
+    const seen = new Set();
+
+    interactions.forEach(i => {
+      if (!i.projectId || !i.stakeholderId) return;
+      const key = String(i.projectId) + '|' + String(i.stakeholderId);
+      if (seen.has(key)) return;
+      const linked = projectStakeholders.find(ps =>
+        String(ps.projectId) === String(i.projectId) &&
+        String(ps.stakeholderId) === String(i.stakeholderId)
+      );
+      if (!linked) {
+        seen.add(key);
+        const stake = stakeholders.find(s => String(s.id) === String(i.stakeholderId));
+        const proj = projects.find(p => String(p.id) === String(i.projectId));
+        const intCount = interactions.filter(x =>
+          String(x.projectId) === String(i.projectId) &&
+          String(x.stakeholderId) === String(i.stakeholderId)
+        ).length;
+        orphans.push({ projectId: i.projectId, stakeholderId: i.stakeholderId, stake, proj, intCount });
+      }
+    });
+
+    // Update integrity badge
+    const badge = document.getElementById('integrity-badge');
+    if (badge) {
+      if (orphans.length > 0) { badge.textContent = orphans.length; badge.style.display = ''; }
+      else { badge.style.display = 'none'; }
+    }
+
+    if (orphans.length === 0) {
+      resultsEl.style.display = '';
+      resultsEl.innerHTML = `<div style="display:flex;align-items:center;gap:8px;color:var(--green)">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M3 8l4 4 6-6"/></svg>
+        <span style="font-size:13px;font-weight:500">All clear — no orphaned interactions found.</span>
+      </div>`;
+      btn.disabled = false;
+      btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px"><path d="M3 8l4 4 6-6"/></svg> Scan complete';
+      return;
+    }
+
+    // Build results table
+    let rows = orphans.map(o => {
+      const name = o.stake ? ((o.stake.firstName||'') + ' ' + (o.stake.lastName||'')).trim() || o.stake.org || '?' : 'Unknown';
+      const org = o.stake ? o.stake.org || '' : '';
+      const projLabel = o.proj ? `<span style="font-family:var(--mono);font-size:10px;background:var(--sky-dim);color:var(--sky-lt);padding:1px 6px;border-radius:4px">${o.proj.pid}</span> ${o.proj.name}` : `<span style="color:var(--fog)">Unknown project</span>`;
+      return `<tr>
+        <td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06)">
+          <div style="font-size:13px;color:var(--white)">${name}</div>
+          ${org ? `<div style="font-size:11px;color:var(--fog)">${org}</div>` : ''}
+        </td>
+        <td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px">${projLabel}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px;color:var(--slate);text-align:center">${o.intCount}</td>
+      </tr>`;
+    }).join('');
+
+    resultsEl.style.display = '';
+    resultsEl.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:14px;height:14px;color:var(--amber)"><circle cx="8" cy="8" r="6"/><path d="M8 5v3"/><circle cx="8" cy="11" r=".8" fill="currentColor" stroke="none"/></svg>
+        <span style="font-size:13px;font-weight:600;color:var(--amber)">${orphans.length} orphaned relationship${orphans.length!==1?'s':''} found</span>
+        <span style="font-size:12px;color:var(--slate)">— stakeholders with interactions but no formal project link</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
+        <thead>
+          <tr>
+            <th style="padding:6px 10px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);border-bottom:1px solid var(--border)">Stakeholder</th>
+            <th style="padding:6px 10px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);border-bottom:1px solid var(--border)">Project</th>
+            <th style="padding:6px 10px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);border-bottom:1px solid var(--border)">Interactions</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn btn-primary" onclick="fixOrphans(${JSON.stringify(orphans.map(o=>({p:o.projectId,s:o.stakeholderId}))).replace(/"/g,'&quot;')})">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px"><path d="M3 8l4 4 6-6"/></svg>
+          Fix all ${orphans.length} — create missing project links
+        </button>
+        <span style="font-size:12px;color:var(--slate)">Links will be created as External / Neutral</span>
+      </div>`;
+
+    btn.disabled = false;
+    btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 1.5"/></svg> Re-scan';
+
+  } catch(err) {
+    resultsEl.style.display = '';
+    resultsEl.innerHTML = `<div style="color:var(--red);font-size:13px">Scan error: ${err.message}</div>`;
+    btn.disabled = false;
+    btn.textContent = 'Retry scan';
+  }
+}
+
+async function fixOrphans(pairs) {
+  const resultsEl = document.getElementById('scan-results');
+  const fixBtn = event.target.closest('button');
+  fixBtn.disabled = true;
+  fixBtn.textContent = 'Fixing…';
+
+  let fixed = 0, failed = 0;
+
+  // Get current project_stakeholders and add new links
+  const current = DB.get('project_stakeholders');
+  const toAdd = [];
+
+  for (const {p, s} of pairs) {
+    // Double-check not already linked (in case of race)
+    const alreadyLinked = current.some(ps =>
+      String(ps.projectId) === String(p) && String(ps.stakeholderId) === String(s)
+    );
+    if (!alreadyLinked) {
+      toAdd.push({
+        id: DB.uid(),
+        projectId: p,
+        stakeholderId: s,
+        stakeholderRole: 'External',
+        support: 'Neutral',
+        issueTags: '',
+        distributionGroups: '',
+        addedDate: new Date().toISOString().slice(0,10),
+        notes: 'Auto-linked via data integrity repair.'
+      });
+      fixed++;
+    }
+  }
+
+  if (toAdd.length > 0) {
+    await DB.set('project_stakeholders', [...current, ...toAdd]);
+  }
+
+  refreshBadges();
+
+  const badge = document.getElementById('integrity-badge');
+  if (badge) badge.style.display = 'none';
+
+  resultsEl.innerHTML = `<div style="display:flex;align-items:center;gap:8px;color:var(--green)">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M3 8l4 4 6-6"/></svg>
+    <span style="font-size:13px;font-weight:500">${fixed} link${fixed!==1?'s':''} created successfully.${failed>0?' '+failed+' failed — check console.':''} Run a re-scan to confirm.</span>
+  </div>
+  <div style="margin-top:10px"><button class="btn" onclick="runIntegrityScan()">Re-scan to confirm</button></div>`;
+}
 
 // ── MEETINGS VIEW ──────────────────────────────────────────────────────────
 const MEETING_TYPES=['Public open house','Public hearing','Scoping meeting','Agency coordination meeting','Elected official briefing','Partnering meeting','Property owner / ROW discussion','Pre-construction meeting','Progress meeting','Community advisory committee','Media briefing / press conference','Pop-up / information booth','School or business outreach','Site visit','Webinar / virtual meeting','Other'];

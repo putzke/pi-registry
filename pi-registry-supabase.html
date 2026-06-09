@@ -4609,24 +4609,57 @@ function generateReport(type){
     body+='</tbody></table>';
 
   } else if(type==='sentiment-summary'){
-    var groups={Champion:[],Neutral:[],Opponent:[]};
+    // Build groups for matrix (all project stakeholders) and detail cards (external only)
+    var matStakes=[];
+    ps.forEach(function(lk){
+      var s=allStakes.find(function(x){return String(x.id)===String(lk.stakeholderId)});
+      if(s)matStakes.push({name:((s.firstName||'')+' '+(s.lastName||'')).trim()||(s.org||'?'),org:s.org||'',influence:s.influenceTier||'Medium',sentiment:lk.support||'Neutral'});
+    });
+    var groupsExt={Champion:[],Neutral:[],Opponent:[]};
     externalFilteredPS.forEach(function(lk){
       var s=allStakes.find(function(x){return String(x.id)===String(lk.stakeholderId)});
-      if(s&&groups[lk.support])groups[lk.support].push({s:s,lk:lk});
+      if(s&&groupsExt[lk.support])groupsExt[lk.support].push({s:s,lk:lk});
     });
-    body='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px">';
+
+    // 3x3 matrix config
+    var matRows=['High','Medium','Low'];
+    var matCols=['Opponent','Neutral','Champion'];
+    var matColors={Champion:'#28A870',Neutral:'#5a87c6',Opponent:'#C0392B'};
+    var matColHdr={Champion:'Champions',Neutral:'Neutrals',Opponent:'Opponents'};
+    var matBg={'High-Champion':'rgba(40,168,112,.15)','High-Neutral':'rgba(209,169,68,.10)','High-Opponent':'rgba(192,57,43,.15)','Medium-Champion':'rgba(40,168,112,.08)','Medium-Neutral':'rgba(255,255,255,.03)','Medium-Opponent':'rgba(192,57,43,.08)','Low-Champion':'rgba(40,168,112,.04)','Low-Neutral':'rgba(255,255,255,.02)','Low-Opponent':'rgba(192,57,43,.04)'};
+    var matLabels={'High-Champion':'Key Ally','High-Neutral':'Keep Satisfied','High-Opponent':'Manage Closely','Medium-Champion':'Engage Actively','Medium-Neutral':'Keep Informed','Medium-Opponent':'Monitor','Low-Champion':'Leverage','Low-Neutral':'Minimal Effort','Low-Opponent':'Watch'};
+
+    // Matrix header
+    var matHdr='<th style="width:72px;padding:7px;background:rgba(26,48,80,.9);border:1px solid rgba(255,255,255,.15);font-size:10px;color:rgba(255,255,255,.5)">Influence</th>';
+    matCols.forEach(function(c){matHdr+='<th style="padding:7px;background:rgba(26,48,80,.7);border:1px solid rgba(255,255,255,.15);text-align:center;font-size:12px;font-weight:700;color:'+matColors[c]+'">'+matColHdr[c]+'</th>';});
+
+    // Matrix rows
+    var matBodyRows='';
+    matRows.forEach(function(inf){
+      var cells='<td style="padding:7px 9px;background:rgba(26,48,80,.9);border:1px solid rgba(255,255,255,.12);font-size:11px;font-weight:700;color:var(--white);text-align:right;vertical-align:middle;white-space:nowrap">'+inf+'<div style="font-size:9px;color:var(--fog);font-weight:400">influence</div></td>';
+      matCols.forEach(function(sent){
+        var key=inf+'-'+sent;
+        var grp=matStakes.filter(function(s){return s.influence===inf&&s.sentiment===sent});
+        var dots=grp.map(function(s){var init=(s.name.split(' ').map(function(w){return w[0]||''}).filter(Boolean).slice(0,2).join('')).toUpperCase()||'?';return '<span title="'+s.name+(s.org?' · '+s.org:'')+'" style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:'+matColors[sent]+';color:#fff;font-size:9px;font-weight:700;margin:2px;box-shadow:0 1px 3px rgba(0,0,0,.4)">'+init+'</span>';}).join('');
+        cells+='<td style="padding:7px;background:'+matBg[key]+';border:1px solid rgba(255,255,255,.10);vertical-align:top;min-width:110px"><div style="font-size:9px;font-weight:600;color:'+matColors[sent]+';opacity:.8;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">'+matLabels[key]+'</div><div style="display:flex;flex-wrap:wrap">'+dots+'</div>'+(grp.length?'<div style="font-size:10px;color:rgba(255,255,255,.3);margin-top:2px">'+grp.length+'</div>':'')+'</td>';
+      });
+      matBodyRows+='<tr>'+cells+'</tr>';
+    });
+
+    // Legend
+    var matLegend='<div style="display:flex;gap:14px;margin-bottom:8px;font-size:11px;color:var(--slate)">';
+    matCols.forEach(function(c){matLegend+='<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+matColors[c]+';margin-right:4px"></span>'+matColHdr[c]+'</span>';});
+    matLegend+='<span style="margin-left:auto;font-style:italic;color:var(--fog);font-size:10px">Hover initials for name · All project stakeholders</span></div>';
+
+    body='<div style="page-break-inside:avoid;margin-bottom:20px">'      +'<div style="font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Stakeholder Engagement Matrix</div>'      +matLegend      +'<table style="width:100%;border-collapse:separate;border-spacing:3px"><thead><tr>'+matHdr+'</tr></thead><tbody>'+matBodyRows+'</tbody></table>'      +'</div>'      +'<div style="font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-top:14px;border-top:1px solid var(--border)">External Stakeholder Detail ('+externalFilteredPS.length+' contacts)</div>'      +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px">';
     ['Champion','Neutral','Opponent'].forEach(function(g){
       var color=g==='Champion'?'var(--green)':g==='Opponent'?'var(--red)':'var(--slate)';
       var bg=g==='Champion'?'rgba(40,168,112,.08)':g==='Opponent'?'rgba(217,64,64,.08)':'rgba(255,255,255,.03)';
-      body+='<div style="background:'+bg+';border:1px solid var(--border);border-radius:12px;padding:16px 18px">'
-        +'<div style="font-size:14px;font-weight:600;color:'+color+';margin-bottom:12px">'+g+'s ('+groups[g].length+')</div>';
-      if(groups[g].length===0)body+='<div style="font-size:12px;color:var(--fog);padding:12px 0">None in this category.</div>';
-      groups[g].forEach(function(item){
+      body+='<div style="background:'+bg+';border:1px solid var(--border);border-radius:12px;padding:16px 18px">'        +'<div style="font-size:14px;font-weight:600;color:'+color+';margin-bottom:12px">'+g+'s ('+groupsExt[g].length+')</div>';
+      if(groupsExt[g].length===0)body+='<div style="font-size:12px;color:var(--fog);padding:12px 0">None in this category.</div>';
+      groupsExt[g].forEach(function(item){
         var tags=(item.lk.issueTags||'').split(',').filter(Boolean).map(function(t){return '<span class="badge b-dark" style="margin:1px">'+t.trim()+'</span>'}).join('');
-        body+='<div style="padding:8px 0;border-bottom:1px solid var(--border)">'
-          +'<div style="font-weight:500;color:var(--white);font-size:13px">'+item.s.firstName+' '+item.s.lastName+'</div>'
-          +'<div style="font-size:12px;color:var(--slate)">'+(item.s.org||item.s.type||'')+'</div>'
-          +(tags?'<div style="margin-top:4px">'+tags+'</div>':'')+'</div>';
+        body+='<div style="padding:8px 0;border-bottom:1px solid var(--border)">'          +'<div style="font-weight:500;color:var(--white);font-size:13px">'+item.s.firstName+' '+item.s.lastName+'</div>'          +'<div style="font-size:12px;color:var(--slate)">'+(item.s.org||item.s.type||'')+'</div>'          +(tags?'<div style="margin-top:4px">'+tags+'</div>':'')+'</div>';
       });
       body+='</div>';
     });

@@ -659,7 +659,7 @@ const SB_TO_INT = {
 
 // Convert our internal object to Supabase column names
 // Date fields that must be null (not '') when empty
-const DATE_FIELDS = new Set(['interaction_date','follow_up_due','due_date','start_date','end_date','precon_date','added_date','meeting_date','date_raised','date_resolved']);
+const DATE_FIELDS = new Set(['interaction_date','follow_up_due','follow_up_resolved','due_date','start_date','end_date','precon_date','added_date','meeting_date','date_raised','date_resolved']);
 
 // Integer FK columns that Supabase expects as numbers
 const SB_INT_FIELDS = new Set(['project_id','stakeholder_id','issue_id','interaction_id','meeting_id']);

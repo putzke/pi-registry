@@ -3556,14 +3556,14 @@ function openTplApply(projId,tplId){
   <div style="font-size:13px;color:var(--slate);padding:9px 12px;background:#162840;border-radius:var(--radius)">Existing deliverables are kept. Template items are added on top. You can edit or delete any item after applying.</div>`,
   `<button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-primary" onclick="applyTpl()">Apply template</button>`);
 }
-function applyTpl(){
+async function applyTpl(){
   const pid=document.getElementById('f-tap')?.value;
   const tid=document.getElementById('f-tat')?.value;
   if(!pid||!tid)return;
   const t=TEMPLATES.find(x=>x.id===tid);if(!t)return;
   const all=DB.get('deliverables');
   t.deliverables.forEach(d=>{all.push({...d,id:DB.uid(),projectId:pid,deliveredCount:0,status:'Not started',progress:0})});
-  DB.set('deliverables',all);
+  await DB.set('deliverables',all);
   S.projectFilter=pid;closeM();setView('deliverables');
 }
 

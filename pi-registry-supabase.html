@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://ncfbblhlsiglxkoiounv.supabase.co; img-src 'self' data:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://maps.googleapis.com https://maps.gstatic.com; style-src 'unsafe-inline' https://fonts.googleapis.com https://maps.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://ncfbblhlsiglxkoiounv.supabase.co https://maps.googleapis.com https://places.googleapis.com; img-src 'self' data: https://maps.gstatic.com https://maps.googleapis.com;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PI Registry v2 — Public Involvement Management</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -331,6 +331,28 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+// ── GOOGLE MAPS API KEY ──────────────────────────────────────────
+// To replace: swap this value or move to a settings/config screen
+// For commercial deployment: each customer should supply their own key
+const GOOGLE_MAPS_API_KEY = 'AIzaSyAN4n-CRuhe8LHosEEykTVpFngwsjGcu1I';
+
+// Load Google Maps Places script dynamically after page load
+function loadGoogleMaps() {
+  if (window._googleMapsLoaded) return;
+  window._googleMapsLoaded = true;
+  const s = document.createElement('script');
+  s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&callback=onGoogleMapsReady`;
+  s.async = true;
+  s.defer = true;
+  document.head.appendChild(s);
+}
+
+// Called by Google when the API is ready
+window.onGoogleMapsReady = function() {
+  window._googleMapsReady = true;
+};
+</script>
 </head>
 <body>
 
@@ -3095,6 +3117,11 @@ function openStakeModal(id){
   `${id?`<button class="btn btn-danger btn-sm" onclick="delStake('${id}')">Delete</button>`:''}
   <button class="btn" onclick="closeM()">Cancel</button>
   <button class="btn btn-primary" onclick="saveStake()">Save stakeholder</button>`,true);
+  // Wire Google Places autocomplete on address field after modal renders
+  requestAnimationFrame(()=>{
+    const addrInput=document.getElementById('f-ad');
+    if(addrInput) initAddressAutocomplete(addrInput);
+  });
 }
 // ── PHONE UTILITIES ────────────────────────────────────────────────────
 function cleanPhone(raw){ return (raw||'').replace(/\D/g,''); }
@@ -3112,6 +3139,32 @@ function validateEmail(email){
   return null;
 }
 // ───────────────────────────────────────────────────────────────────────
+
+function initAddressAutocomplete(input) {
+  if (!input) return;
+  // Load Google Maps if not already loaded
+  loadGoogleMaps();
+  // Poll until Google Maps is ready (usually < 1 second)
+  let attempts = 0;
+  const poll = setInterval(() => {
+    attempts++;
+    if (window.google && window.google.maps && window.google.maps.places) {
+      clearInterval(poll);
+      const ac = new window.google.maps.places.Autocomplete(input, {
+        types: ['address'],
+        componentRestrictions: { country: 'us' },
+        fields: ['formatted_address']
+      });
+      ac.addListener('place_changed', () => {
+        const place = ac.getPlace();
+        if (place && place.formatted_address) {
+          input.value = place.formatted_address;
+        }
+      });
+    }
+    if (attempts > 30) clearInterval(poll); // give up after 3 seconds
+  }, 100);
+}
 
 function saveStake(){
   const v=id=>document.getElementById(id)?.value||'';

@@ -3183,6 +3183,36 @@ function saveStake(){
   if(emailErr){alert(emailErr);return;}
   const data={id:S.editId||DB.uid(),firstName:document.getElementById('f-fn')?.value||'',lastName:document.getElementById('f-ln')?.value||'',org:v('f-org'),title:v('f-ti'),email:v('f-em'),phone:rawPhone.trim()?formatPhone(cleanPhone(rawPhone)):'',address:v('f-ad'),parcelId:v('f-parc'),type:v('f-st'),isMaster:true,notes:v('f-no'),isAnonymous:false};
   if(!data.firstName&&!data.lastName&&!data.org){alert('First and last name, or Organization name required.');return}
+
+  // ── Duplicate detection (new contacts only) ───────────────────
+  if(!S.editId){
+    const existing=DB.get('stakeholders');
+    const norm=s=>(s||'').trim().toLowerCase();
+    let dupe=null;
+    let dupeReason='';
+    // 1. Email match
+    if(data.email){
+      dupe=existing.find(e=>e.email&&norm(e.email)===norm(data.email));
+      if(dupe) dupeReason='email address';
+    }
+    // 2. Phone match
+    if(!dupe&&data.phone){
+      const cleanNew=cleanPhone(data.phone);
+      dupe=existing.find(e=>e.phone&&cleanPhone(e.phone)===cleanNew);
+      if(dupe) dupeReason='phone number';
+    }
+    // 3. Full name match
+    if(!dupe&&data.firstName&&data.lastName){
+      dupe=existing.find(e=>norm(e.firstName)===norm(data.firstName)&&norm(e.lastName)===norm(data.lastName));
+      if(dupe) dupeReason='name';
+    }
+    if(dupe){
+      const dupeName=((dupe.firstName||'')+' '+(dupe.lastName||'')).trim()||dupe.org||'Unknown';
+      const proceed=confirm(`A stakeholder with the same ${dupeReason} already exists:\n\n"${dupeName}" (${dupe.org||dupe.type||''}${dupe.email?' · '+dupe.email:''})\n\nSave anyway as a new contact?`);
+      if(!proceed) return;
+    }
+  }
+
   const all=DB.get('stakeholders');
   if(S.editId){const i=all.findIndex(x=>x.id===S.editId);if(i>-1)all[i]=data;}else all.push(data);
   DB.set('stakeholders',all);

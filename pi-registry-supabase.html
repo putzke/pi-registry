@@ -3070,6 +3070,10 @@ function renderProjects(el){
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:13px;height:13px"><path d="M8 2C5.8 2 4 3.8 4 6c0 3 4 8 4 8s4-5 4-8c0-2.2-1.8-4-4-4z"/><circle cx="8" cy="6" r="1.5"/></svg>
               Map
             </button>
+            <button class="btn btn-sm" style="color:#b39ddb;border-color:rgba(179,157,219,.4)" onclick="showEngagementMatrix('${p.id}')">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:13px;height:13px"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>
+              Matrix
+            </button>
             <button class="btn btn-sm" style="margin-left:auto;color:var(--green);border-color:rgba(40,168,112,.4)" onclick="exportProject('${p.id}')">
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:13px;height:13px"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg>
               Export
@@ -6294,6 +6298,271 @@ function printStakeholderMap(projectId, projectName) {
 }
 // ══════════════════════════════════════════════════════════════════
 // END STAKEHOLDER MAP
+// ══════════════════════════════════════════════════════════════════
+
+
+// ══════════════════════════════════════════════════════════════════
+// STAKEHOLDER ENGAGEMENT MATRIX — Self-contained
+// Y axis: Influence Tier (High / Medium / Low)
+// X axis: Sentiment (Opponent / Neutral / Champion)
+// Dot color mirrors sentiment; size reflects influence
+// ══════════════════════════════════════════════════════════════════
+
+function showEngagementMatrix(projectId) {
+  const projObj = DB.get('projects').find(p => String(p.id) === String(projectId));
+  if (!projObj) return;
+  const projectName = projObj.name;
+
+  const psLinks = DB.get('project_stakeholders').filter(x => String(x.projectId) === String(projectId));
+  const allStakes = DB.get('stakeholders');
+
+  // Build enriched list
+  const stakes = psLinks.map(lk => {
+    const s = allStakes.find(x => String(x.id) === String(lk.stakeholderId));
+    if (!s) return null;
+    return {
+      name: ((s.firstName||'')+' '+(s.lastName||'')).trim() || s.org || 'Unknown',
+      org: s.org || '',
+      type: s.type || '',
+      influence: s.influenceTier || 'Medium',
+      sentiment: lk.support || 'Neutral'
+    };
+  }).filter(Boolean);
+
+  if (stakes.length === 0) {
+    showToast('No stakeholders found for this project.', 'warn', 3000);
+    return;
+  }
+
+  // Matrix config
+  const rows    = ['High','Medium','Low'];
+  const cols    = ['Opponent','Neutral','Champion'];
+  const colColors = { Champion:'#28A870', Neutral:'#5a87c6', Opponent:'#C0392B' };
+  const quadrantLabels = {
+    'High-Opponent':  'Manage Closely',
+    'High-Neutral':   'Keep Satisfied',
+    'High-Champion':  'Key Ally',
+    'Medium-Opponent':'Monitor',
+    'Medium-Neutral': 'Keep Informed',
+    'Medium-Champion':'Engage Actively',
+    'Low-Opponent':   'Watch',
+    'Low-Neutral':    'Minimal Effort',
+    'Low-Champion':   'Leverage'
+  };
+  const quadrantBg = {
+    'High-Opponent':  'rgba(192,57,43,.18)',
+    'High-Neutral':   'rgba(209,169,68,.12)',
+    'High-Champion':  'rgba(40,168,112,.18)',
+    'Medium-Opponent':'rgba(192,57,43,.10)',
+    'Medium-Neutral': 'rgba(255,255,255,.04)',
+    'Medium-Champion':'rgba(40,168,112,.10)',
+    'Low-Opponent':   'rgba(192,57,43,.06)',
+    'Low-Neutral':    'rgba(255,255,255,.02)',
+    'Low-Champion':   'rgba(40,168,112,.06)'
+  };
+
+  // Build cell contents
+  function cellHTML(inf, sent) {
+    const key = inf+'-'+sent;
+    const group = stakes.filter(s => s.influence===inf && s.sentiment===sent);
+    const color = colColors[sent];
+    const bg = quadrantBg[key] || 'rgba(255,255,255,.03)';
+    const label = quadrantLabels[key] || '';
+    const dots = group.map(s => {
+      const initials = (s.name.split(' ').map(w=>w[0]).filter(Boolean).slice(0,2).join('')).toUpperCase() || '?';
+      return `<div title="${s.name}${s.org?' · '+s.org:''}" style="
+        display:inline-flex;align-items:center;justify-content:center;
+        width:28px;height:28px;border-radius:50%;
+        background:${color};color:#fff;font-size:9px;font-weight:700;
+        margin:2px;cursor:default;flex-shrink:0;
+        box-shadow:0 1px 4px rgba(0,0,0,.35)">${initials}</div>`;
+    }).join('');
+    return `<td style="
+      width:33%;padding:10px 8px;vertical-align:top;
+      background:${bg};border:1px solid rgba(255,255,255,.08);
+      border-radius:6px;min-height:90px">
+      <div style="font-size:9px;font-weight:600;text-transform:uppercase;
+        letter-spacing:.5px;color:${color};opacity:.7;margin-bottom:6px">${label}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:2px;min-height:32px">${dots}</div>
+      ${group.length>0?`<div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:4px">${group.length} stakeholder${group.length!==1?'s':''}</div>`:''}
+    </td>`;
+  }
+
+  // Build table rows
+  const tableRows = rows.map(inf => `
+    <tr>
+      <td style="padding:8px 12px 8px 0;vertical-align:middle;white-space:nowrap;width:70px">
+        <div style="font-size:11px;font-weight:700;color:var(--white);text-align:right">${inf}</div>
+        <div style="font-size:9px;color:var(--fog);text-align:right">influence</div>
+      </td>
+      ${cols.map(sent => cellHTML(inf, sent)).join('')}
+    </tr>`).join('');
+
+  // Summary counts
+  const total = stakes.length;
+  const champ = stakes.filter(s=>s.sentiment==='Champion').length;
+  const opp   = stakes.filter(s=>s.sentiment==='Opponent').length;
+  const hi    = stakes.filter(s=>s.influence==='High').length;
+
+  const modalHTML = `
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <div style="display:flex;gap:16px;font-size:12px">
+          <span style="color:var(--fog)">${total} stakeholders</span>
+          <span style="color:#28A870">${champ} champion${champ!==1?'s':''}</span>
+          <span style="color:#C0392B">${opp} opponent${opp!==1?'s':''}</span>
+          <span style="color:var(--slate)">${hi} high influence</span>
+        </div>
+        <button class="btn btn-sm" onclick="printEngagementMatrix('${projectId}')">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M4 6V2h8v4"/><rect x="2" y="6" width="12" height="7" rx="1"/><path d="M4 10h8M4 13h5"/></svg>
+          Print / PDF
+        </button>
+      </div>
+      <table style="width:100%;border-collapse:separate;border-spacing:4px">
+        <thead>
+          <tr>
+            <td style="width:70px"></td>
+            ${cols.map(c=>`<td style="text-align:center;padding-bottom:6px">
+              <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${colColors[c]};margin-right:5px;vertical-align:middle"></span>
+              <span style="font-size:11px;font-weight:700;color:${colColors[c]}">${c}</span>
+            </td>`).join('')}
+          </tr>
+        </thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+      <div style="margin-top:12px;font-size:10px;color:var(--fog)">
+        Hover over initials to see stakeholder name · Each dot represents one stakeholder
+      </div>
+    </div>`;
+
+  openM(projectName + ' — Stakeholder Engagement Matrix', modalHTML,
+    '<button class="btn" onclick="closeM()">Close</button>', true);
+}
+
+function printEngagementMatrix(projectId) {
+  const projObj = DB.get('projects').find(p => String(p.id) === String(projectId));
+  if (!projObj) return;
+  const projectName = projObj.name;
+
+  const psLinks = DB.get('project_stakeholders').filter(x => String(x.projectId) === String(projectId));
+  const allStakes = DB.get('stakeholders');
+  const stakes = psLinks.map(lk => {
+    const s = allStakes.find(x => String(x.id) === String(lk.stakeholderId));
+    if (!s) return null;
+    return {
+      name: ((s.firstName||'')+' '+(s.lastName||'')).trim() || s.org || 'Unknown',
+      org: s.org || '',
+      type: s.type || '',
+      influence: s.influenceTier || 'Medium',
+      sentiment: lk.support || 'Neutral'
+    };
+  }).filter(Boolean);
+
+  const rows    = ['High','Medium','Low'];
+  const cols    = ['Opponent','Neutral','Champion'];
+  const colColors = { Champion:'#28A870', Neutral:'#4a7ab5', Opponent:'#C0392B' };
+  const quadrantLabels = {
+    'High-Opponent':'Manage Closely','High-Neutral':'Keep Satisfied','High-Champion':'Key Ally',
+    'Medium-Opponent':'Monitor','Medium-Neutral':'Keep Informed','Medium-Champion':'Engage Actively',
+    'Low-Opponent':'Watch','Low-Neutral':'Minimal Effort','Low-Champion':'Leverage'
+  };
+  const quadrantBg = {
+    'High-Opponent':'#fdecea','High-Neutral':'#fef9e7','High-Champion':'#eafaf1',
+    'Medium-Opponent':'#fdf3f2','Medium-Neutral':'#fafafa','Medium-Champion':'#f0faf5',
+    'Low-Opponent':'#fef8f8','Low-Neutral':'#ffffff','Low-Champion':'#f7fdf9'
+  };
+
+  // Build print table
+  const tableRows = rows.map(inf => {
+    const cells = cols.map(sent => {
+      const key = inf+'-'+sent;
+      const group = stakes.filter(s => s.influence===inf && s.sentiment===sent);
+      const color = colColors[sent];
+      const bg = quadrantBg[key] || '#fff';
+      const label = quadrantLabels[key] || '';
+      const nameList = group.map(s =>
+        `<div style="font-size:10px;margin:1px 0;color:#333">
+          <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${color};margin-right:4px;vertical-align:middle"></span>
+          ${s.name}${s.org?' <span style="color:#888;font-size:9px">('+s.org+')</span>':''}
+        </div>`).join('');
+      return `<td style="width:33%;padding:10px;vertical-align:top;background:${bg};border:1px solid #ddd;min-height:80px">
+        <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:${color};margin-bottom:6px">${label}</div>
+        ${nameList || '<div style="font-size:9px;color:#bbb;font-style:italic">None</div>'}
+        ${group.length>0?`<div style="font-size:9px;color:#999;margin-top:4px;border-top:1px solid #eee;padding-top:3px">${group.length} stakeholder${group.length!==1?'s':''}</div>`:''}
+      </td>`;
+    }).join('');
+    return `<tr>
+      <td style="padding:8px 12px 8px 0;vertical-align:middle;white-space:nowrap;width:80px;text-align:right">
+        <div style="font-size:11px;font-weight:700;color:#1A3050">${inf}</div>
+        <div style="font-size:8px;color:#999">influence</div>
+      </td>
+      ${cells}
+    </tr>`;
+  }).join('');
+
+  const colHeaders = cols.map(c =>
+    `<td style="text-align:center;padding-bottom:8px;width:33%">
+      <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${colColors[c]};margin-right:5px;vertical-align:middle"></span>
+      <span style="font-size:11px;font-weight:700;color:${colColors[c]}">${c}</span>
+    </td>`).join('');
+
+  // Stakeholder roster by quadrant
+  const rosterRows = rows.flatMap(inf => cols.map(sent => {
+    const group = stakes.filter(s => s.influence===inf && s.sentiment===sent);
+    if (group.length === 0) return '';
+    return `<tr style="background:${quadrantBg[inf+'-'+sent]}">
+      <td style="padding:5px 8px;font-size:10px;font-weight:600;color:${colColors[sent]};border:1px solid #eee">${inf} / ${sent}</td>
+      <td style="padding:5px 8px;font-size:10px;border:1px solid #eee">${group.map(s=>s.name).join(', ')}</td>
+      <td style="padding:5px 8px;font-size:10px;color:#666;border:1px solid #eee">${quadrantLabels[inf+'-'+sent]}</td>
+    </tr>`;
+  })).filter(Boolean).join('');
+
+  const date = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  const total = stakes.length;
+  const champ = stakes.filter(s=>s.sentiment==='Champion').length;
+  const opp = stakes.filter(s=>s.sentiment==='Opponent').length;
+
+  const printWin = window.open('', '_blank');
+  printWin.document.write(`<!DOCTYPE html><html><head>
+  <title>${projectName} — Stakeholder Engagement Matrix</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; color: #222; }
+    h1 { font-size: 18px; color: #1A3050; margin-bottom: 2px; }
+    .sub { font-size: 12px; color: #666; margin-bottom: 6px; }
+    .stats { display: flex; gap: 20px; font-size: 11px; margin-bottom: 16px; padding: 8px 12px; background: #f5f7fa; border-radius: 4px; }
+    table { width: 100%; border-collapse: collapse; }
+    .section-title { font-size: 12px; font-weight: 700; color: #1A3050; text-transform: uppercase; letter-spacing: .5px; margin: 20px 0 8px; }
+    @media print { button { display:none } @page { margin: 15mm; } }
+  </style>
+  </head><body>
+  <h1>${projectName} — Stakeholder Engagement Matrix</h1>
+  <div class="sub">Generated ${date} &nbsp;·&nbsp; Sunrise Engineering — Public Involvement Services</div>
+  <div class="stats">
+    <span><strong>${total}</strong> total stakeholders</span>
+    <span style="color:#28A870"><strong>${champ}</strong> champion${champ!==1?'s':''}</span>
+    <span style="color:#C0392B"><strong>${opp}</strong> opponent${opp!==1?'s':''}</span>
+    <span style="color:#666"><strong>${total-champ-opp}</strong> neutral</span>
+  </div>
+  <div class="section-title">Engagement Matrix</div>
+  <table style="border-collapse:separate;border-spacing:4px">
+    <thead><tr><td style="width:80px"></td>${colHeaders}</tr></thead>
+    <tbody>${tableRows}</tbody>
+  </table>
+  <div class="section-title" style="margin-top:24px">Stakeholder Roster by Quadrant</div>
+  <table>
+    <thead><tr>
+      <th style="padding:6px 8px;background:#1A3050;color:#fff;font-size:10px;text-align:left;width:140px">Influence / Sentiment</th>
+      <th style="padding:6px 8px;background:#1A3050;color:#fff;font-size:10px;text-align:left">Stakeholders</th>
+      <th style="padding:6px 8px;background:#1A3050;color:#fff;font-size:10px;text-align:left;width:120px">Strategy</th>
+    </tr></thead>
+    <tbody>${rosterRows}</tbody>
+  </table>
+  <script>window.onload=function(){window.print();}<\/script>
+  </body></html>`);
+  printWin.document.close();
+}
+// ══════════════════════════════════════════════════════════════════
+// END STAKEHOLDER ENGAGEMENT MATRIX
 // ══════════════════════════════════════════════════════════════════
 
 </script>

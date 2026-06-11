@@ -6264,6 +6264,25 @@ async function renderSettings(el) {
         <div id="scan-results" style="display:none;border-top:1px solid var(--border);padding:18px 20px"></div>
       </div>
 
+      <div style="background:var(--navy-mid);border:1px solid var(--border);border-radius:var(--radius-xl);margin-bottom:20px;overflow:hidden">
+        <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:16px;height:16px;color:var(--amber)"><circle cx="8" cy="8" r="6"/><path d="M8 5v3"/><circle cx="8" cy="11" r=".8" fill="currentColor" stroke="none"/></svg>
+          <span style="font-size:14px;font-weight:600;color:var(--white)">Data Integrity</span>
+        </div>
+        <div style="padding:18px 20px">
+          <div style="font-size:13px;color:var(--mist);margin-bottom:6px;font-weight:500">Duplicate project link scan</div>
+          <div style="font-size:12px;color:var(--slate);margin-bottom:16px;line-height:1.6">
+            Finds stakeholders who are linked to the same project more than once in <code style="font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);padding:1px 5px;border-radius:3px">pi_project_stakeholders</code>.
+            This can happen when a stakeholder is imported multiple times against the same project. Duplicate links cause incorrect project counts and show the same project twice on a stakeholder's profile.
+          </div>
+          <button class="btn btn-primary" id="dup-scan-btn" onclick="runDuplicateScan()">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 1.5"/></svg>
+            Scan for duplicate project links
+          </button>
+        </div>
+        <div id="dup-scan-results" style="display:none;border-top:1px solid var(--border);padding:18px 20px"></div>
+      </div>
+
       <div style="background:var(--navy-mid);border:1px solid var(--border);border-radius:var(--radius-xl);overflow:hidden">
         <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:16px;height:16px;color:var(--sky-lt)"><circle cx="8" cy="8" r="6"/><path d="M8 5v3"/><circle cx="8" cy="11" r=".8" fill="currentColor" stroke="none"/></svg>
@@ -6277,6 +6296,136 @@ async function renderSettings(el) {
         </div>
       </div>
     </div>`;
+}
+
+
+async function runDuplicateScan() {
+  const btn = document.getElementById('dup-scan-btn');
+  const resultsEl = document.getElementById('dup-scan-results');
+  btn.disabled = true;
+  btn.textContent = 'Scanning…';
+
+  try {
+    const ps = DB.get('project_stakeholders');
+    const stakeholders = DB.get('stakeholders');
+    const projects = DB.get('projects');
+
+    // Group by projectId+stakeholderId, find any with count > 1
+    const keyMap = {};
+    ps.forEach(lk => {
+      const key = String(lk.projectId) + '|' + String(lk.stakeholderId);
+      if (!keyMap[key]) keyMap[key] = [];
+      keyMap[key].push(lk);
+    });
+
+    const dupes = Object.entries(keyMap)
+      .filter(([,rows]) => rows.length > 1)
+      .map(([key, rows]) => {
+        const [pid, sid] = key.split('|');
+        const stake = stakeholders.find(s => String(s.id) === sid);
+        const proj = projects.find(p => String(p.id) === pid);
+        return { key, pid, sid, rows, stake, proj };
+      });
+
+    resultsEl.style.display = '';
+
+    if (dupes.length === 0) {
+      resultsEl.innerHTML = `<div style="display:flex;align-items:center;gap:8px;color:var(--green)">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M3 8l4 4 6-6"/></svg>
+        <span style="font-size:13px;font-weight:500">All clear — no duplicate project links found.</span>
+      </div>`;
+      btn.disabled = false;
+      btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px"><path d="M3 8l4 4 6-6"/></svg> Scan complete';
+      return;
+    }
+
+    let rows = dupes.map(d => {
+      const name = d.stake ? ((d.stake.firstName||'')+' '+(d.stake.lastName||'')).trim()||d.stake.org||'?' : 'Unknown';
+      const org = d.stake ? d.stake.org||'' : '';
+      const projLabel = d.proj
+        ? `<span style="font-family:var(--mono);font-size:10px;background:var(--sky-dim);color:var(--sky-lt);padding:1px 6px;border-radius:4px">${d.proj.pid}</span> ${d.proj.name}`
+        : `<span style="color:var(--fog)">Unknown project</span>`;
+      return `<tr>
+        <td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06)">
+          <div style="font-size:13px;color:var(--white)">${name}</div>
+          ${org?`<div style="font-size:11px;color:var(--fog)">${org}</div>`:''}
+        </td>
+        <td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px">${projLabel}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px;color:var(--amber);text-align:center">${d.rows.length} links</td>
+      </tr>`;
+    }).join('');
+
+    const dupesPayload = JSON.stringify(dupes.map(d=>({key:d.key,ids:d.rows.map(r=>r.id)}))).replace(/"/g,'&quot;');
+
+    resultsEl.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:14px;height:14px;color:var(--amber)"><circle cx="8" cy="8" r="6"/><path d="M8 5v3"/><circle cx="8" cy="11" r=".8" fill="currentColor" stroke="none"/></svg>
+        <span style="font-size:13px;font-weight:600;color:var(--amber)">${dupes.length} duplicate link${dupes.length!==1?'s':''} found</span>
+        <span style="font-size:12px;color:var(--slate)">— one copy will be kept, extras removed</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
+        <thead>
+          <tr>
+            <th style="padding:6px 10px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);border-bottom:1px solid var(--border)">Stakeholder</th>
+            <th style="padding:6px 10px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);border-bottom:1px solid var(--border)">Project</th>
+            <th style="padding:6px 10px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);border-bottom:1px solid var(--border)">Duplicates</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn btn-primary" onclick="fixDuplicates(${dupesPayload})">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px"><path d="M3 8l4 4 6-6"/></svg>
+          Remove ${dupes.reduce((a,d)=>a+d.rows.length-1,0)} duplicate${dupes.reduce((a,d)=>a+d.rows.length-1,0)!==1?'s':''}
+        </button>
+        <span style="font-size:12px;color:var(--slate)">Keeps the most recent link, removes extras</span>
+      </div>`;
+
+    btn.disabled = false;
+    btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 1.5"/></svg> Re-scan';
+
+  } catch(err) {
+    resultsEl.style.display = '';
+    resultsEl.innerHTML = `<div style="color:var(--red);font-size:13px">Scan error: ${err.message}</div>`;
+    btn.disabled = false;
+    btn.textContent = 'Retry scan';
+  }
+}
+
+async function fixDuplicates(dupes) {
+  const resultsEl = document.getElementById('dup-scan-results');
+  const fixBtn = event.target.closest('button');
+  fixBtn.disabled = true;
+  fixBtn.textContent = 'Fixing…';
+
+  let removed = 0;
+  const ps = DB.get('project_stakeholders');
+
+  // For each dupe group, keep the row with highest numeric id (most recent), remove the rest
+  const idsToRemove = new Set();
+  dupes.forEach(d => {
+    const ids = d.ids.map(id => id);
+    // Sort: numeric ids descending, keep first, remove rest
+    const sorted = [...ids].sort((a,b) => {
+      const na = parseInt(a)||0, nb = parseInt(b)||0;
+      return nb - na;
+    });
+    sorted.slice(1).forEach(id => { idsToRemove.add(String(id)); removed++; });
+  });
+
+  const newPs = ps.filter(lk => !idsToRemove.has(String(lk.id)));
+  await DB.set('project_stakeholders', newPs);
+
+  refreshBadges();
+
+  const badge = document.getElementById('integrity-badge');
+  if (badge) badge.style.display = 'none';
+
+  resultsEl.innerHTML = `<div style="display:flex;align-items:center;gap:8px;color:var(--green)">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M3 8l4 4 6-6"/></svg>
+    <span style="font-size:13px;font-weight:500">${removed} duplicate link${removed!==1?'s':''} removed. Run a re-scan to confirm.</span>
+  </div>
+  <div style="margin-top:10px"><button class="btn" onclick="runDuplicateScan()">Re-scan to confirm</button></div>`;
 }
 
 async function runIntegrityScan() {

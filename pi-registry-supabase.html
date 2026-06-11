@@ -1215,7 +1215,7 @@ function renderDash(el){
     const projOD=ints.filter(i=>i.projectId===p.id&&i.followUp&&!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<new Date()).length;
     const card=document.createElement('div');
     card.style.cssText='background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:14px 16px;cursor:pointer';
-    card.onclick=function(){filterByProject(p.id);setView('stakeholders');};
+    card.onclick=function(){filterByProject(p.id);setView('interactions');};
     const fuTag=projFU>0?`<span style="color:${projOD>0?'var(--red)':'var(--amber)'};margin-left:auto;font-weight:500">${projOD>0?projOD+' overdue':projFU+' open FU'}</span>`:'';
     const oppTag=opp>0?`<span style="color:var(--red)">${opp} opp.</span>`:'';
     card.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">

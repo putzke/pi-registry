@@ -6662,16 +6662,23 @@ async function _smapGeocodeAndRender(projectId, projectName, stakes, psLinks) {
   const infoWindow = new window.google.maps.InfoWindow();
   const bounds = new window.google.maps.LatLngBounds();
 
-  geocoded.forEach(g => {
+  geocoded.forEach((g, gIdx) => {
     const color = pinColors[g.support] || pinColors.Neutral;
     const name = ((g.stake.firstName||'') + ' ' + (g.stake.lastName||'')).trim() || g.stake.org || 'Unknown';
+    const markerNum = String(gIdx + 1);
     const marker = new window.google.maps.Marker({
       position: { lat: g.lat, lng: g.lng },
       map,
       title: name,
+      label: {
+        text: markerNum,
+        color: '#ffffff',
+        fontSize: '10px',
+        fontWeight: '700'
+      },
       icon: {
         path: window.google.maps.SymbolPath.CIRCLE,
-        scale: 9,
+        scale: markerNum.length > 1 ? 11 : 9,
         fillColor: color,
         fillOpacity: 0.95,
         strokeColor: '#ffffff',
@@ -6718,9 +6725,9 @@ function printStakeholderMap(projectId, projectName) {
 
   // Build a printable HTML page with static map + stakeholder table
   const center = geocoded.length > 0 ? `${geocoded[0].lat},${geocoded[0].lng}` : '40.75,-111.88';
-  const markers = geocoded.map(g => {
+  const markers = geocoded.map((g, gi) => {
     const color = g.support==='Champion'?'green':g.support==='Opponent'?'red':'blue';
-    const label = ((g.stake.firstName||'')[0]||(g.stake.org||'?')[0]||'?').toUpperCase();
+    const label = String(gi + 1);
     return `markers=color:${color}%7Clabel:${label}%7C${g.lat},${g.lng}`;
   }).join('&');
 

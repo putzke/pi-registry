@@ -3174,7 +3174,7 @@ function renderProjects(el){
     <div style="padding:20px">
     ${projs.length===0
       ? `<div style="text-align:center;padding:60px;color:var(--fog);font-size:14px">${tab==='active'?'No active projects. Create one to get started.':'No archived projects yet.'}</div>`
-      : `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px">
+      : `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
       ${projs.map(p=>{
         const psSt=ps.filter(x=>x.projectId===p.id);
         const champ=psSt.filter(x=>x.support==='Champion').length;
@@ -3207,24 +3207,28 @@ function renderProjects(el){
             <span style="color:var(--slate)">${intCt} interactions</span>
             ${openFU>0?`<span style="color:var(--amber);margin-left:auto">${openFU} open FU</span>`:''}
           </div>
-          <div style="display:flex;gap:7px;margin-top:11px;flex-wrap:wrap">
-            <button class="btn btn-sm" onclick="filterByProject('${p.id}');setView('stakeholders')">Contacts</button>
-            <button class="btn btn-sm" onclick="filterByProject('${p.id}');setView('interactions')">Interactions</button>
-            <button class="btn btn-sm" onclick="filterByProject('${p.id}');setView('followups')">Follow-ups${openFU>0?` (${openFU})`:''}</button>
-            <button class="btn btn-sm" onclick="filterByProject('${p.id}');setView('deliverables')">Deliverables</button>
-            <button class="btn btn-ghost btn-sm" onclick="openProjModal('${p.id}')">Edit</button>
-            <button class="btn btn-sm" style="color:var(--sky-lt);border-color:rgba(90,135,198,.4)" onclick="showStakeholderMap('${p.id}')">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:13px;height:13px"><path d="M8 2C5.8 2 4 3.8 4 6c0 3 4 8 4 8s4-5 4-8c0-2.2-1.8-4-4-4z"/><circle cx="8" cy="6" r="1.5"/></svg>
-              Map
-            </button>
-            <button class="btn btn-sm" style="color:#b39ddb;border-color:rgba(179,157,219,.4)" onclick="showEngagementMatrix('${p.id}')">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:13px;height:13px"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>
-              Matrix
-            </button>
-            <button class="btn btn-sm" style="margin-left:auto;color:var(--green);border-color:rgba(40,168,112,.4)" onclick="exportProject('${p.id}')">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:13px;height:13px"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg>
-              Export
-            </button>
+          <div style="margin-top:11px;display:flex;flex-direction:column;gap:6px">
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px">
+              <button class="btn btn-sm" style="justify-content:center" onclick="filterByProject('${p.id}');setView('stakeholders')">Contacts</button>
+              <button class="btn btn-sm" style="justify-content:center" onclick="filterByProject('${p.id}');setView('interactions')">Interactions</button>
+              <button class="btn btn-sm" style="justify-content:center" onclick="filterByProject('${p.id}');setView('followups')">Follow-ups${openFU>0?` (${openFU})`:''}</button>
+              <button class="btn btn-sm" style="justify-content:center" onclick="filterByProject('${p.id}');setView('deliverables')">Deliverables</button>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:5px">
+              <button class="btn btn-ghost btn-sm" style="justify-content:center" onclick="openProjModal('${p.id}')">Edit</button>
+              <button class="btn btn-sm" style="justify-content:center;color:var(--sky-lt);border-color:rgba(90,135,198,.4)" onclick="showStakeholderMap('${p.id}')">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M8 2C5.8 2 4 3.8 4 6c0 3 4 8 4 8s4-5 4-8c0-2.2-1.8-4-4-4z"/><circle cx="8" cy="6" r="1.5"/></svg>
+                Map
+              </button>
+              <button class="btn btn-sm" style="justify-content:center;color:#b39ddb;border-color:rgba(179,157,219,.4)" onclick="showEngagementMatrix('${p.id}')">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>
+                Matrix
+              </button>
+              <button class="btn btn-sm" style="justify-content:center;color:var(--green);border-color:rgba(40,168,112,.4)" onclick="exportProject('${p.id}')">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg>
+                Export
+              </button>
+            </div>
           </div>
         </div>`;
       }).join('')}

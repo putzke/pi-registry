@@ -1686,9 +1686,28 @@ function renderMaster(el){
     <div class="tb-sp"></div>
     <span class="tb-info">${stakes.length} contact${stakes.length!==1?'s':''}</span>
   </div>
+  ${S.bulkSelected.size>0?`<div class="bulk-bar">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px;color:var(--sky-lt)"><circle cx="6" cy="5" r="3"/><path d="M1 13.5c0-2.485 2.239-4.5 5-4.5s5 2.015 5 4.5"/><path d="M11 8h4M13 6v4"/></svg>
+    <span class="bulk-bar-ct">${S.bulkSelected.size} selected</span>
+    <span class="bulk-bar-lbl">— set sentiment to:</span>
+    <select class="bulk-sent-sel" id="bulk-sent-val">
+      <option value="">Choose…</option>
+      <option value="Champion">Champion</option>
+      <option value="Neutral">Neutral</option>
+      <option value="Opponent">Opponent</option>
+      <option value="Unknown">Unknown</option>
+    </select>
+    <button class="bulk-apply" onclick="applyBulkSentiment()">Apply to ${S.bulkSelected.size} stakeholder${S.bulkSelected.size!==1?'s':''}</button>
+    <button class="bulk-clear" onclick="clearBulkSelection()">Clear selection</button>
+  </div>`:''}
   <div class="content">
     <div class="split">
       <div class="list-pane">
+        <div class="bulk-selall">
+          <input type="checkbox" class="lrow-chk" id="bulk-chk-all-ms" onchange="bulkSelectAll(this.checked)" ${S.bulkSelected.size===stakes.length&&stakes.length>0?'checked':''}>
+          <label for="bulk-chk-all-ms" style="cursor:pointer">${S.bulkSelected.size>0&&S.bulkSelected.size===stakes.length?'Deselect all':'Select all '+stakes.length}</label>
+          ${S.bulkSelected.size>0?`<span style="margin-left:auto;font-size:11px;color:var(--sky-lt)">${S.bulkSelected.size} selected</span>`:''}
+        </div>
         <div class="data-list" id="ms-data-list">
           ${stakes.length===0?`<div class="pane-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="9" cy="7" r="4"/><path d="M2 20c0-3.314 3.134-6 7-6s7 2.686 7 6"/></svg><div class="pe-title">No stakeholders found</div></div>`
           :stakes.map(s=>{
@@ -1801,21 +1820,21 @@ function renderStakeholders(el){
     </div>
     <div id="bubble-chart-mount" style="width:100%;height:460px;position:relative"></div>
   </div>` : `
+  ${S.bulkSelected.size>0?`<div class="bulk-bar">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px;color:var(--sky-lt)"><circle cx="6" cy="5" r="3"/><path d="M1 13.5c0-2.485 2.239-4.5 5-4.5s5 2.015 5 4.5"/><path d="M11 8h4M13 6v4"/></svg>
+    <span class="bulk-bar-ct">${S.bulkSelected.size} selected</span>
+    <span class="bulk-bar-lbl">— set sentiment to:</span>
+    <select class="bulk-sent-sel" id="bulk-sent-val">
+      <option value="">Choose…</option>
+      <option value="Champion">Champion</option>
+      <option value="Neutral">Neutral</option>
+      <option value="Opponent">Opponent</option>
+      <option value="Unknown">Unknown</option>
+    </select>
+    <button class="bulk-apply" onclick="applyBulkSentiment()">Apply to ${S.bulkSelected.size} stakeholder${S.bulkSelected.size!==1?'s':''}</button>
+    <button class="bulk-clear" onclick="clearBulkSelection()">Clear selection</button>
+  </div>`:''}
   <div class="content">
-    ${S.bulkSelected.size>0?`<div class="bulk-bar">
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px;color:var(--sky-lt)"><circle cx="6" cy="5" r="3"/><path d="M1 13.5c0-2.485 2.239-4.5 5-4.5s5 2.015 5 4.5"/><path d="M11 8h4M13 6v4"/></svg>
-      <span class="bulk-bar-ct">${S.bulkSelected.size} selected</span>
-      <span class="bulk-bar-lbl">— set sentiment to:</span>
-      <select class="bulk-sent-sel" id="bulk-sent-val">
-        <option value="">Choose…</option>
-        <option value="Champion">Champion</option>
-        <option value="Neutral">Neutral</option>
-        <option value="Opponent">Opponent</option>
-        <option value="Unknown">Unknown</option>
-      </select>
-      <button class="bulk-apply" onclick="applyBulkSentiment()">Apply to ${S.bulkSelected.size} stakeholder${S.bulkSelected.size!==1?'s':''}</button>
-      <button class="bulk-clear" onclick="clearBulkSelection()">Clear selection</button>
-    </div>`:''}
     <div class="split">
       <div class="list-pane">
         <div class="bulk-selall">
@@ -2097,27 +2116,41 @@ function bulkSelectStake(id) {
   const sid = String(id);
   if (S.bulkSelected.has(sid)) S.bulkSelected.delete(sid);
   else S.bulkSelected.add(sid);
-  renderStakeholders(document.getElementById('main'));
+  if (S.view === 'master') renderMaster(document.getElementById('main'));
+  else renderStakeholders(document.getElementById('main'));
 }
 
 function bulkSelectAll(checked) {
   const allStakes = DB.get('stakeholders');
   const ps = DB.get('project_stakeholders');
-  let listItems = S.projectFilter
-    ? ps.filter(x=>x.projectId===S.projectFilter).map(lk=>allStakes.find(x=>String(x.id)===String(lk.stakeholderId))).filter(Boolean)
-    : allStakes;
-  const search = (S.stakeSearch||'').toLowerCase();
-  const typeF = S.stakeType||'';
-  if (search) listItems = listItems.filter(s=>(s.firstName+' '+s.lastName+' '+(s.org||'')).toLowerCase().includes(search));
-  if (typeF) listItems = listItems.filter(s=>s.type===typeF);
-  if (S.skOrgOnly) listItems = listItems.filter(s=>isOrgContact(s));
+  const isMaster = S.view === 'master';
+  let listItems;
+  if (isMaster) {
+    listItems = allStakes.slice();
+    const search = (S.masterSearch||'').toLowerCase();
+    const typeF = S.masterType||'';
+    if (search) listItems = listItems.filter(s=>(s.firstName+' '+s.lastName+' '+(s.org||'')).toLowerCase().includes(search));
+    if (typeF) listItems = listItems.filter(s=>s.type===typeF);
+    if (S.msOrgOnly) listItems = listItems.filter(s=>isOrgContact(s));
+  } else {
+    listItems = S.projectFilter
+      ? ps.filter(x=>x.projectId===S.projectFilter).map(lk=>allStakes.find(x=>String(x.id)===String(lk.stakeholderId))).filter(Boolean)
+      : allStakes;
+    const search = (S.stakeSearch||'').toLowerCase();
+    const typeF = S.stakeType||'';
+    if (search) listItems = listItems.filter(s=>(s.firstName+' '+s.lastName+' '+(s.org||'')).toLowerCase().includes(search));
+    if (typeF) listItems = listItems.filter(s=>s.type===typeF);
+    if (S.skOrgOnly) listItems = listItems.filter(s=>isOrgContact(s));
+  }
   S.bulkSelected = checked ? new Set(listItems.map(s=>String(s.id))) : new Set();
-  renderStakeholders(document.getElementById('main'));
+  if (isMaster) renderMaster(document.getElementById('main'));
+  else renderStakeholders(document.getElementById('main'));
 }
 
 function clearBulkSelection() {
   S.bulkSelected = new Set();
-  renderStakeholders(document.getElementById('main'));
+  if (S.view === 'master') renderMaster(document.getElementById('main'));
+  else renderStakeholders(document.getElementById('main'));
 }
 
 async function applyBulkSentiment() {

@@ -1213,23 +1213,22 @@ function renderDash(el){
     const ints2=ints.filter(i=>i.projectId===p.id).length;
     const projFU=ints.filter(i=>i.projectId===p.id&&i.followUp&&!i.followUpDone).length;
     const projOD=ints.filter(i=>i.projectId===p.id&&i.followUp&&!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<new Date()).length;
-    const card=document.createElement('div');
-    card.style.cssText='background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:14px 16px;cursor:pointer';
-    card.onclick=function(){filterByProject(p.id);setView('interactions');};
     const fuTag=projFU>0?`<span style="color:${projOD>0?'var(--red)':'var(--amber)'};margin-left:auto;font-weight:500">${projOD>0?projOD+' overdue':projFU+' open FU'}</span>`:'';
     const oppTag=opp>0?`<span style="color:var(--red)">${opp} opp.</span>`:'';
-    card.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-      <div><div style="font-weight:600;font-size:14px;margin-bottom:2px">${p.name}</div>
-      <div style="font-size:12px;color:var(--fog);font-family:var(--mono)">${p.pid} · ${p.client}</div></div>
-      <span class="badge b-sky">${p.phase}</span></div>
+    return `<div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:14px 16px;cursor:pointer" onclick="filterByProject('${p.id}');setView('interactions')">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div><div style="font-weight:600;font-size:14px;margin-bottom:2px">${p.name}</div>
+        <div style="font-size:12px;color:var(--fog);font-family:var(--mono)">${p.pid} · ${p.client}</div></div>
+        <span class="badge b-sky">${p.phase}</span>
+      </div>
       <div style="display:flex;gap:12px;font-size:12px;flex-wrap:wrap;padding-top:8px;border-top:1px solid var(--border)">
         <span style="color:var(--mist)">${psSt.length} contacts</span>
         <span style="color:var(--green)">${champ} champ.</span>
         ${oppTag}
         <span style="color:var(--slate)">${ints2} interactions</span>
         ${fuTag}
-      </div>`;
-    return card.outerHTML;
+      </div>
+    </div>`;
   }
   const dels=DB.get('deliverables');
   const totalDels=dels.length;

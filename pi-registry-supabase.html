@@ -1848,7 +1848,9 @@ function renderStakeholders(el){
             const lk=S.projectFilter?ps.find(x=>x.projectId===S.projectFilter&&String(x.stakeholderId)===String(s.id)):null;
             const intCt=ints.filter(i=>String(i.stakeholderId)===String(s.id)&&(!S.projectFilter||i.projectId===S.projectFilter)).length;
             const col=acol(s.firstName+s.lastName);
-            return`<div class="lrow${s.id===sel?' sel':''}" onclick="selectStake('${s.id}')">
+            const isBulkSel=S.bulkSelected.has(String(s.id));
+            return`<div class="lrow${s.id===sel?' sel':''}${isBulkSel?' bulk-sel':''}" onclick="selectStake('${s.id}')">
+              <input type="checkbox" class="lrow-chk" ${isBulkSel?'checked':''} onclick="event.stopPropagation();bulkSelectStake('${s.id}')" title="Select for bulk action">
               <div class="avatar" style="background:${col}22;color:${col}">${ini(s.firstName,s.lastName)}</div>
               <div class="lrow-body">
                 <div class="lrow-name">${dispName(s)}${isOrgContact(s)?'<span class="badge b-sky" style="font-size:9px;margin-left:5px">ORG</span>':''}</div>

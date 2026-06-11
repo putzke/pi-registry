@@ -110,6 +110,18 @@ body{font-family:var(--font);font-size:13px;background:var(--navy);color:var(--w
 /* LIST ROWS */
 .data-list{flex:1;overflow-y:auto}
 .lrow{display:flex;align-items:center;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;gap:9px;transition:background .08s}
+.lrow.bulk-sel{background:rgba(45,125,210,.08)!important}
+.lrow-chk{width:15px;height:15px;accent-color:var(--sky);cursor:pointer;flex-shrink:0}
+.bulk-bar{display:flex;align-items:center;gap:10px;padding:8px 14px;background:rgba(45,125,210,.1);border-bottom:1px solid rgba(45,125,210,.3);flex-wrap:wrap}
+.bulk-bar-ct{font-size:12px;color:var(--sky-lt);font-weight:600}
+.bulk-bar-lbl{font-size:12px;color:var(--slate)}
+.bulk-sent-sel{background:var(--navy-mid);border:1px solid rgba(255,255,255,.2);color:var(--white);font-size:12px;padding:4px 8px;border-radius:5px}
+.bulk-apply{background:var(--sky);border:none;color:#fff;font-size:12px;padding:5px 12px;border-radius:5px;cursor:pointer;font-weight:500}
+.bulk-apply:hover{opacity:.85}
+.bulk-apply:disabled{opacity:.4;cursor:default}
+.bulk-clear{background:transparent;border:1px solid rgba(255,255,255,.2);color:var(--slate);font-size:12px;padding:5px 10px;border-radius:5px;cursor:pointer}
+.bulk-clear:hover{color:var(--mist);border-color:rgba(255,255,255,.35)}
+.bulk-selall{display:flex;align-items:center;gap:7px;padding:6px 14px;background:var(--navy-dk);border-bottom:1px solid var(--border);font-size:12px;color:var(--slate)}
 .lrow:hover{background:rgba(255,255,255,.03)}
 .lrow.sel{background:var(--sky-dim);border-left:2px solid var(--sky)}
 .avatar{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;letter-spacing:-.2px}
@@ -1033,7 +1045,7 @@ const S={
   projectFilter:null,
   selStakeholder:null,
   selInteraction:null,
-  stakeTab:'info',ehShowAll:false,
+  stakeTab:'info',ehShowAll:false,bulkSelected:new Set(),
   skView:'list',
   issStatus:'', issCat:'', selIssue:null,
   issViewProj:'', issViewStatus:'', issViewCat:'', issViewPri:'', selIssueView:null,
@@ -1683,7 +1695,9 @@ function renderMaster(el){
             const projCount=ps.filter(x=>String(x.stakeholderId)===String(s.id)).length;
             const intCount=ints.filter(i=>String(i.stakeholderId)===String(s.id)).length;
             const col=acol(s.firstName+s.lastName);
-            return`<div class="lrow${s.id===sel?' sel':''}" onclick="selectStake('${s.id}')">
+            const isBulkSel=S.bulkSelected.has(String(s.id));
+            return`<div class="lrow${s.id===sel?' sel':''}${isBulkSel?' bulk-sel':''}" onclick="selectStake('${s.id}')">
+              <input type="checkbox" class="lrow-chk" ${isBulkSel?'checked':''} onclick="event.stopPropagation();bulkSelectStake('${s.id}')" title="Select for bulk action">
               <div class="avatar" style="background:${col}22;color:${col}">${ini(s.firstName,s.lastName)}</div>
               <div class="lrow-body">
                 <div class="lrow-name">${dispName(s)}${isOrgContact(s)?'<span class="badge b-sky" style="font-size:9px;margin-left:5px">ORG</span>':''}</div>
@@ -1788,8 +1802,27 @@ function renderStakeholders(el){
     <div id="bubble-chart-mount" style="width:100%;height:460px;position:relative"></div>
   </div>` : `
   <div class="content">
+    ${S.bulkSelected.size>0?`<div class="bulk-bar">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px;color:var(--sky-lt)"><circle cx="6" cy="5" r="3"/><path d="M1 13.5c0-2.485 2.239-4.5 5-4.5s5 2.015 5 4.5"/><path d="M11 8h4M13 6v4"/></svg>
+      <span class="bulk-bar-ct">${S.bulkSelected.size} selected</span>
+      <span class="bulk-bar-lbl">— set sentiment to:</span>
+      <select class="bulk-sent-sel" id="bulk-sent-val">
+        <option value="">Choose…</option>
+        <option value="Champion">Champion</option>
+        <option value="Neutral">Neutral</option>
+        <option value="Opponent">Opponent</option>
+        <option value="Unknown">Unknown</option>
+      </select>
+      <button class="bulk-apply" onclick="applyBulkSentiment()">Apply to ${S.bulkSelected.size} stakeholder${S.bulkSelected.size!==1?'s':''}</button>
+      <button class="bulk-clear" onclick="clearBulkSelection()">Clear selection</button>
+    </div>`:''}
     <div class="split">
       <div class="list-pane">
+        <div class="bulk-selall">
+          <input type="checkbox" class="lrow-chk" id="bulk-chk-all" onchange="bulkSelectAll(this.checked)" ${S.bulkSelected.size===listItems.length&&listItems.length>0?'checked':''}>
+          <label for="bulk-chk-all" style="cursor:pointer">${S.bulkSelected.size>0&&S.bulkSelected.size===listItems.length?'Deselect all':'Select all '+listItems.length}</label>
+          ${S.bulkSelected.size>0?`<span style="margin-left:auto;font-size:11px;color:var(--sky-lt)">${S.bulkSelected.size} selected</span>`:''}
+        </div>
         <div class="data-list">
           ${listItems.length===0?`<div class="pane-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="9" cy="7" r="4"/><path d="M2 20c0-3.314 3.134-6 7-6s7 2.686 7 6"/></svg><div class="pe-title">No stakeholders</div><div class="pe-sub">${S.projectFilter?'Add or link stakeholders to this project.':'Add your first stakeholder.'}</div></div>`
           :listItems.map(s=>{
@@ -2056,6 +2089,79 @@ async function deleteIssue(id, projectId){
   closeM();
   S.skView='issues';
   renderStakeholders(document.getElementById('main'));
+}
+
+
+// ── BULK SENTIMENT ────────────────────────────────────────────────
+function bulkSelectStake(id) {
+  const sid = String(id);
+  if (S.bulkSelected.has(sid)) S.bulkSelected.delete(sid);
+  else S.bulkSelected.add(sid);
+  renderStakeholders(document.getElementById('main'));
+}
+
+function bulkSelectAll(checked) {
+  const allStakes = DB.get('stakeholders');
+  const ps = DB.get('project_stakeholders');
+  let listItems = S.projectFilter
+    ? ps.filter(x=>x.projectId===S.projectFilter).map(lk=>allStakes.find(x=>String(x.id)===String(lk.stakeholderId))).filter(Boolean)
+    : allStakes;
+  const search = (S.stakeSearch||'').toLowerCase();
+  const typeF = S.stakeType||'';
+  if (search) listItems = listItems.filter(s=>(s.firstName+' '+s.lastName+' '+(s.org||'')).toLowerCase().includes(search));
+  if (typeF) listItems = listItems.filter(s=>s.type===typeF);
+  if (S.skOrgOnly) listItems = listItems.filter(s=>isOrgContact(s));
+  S.bulkSelected = checked ? new Set(listItems.map(s=>String(s.id))) : new Set();
+  renderStakeholders(document.getElementById('main'));
+}
+
+function clearBulkSelection() {
+  S.bulkSelected = new Set();
+  renderStakeholders(document.getElementById('main'));
+}
+
+async function applyBulkSentiment() {
+  const val = document.getElementById('bulk-sent-val')?.value;
+  if (!val) { alert('Please choose a sentiment first.'); return; }
+  if (!S.bulkSelected.size) return;
+  const confirmed = confirm(`Set sentiment to "${val}" for ${S.bulkSelected.size} stakeholder${S.bulkSelected.size!==1?'s':''}?`);
+  if (!confirmed) return;
+
+  const ps = DB.get('project_stakeholders');
+  let updated = 0;
+
+  if (S.projectFilter) {
+    // Update support field on project_stakeholders links for this project
+    const newPs = ps.map(lk => {
+      if (lk.projectId === S.projectFilter && S.bulkSelected.has(String(lk.stakeholderId))) {
+        updated++;
+        return {...lk, support: val};
+      }
+      return lk;
+    });
+    await DB.set('project_stakeholders', newPs);
+  } else {
+    // No project filter — update all project links for these stakeholders
+    const newPs = ps.map(lk => {
+      if (S.bulkSelected.has(String(lk.stakeholderId))) {
+        updated++;
+        return {...lk, support: val};
+      }
+      return lk;
+    });
+    await DB.set('project_stakeholders', newPs);
+  }
+
+  S.bulkSelected = new Set();
+  refreshBadges();
+  renderStakeholders(document.getElementById('main'));
+
+  // Toast confirmation
+  const toast = document.createElement('div');
+  toast.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#0f2d4a;border:1px solid rgba(40,168,112,.4);color:#4ade80;padding:10px 16px;border-radius:8px;font-size:13px;display:flex;align-items:center;gap:8px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.4)';
+  toast.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M3 8l4 4 6-6"/></svg> Sentiment set to <strong style="margin-left:3px">' + val + '</strong> for ' + updated + ' stakeholder' + (updated!==1?'s':'');
+  document.body.appendChild(toast);
+  setTimeout(()=>toast.remove(), 3500);
 }
 
 function selectStake(id){

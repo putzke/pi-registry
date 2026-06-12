@@ -412,6 +412,10 @@ window.onGoogleMapsReady = function() {
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="14" height="14" rx="1.5"/><path d="M4 11V8M7 11V5M10 11V7M13 11V4"/></svg>
       Reports
     </button>
+    <button class="nav-btn" id="nav-settings" onclick="setView('settings')">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg>
+      Settings
+    </button>
   </div>
   <div style="margin:8px 10px 0;background:#0E1E30;border:1px solid rgba(255,255,255,.13);border-radius:var(--radius-lg);flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0">
     <div style="padding:8px 16px 6px;border-bottom:1px solid rgba(255,255,255,.1);flex-shrink:0">
@@ -1169,6 +1173,7 @@ function render(){
   else if(S.view==='meetings')renderMeetings(m);
   else if(S.view==='issues')renderIssuesView(m);
   else if(S.view==='commitments')renderCommitments(m);
+  else if(S.view==='settings')renderSettings(m);
   else if(S.view==='projects')renderProjects(m);
 }
 
@@ -2313,6 +2318,7 @@ function renderBubbleChart(projectId){
 
 function renderStakeDetail(s,link){
   const ints=DB.get('interactions').filter(i=>String(i.stakeholderId)===String(s.id)&&(!S.projectFilter||i.projectId===S.projectFilter));
+  const allInts=DB.get('interactions').filter(i=>String(i.stakeholderId)===String(s.id)); // all projects for engagement history
   const ps=DB.get('project_stakeholders').filter(x=>String(x.stakeholderId)===String(s.id));
   const projs=DB.get('projects');
   const col=acol(s.firstName+s.lastName);
@@ -2366,6 +2372,83 @@ function renderStakeDetail(s,link){
       </div>
     </div>`).join('')}
   </div>`;
+  // ── Engagement History Tab ───────────────────────────────────────
+  const allProjs = DB.get('projects');
+  const firstContact = allInts.length ? allInts.reduce((a,b)=>(a.date<b.date?a:b)).date : null;
+  const lastContact  = allInts.length ? allInts.reduce((a,b)=>(a.date>b.date?a:b)).date : null;
+  const openFUs = allInts.filter(i=>i.followUp&&!i.followUpDone).length;
+  // Channel breakdown
+  const chanCounts = {};
+  allInts.forEach(i=>{ chanCounts[i.channel||'Other']=(chanCounts[i.channel||'Other']||0)+1; });
+  const chanPills = Object.entries(chanCounts).sort((a,b)=>b[1]-a[1]).map(([ch,ct])=>
+    `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:12px;font-size:11px;color:var(--slate);margin:2px">
+      <span style="color:var(--sky-lt);font-weight:600">${ct}</span> ${ch}
+    </span>`).join('');
+  // Group by project then by year
+  const byProj = {};
+  allInts.forEach(i=>{
+    const key = String(i.projectId||'none');
+    if(!byProj[key]) byProj[key]=[];
+    byProj[key].push(i);
+  });
+  // Show all projects or just current
+  const showAllProjs = S.engHistShowAll || !S.projectFilter;
+  const projKeys = showAllProjs ? Object.keys(byProj) : Object.keys(byProj).filter(k=>String(k)===String(S.projectFilter));
+  const projSections = projKeys.map(pid=>{
+    const proj = allProjs.find(p=>String(p.id)===String(pid));
+    const projInts = byProj[pid].sort((a,b)=>b.date.localeCompare(a.date));
+    const isLinked = DB.get('project_stakeholders').some(x=>String(x.projectId)===String(pid)&&String(x.stakeholderId)===String(s.id));
+    const projLabel = proj ? `<span class="badge b-sky" style="font-family:var(--mono);font-size:10px">${proj.pid}</span> ${proj.name}` : `Project ${pid}`;
+    const notLinkedTag = !isLinked ? `<span class="badge b-amber" style="font-size:10px;margin-left:6px">Not linked</span>` : '';
+    const rows = projInts.map(i=>`
+      <div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05);align-items:flex-start">
+        <div style="width:70px;flex-shrink:0;font-size:11px;color:var(--fog);padding-top:2px">${fmt(i.date)}</div>
+        <div style="flex-shrink:0;margin-top:3px">${chIco(i.channel)}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:3px">
+            <span class="badge ${i.direction==='Incoming'?'b-sky':'b-green'}" style="font-size:10px">${i.direction}</span>
+            <span class="badge b-gray" style="font-size:10px">${i.channel||'—'}</span>
+            ${i.loggedBy?`<span style="font-size:10px;color:var(--fog)">${i.loggedBy}</span>`:''}
+            ${i.followUp?`<span class="badge ${i.followUpDone?'b-green':'b-amber'}" style="font-size:10px">${i.followUpDone?'✓ Follow-up':'Follow-up'}</span>`:''}
+          </div>
+          <div style="font-size:12px;color:var(--mist);line-height:1.5">${i.summary||'—'}</div>
+        </div>
+      </div>`).join('');
+    return `<div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;color:var(--slate);margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        ${projLabel}${notLinkedTag}
+        <span style="color:var(--fog);font-weight:400">${projInts.length} interaction${projInts.length!==1?'s':''}</span>
+      </div>
+      ${rows}
+    </div>`;
+  }).join('');
+  const engHistHTML=`<div class="det-body">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+      <div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:var(--sky-lt)">${allInts.length}</div>
+        <div style="font-size:10px;color:var(--fog);margin-top:2px">Total interactions</div>
+      </div>
+      <div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:${openFUs>0?'var(--amber)':'var(--green)'}">${openFUs}</div>
+        <div style="font-size:10px;color:var(--fog);margin-top:2px">Open follow-ups</div>
+      </div>
+      <div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:11px;font-weight:700;color:var(--white)">${firstContact?fmt(firstContact):'—'}</div>
+        <div style="font-size:10px;color:var(--fog);margin-top:2px">First contact</div>
+      </div>
+      <div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:11px;font-weight:700;color:var(--white)">${lastContact?fmt(lastContact):'—'}</div>
+        <div style="font-size:10px;color:var(--fog);margin-top:2px">Last contact</div>
+      </div>
+    </div>
+    ${allInts.length>0?`<div style="margin-bottom:12px">${chanPills}</div>`:''}
+    ${S.projectFilter?`<div style="margin-bottom:10px;font-size:11px;color:var(--fog);display:flex;align-items:center;gap:8px">
+      <span>Showing: ${showAllProjs?'all projects':'current project'}</span>
+      <button class="btn btn-ghost btn-xs" onclick="S.engHistShowAll=${showAllProjs?'false':'true'};${cb}">${showAllProjs?'Show current project only':'Show all projects'}</button>
+    </div>`:''}
+    ${allInts.length===0?`<div class="pane-empty" style="padding:24px 0"><div class="pe-sub">No interactions recorded yet.</div></div>`:projSections}
+  </div>`;
+
   return`<div class="det-hdr">
     <div class="det-hero">
       <div class="det-avatar" style="background:${col}22;color:${col}">${ini(s.firstName,s.lastName)}</div>
@@ -2393,8 +2476,9 @@ function renderStakeDetail(s,link){
   <div class="dtabs">
     <button class="dtab${tab==='info'?' active':''}" onclick="S.stakeTab='info';${cb}">Profile & project</button>
     <button class="dtab${tab==='log'?' active':''}" onclick="S.stakeTab='log';${cb}">Interaction log (${ints.length})</button>
+    <button class="dtab${tab==='history'?' active':''}" onclick="S.stakeTab='history';${cb}">Engagement history${allInts.length>0?' ('+allInts.length+')':''}</button>
   </div>
-  ${tab==='info'?infoHTML:logHTML}`;
+  ${tab==='info'?infoHTML:tab==='log'?logHTML:engHistHTML}`;
 }
 
 
@@ -6507,16 +6591,25 @@ async function _smapGeocodeAndRender(projectId, projectName, stakes, psLinks) {
   const infoWindow = new window.google.maps.InfoWindow();
   const bounds = new window.google.maps.LatLngBounds();
 
-  geocoded.forEach(g => {
+  geocoded.forEach((g, idx) => {
     const color = pinColors[g.support] || pinColors.Neutral;
     const name = ((g.stake.firstName||'') + ' ' + (g.stake.lastName||'')).trim() || g.stake.org || 'Unknown';
+    const num = idx + 1;
+    const scale = num >= 10 ? 11 : 9;
+    // Numbered pin using SVG label
     const marker = new window.google.maps.Marker({
       position: { lat: g.lat, lng: g.lng },
       map,
-      title: name,
+      title: num + '. ' + name,
+      label: {
+        text: String(num),
+        color: '#ffffff',
+        fontSize: num >= 10 ? '9px' : '10px',
+        fontWeight: 'bold'
+      },
       icon: {
         path: window.google.maps.SymbolPath.CIRCLE,
-        scale: 9,
+        scale: scale,
         fillColor: color,
         fillOpacity: 0.95,
         strokeColor: '#ffffff',
@@ -6528,7 +6621,7 @@ async function _smapGeocodeAndRender(projectId, projectName, stakes, psLinks) {
     marker.addListener('click', () => {
       infoWindow.setContent(`
         <div style="font-family:sans-serif;font-size:13px;min-width:180px">
-          <div style="font-weight:600;margin-bottom:4px">${name}</div>
+          <div style="font-weight:600;margin-bottom:4px">#${num} — ${name}</div>
           ${g.stake.org ? `<div style="color:#555;margin-bottom:3px">${g.stake.org}</div>` : ''}
           ${g.stake.type ? `<div style="color:#777;font-size:11px;margin-bottom:3px">${g.stake.type}</div>` : ''}
           <div style="margin-top:5px;padding-top:5px;border-top:1px solid #eee">
@@ -7265,6 +7358,139 @@ function reopenCommitment(id) {
 }
 // ══════════════════════════════════════════════════════════════════
 // END COMMITMENTS TRACKER
+// ══════════════════════════════════════════════════════════════════
+
+
+// ══════════════════════════════════════════════════════════════════
+// SETTINGS VIEW
+// ══════════════════════════════════════════════════════════════════
+function renderSettings(m) {
+  m.innerHTML = `
+  <div class="topbar">
+    <div class="topbar-title">Settings</div>
+    <div class="topbar-sub">App configuration and data tools</div>
+  </div>
+  <div style="padding:24px;max-width:800px;margin:0 auto">
+
+    <!-- Data Integrity -->
+    <div style="background:var(--navy-mid);border:1px solid rgba(255,255,255,.12);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">
+      <div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:4px">Data Integrity Scanner</div>
+      <div style="font-size:12px;color:var(--fog);margin-bottom:16px">Finds stakeholders with interactions logged on a project but not formally linked to it in project_stakeholders.</div>
+      <div style="display:flex;gap:10px;margin-bottom:14px">
+        <button class="btn btn-primary" onclick="runIntegrityScan()">Run scan</button>
+        <button class="btn" id="fix-orphans-btn" style="display:none" onclick="fixOrphans()">Fix all orphans</button>
+      </div>
+      <div id="integrity-results"></div>
+    </div>
+
+    <!-- App info -->
+    <div style="background:var(--navy-mid);border:1px solid rgba(255,255,255,.12);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">
+      <div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:12px">App information</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px">
+        <div><span style="color:var(--fog)">Version</span> <span style="color:var(--white);margin-left:8px">PI Registry 2.0</span></div>
+        <div><span style="color:var(--fog)">Hosted</span> <span style="color:var(--white);margin-left:8px">GitHub Pages</span></div>
+        <div><span style="color:var(--fog)">Backend</span> <span style="color:var(--white);margin-left:8px">Supabase</span></div>
+        <div><span style="color:var(--fog)">Projects</span> <span style="color:var(--white);margin-left:8px">${DB.get('projects').length}</span></div>
+        <div><span style="color:var(--fog)">Stakeholders</span> <span style="color:var(--white);margin-left:8px">${DB.get('stakeholders').length}</span></div>
+        <div><span style="color:var(--fog)">Interactions</span> <span style="color:var(--white);margin-left:8px">${DB.get('interactions').length}</span></div>
+      </div>
+    </div>
+
+    <!-- Danger zone -->
+    <div style="background:rgba(192,57,43,.08);border:1px solid rgba(192,57,43,.25);border-radius:var(--radius-lg);padding:20px">
+      <div style="font-size:15px;font-weight:700;color:var(--red);margin-bottom:4px">Danger zone</div>
+      <div style="font-size:12px;color:var(--fog);margin-bottom:14px">These actions cannot be undone. Use with caution.</div>
+      <button class="btn" style="border-color:rgba(192,57,43,.4);color:var(--red)" onclick="if(confirm('Clear ALL local cache and reload from Supabase? This will not delete any data.')){Object.keys(_syncCache).forEach(k=>delete _syncCache[k]);loadAllData().then(()=>{showToast('Cache cleared and reloaded','info');renderSettings(document.getElementById(\'main\'));});}">Clear cache &amp; reload</button>
+    </div>
+
+  </div>`;
+}
+
+function runIntegrityScan() {
+  const ints = DB.get('interactions');
+  const ps = DB.get('project_stakeholders');
+  const stakes = DB.get('stakeholders');
+  const projs = DB.get('projects');
+
+  // Find stakeholder+project combos in interactions but not in project_stakeholders
+  const orphans = [];
+  const seen = new Set();
+  ints.forEach(i => {
+    if (!i.projectId || !i.stakeholderId) return;
+    const key = String(i.projectId) + '_' + String(i.stakeholderId);
+    if (seen.has(key)) return;
+    seen.add(key);
+    const linked = ps.some(x => String(x.projectId)===String(i.projectId) && String(x.stakeholderId)===String(i.stakeholderId));
+    if (!linked) {
+      const s = stakes.find(x => String(x.id)===String(i.stakeholderId));
+      const p = projs.find(x => String(x.id)===String(i.projectId));
+      orphans.push({ stakeholderId: i.stakeholderId, projectId: i.projectId, stakeName: s?(((s.firstName||'')+' '+(s.lastName||'')).trim()||s.org):'Unknown', projName: p?(p.name+' ('+p.pid+')'):'Unknown project' });
+    }
+  });
+
+  const el = document.getElementById('integrity-results');
+  const fixBtn = document.getElementById('fix-orphans-btn');
+  if (!el) return;
+
+  if (orphans.length === 0) {
+    el.innerHTML = '<div style="color:var(--green);font-size:13px">✓ No orphaned interactions found. All good!</div>';
+    if (fixBtn) fixBtn.style.display = 'none';
+    return;
+  }
+
+  // Store orphans for fix
+  window._orphans = orphans;
+  if (fixBtn) fixBtn.style.display = '';
+
+  const rows = orphans.map(o => `<tr>
+    <td style="padding:7px 10px;font-size:12px;color:var(--white)">${o.stakeName}</td>
+    <td style="padding:7px 10px;font-size:12px;color:var(--slate)">${o.projName}</td>
+    <td style="padding:7px 10px;font-size:11px;color:var(--amber)">Not linked</td>
+  </tr>`).join('');
+
+  el.innerHTML = `
+    <div style="font-size:12px;color:var(--amber);margin-bottom:10px">Found ${orphans.length} orphaned interaction${orphans.length!==1?'s':''} — stakeholders with interactions on a project they are not linked to.</div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr>
+        <th style="padding:6px 10px;text-align:left;color:var(--fog);font-weight:600;border-bottom:1px solid var(--border)">Stakeholder</th>
+        <th style="padding:6px 10px;text-align:left;color:var(--fog);font-weight:600;border-bottom:1px solid var(--border)">Project</th>
+        <th style="padding:6px 10px;text-align:left;color:var(--fog);font-weight:600;border-bottom:1px solid var(--border)">Status</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function fixOrphans() {
+  const orphans = window._orphans || [];
+  if (!orphans.length) return;
+  if (!confirm(`Create ${orphans.length} missing project_stakeholder link${orphans.length!==1?'s':''}? They will be added as External / Neutral.`)) return;
+
+  const allPS = DB.get('project_stakeholders');
+  const today = new Date().toISOString().slice(0,10);
+  orphans.forEach(o => {
+    // Double check it's still missing
+    const already = allPS.some(x => String(x.projectId)===String(o.projectId) && String(x.stakeholderId)===String(o.stakeholderId));
+    if (!already) {
+      allPS.push({
+        id: DB.uid(),
+        projectId: o.projectId,
+        stakeholderId: o.stakeholderId,
+        stakeholderRole: 'External',
+        support: 'Neutral',
+        distributionGroups: '',
+        issueTags: '',
+        addedDate: today,
+        notes: 'Auto-linked by data integrity scanner.'
+      });
+    }
+  });
+  DB.set('project_stakeholders', allPS);
+  window._orphans = [];
+  showToast(`✓ Fixed ${orphans.length} orphaned link${orphans.length!==1?'s':''}`, 'info', 3000);
+  runIntegrityScan(); // re-run to confirm clean
+}
+// ══════════════════════════════════════════════════════════════════
+// END SETTINGS VIEW
 // ══════════════════════════════════════════════════════════════════
 
 </script>

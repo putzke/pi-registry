@@ -1411,8 +1411,35 @@ function renderDash(el){
         name:m.title,
         sub:(p?p.pid+' · ':'')+m.location};
     });
+    // Follow-ups resolved
+    var feedFU=(ints||[]).filter(function(i){return i.followUpDone&&i.followUpResolved;}).map(function(i){
+      var s=stakes.find(function(x){return String(x.id)===String(i.stakeholderId);});
+      var p=projs.find(function(x){return x.id===i.projectId;});
+      return{ts:new Date(i.followUpResolved+'T00:00:00').getTime(),
+        label:'Follow-up resolved',color:'var(--green)',
+        name:s?(s.firstName+' '+s.lastName):'(stakeholder)',
+        sub:(p?p.pid+' · ':'')+((i.followUpNote||i.subject||'Resolved').slice(0,55))};
+    });
+    // Issues resolved
+    var feedIssues=(DB.get('issues')||[]).filter(function(i){return i.dateResolved;}).map(function(i){
+      var p=projs.find(function(x){return x.id===i.projectId;});
+      return{ts:new Date(i.dateResolved+'T00:00:00').getTime(),
+        label:'Issue resolved',color:'var(--amber)',
+        name:i.title||'Issue',
+        sub:(p?p.pid+' · ':'')+((i.resolutionSummary||i.category||'').slice(0,55))};
+    });
+    // Commitments fulfilled
+    var feedComm=(DB.get('commitments')||[]).filter(function(c){return c.fulfilledDate;}).map(function(c){
+      var p=projs.find(function(x){return x.id===c.projectId;});
+      var s=c.stakeholderId?stakes.find(function(x){return String(x.id)===String(c.stakeholderId);}):null;
+      var madeTo=s?((s.firstName||'')+' '+(s.lastName||'')).trim()||(s.org||''):(c.madeTo||'');
+      return{ts:new Date(c.fulfilledDate+'T00:00:00').getTime(),
+        label:'Commitment fulfilled',color:'#b39ddb',
+        name:madeTo||'Stakeholder',
+        sub:(p?p.pid+' · ':'')+((c.commitment||'').slice(0,55)+((c.commitment||'').length>55?'…':''))};
+    });
     var cutoff=Date.now()-30*86400000;
-    var combined=feedInts.concat(feedMeets).filter(function(a){return a.ts>=cutoff;}).sort(function(a,b){return b.ts-a.ts;}).slice(0,8);
+    var combined=feedInts.concat(feedMeets,feedFU,feedIssues,feedComm).filter(function(a){return a.ts>=cutoff;}).sort(function(a,b){return b.ts-a.ts;}).slice(0,12);
     if(!combined.length)return'<div style="font-size:12px;color:var(--fog);padding:10px 0">No activity in the last 30 days.</div>';
     function relTime(ts){
       var diff=Date.now()-ts,days=Math.floor(diff/86400000);

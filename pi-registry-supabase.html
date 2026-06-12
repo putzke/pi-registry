@@ -110,18 +110,6 @@ body{font-family:var(--font);font-size:13px;background:var(--navy);color:var(--w
 /* LIST ROWS */
 .data-list{flex:1;overflow-y:auto}
 .lrow{display:flex;align-items:center;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;gap:9px;transition:background .08s}
-.lrow.bulk-sel{background:rgba(45,125,210,.08)!important}
-.lrow-chk{width:15px;height:15px;accent-color:var(--sky);cursor:pointer;flex-shrink:0}
-.bulk-bar{display:flex;align-items:center;gap:10px;padding:8px 14px;background:rgba(45,125,210,.1);border-bottom:1px solid rgba(45,125,210,.3);flex-wrap:wrap}
-.bulk-bar-ct{font-size:12px;color:var(--sky-lt);font-weight:600}
-.bulk-bar-lbl{font-size:12px;color:var(--slate)}
-.bulk-sent-sel{background:var(--navy-mid);border:1px solid rgba(255,255,255,.2);color:var(--white);font-size:12px;padding:4px 8px;border-radius:5px}
-.bulk-apply{background:var(--sky);border:none;color:#fff;font-size:12px;padding:5px 12px;border-radius:5px;cursor:pointer;font-weight:500}
-.bulk-apply:hover{opacity:.85}
-.bulk-apply:disabled{opacity:.4;cursor:default}
-.bulk-clear{background:transparent;border:1px solid rgba(255,255,255,.2);color:var(--slate);font-size:12px;padding:5px 10px;border-radius:5px;cursor:pointer}
-.bulk-clear:hover{color:var(--mist);border-color:rgba(255,255,255,.35)}
-.bulk-selall{display:flex;align-items:center;gap:7px;padding:6px 14px;background:var(--navy-dk);border-bottom:1px solid var(--border);font-size:12px;color:var(--slate)}
 .lrow:hover{background:rgba(255,255,255,.03)}
 .lrow.sel{background:var(--sky-dim);border-left:2px solid var(--sky)}
 .avatar{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;letter-spacing:-.2px}
@@ -193,45 +181,6 @@ hr.div{border:none;border-top:1px solid var(--border);margin:14px 0}
 .log-fu{display:flex;align-items:flex-start;gap:5px;background:rgba(232,160,32,.08);border:1px solid rgba(232,160,32,.2);border-radius:var(--radius);padding:6px 9px;font-size:12px;color:var(--amber)}
 .log-fu.done{background:rgba(40,168,112,.06);border-color:rgba(40,168,112,.2);color:var(--green)}
 .log-fu svg{width:11px;height:11px;flex-shrink:0;margin-top:1px}
-/* ── Engagement History Tab ── */
-.eh-stat-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:18px}
-.eh-stat{background:var(--navy-mid);padding:12px 14px}
-.eh-stat-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);margin-bottom:4px}
-.eh-stat-val{font-size:18px;font-weight:700;color:var(--white);line-height:1}
-.eh-stat-sub{font-size:11px;color:var(--fog);margin-top:3px}
-.eh-ch-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
-.eh-ch-pill{display:flex;align-items:center;gap:5px;padding:4px 9px;border-radius:20px;font-size:11px;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--mist)}
-.eh-ch-pill svg{width:11px;height:11px;opacity:.7}
-.eh-yr-hd{display:flex;align-items:center;gap:10px;margin:18px 0 10px;cursor:pointer;user-select:none}
-.eh-yr-hd:first-child{margin-top:0}
-.eh-yr-line{flex:1;height:1px;background:var(--border)}
-.eh-yr-lbl{font-size:11px;font-weight:700;color:var(--sky-lt);letter-spacing:.5px;text-transform:uppercase;white-space:nowrap}
-.eh-yr-ct{font-size:10px;color:var(--slate);white-space:nowrap}
-.eh-proj-grp{margin-bottom:12px}
-.eh-proj-lbl{display:flex;align-items:center;gap:7px;margin-bottom:8px;padding:5px 0}
-.eh-proj-pid{font-family:var(--mono);font-size:10px;color:var(--sky-lt);background:var(--sky-dim);padding:2px 7px;border-radius:4px}
-.eh-proj-name{font-size:12px;color:var(--slate)}
-.eh-entry{display:flex;gap:10px;padding:8px 0 8px 2px;border-bottom:1px solid rgba(255,255,255,.06)}
-.eh-entry:last-child{border-bottom:none}
-.eh-dot-col{display:flex;flex-direction:column;align-items:center;width:20px;flex-shrink:0;padding-top:3px}
-.eh-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.eh-vline{width:1px;flex:1;min-height:8px;background:rgba(255,255,255,.08);margin-top:4px}
-.eh-ico{width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.eh-ico svg{width:11px;height:11px}
-.eh-body{flex:1;min-width:0}
-.eh-row1{display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap}
-.eh-date{font-size:11px;color:var(--slate);margin-left:auto}
-.eh-sum{font-size:12px;color:var(--mist);line-height:1.5}
-.eh-fu-tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 7px;border-radius:4px;margin-top:4px}
-.eh-fu-open{background:rgba(232,160,32,.1);color:var(--amber);border:1px solid rgba(232,160,32,.2)}
-.eh-fu-done{background:rgba(40,168,112,.1);color:var(--green);border:1px solid rgba(40,168,112,.2)}
-.eh-fu-tag svg{width:10px;height:10px}
-.eh-all-toggle{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--slate);cursor:pointer;margin-bottom:14px;padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:rgba(255,255,255,.04);transition:background .1s}
-.eh-all-toggle:hover{background:rgba(255,255,255,.08);color:var(--mist)}
-.eh-all-toggle.active{background:var(--sky-dim);color:var(--sky-lt);border-color:rgba(45,125,210,.4)}
-.eh-trend{display:flex;align-items:center;gap:3px;margin-top:5px}
-.eh-trend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.eh-empty{padding:28px 0;text-align:center;color:var(--slate);font-size:13px}
 
 /* FULL TABLE */
 .full-view{display:flex;flex-direction:column;flex:1;overflow:hidden}
@@ -440,6 +389,11 @@ window.onGoogleMapsReady = function() {
       Follow-ups
       <span class="nav-badge warn hide" id="nb-fu">0</span>
     </button>
+    <button class="nav-btn" id="nav-commitments" onclick="setView('commitments')">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4z"/><path d="M2 4l2-3h8l2 3"/><path d="M6 8l2 2 4-4"/></svg>
+      Commitments
+      <span class="nav-badge warn hide" id="nb-comm">0</span>
+    </button>
     <button class="nav-btn" id="nav-deliverables" onclick="setView('deliverables')">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 1h8l3 3v10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z"/><path d="M4 1v4h8"/><path d="M4 9h8M4 12h5"/></svg>
       Deliverables
@@ -457,11 +411,6 @@ window.onGoogleMapsReady = function() {
     <button class="nav-btn" id="nav-reports" onclick="setView('reports')">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="14" height="14" rx="1.5"/><path d="M4 11V8M7 11V5M10 11V7M13 11V4"/></svg>
       Reports
-    </button>
-    <button class="nav-btn" id="nav-settings" onclick="setView('settings')">
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg>
-      Settings
-      <span class="nav-badge" id="integrity-badge" style="display:none;background:var(--amber)"></span>
     </button>
   </div>
   <div style="margin:8px 10px 0;background:#0E1E30;border:1px solid rgba(255,255,255,.13);border-radius:var(--radius-lg);flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0">
@@ -681,7 +630,8 @@ const SB_TABLES = {
   deliverables:         'pi_deliverables',
   meetings:             'pi_meetings',
   issues:               'pi_issues',
-  issue_interactions:   'pi_issue_interactions'
+  issue_interactions:   'pi_issue_interactions',
+  commitments:          'pi_commitments'
 };
 
 // Map our internal field names to Supabase column names
@@ -736,12 +686,19 @@ const SB_TO_INT = {
   pi_issue_interactions: {
     id:'id', issueId:'issue_id', interactionId:'interaction_id',
     createdAt:'created_at'
+  },
+  pi_commitments: {
+    id:'id', projectId:'project_id', stakeholderId:'stakeholder_id',
+    commitment:'commitment', madeTo:'made_to', madeBy:'made_by',
+    dateMade:'date_made', dueDate:'due_date', category:'category',
+    status:'status', fulfilledDate:'fulfilled_date',
+    fulfilledNotes:'fulfilled_notes', notes:'notes', createdAt:'created_at'
   }
 };
 
 // Convert our internal object to Supabase column names
 // Date fields that must be null (not '') when empty
-const DATE_FIELDS = new Set(['interaction_date','follow_up_due','follow_up_resolved','due_date','start_date','end_date','precon_date','added_date','meeting_date','date_raised','date_resolved']);
+const DATE_FIELDS = new Set(['interaction_date','follow_up_due','follow_up_resolved','due_date','start_date','end_date','precon_date','added_date','meeting_date','date_raised','date_resolved','date_made','fulfilled_date']);
 
 // Integer FK columns that Supabase expects as numbers
 const SB_INT_FIELDS = new Set(['project_id','stakeholder_id','issue_id','interaction_id','meeting_id']);
@@ -856,7 +813,7 @@ function cacheClear(k) { delete _cache[k]; delete _cacheTime[k]; }
 const _syncCache = {};
 
 async function loadAllData() {
-  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions'];
+  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments'];
   await Promise.all(tables.map(async t => { _syncCache[t] = await sbGet(t); }));
 }
 
@@ -1045,7 +1002,7 @@ const S={
   projectFilter:null,
   selStakeholder:null,
   selInteraction:null,
-  stakeTab:'info',ehShowAll:false,bulkSelected:new Set(),
+  stakeTab:'info',
   skView:'list',
   issStatus:'', issCat:'', selIssue:null,
   issViewProj:'', issViewStatus:'', issViewCat:'', issViewPri:'', selIssueView:null,
@@ -1109,7 +1066,8 @@ function initDashRows(){
 function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;
   S.view=v;S.selStakeholder=null;S.selInteraction=null;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
-  const nb=document.getElementById('nav-'+v);if(nb)nb.classList.add('active');
+  const navId=v==='commitments'?'nav-commitments':('nav-'+v);
+  const nb=document.getElementById(navId);if(nb)nb.classList.add('active');
   render();
 }
 async function initApp(){
@@ -1166,6 +1124,11 @@ function refreshBadges(){
     if(openIssues>0){ibEl.textContent=openIssues;ibEl.style.display='';}
     else{ibEl.style.display='none';}
   }
+  // Commitments badge — open/overdue
+  const today=new Date().toISOString().slice(0,10);
+  const openComm=(DB.get('commitments')||[]).filter(c=>c.status==='Open'||c.status==='Overdue').length;
+  const commEl=document.getElementById('nb-comm');
+  if(commEl){commEl.textContent=openComm;commEl.classList.toggle('hide',openComm===0);}
 }
 function buildProjList(){
   const allProjs=DB.get('projects');
@@ -1205,8 +1168,8 @@ function render(){
   else if(S.view==='reports')renderReports(m);
   else if(S.view==='meetings')renderMeetings(m);
   else if(S.view==='issues')renderIssuesView(m);
+  else if(S.view==='commitments')renderCommitments(m);
   else if(S.view==='projects')renderProjects(m);
-  else if(S.view==='settings')renderSettings(m);
 }
 
 // ── DASHBOARD ─────────────────────────────────
@@ -1217,6 +1180,10 @@ function renderDash(el){
   const ps=DB.get('project_stakeholders');
   const openFUCt=ints.filter(i=>i.followUp&&!i.followUpDone).length;
   const overdueCt=ints.filter(i=>i.followUp&&!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<new Date()).length;
+  const todayStr=new Date().toISOString().slice(0,10);
+  const allCommD=DB.get('commitments').filter(c=>!projF||String(c.projectId)===String(projF));
+  const openCommCt=allCommD.filter(c=>c.status==='Open'||c.status==='Overdue').length;
+  const commOverdueCt=allCommD.filter(c=>(c.status==='Open'||c.status==='Overdue')&&c.dueDate&&c.dueDate<todayStr).length;
   const active=projs.filter(p=>p.status==='Active');
   function projCard(p){
     const psSt=ps.filter(x=>x.projectId===p.id);
@@ -1225,22 +1192,23 @@ function renderDash(el){
     const ints2=ints.filter(i=>i.projectId===p.id).length;
     const projFU=ints.filter(i=>i.projectId===p.id&&i.followUp&&!i.followUpDone).length;
     const projOD=ints.filter(i=>i.projectId===p.id&&i.followUp&&!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<new Date()).length;
+    const card=document.createElement('div');
+    card.style.cssText='background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:14px 16px;cursor:pointer';
+    card.onclick=function(){filterByProject(p.id);setView('stakeholders');};
     const fuTag=projFU>0?`<span style="color:${projOD>0?'var(--red)':'var(--amber)'};margin-left:auto;font-weight:500">${projOD>0?projOD+' overdue':projFU+' open FU'}</span>`:'';
     const oppTag=opp>0?`<span style="color:var(--red)">${opp} opp.</span>`:'';
-    return `<div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:14px 16px;cursor:pointer" onclick="filterByProject('${p.id}');setView('interactions')">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-        <div><div style="font-weight:600;font-size:14px;margin-bottom:2px">${p.name}</div>
-        <div style="font-size:12px;color:var(--fog);font-family:var(--mono)">${p.pid} · ${p.client}</div></div>
-        <span class="badge b-sky">${p.phase}</span>
-      </div>
+    card.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+      <div><div style="font-weight:600;font-size:14px;margin-bottom:2px">${p.name}</div>
+      <div style="font-size:12px;color:var(--fog);font-family:var(--mono)">${p.pid} · ${p.client}</div></div>
+      <span class="badge b-sky">${p.phase}</span></div>
       <div style="display:flex;gap:12px;font-size:12px;flex-wrap:wrap;padding-top:8px;border-top:1px solid var(--border)">
         <span style="color:var(--mist)">${psSt.length} contacts</span>
         <span style="color:var(--green)">${champ} champ.</span>
         ${oppTag}
         <span style="color:var(--slate)">${ints2} interactions</span>
         ${fuTag}
-      </div>
-    </div>`;
+      </div>`;
+    return card.outerHTML;
   }
   const dels=DB.get('deliverables');
   const totalDels=dels.length;
@@ -1496,6 +1464,11 @@ function renderDash(el){
         <div class="stat-val sv-amber" id="sv-fu">0</div>
         <div class="stat-sub" style="color:${overdueCt>0?'var(--red)':'var(--fog)'}">${overdueCt>0?overdueCt+' overdue':'All on track'}</div>
       </div>
+      <div class="stat-card dash-anim" style="cursor:pointer;animation-delay:220ms" onclick="setView('commitments')">
+        <div class="stat-lbl">Open commitments</div>
+        <div class="stat-val" style="color:#b39ddb" id="sv-comm">0</div>
+        <div class="stat-sub" style="color:${commOverdueCt>0?'var(--red)':'var(--fog)'}">${commOverdueCt>0?commOverdueCt+' overdue':'All on track'}</div>
+      </div>
     </div>
 
     <!-- ROW 2: Visual panels -->
@@ -1597,6 +1570,7 @@ function renderDash(el){
   countUp('sv-stakes', stakes.length, 110);
   countUp('sv-ints', ints.length, 170);
   countUp('sv-fu', openFUCt, 230);
+  countUp('sv-comm', openCommCt, 290);
 }
 
 // ── MASTER STAKEHOLDER LIST ───────────────────
@@ -1686,37 +1660,16 @@ function renderMaster(el){
     <div class="tb-sp"></div>
     <span class="tb-info">${stakes.length} contact${stakes.length!==1?'s':''}</span>
   </div>
-  ${S.bulkSelected.size>0?`<div class="bulk-bar">
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px;color:var(--sky-lt)"><circle cx="6" cy="5" r="3"/><path d="M1 13.5c0-2.485 2.239-4.5 5-4.5s5 2.015 5 4.5"/><path d="M11 8h4M13 6v4"/></svg>
-    <span class="bulk-bar-ct">${S.bulkSelected.size} selected</span>
-    <span class="bulk-bar-lbl">— set sentiment to:</span>
-    <select class="bulk-sent-sel" id="bulk-sent-val">
-      <option value="">Choose…</option>
-      <option value="Champion">Champion</option>
-      <option value="Neutral">Neutral</option>
-      <option value="Opponent">Opponent</option>
-      <option value="Unknown">Unknown</option>
-    </select>
-    <button class="bulk-apply" onclick="applyBulkSentiment()">Apply to ${S.bulkSelected.size} stakeholder${S.bulkSelected.size!==1?'s':''}</button>
-    <button class="bulk-clear" onclick="clearBulkSelection()">Clear selection</button>
-  </div>`:''}
   <div class="content">
     <div class="split">
       <div class="list-pane">
-        <div class="bulk-selall">
-          <input type="checkbox" class="lrow-chk" id="bulk-chk-all-ms" onchange="bulkSelectAll(this.checked)" ${S.bulkSelected.size===stakes.length&&stakes.length>0?'checked':''}>
-          <label for="bulk-chk-all-ms" style="cursor:pointer">${S.bulkSelected.size>0&&S.bulkSelected.size===stakes.length?'Deselect all':'Select all '+stakes.length}</label>
-          ${S.bulkSelected.size>0?`<span style="margin-left:auto;font-size:11px;color:var(--sky-lt)">${S.bulkSelected.size} selected</span>`:''}
-        </div>
         <div class="data-list" id="ms-data-list">
           ${stakes.length===0?`<div class="pane-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="9" cy="7" r="4"/><path d="M2 20c0-3.314 3.134-6 7-6s7 2.686 7 6"/></svg><div class="pe-title">No stakeholders found</div></div>`
           :stakes.map(s=>{
             const projCount=ps.filter(x=>String(x.stakeholderId)===String(s.id)).length;
             const intCount=ints.filter(i=>String(i.stakeholderId)===String(s.id)).length;
             const col=acol(s.firstName+s.lastName);
-            const isBulkSel=S.bulkSelected.has(String(s.id));
-            return`<div class="lrow${s.id===sel?' sel':''}${isBulkSel?' bulk-sel':''}" onclick="selectStake('${s.id}')">
-              <input type="checkbox" class="lrow-chk" ${isBulkSel?'checked':''} onclick="event.stopPropagation();bulkSelectStake('${s.id}')" title="Select for bulk action">
+            return`<div class="lrow${s.id===sel?' sel':''}" onclick="selectStake('${s.id}')">
               <div class="avatar" style="background:${col}22;color:${col}">${ini(s.firstName,s.lastName)}</div>
               <div class="lrow-body">
                 <div class="lrow-name">${dispName(s)}${isOrgContact(s)?'<span class="badge b-sky" style="font-size:9px;margin-left:5px">ORG</span>':''}</div>
@@ -1820,37 +1773,16 @@ function renderStakeholders(el){
     </div>
     <div id="bubble-chart-mount" style="width:100%;height:460px;position:relative"></div>
   </div>` : `
-  ${S.bulkSelected.size>0?`<div class="bulk-bar">
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px;color:var(--sky-lt)"><circle cx="6" cy="5" r="3"/><path d="M1 13.5c0-2.485 2.239-4.5 5-4.5s5 2.015 5 4.5"/><path d="M11 8h4M13 6v4"/></svg>
-    <span class="bulk-bar-ct">${S.bulkSelected.size} selected</span>
-    <span class="bulk-bar-lbl">— set sentiment to:</span>
-    <select class="bulk-sent-sel" id="bulk-sent-val">
-      <option value="">Choose…</option>
-      <option value="Champion">Champion</option>
-      <option value="Neutral">Neutral</option>
-      <option value="Opponent">Opponent</option>
-      <option value="Unknown">Unknown</option>
-    </select>
-    <button class="bulk-apply" onclick="applyBulkSentiment()">Apply to ${S.bulkSelected.size} stakeholder${S.bulkSelected.size!==1?'s':''}</button>
-    <button class="bulk-clear" onclick="clearBulkSelection()">Clear selection</button>
-  </div>`:''}
   <div class="content">
     <div class="split">
       <div class="list-pane">
-        <div class="bulk-selall">
-          <input type="checkbox" class="lrow-chk" id="bulk-chk-all" onchange="bulkSelectAll(this.checked)" ${S.bulkSelected.size===listItems.length&&listItems.length>0?'checked':''}>
-          <label for="bulk-chk-all" style="cursor:pointer">${S.bulkSelected.size>0&&S.bulkSelected.size===listItems.length?'Deselect all':'Select all '+listItems.length}</label>
-          ${S.bulkSelected.size>0?`<span style="margin-left:auto;font-size:11px;color:var(--sky-lt)">${S.bulkSelected.size} selected</span>`:''}
-        </div>
         <div class="data-list">
           ${listItems.length===0?`<div class="pane-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="9" cy="7" r="4"/><path d="M2 20c0-3.314 3.134-6 7-6s7 2.686 7 6"/></svg><div class="pe-title">No stakeholders</div><div class="pe-sub">${S.projectFilter?'Add or link stakeholders to this project.':'Add your first stakeholder.'}</div></div>`
           :listItems.map(s=>{
             const lk=S.projectFilter?ps.find(x=>x.projectId===S.projectFilter&&String(x.stakeholderId)===String(s.id)):null;
             const intCt=ints.filter(i=>String(i.stakeholderId)===String(s.id)&&(!S.projectFilter||i.projectId===S.projectFilter)).length;
             const col=acol(s.firstName+s.lastName);
-            const isBulkSel=S.bulkSelected.has(String(s.id));
-            return`<div class="lrow${s.id===sel?' sel':''}${isBulkSel?' bulk-sel':''}" onclick="selectStake('${s.id}')">
-              <input type="checkbox" class="lrow-chk" ${isBulkSel?'checked':''} onclick="event.stopPropagation();bulkSelectStake('${s.id}')" title="Select for bulk action">
+            return`<div class="lrow${s.id===sel?' sel':''}" onclick="selectStake('${s.id}')">
               <div class="avatar" style="background:${col}22;color:${col}">${ini(s.firstName,s.lastName)}</div>
               <div class="lrow-body">
                 <div class="lrow-name">${dispName(s)}${isOrgContact(s)?'<span class="badge b-sky" style="font-size:9px;margin-left:5px">ORG</span>':''}</div>
@@ -2112,93 +2044,6 @@ async function deleteIssue(id, projectId){
   renderStakeholders(document.getElementById('main'));
 }
 
-
-// ── BULK SENTIMENT ────────────────────────────────────────────────
-function bulkSelectStake(id) {
-  const sid = String(id);
-  if (S.bulkSelected.has(sid)) S.bulkSelected.delete(sid);
-  else S.bulkSelected.add(sid);
-  if (S.view === 'master') renderMaster(document.getElementById('main'));
-  else renderStakeholders(document.getElementById('main'));
-}
-
-function bulkSelectAll(checked) {
-  const allStakes = DB.get('stakeholders');
-  const ps = DB.get('project_stakeholders');
-  const isMaster = S.view === 'master';
-  let listItems;
-  if (isMaster) {
-    listItems = allStakes.slice();
-    const search = (S.masterSearch||'').toLowerCase();
-    const typeF = S.masterType||'';
-    if (search) listItems = listItems.filter(s=>(s.firstName+' '+s.lastName+' '+(s.org||'')).toLowerCase().includes(search));
-    if (typeF) listItems = listItems.filter(s=>s.type===typeF);
-    if (S.msOrgOnly) listItems = listItems.filter(s=>isOrgContact(s));
-  } else {
-    listItems = S.projectFilter
-      ? ps.filter(x=>x.projectId===S.projectFilter).map(lk=>allStakes.find(x=>String(x.id)===String(lk.stakeholderId))).filter(Boolean)
-      : allStakes;
-    const search = (S.stakeSearch||'').toLowerCase();
-    const typeF = S.stakeType||'';
-    if (search) listItems = listItems.filter(s=>(s.firstName+' '+s.lastName+' '+(s.org||'')).toLowerCase().includes(search));
-    if (typeF) listItems = listItems.filter(s=>s.type===typeF);
-    if (S.skOrgOnly) listItems = listItems.filter(s=>isOrgContact(s));
-  }
-  S.bulkSelected = checked ? new Set(listItems.map(s=>String(s.id))) : new Set();
-  if (isMaster) renderMaster(document.getElementById('main'));
-  else renderStakeholders(document.getElementById('main'));
-}
-
-function clearBulkSelection() {
-  S.bulkSelected = new Set();
-  if (S.view === 'master') renderMaster(document.getElementById('main'));
-  else renderStakeholders(document.getElementById('main'));
-}
-
-async function applyBulkSentiment() {
-  const val = document.getElementById('bulk-sent-val')?.value;
-  if (!val) { alert('Please choose a sentiment first.'); return; }
-  if (!S.bulkSelected.size) return;
-  const confirmed = confirm(`Set sentiment to "${val}" for ${S.bulkSelected.size} stakeholder${S.bulkSelected.size!==1?'s':''}?`);
-  if (!confirmed) return;
-
-  const ps = DB.get('project_stakeholders');
-  let updated = 0;
-
-  if (S.projectFilter) {
-    // Update support field on project_stakeholders links for this project
-    const newPs = ps.map(lk => {
-      if (lk.projectId === S.projectFilter && S.bulkSelected.has(String(lk.stakeholderId))) {
-        updated++;
-        return {...lk, support: val};
-      }
-      return lk;
-    });
-    await DB.set('project_stakeholders', newPs);
-  } else {
-    // No project filter — update all project links for these stakeholders
-    const newPs = ps.map(lk => {
-      if (S.bulkSelected.has(String(lk.stakeholderId))) {
-        updated++;
-        return {...lk, support: val};
-      }
-      return lk;
-    });
-    await DB.set('project_stakeholders', newPs);
-  }
-
-  S.bulkSelected = new Set();
-  refreshBadges();
-  renderStakeholders(document.getElementById('main'));
-
-  // Toast confirmation
-  const toast = document.createElement('div');
-  toast.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#0f2d4a;border:1px solid rgba(40,168,112,.4);color:#4ade80;padding:10px 16px;border-radius:8px;font-size:13px;display:flex;align-items:center;gap:8px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.4)';
-  toast.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M3 8l4 4 6-6"/></svg> Sentiment set to <strong style="margin-left:3px">' + val + '</strong> for ' + updated + ' stakeholder' + (updated!==1?'s':'');
-  document.body.appendChild(toast);
-  setTimeout(()=>toast.remove(), 3500);
-}
-
 function selectStake(id){
   const msVal=document.getElementById('ms-search')?.value||'';
   const skVal=document.getElementById('sk-search')?.value||'';
@@ -2396,107 +2241,6 @@ function renderStakeDetail(s,link){
       </div>
     </div>`).join('')}
   </div>`;
-  // ── ENGAGEMENT HISTORY TAB ────────────────────────────────────────────
-  (function(){
-    // allInts: all interactions for this stakeholder across every project (not project-filtered)
-    const allInts=DB.get('interactions').filter(i=>String(i.stakeholderId)===String(s.id));
-    const showAll=S.ehShowAll;
-    const viewInts=showAll?allInts:ints; // ints already respects S.projectFilter
-
-    // ── Stats bar ─────────────────────────────────────────────────────
-    const total=viewInts.length;
-    const incoming=viewInts.filter(i=>i.direction==='Incoming').length;
-    const outgoing=total-incoming;
-    const openFU=viewInts.filter(i=>i.followUp&&!i.followUpDone).length;
-    const sorted=[...viewInts].sort((a,b)=>a.date.localeCompare(b.date));
-    const firstDate=sorted.length?fmt(sorted[0].date):'—';
-    const lastDate=sorted.length?fmt(sorted[sorted.length-1].date):'—';
-
-    // ── Channel breakdown pills ───────────────────────────────────────
-    const chMap={};
-    viewInts.forEach(i=>{chMap[i.channel]=(chMap[i.channel]||0)+1;});
-    const chPills=Object.entries(chMap).sort((a,b)=>b[1]-a[1])
-      .map(([ch,ct])=>`<span class="eh-ch-pill">${chIco(ch)}<span>${ch}</span><strong style="color:var(--white)">${ct}</strong></span>`).join('');
-
-    // ── Group by year → project ────────────────────────────────────────
-    const byYear={};
-    viewInts.forEach(i=>{
-      const yr=i.date?i.date.slice(0,4):'Unknown';
-      if(!byYear[yr])byYear[yr]=[];
-      byYear[yr].push(i);
-    });
-    const years=Object.keys(byYear).sort((a,b)=>b.localeCompare(a));
-
-    const timelineHTML=years.map(yr=>{
-      const yInts=byYear[yr].slice().sort((a,b)=>b.date.localeCompare(a.date));
-      // Group by project within year
-      const byProj={};
-      yInts.forEach(i=>{
-        const pid=i.projectId||'__none__';
-        if(!byProj[pid])byProj[pid]=[];
-        byProj[pid].push(i);
-      });
-      const projSections=Object.entries(byProj).map(([pid,pInts])=>{
-        const proj=pid==='__none__'?null:DB.get('projects').find(p=>p.id===pid);
-        const projLabel=proj?`<span class="eh-proj-pid">${proj.pid}</span><span class="eh-proj-name">${proj.name}</span>`:'<span class="eh-proj-name" style="color:var(--fog)">No project</span>';
-        // Check if stakeholder is formally linked to this project
-        const isLinked=pid==='__none__'||DB.get('project_stakeholders').some(ps=>String(ps.projectId)===String(pid)&&String(ps.stakeholderId)===String(s.id));
-        const orphanTag=(!isLinked&&proj)?`<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--amber);background:rgba(232,160,32,.1);border:1px solid rgba(232,160,32,.25);padding:1px 7px;border-radius:4px;margin-left:4px" title="Interaction exists but stakeholder is not formally linked to this project"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:9px;height:9px"><circle cx="8" cy="8" r="6"/><path d="M8 5v3"/><circle cx="8" cy="11" r=".8" fill="currentColor" stroke="none"/></svg> Not linked</span>`:'';
-        const entries=pInts.map((i,idx,arr)=>{
-          const dotColor=i.direction==='Incoming'?'var(--sky)':'var(--green)';
-          const fuTag=i.followUp
-            ?`<div><span class="eh-fu-tag ${i.followUpDone?'eh-fu-done':'eh-fu-open'}">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">${i.followUpDone?'<path d="M3 8l4 4 6-6"/>':'<circle cx="8" cy="8" r="6"/><path d="M8 5v3.5"/><circle cx="8" cy="11" r=".8" fill="currentColor" stroke="none"/>'}</svg>
-                ${i.followUpDone?'Resolved':'Follow-up'}: ${i.followUpNote||''}${!i.followUpDone&&i.followUpDue?' · due '+fmt(i.followUpDue):''}
-              </span></div>`:'';
-          return`<div class="eh-entry">
-            <div class="eh-dot-col"><div class="eh-dot" style="background:${dotColor}"></div>${idx<arr.length-1?'<div class="eh-vline"></div>':''}</div>
-            <div class="eh-ico ${chCls(i.channel)}" style="margin-top:1px">${chIco(i.channel)}</div>
-            <div class="eh-body">
-              <div class="eh-row1">
-                <span class="badge ${i.direction==='Incoming'?'b-sky':'b-green'}" style="font-size:10px">${i.direction}</span>
-                <span class="badge b-gray" style="font-size:10px">${i.channel}</span>
-                ${i.loggedBy?`<span style="font-size:11px;color:var(--fog)">${i.loggedBy}</span>`:''}
-                <span class="eh-date">${fmt(i.date)}</span>
-              </div>
-              <div class="eh-sum">${i.summary}</div>
-              ${fuTag}
-            </div>
-          </div>`;
-        }).join('');
-        return`<div class="eh-proj-grp">
-          <div class="eh-proj-lbl">${projLabel}${orphanTag}<span style="margin-left:auto;font-size:11px;color:var(--fog)">${pInts.length} interaction${pInts.length!==1?'s':''}</span></div>
-          ${entries}
-        </div>`;
-      }).join('');
-      return`<div class="eh-yr-hd"><div class="eh-yr-line"></div><span class="eh-yr-lbl">${yr}</span><span class="eh-yr-ct">${yInts.length} interaction${yInts.length!==1?'s':''}</span><div class="eh-yr-line"></div></div>
-      ${projSections}`;
-    }).join('');
-
-    const activeProjObj=S.projectFilter?DB.get('projects').find(p=>p.id===S.projectFilter):null;
-    const activeProjTag=activeProjObj?` <span style="font-family:var(--mono);font-size:10px;background:var(--sky-dim);color:var(--sky-lt);padding:1px 6px;border-radius:4px;margin-left:2px">${activeProjObj.pid}</span>`:'';
-    const toggleLabel=showAll?`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px"><path d="M2 8h12M8 3l5 5-5 5"/></svg> Showing all projects (${allInts.length})`:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.5"/><circle cx="8" cy="11" r=".8" fill="currentColor" stroke="none"/></svg> Filtered to${activeProjTag} — show all (${allInts.length})`;
-    const toggleBtn=S.projectFilter?`<span class="eh-all-toggle${showAll?' active':''}" onclick="S.ehShowAll=${showAll?'false':'true'};${cb}">${toggleLabel}</span>`:'';
-
-    S._ehHTML=`<div class="det-body">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-        <span class="sec-t">Engagement history</span>
-        <button class="btn btn-primary btn-xs" onclick="openIntModal('${s.id}')">+ Log</button>
-      </div>
-      ${toggleBtn}
-      ${total===0?`<div class="eh-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" style="width:28px;height:28px;display:block;margin:0 auto 8px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>No interactions logged yet for this contact.</div>`:`
-      <div class="eh-stat-bar">
-        <div class="eh-stat"><div class="eh-stat-lbl">Total</div><div class="eh-stat-val">${total}</div><div class="eh-stat-sub">${incoming} in · ${outgoing} out</div></div>
-        <div class="eh-stat"><div class="eh-stat-lbl">Open follow-ups</div><div class="eh-stat-val" style="color:${openFU>0?'var(--amber)':'var(--green)'}">${openFU}</div><div class="eh-stat-sub">${openFU>0?'need attention':'all resolved'}</div></div>
-        <div class="eh-stat"><div class="eh-stat-lbl">First contact</div><div class="eh-stat-val" style="font-size:13px;font-weight:600;margin-top:2px">${firstDate}</div></div>
-        <div class="eh-stat"><div class="eh-stat-lbl">Last contact</div><div class="eh-stat-val" style="font-size:13px;font-weight:600;margin-top:2px">${lastDate}</div></div>
-      </div>
-      ${chPills?`<div class="eh-ch-bar">${chPills}</div>`:''}
-      ${timelineHTML}`}
-    </div>`;
-  })();
-  const historyHTML=S._ehHTML||'';
-  // ── END ENGAGEMENT HISTORY TAB ────────────────────────────────────────
   return`<div class="det-hdr">
     <div class="det-hero">
       <div class="det-avatar" style="background:${col}22;color:${col}">${ini(s.firstName,s.lastName)}</div>
@@ -2522,11 +2266,10 @@ function renderStakeDetail(s,link){
     </div>
   </div>
   <div class="dtabs">
-    <button class="dtab${tab==='info'?' active':''}" onclick="S.stakeTab='info';S.ehShowAll=false;${cb}">Profile & project</button>
-    <button class="dtab${tab==='log'?' active':''}" onclick="S.stakeTab='log';S.ehShowAll=false;${cb}">Interaction log (${ints.length})</button>
-    <button class="dtab${tab==='history'?' active':''}" onclick="S.stakeTab='history';${cb}">Engagement history</button>
+    <button class="dtab${tab==='info'?' active':''}" onclick="S.stakeTab='info';${cb}">Profile & project</button>
+    <button class="dtab${tab==='log'?' active':''}" onclick="S.stakeTab='log';${cb}">Interaction log (${ints.length})</button>
   </div>
-  ${tab==='info'?infoHTML:tab==='log'?logHTML:historyHTML}`;
+  ${tab==='info'?infoHTML:logHTML}`;
 }
 
 
@@ -3314,7 +3057,7 @@ function renderProjects(el){
     <div style="padding:20px">
     ${projs.length===0
       ? `<div style="text-align:center;padding:60px;color:var(--fog);font-size:14px">${tab==='active'?'No active projects. Create one to get started.':'No archived projects yet.'}</div>`
-      : `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+      : `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px">
       ${projs.map(p=>{
         const psSt=ps.filter(x=>x.projectId===p.id);
         const champ=psSt.filter(x=>x.support==='Champion').length;
@@ -3347,28 +3090,24 @@ function renderProjects(el){
             <span style="color:var(--slate)">${intCt} interactions</span>
             ${openFU>0?`<span style="color:var(--amber);margin-left:auto">${openFU} open FU</span>`:''}
           </div>
-          <div style="margin-top:11px;display:flex;flex-direction:column;gap:6px">
-            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px">
-              <button class="btn btn-sm" style="justify-content:center" onclick="filterByProject('${p.id}');setView('stakeholders')">Contacts</button>
-              <button class="btn btn-sm" style="justify-content:center" onclick="filterByProject('${p.id}');setView('interactions')">Interactions</button>
-              <button class="btn btn-sm" style="justify-content:center" onclick="filterByProject('${p.id}');setView('followups')">Follow-ups${openFU>0?` (${openFU})`:''}</button>
-              <button class="btn btn-sm" style="justify-content:center" onclick="filterByProject('${p.id}');setView('deliverables')">Deliverables</button>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:5px">
-              <button class="btn btn-ghost btn-sm" style="justify-content:center" onclick="openProjModal('${p.id}')">Edit</button>
-              <button class="btn btn-sm" style="justify-content:center;color:var(--sky-lt);border-color:rgba(90,135,198,.4)" onclick="showStakeholderMap('${p.id}')">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M8 2C5.8 2 4 3.8 4 6c0 3 4 8 4 8s4-5 4-8c0-2.2-1.8-4-4-4z"/><circle cx="8" cy="6" r="1.5"/></svg>
-                Map
-              </button>
-              <button class="btn btn-sm" style="justify-content:center;color:#b39ddb;border-color:rgba(179,157,219,.4)" onclick="showEngagementMatrix('${p.id}')">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>
-                Matrix
-              </button>
-              <button class="btn btn-sm" style="justify-content:center;color:var(--green);border-color:rgba(40,168,112,.4)" onclick="exportProject('${p.id}')">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg>
-                Export
-              </button>
-            </div>
+          <div style="display:flex;gap:7px;margin-top:11px;flex-wrap:wrap">
+            <button class="btn btn-sm" onclick="filterByProject('${p.id}');setView('stakeholders')">Contacts</button>
+            <button class="btn btn-sm" onclick="filterByProject('${p.id}');setView('interactions')">Interactions</button>
+            <button class="btn btn-sm" onclick="filterByProject('${p.id}');setView('followups')">Follow-ups${openFU>0?` (${openFU})`:''}</button>
+            <button class="btn btn-sm" onclick="filterByProject('${p.id}');setView('deliverables')">Deliverables</button>
+            <button class="btn btn-ghost btn-sm" onclick="openProjModal('${p.id}')">Edit</button>
+            <button class="btn btn-sm" style="color:var(--sky-lt);border-color:rgba(90,135,198,.4)" onclick="showStakeholderMap('${p.id}')">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:13px;height:13px"><path d="M8 2C5.8 2 4 3.8 4 6c0 3 4 8 4 8s4-5 4-8c0-2.2-1.8-4-4-4z"/><circle cx="8" cy="6" r="1.5"/></svg>
+              Map
+            </button>
+            <button class="btn btn-sm" style="color:#b39ddb;border-color:rgba(179,157,219,.4)" onclick="showEngagementMatrix('${p.id}')">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:13px;height:13px"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>
+              Matrix
+            </button>
+            <button class="btn btn-sm" style="margin-left:auto;color:var(--green);border-color:rgba(40,168,112,.4)" onclick="exportProject('${p.id}')">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:13px;height:13px"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg>
+              Export
+            </button>
           </div>
         </div>`;
       }).join('')}
@@ -4674,11 +4413,13 @@ function renderReports(el){
     +'<div style="font-size:42px;font-weight:700;line-height:1;color:'+(overdueFU>0?'var(--red)':openFUs>0?'var(--amber)':'var(--green)')+'">'+openFUs+'</div>'
     +'<div style="font-size:14px;color:'+(overdueFU>0?'var(--red)':'var(--fog)')+'">'+(overdueFU>0?overdueFU+' overdue':openFUs>0?'All on track':'None pending')+'</div>'
     +'</div>'
-    // Deliverables card
+    // Deliverables card with donut
     +'<div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:16px 18px">'
     +'<div style="font-size:13px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Deliverables</div>'
-    +'<div style="font-size:42px;font-weight:700;line-height:1;color:var(--white)">'+doneDels+'</div>'
-    +'<div style="font-size:14px;color:var(--fog);margin-top:4px">of '+projDels.length+' complete · '+delPctR+'%</div>'
+    +'<div style="display:flex;align-items:center;gap:14px">'
+    +miniDonut(delPctR,delPctR>=75?'#28A870':delPctR>=40?'#5BA4CF':'#D9A544',64)
+    +'<div><div style="font-size:18px;font-weight:600;color:var(--white)">'+doneDels+' of '+projDels.length+'</div>'
+    +'<div style="font-size:14px;color:var(--fog)">complete</div></div></div>'
     +'</div></div>';
 
   var groupPanel='<div style="margin-bottom:24px;background:#0E1E30;border:1px solid rgba(255,255,255,.13);border-radius:12px;padding:16px 20px">'
@@ -5256,7 +4997,8 @@ function getAvailableSections(){
     {id:'sentiment',title:'Sentiment & engagement matrix',type:'auto-sentiment'},
     {id:'deliverables',title:'Deliverable / scope status',type:'auto-del'},
     {id:'comment-matrix',title:'Public comment matrix',type:'auto-comments'},
-    {id:'issues',title:'Issues tracker',type:'auto-issues'}
+    {id:'issues',title:'Issues tracker',type:'auto-issues'},
+    {id:'commitments',title:'Commitments tracker',type:'auto-commitments'}
   ];
 }
 
@@ -5300,7 +5042,8 @@ function getSectionDesc(type){
     'auto-sentiment':'Auto-populates a 3x3 stakeholder engagement matrix plus stakeholder positions grouped by Champion, Neutral, and Opponent.',
     'auto-del':'Auto-populates deliverable progress showing contracted vs delivered counts.',
     'auto-comments':'Auto-populates public comments received with response status for formal documentation.',
-    'auto-issues':'Auto-populates open and resolved issues with priority, status, category, and linked interaction details.'
+    'auto-issues':'Auto-populates open and resolved issues with priority, status, category, and linked interaction details.',
+    'auto-commitments':'Auto-populates open and fulfilled commitments made to stakeholders, grouped by category and status.'
   };
   return descs[type]||'';
 }
@@ -5878,6 +5621,41 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
         });
       }
 
+    } else if(sec.type==='auto-commitments'){
+      var projComm=(DB.get('commitments')||[]).filter(function(c){return String(c.projectId)===String(proj.id)});
+      var allStakesC=DB.get('stakeholders');
+      var openComm=projComm.filter(function(c){return c.status!=='Fulfilled'});
+      var fulfilledComm=projComm.filter(function(c){return c.status==='Fulfilled'});
+      xml+=bullet('Open commitments: '+openComm.length+' | Fulfilled: '+fulfilledComm.length+' | Total: '+projComm.length);
+      xml+=spacer();
+      if(projComm.length===0){
+        xml+=bullet('No commitments recorded for this project.');
+      } else {
+        // Open/Overdue first
+        if(openComm.length>0){
+          xml+=para('Open / Overdue Commitments:',boldRpr);
+          openComm.forEach(function(c){
+            var sk=c.stakeholderId?allStakesC.find(function(s){return String(s.id)===String(c.stakeholderId)}):null;
+            var madeTo=sk?((sk.firstName||'')+' '+(sk.lastName||'')).trim()||(sk.org||''):(c.madeTo||'');
+            var due=c.dueDate?(' — Due: '+c.dueDate):'';
+            xml+=bullet((c.category?'['+c.category+'] ':'')+escXml(c.commitment||'')+(madeTo?' (to: '+escXml(madeTo)+')':'')+due);
+            if(c.madeBy)xml+=bullet('Made by: '+escXml(c.madeBy),1);
+            if(c.notes)xml+=bullet('Notes: '+escXml(c.notes),1);
+          });
+          xml+=spacer();
+        }
+        // Fulfilled
+        if(fulfilledComm.length>0){
+          xml+=para('Fulfilled Commitments:',boldRpr);
+          fulfilledComm.forEach(function(c){
+            var sk=c.stakeholderId?allStakesC.find(function(s){return String(s.id)===String(c.stakeholderId)}):null;
+            var madeTo=sk?((sk.firstName||'')+' '+(sk.lastName||'')).trim()||(sk.org||''):(c.madeTo||'');
+            xml+=bullet('✓ '+(c.category?'['+c.category+'] ':'')+escXml(c.commitment||'')+(madeTo?' (to: '+escXml(madeTo)+')':'')+(c.fulfilledDate?' — Fulfilled: '+c.fulfilledDate:''));
+            if(c.fulfilledNotes)xml+=bullet(escXml(c.fulfilledNotes),1);
+          });
+        }
+      }
+
     } else if(sec.type==='auto-matrix'){
       var rows3=['High','Medium','Low'];
       var cols3=['Opponent','Neutral','Champion'];
@@ -6233,354 +6011,6 @@ refreshBadges();render();
 
 
 
-
-
-// ── SETTINGS VIEW ──────────────────────────────────────────────────────────
-async function renderSettings(el) {
-  el.innerHTML = `
-    <div style="padding:28px 32px;max-width:860px">
-      <div style="margin-bottom:24px">
-        <div style="font-size:20px;font-weight:700;color:var(--white);margin-bottom:4px">Settings & Administration</div>
-        <div style="font-size:13px;color:var(--slate)">Data tools and app configuration</div>
-      </div>
-
-      <div style="background:var(--navy-mid);border:1px solid var(--border);border-radius:var(--radius-xl);margin-bottom:20px;overflow:hidden">
-        <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:16px;height:16px;color:var(--amber)"><circle cx="8" cy="8" r="6"/><path d="M8 5v3"/><circle cx="8" cy="11" r=".8" fill="currentColor" stroke="none"/></svg>
-          <span style="font-size:14px;font-weight:600;color:var(--white)">Data Integrity</span>
-        </div>
-        <div style="padding:18px 20px">
-          <div style="font-size:13px;color:var(--mist);margin-bottom:6px;font-weight:500">Orphaned interaction scan</div>
-          <div style="font-size:12px;color:var(--slate);margin-bottom:16px;line-height:1.6">
-            Finds stakeholders who have interaction records logged under a project but are not formally linked to that project in <code style="font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);padding:1px 5px;border-radius:3px">pi_project_stakeholders</code>.
-            This can happen when interactions are imported without a corresponding project link.
-            Running this scan and fixing orphans ensures accurate project contact counts, bubble charts, and reports.
-          </div>
-          <button class="btn btn-primary" id="scan-btn" onclick="runIntegrityScan()">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 1.5"/></svg>
-            Scan for orphaned interactions
-          </button>
-        </div>
-        <div id="scan-results" style="display:none;border-top:1px solid var(--border);padding:18px 20px"></div>
-      </div>
-
-      <div style="background:var(--navy-mid);border:1px solid var(--border);border-radius:var(--radius-xl);margin-bottom:20px;overflow:hidden">
-        <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:16px;height:16px;color:var(--amber)"><circle cx="8" cy="8" r="6"/><path d="M8 5v3"/><circle cx="8" cy="11" r=".8" fill="currentColor" stroke="none"/></svg>
-          <span style="font-size:14px;font-weight:600;color:var(--white)">Data Integrity</span>
-        </div>
-        <div style="padding:18px 20px">
-          <div style="font-size:13px;color:var(--mist);margin-bottom:6px;font-weight:500">Duplicate project link scan</div>
-          <div style="font-size:12px;color:var(--slate);margin-bottom:16px;line-height:1.6">
-            Finds stakeholders who are linked to the same project more than once in <code style="font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);padding:1px 5px;border-radius:3px">pi_project_stakeholders</code>.
-            This can happen when a stakeholder is imported multiple times against the same project. Duplicate links cause incorrect project counts and show the same project twice on a stakeholder's profile.
-          </div>
-          <button class="btn btn-primary" id="dup-scan-btn" onclick="runDuplicateScan()">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 1.5"/></svg>
-            Scan for duplicate project links
-          </button>
-        </div>
-        <div id="dup-scan-results" style="display:none;border-top:1px solid var(--border);padding:18px 20px"></div>
-      </div>
-
-      <div style="background:var(--navy-mid);border:1px solid var(--border);border-radius:var(--radius-xl);overflow:hidden">
-        <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:16px;height:16px;color:var(--sky-lt)"><circle cx="8" cy="8" r="6"/><path d="M8 5v3"/><circle cx="8" cy="11" r=".8" fill="currentColor" stroke="none"/></svg>
-          <span style="font-size:14px;font-weight:600;color:var(--white)">About PI Registry</span>
-        </div>
-        <div style="padding:18px 20px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
-          <div><div style="font-size:11px;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Version</div><div style="font-size:13px;color:var(--mist)">Supabase edition</div></div>
-          <div><div style="font-size:11px;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Hosting</div><div style="font-size:13px;color:var(--mist)">GitHub Pages</div></div>
-          <div><div style="font-size:11px;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Database</div><div style="font-size:13px;color:var(--mist)">Supabase (PostgreSQL)</div></div>
-          <div><div style="font-size:11px;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Built by</div><div style="font-size:13px;color:var(--mist)">Sunrise Engineering PI Services</div></div>
-        </div>
-      </div>
-    </div>`;
-}
-
-
-async function runDuplicateScan() {
-  const btn = document.getElementById('dup-scan-btn');
-  const resultsEl = document.getElementById('dup-scan-results');
-  btn.disabled = true;
-  btn.textContent = 'Scanning…';
-
-  try {
-    const ps = DB.get('project_stakeholders');
-    const stakeholders = DB.get('stakeholders');
-    const projects = DB.get('projects');
-
-    // Group by projectId+stakeholderId, find any with count > 1
-    const keyMap = {};
-    ps.forEach(lk => {
-      const key = String(lk.projectId) + '|' + String(lk.stakeholderId);
-      if (!keyMap[key]) keyMap[key] = [];
-      keyMap[key].push(lk);
-    });
-
-    const dupes = Object.entries(keyMap)
-      .filter(([,rows]) => rows.length > 1)
-      .map(([key, rows]) => {
-        const [pid, sid] = key.split('|');
-        const stake = stakeholders.find(s => String(s.id) === sid);
-        const proj = projects.find(p => String(p.id) === pid);
-        return { key, pid, sid, rows, stake, proj };
-      });
-
-    resultsEl.style.display = '';
-
-    if (dupes.length === 0) {
-      resultsEl.innerHTML = `<div style="display:flex;align-items:center;gap:8px;color:var(--green)">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M3 8l4 4 6-6"/></svg>
-        <span style="font-size:13px;font-weight:500">All clear — no duplicate project links found.</span>
-      </div>`;
-      btn.disabled = false;
-      btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px"><path d="M3 8l4 4 6-6"/></svg> Scan complete';
-      return;
-    }
-
-    let rows = dupes.map(d => {
-      const name = d.stake ? ((d.stake.firstName||'')+' '+(d.stake.lastName||'')).trim()||d.stake.org||'?' : 'Unknown';
-      const org = d.stake ? d.stake.org||'' : '';
-      const projLabel = d.proj
-        ? `<span style="font-family:var(--mono);font-size:10px;background:var(--sky-dim);color:var(--sky-lt);padding:1px 6px;border-radius:4px">${d.proj.pid}</span> ${d.proj.name}`
-        : `<span style="color:var(--fog)">Unknown project</span>`;
-      return `<tr>
-        <td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06)">
-          <div style="font-size:13px;color:var(--white)">${name}</div>
-          ${org?`<div style="font-size:11px;color:var(--fog)">${org}</div>`:''}
-        </td>
-        <td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px">${projLabel}</td>
-        <td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px;color:var(--amber);text-align:center">${d.rows.length} links</td>
-      </tr>`;
-    }).join('');
-
-    const dupesPayload = JSON.stringify(dupes.map(d=>({key:d.key,ids:d.rows.map(r=>r.id)}))).replace(/"/g,'&quot;');
-
-    resultsEl.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:14px;height:14px;color:var(--amber)"><circle cx="8" cy="8" r="6"/><path d="M8 5v3"/><circle cx="8" cy="11" r=".8" fill="currentColor" stroke="none"/></svg>
-        <span style="font-size:13px;font-weight:600;color:var(--amber)">${dupes.length} duplicate link${dupes.length!==1?'s':''} found</span>
-        <span style="font-size:12px;color:var(--slate)">— one copy will be kept, extras removed</span>
-      </div>
-      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
-        <thead>
-          <tr>
-            <th style="padding:6px 10px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);border-bottom:1px solid var(--border)">Stakeholder</th>
-            <th style="padding:6px 10px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);border-bottom:1px solid var(--border)">Project</th>
-            <th style="padding:6px 10px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);border-bottom:1px solid var(--border)">Duplicates</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-      <div style="display:flex;align-items:center;gap:10px">
-        <button class="btn btn-primary" onclick="fixDuplicates(${dupesPayload})">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px"><path d="M3 8l4 4 6-6"/></svg>
-          Remove ${dupes.reduce((a,d)=>a+d.rows.length-1,0)} duplicate${dupes.reduce((a,d)=>a+d.rows.length-1,0)!==1?'s':''}
-        </button>
-        <span style="font-size:12px;color:var(--slate)">Keeps the most recent link, removes extras</span>
-      </div>`;
-
-    btn.disabled = false;
-    btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 1.5"/></svg> Re-scan';
-
-  } catch(err) {
-    resultsEl.style.display = '';
-    resultsEl.innerHTML = `<div style="color:var(--red);font-size:13px">Scan error: ${err.message}</div>`;
-    btn.disabled = false;
-    btn.textContent = 'Retry scan';
-  }
-}
-
-async function fixDuplicates(dupes) {
-  const resultsEl = document.getElementById('dup-scan-results');
-  const fixBtn = event.target.closest('button');
-  fixBtn.disabled = true;
-  fixBtn.textContent = 'Fixing…';
-
-  let removed = 0;
-  const ps = DB.get('project_stakeholders');
-
-  // For each dupe group, keep the row with highest numeric id (most recent), remove the rest
-  const idsToRemove = new Set();
-  dupes.forEach(d => {
-    const ids = d.ids.map(id => id);
-    // Sort: numeric ids descending, keep first, remove rest
-    const sorted = [...ids].sort((a,b) => {
-      const na = parseInt(a)||0, nb = parseInt(b)||0;
-      return nb - na;
-    });
-    sorted.slice(1).forEach(id => { idsToRemove.add(String(id)); removed++; });
-  });
-
-  const newPs = ps.filter(lk => !idsToRemove.has(String(lk.id)));
-  await DB.set('project_stakeholders', newPs);
-
-  refreshBadges();
-
-  const badge = document.getElementById('integrity-badge');
-  if (badge) badge.style.display = 'none';
-
-  resultsEl.innerHTML = `<div style="display:flex;align-items:center;gap:8px;color:var(--green)">
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M3 8l4 4 6-6"/></svg>
-    <span style="font-size:13px;font-weight:500">${removed} duplicate link${removed!==1?'s':''} removed. Run a re-scan to confirm.</span>
-  </div>
-  <div style="margin-top:10px"><button class="btn" onclick="runDuplicateScan()">Re-scan to confirm</button></div>`;
-}
-
-async function runIntegrityScan() {
-  const btn = document.getElementById('scan-btn');
-  const resultsEl = document.getElementById('scan-results');
-  btn.disabled = true;
-  btn.textContent = 'Scanning…';
-
-  try {
-    const interactions = DB.get('interactions');
-    const projectStakeholders = DB.get('project_stakeholders');
-    const stakeholders = DB.get('stakeholders');
-    const projects = DB.get('projects');
-
-    // Find interactions where stakeholder is not linked to that project
-    const orphans = [];
-    const seen = new Set();
-
-    interactions.forEach(i => {
-      if (!i.projectId || !i.stakeholderId) return;
-      const key = String(i.projectId) + '|' + String(i.stakeholderId);
-      if (seen.has(key)) return;
-      const linked = projectStakeholders.find(ps =>
-        String(ps.projectId) === String(i.projectId) &&
-        String(ps.stakeholderId) === String(i.stakeholderId)
-      );
-      if (!linked) {
-        seen.add(key);
-        const stake = stakeholders.find(s => String(s.id) === String(i.stakeholderId));
-        const proj = projects.find(p => String(p.id) === String(i.projectId));
-        const intCount = interactions.filter(x =>
-          String(x.projectId) === String(i.projectId) &&
-          String(x.stakeholderId) === String(i.stakeholderId)
-        ).length;
-        orphans.push({ projectId: i.projectId, stakeholderId: i.stakeholderId, stake, proj, intCount });
-      }
-    });
-
-    // Update integrity badge
-    const badge = document.getElementById('integrity-badge');
-    if (badge) {
-      if (orphans.length > 0) { badge.textContent = orphans.length; badge.style.display = ''; }
-      else { badge.style.display = 'none'; }
-    }
-
-    if (orphans.length === 0) {
-      resultsEl.style.display = '';
-      resultsEl.innerHTML = `<div style="display:flex;align-items:center;gap:8px;color:var(--green)">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M3 8l4 4 6-6"/></svg>
-        <span style="font-size:13px;font-weight:500">All clear — no orphaned interactions found.</span>
-      </div>`;
-      btn.disabled = false;
-      btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px"><path d="M3 8l4 4 6-6"/></svg> Scan complete';
-      return;
-    }
-
-    // Build results table
-    let rows = orphans.map(o => {
-      const name = o.stake ? ((o.stake.firstName||'') + ' ' + (o.stake.lastName||'')).trim() || o.stake.org || '?' : 'Unknown';
-      const org = o.stake ? o.stake.org || '' : '';
-      const projLabel = o.proj ? `<span style="font-family:var(--mono);font-size:10px;background:var(--sky-dim);color:var(--sky-lt);padding:1px 6px;border-radius:4px">${o.proj.pid}</span> ${o.proj.name}` : `<span style="color:var(--fog)">Unknown project</span>`;
-      return `<tr>
-        <td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06)">
-          <div style="font-size:13px;color:var(--white)">${name}</div>
-          ${org ? `<div style="font-size:11px;color:var(--fog)">${org}</div>` : ''}
-        </td>
-        <td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px">${projLabel}</td>
-        <td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px;color:var(--slate);text-align:center">${o.intCount}</td>
-      </tr>`;
-    }).join('');
-
-    resultsEl.style.display = '';
-    resultsEl.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:14px;height:14px;color:var(--amber)"><circle cx="8" cy="8" r="6"/><path d="M8 5v3"/><circle cx="8" cy="11" r=".8" fill="currentColor" stroke="none"/></svg>
-        <span style="font-size:13px;font-weight:600;color:var(--amber)">${orphans.length} orphaned relationship${orphans.length!==1?'s':''} found</span>
-        <span style="font-size:12px;color:var(--slate)">— stakeholders with interactions but no formal project link</span>
-      </div>
-      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
-        <thead>
-          <tr>
-            <th style="padding:6px 10px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);border-bottom:1px solid var(--border)">Stakeholder</th>
-            <th style="padding:6px 10px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);border-bottom:1px solid var(--border)">Project</th>
-            <th style="padding:6px 10px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);border-bottom:1px solid var(--border)">Interactions</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-      <div style="display:flex;align-items:center;gap:10px">
-        <button class="btn btn-primary" onclick="fixOrphans(${JSON.stringify(orphans.map(o=>({p:o.projectId,s:o.stakeholderId}))).replace(/"/g,'&quot;')})">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px"><path d="M3 8l4 4 6-6"/></svg>
-          Fix all ${orphans.length} — create missing project links
-        </button>
-        <span style="font-size:12px;color:var(--slate)">Links will be created as External / Neutral</span>
-      </div>`;
-
-    btn.disabled = false;
-    btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 1.5"/></svg> Re-scan';
-
-  } catch(err) {
-    resultsEl.style.display = '';
-    resultsEl.innerHTML = `<div style="color:var(--red);font-size:13px">Scan error: ${err.message}</div>`;
-    btn.disabled = false;
-    btn.textContent = 'Retry scan';
-  }
-}
-
-async function fixOrphans(pairs) {
-  const resultsEl = document.getElementById('scan-results');
-  const fixBtn = event.target.closest('button');
-  fixBtn.disabled = true;
-  fixBtn.textContent = 'Fixing…';
-
-  let fixed = 0, failed = 0;
-
-  // Get current project_stakeholders and add new links
-  const current = DB.get('project_stakeholders');
-  const toAdd = [];
-
-  for (const {p, s} of pairs) {
-    // Double-check not already linked (in case of race)
-    const alreadyLinked = current.some(ps =>
-      String(ps.projectId) === String(p) && String(ps.stakeholderId) === String(s)
-    );
-    if (!alreadyLinked) {
-      toAdd.push({
-        id: DB.uid(),
-        projectId: p,
-        stakeholderId: s,
-        stakeholderRole: 'External',
-        support: 'Neutral',
-        issueTags: '',
-        distributionGroups: '',
-        addedDate: new Date().toISOString().slice(0,10),
-        notes: 'Auto-linked via data integrity repair.'
-      });
-      fixed++;
-    }
-  }
-
-  if (toAdd.length > 0) {
-    await DB.set('project_stakeholders', [...current, ...toAdd]);
-  }
-
-  refreshBadges();
-
-  const badge = document.getElementById('integrity-badge');
-  if (badge) badge.style.display = 'none';
-
-  resultsEl.innerHTML = `<div style="display:flex;align-items:center;gap:8px;color:var(--green)">
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M3 8l4 4 6-6"/></svg>
-    <span style="font-size:13px;font-weight:500">${fixed} link${fixed!==1?'s':''} created successfully.${failed>0?' '+failed+' failed — check console.':''} Run a re-scan to confirm.</span>
-  </div>
-  <div style="margin-top:10px"><button class="btn" onclick="runIntegrityScan()">Re-scan to confirm</button></div>`;
-}
 
 // ── MEETINGS VIEW ──────────────────────────────────────────────────────────
 const MEETING_TYPES=['Public open house','Public hearing','Scoping meeting','Agency coordination meeting','Elected official briefing','Partnering meeting','Property owner / ROW discussion','Pre-construction meeting','Progress meeting','Community advisory committee','Media briefing / press conference','Pop-up / information booth','School or business outreach','Site visit','Webinar / virtual meeting','Other'];
@@ -6952,23 +6382,16 @@ async function _smapGeocodeAndRender(projectId, projectName, stakes, psLinks) {
   const infoWindow = new window.google.maps.InfoWindow();
   const bounds = new window.google.maps.LatLngBounds();
 
-  geocoded.forEach((g, gIdx) => {
+  geocoded.forEach(g => {
     const color = pinColors[g.support] || pinColors.Neutral;
     const name = ((g.stake.firstName||'') + ' ' + (g.stake.lastName||'')).trim() || g.stake.org || 'Unknown';
-    const markerNum = String(gIdx + 1);
     const marker = new window.google.maps.Marker({
       position: { lat: g.lat, lng: g.lng },
       map,
       title: name,
-      label: {
-        text: markerNum,
-        color: '#ffffff',
-        fontSize: '10px',
-        fontWeight: '700'
-      },
       icon: {
         path: window.google.maps.SymbolPath.CIRCLE,
-        scale: markerNum.length > 1 ? 11 : 9,
+        scale: 9,
         fillColor: color,
         fillOpacity: 0.95,
         strokeColor: '#ffffff',
@@ -7015,9 +6438,9 @@ function printStakeholderMap(projectId, projectName) {
 
   // Build a printable HTML page with static map + stakeholder table
   const center = geocoded.length > 0 ? `${geocoded[0].lat},${geocoded[0].lng}` : '40.75,-111.88';
-  const markers = geocoded.map((g, gi) => {
+  const markers = geocoded.map(g => {
     const color = g.support==='Champion'?'green':g.support==='Opponent'?'red':'blue';
-    const label = String(gi + 1);
+    const label = ((g.stake.firstName||'')[0]||(g.stake.org||'?')[0]||'?').toUpperCase();
     return `markers=color:${color}%7Clabel:${label}%7C${g.lat},${g.lng}`;
   }).join('&');
 
@@ -7438,6 +6861,285 @@ async function _smapGeocodeAndRenderInEl(containerId, loadingId, errorsId, proje
 }
 // ══════════════════════════════════════════════════════════════════
 // END STAKEHOLDER MAP REPORT
+// ══════════════════════════════════════════════════════════════════
+
+
+// ══════════════════════════════════════════════════════════════════
+// COMMITMENTS TRACKER
+// Tracks formal promises made to external stakeholders during PI
+// Distinct from Deliverables (contract scope) and Follow-ups (tasks)
+// ══════════════════════════════════════════════════════════════════
+
+const COMM_CATS = ['Noise / Hours','Access / Traffic','Notification','ROW / Property','Environmental','Agency Coordination','Meeting Follow-up','Other'];
+const COMM_STATUSES = ['Open','Fulfilled','Overdue'];
+
+function renderCommitments(m) {
+  const projF = S.projectFilter || '';
+  const today = new Date().toISOString().slice(0,10);
+  const allComm = DB.get('commitments');
+  const allProjs = DB.get('projects');
+  const allStakes = DB.get('stakeholders');
+
+  // Auto-update overdue status
+  allComm.forEach(c => {
+    if (c.status === 'Open' && c.dueDate && c.dueDate < today) c.status = 'Overdue';
+  });
+
+  // Filters
+  const statusF = S.commStatus || '';
+  const catF = S.commCat || '';
+  const projFilter = projF;
+
+  let filtered = allComm.filter(c => {
+    if (projFilter && String(c.projectId) !== String(projFilter)) return false;
+    if (statusF && c.status !== statusF) return false;
+    if (catF && c.category !== catF) return false;
+    return true;
+  });
+  filtered.sort((a,b) => {
+    // Overdue first, then Open, then Fulfilled; within each by due date
+    const statusOrder = {Overdue:0, Open:1, Fulfilled:2};
+    const sa = statusOrder[a.status]??1, sb = statusOrder[b.status]??1;
+    if (sa !== sb) return sa - sb;
+    return (a.dueDate||'9999') < (b.dueDate||'9999') ? -1 : 1;
+  });
+
+  const openCount = allComm.filter(c => c.status==='Open' && (!projFilter||String(c.projectId)===String(projFilter))).length;
+  const overdueCount = allComm.filter(c => c.status==='Overdue' && (!projFilter||String(c.projectId)===String(projFilter))).length;
+  const fulfilledCount = allComm.filter(c => c.status==='Fulfilled' && (!projFilter||String(c.projectId)===String(projFilter))).length;
+
+  // Header
+  let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+    <div>
+      <div style="font-size:20px;font-weight:700;color:var(--white)">Commitments</div>
+      <div style="font-size:12px;color:var(--slate)">Formal promises made to stakeholders — tracked through fulfillment</div>
+    </div>
+    <button class="btn btn-primary" onclick="openCommModal()">+ Add commitment</button>
+  </div>`;
+
+  // Summary cards
+  html += `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px">
+    <div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;padding:14px 16px;cursor:pointer" onclick="S.commStatus='Open';renderCommitments(document.getElementById('main'))">
+      <div style="font-size:28px;font-weight:700;color:var(--sky-lt)">${openCount}</div>
+      <div style="font-size:11px;color:var(--fog);margin-top:2px">Open</div>
+    </div>
+    <div style="background:rgba(192,57,43,.1);border:1px solid rgba(192,57,43,.3);border-radius:10px;padding:14px 16px;cursor:pointer" onclick="S.commStatus='Overdue';renderCommitments(document.getElementById('main'))">
+      <div style="font-size:28px;font-weight:700;color:var(--red)">${overdueCount}</div>
+      <div style="font-size:11px;color:var(--fog);margin-top:2px">Overdue</div>
+    </div>
+    <div style="background:rgba(40,168,112,.08);border:1px solid rgba(40,168,112,.25);border-radius:10px;padding:14px 16px;cursor:pointer" onclick="S.commStatus='Fulfilled';renderCommitments(document.getElementById('main'))">
+      <div style="font-size:28px;font-weight:700;color:var(--green)">${fulfilledCount}</div>
+      <div style="font-size:11px;color:var(--fog);margin-top:2px">Fulfilled</div>
+    </div>
+  </div>`;
+
+  // Filter bar
+  html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+    <select style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)" onchange="S.commStatus=this.value;renderCommitments(document.getElementById('main'))">
+      <option value="" ${!statusF?'selected':''}>All statuses</option>
+      ${COMM_STATUSES.map(s=>`<option value="${s}" ${statusF===s?'selected':''}>${s}</option>`).join('')}
+    </select>
+    <select style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)" onchange="S.commCat=this.value;renderCommitments(document.getElementById('main'))">
+      <option value="" ${!catF?'selected':''}>All categories</option>
+      ${COMM_CATS.map(c=>`<option value="${c}" ${catF===c?'selected':''}>${c}</option>`).join('')}
+    </select>
+    ${statusF||catF?`<button class="btn btn-ghost btn-sm" onclick="S.commStatus='';S.commCat='';renderCommitments(document.getElementById('main'))">Clear filters</button>`:''}
+    <span style="margin-left:auto;font-size:12px;color:var(--fog)">${filtered.length} commitment${filtered.length!==1?'s':''}</span>
+  </div>`;
+
+  if (filtered.length === 0) {
+    html += `<div style="text-align:center;padding:60px 20px;color:var(--fog);font-size:13px">
+      ${allComm.length===0?'No commitments logged yet. Add your first commitment using the button above.':'No commitments match the current filters.'}
+    </div>`;
+  } else {
+    // Group by project
+    const byProj = {};
+    filtered.forEach(c => {
+      const key = String(c.projectId||'');
+      if (!byProj[key]) byProj[key] = [];
+      byProj[key].push(c);
+    });
+
+    Object.keys(byProj).forEach(pid => {
+      const proj = allProjs.find(p => String(p.id)===pid);
+      const projName = proj ? (proj.name+' — '+proj.pid) : 'Unknown project';
+      const comms = byProj[pid];
+
+      html += `<div style="margin-bottom:24px">
+        <div style="font-size:12px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+          <span>${projName}</span>
+          <span style="font-size:11px;font-weight:400;color:var(--fog)">${comms.length} commitment${comms.length!==1?'s':''}</span>
+        </div>`;
+
+      comms.forEach(c => {
+        const stake = c.stakeholderId ? allStakes.find(s=>String(s.id)===String(c.stakeholderId)) : null;
+        const stakeName = stake ? (((stake.firstName||'')+' '+(stake.lastName||'')).trim()||stake.org||'') : (c.madeTo||'');
+        const statusColor = c.status==='Fulfilled'?'var(--green)':c.status==='Overdue'?'var(--red)':'var(--sky-lt)';
+        const statusBg = c.status==='Fulfilled'?'rgba(40,168,112,.12)':c.status==='Overdue'?'rgba(192,57,43,.12)':'rgba(90,135,198,.12)';
+        const dueFmt = c.dueDate ? new Date(c.dueDate+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—';
+        const madeFmt = c.dateMade ? new Date(c.dateMade+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—';
+
+        html += `<div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:8px;display:flex;gap:14px;align-items:flex-start">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+              <span style="font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;background:${statusBg};color:${statusColor}">${c.status}</span>
+              ${c.category?`<span style="font-size:11px;color:var(--fog);background:rgba(255,255,255,.06);padding:2px 7px;border-radius:4px">${c.category}</span>`:''}
+              ${c.dueDate?`<span style="font-size:11px;color:${c.status==='Overdue'?'var(--red)':'var(--fog)'}">Due ${dueFmt}</span>`:''}
+            </div>
+            <div style="font-size:14px;color:var(--white);line-height:1.5;margin-bottom:6px">${c.commitment||'—'}</div>
+            <div style="display:flex;gap:16px;font-size:11px;color:var(--slate);flex-wrap:wrap">
+              ${stakeName?`<span>Made to: <strong style="color:var(--white)">${stakeName}</strong></span>`:''}
+              ${c.madeBy?`<span>By: <strong style="color:var(--white)">${c.madeBy}</strong></span>`:''}
+              ${c.dateMade?`<span>On: ${madeFmt}</span>`:''}
+            </div>
+            ${c.status==='Fulfilled'&&c.fulfilledNotes?`<div style="margin-top:8px;font-size:12px;color:var(--green);font-style:italic">✓ ${c.fulfilledNotes}</div>`:''}
+            ${c.notes?`<div style="margin-top:6px;font-size:12px;color:var(--fog)">${c.notes}</div>`:''}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+            ${c.status!=='Fulfilled'?`<button class="btn btn-success btn-xs" onclick="fulfillCommitment('${c.id}')">✓ Fulfill</button>`:''}
+            ${c.status==='Fulfilled'?`<button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2)" onclick="reopenCommitment('${c.id}')">Reopen</button>`:''}
+            <button class="btn btn-ghost btn-xs" onclick="openCommModal('${c.id}')">Edit</button>
+          </div>
+        </div>`;
+      });
+
+      html += '</div>';
+    });
+  }
+
+  m.innerHTML = `<div style="padding:24px;max-width:900px;margin:0 auto">${html}</div>`;
+}
+
+function openCommModal(id) {
+  S.editId = id || null;
+  const c = id ? (DB.get('commitments').find(x=>x.id===id)||{}) : {};
+  const allProjs = DB.get('projects').filter(p=>p.status==='Active'||p.status==='On hold');
+  const allStakes = DB.get('stakeholders');
+  const projId = c.projectId || S.projectFilter || '';
+
+  // Get stakeholders for selected project
+  const ps = DB.get('project_stakeholders').filter(x=>String(x.projectId)===String(projId));
+  const projStakes = ps.map(lk=>allStakes.find(s=>String(s.id)===String(lk.stakeholderId))).filter(Boolean);
+
+  const body = `
+    <div class="fsec">Commitment details</div>
+    <div class="fr"><label>Commitment *</label>
+      <textarea id="f-comm" rows="3" placeholder="Describe the specific commitment made (e.g. 'We will provide 72-hour advance notice before any driveway closure')" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:10px 12px;resize:vertical;font-family:inherit;line-height:1.6;box-sizing:border-box">${c.commitment||''}</textarea>
+    </div>
+    <div class="fgrid fg2f">
+      <div class="fr"><label>Category</label>
+        <select id="f-ccat">
+          ${COMM_CATS.map(cat=>`<option value="${cat}" ${c.category===cat?'selected':''}>${cat}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fr"><label>Status</label>
+        <select id="f-cstat">
+          ${COMM_STATUSES.map(s=>`<option value="${s}" ${(c.status||'Open')===s?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="fsec">Parties</div>
+    <div class="fgrid fg2f">
+      <div class="fr"><label>Project *</label>
+        <select id="f-cpid" onchange="S.editCommProjId=this.value">
+          <option value="">— Select project —</option>
+          ${allProjs.map(p=>`<option value="${p.id}" ${String(p.id)===String(projId)?'selected':''}>${p.name} (${p.pid})</option>`).join('')}
+        </select>
+      </div>
+      <div class="fr"><label>Made to (stakeholder)</label>
+        <select id="f-cstake">
+          <option value="">— Select stakeholder —</option>
+          ${projStakes.map(s=>`<option value="${s.id}" ${String(s.id)===String(c.stakeholderId||'')?'selected':''}>${((s.firstName||'')+' '+(s.lastName||'')).trim()||s.org}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="fgrid fg2f">
+      <div class="fr"><label>Made to (free text — if not in registry)</label>
+        <input id="f-cmadeto" value="${c.madeTo||''}" placeholder="e.g. Riverdale Canyon residents, City Council">
+      </div>
+      <div class="fr"><label>Made by (staff)</label>
+        <input id="f-cmadeby" value="${c.madeBy||''}" placeholder="e.g. JP, Shaylie">
+      </div>
+    </div>
+    <div class="fsec">Dates</div>
+    <div class="fgrid fg3f">
+      <div class="fr"><label>Date made</label><input type="date" id="f-cdatemade" value="${c.dateMade||''}"></div>
+      <div class="fr"><label>Due date</label><input type="date" id="f-cduedate" value="${c.dueDate||''}"></div>
+      <div class="fr"><label>Fulfilled date</label><input type="date" id="f-cfuldate" value="${c.fulfilledDate||''}"></div>
+    </div>
+    <div class="fr"><label>Fulfillment notes</label>
+      <input id="f-cfulnotes" value="${c.fulfilledNotes||''}" placeholder="How was this commitment fulfilled?">
+    </div>
+    <div class="fr"><label>Notes</label>
+      <input id="f-cnotes" value="${c.notes||''}" placeholder="Source document, meeting where commitment was made, etc.">
+    </div>`;
+
+  const footer = `<button class="btn" onclick="closeM()">Cancel</button>
+    <button class="btn btn-primary" onclick="saveCommitment()">Save commitment</button>`;
+
+  openM(id ? 'Edit commitment' : 'New commitment', body, footer, true);
+}
+
+function saveCommitment() {
+  const v = id => document.getElementById(id)?.value||'';
+  const vDate = id => { const val=document.getElementById(id)?.value||''; return val||null; };
+  const comm = v('f-comm');
+  if (!comm.trim()) { alert('Commitment text is required.'); return; }
+  const pid = v('f-cpid');
+  if (!pid) { alert('Project is required.'); return; }
+
+  const data = {
+    id: S.editId || DB.uid(),
+    projectId: pid,
+    stakeholderId: v('f-cstake') || null,
+    commitment: comm,
+    madeTo: v('f-cmadeto'),
+    madeBy: v('f-cmadeby'),
+    dateMade: vDate('f-cdatemade'),
+    dueDate: vDate('f-cduedate'),
+    category: v('f-ccat'),
+    status: v('f-cstat') || 'Open',
+    fulfilledDate: vDate('f-cfuldate'),
+    fulfilledNotes: v('f-cfulnotes'),
+    notes: v('f-cnotes')
+  };
+
+  const all = DB.get('commitments');
+  if (S.editId) {
+    const i = all.findIndex(x=>x.id===S.editId);
+    if (i>-1) all[i] = data;
+  } else {
+    all.push(data);
+  }
+  DB.set('commitments', all);
+  closeM(); refreshBadges(); renderCommitments(document.getElementById('main'));
+}
+
+function fulfillCommitment(id) {
+  const today = new Date().toISOString().slice(0,10);
+  const all = DB.get('commitments');
+  const i = all.findIndex(x=>x.id===id);
+  if (i>-1) {
+    const note = prompt('Fulfillment notes (optional):', '') ?? '';
+    all[i] = {...all[i], status:'Fulfilled', fulfilledDate:today, fulfilledNotes:note};
+    DB.set('commitments', all);
+    refreshBadges();
+    renderCommitments(document.getElementById('main'));
+  }
+}
+
+function reopenCommitment(id) {
+  const all = DB.get('commitments');
+  const i = all.findIndex(x=>x.id===id);
+  if (i>-1) {
+    all[i] = {...all[i], status:'Open', fulfilledDate:null, fulfilledNotes:''};
+    DB.set('commitments', all);
+    refreshBadges();
+    renderCommitments(document.getElementById('main'));
+  }
+}
+// ══════════════════════════════════════════════════════════════════
+// END COMMITMENTS TRACKER
 // ══════════════════════════════════════════════════════════════════
 
 </script>

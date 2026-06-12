@@ -7470,6 +7470,16 @@ function renderSettings(m) {
       <div id="integrity-results"></div>
     </div>
 
+    <!-- Duplicate Detector -->
+    <div style="background:var(--navy-mid);border:1px solid rgba(255,255,255,.12);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">
+      <div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:4px">Duplicate Stakeholder Detector</div>
+      <div style="font-size:12px;color:var(--fog);margin-bottom:16px">Finds master list contacts who share the same email address or full name — potential duplicates to review and merge manually.</div>
+      <div style="margin-bottom:14px">
+        <button class="btn btn-primary" onclick="runDuplicateScan()">Scan for duplicates</button>
+      </div>
+      <div id="duplicate-results"></div>
+    </div>
+
     <!-- App info -->
     <div style="background:var(--navy-mid);border:1px solid rgba(255,255,255,.12);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">
       <div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:12px">App information</div>
@@ -7577,6 +7587,68 @@ function fixOrphans() {
   runIntegrityScan(); // re-run to confirm clean
 }
 // ══════════════════════════════════════════════════════════════════
+
+// ── DUPLICATE STAKEHOLDER DETECTOR ───────────────────────────────
+function runDuplicateScan() {
+  const stakes = DB.get('stakeholders').filter(s => s.isMaster || s.isMasterList);
+  const norm = s => (s||'').trim().toLowerCase();
+  const byEmail = {}, byName = {};
+  stakes.forEach(s => {
+    if (s.email) { const k=norm(s.email); if(!byEmail[k])byEmail[k]=[]; byEmail[k].push(s); }
+    const fn=norm(s.firstName), ln=norm(s.lastName);
+    if (fn||ln) { const k=fn+'|'+ln; if(!byName[k])byName[k]=[]; byName[k].push(s); }
+  });
+  const dupGroups=[], seen=new Set();
+  Object.entries(byEmail).forEach(([email,group])=>{
+    if(group.length<2)return;
+    const ids=group.map(s=>String(s.id)).sort().join(',');
+    if(seen.has(ids))return; seen.add(ids);
+    dupGroups.push({reason:'Same email: '+group[0].email, group});
+  });
+  Object.entries(byName).forEach(([nameKey,group])=>{
+    if(group.length<2)return;
+    const ids=group.map(s=>String(s.id)).sort().join(',');
+    if(seen.has(ids))return; seen.add(ids);
+    const [fn,ln]=nameKey.split('|');
+    dupGroups.push({reason:'Same name: '+(fn+' '+ln).trim(), group});
+  });
+  const el=document.getElementById('duplicate-results');
+  if(!el)return;
+  if(dupGroups.length===0){
+    el.innerHTML='<div style="color:var(--green);font-size:13px">\u2713 No duplicate stakeholders found.</div>';
+    return;
+  }
+  const sections=dupGroups.map(g=>{
+    const rows=g.group.map(s=>{
+      const name=(((s.firstName||'')+' '+(s.lastName||'')).trim())||s.org||'Unknown';
+      const projCt=DB.get('project_stakeholders').filter(x=>String(x.stakeholderId)===String(s.id)).length;
+      const intCt=DB.get('interactions').filter(i=>String(i.stakeholderId)===String(s.id)).length;
+      return `<tr>
+        <td style="padding:7px 10px;font-size:12px;color:var(--white)">${name}</td>
+        <td style="padding:7px 10px;font-size:12px;color:var(--slate)">${s.org||'\u2014'}</td>
+        <td style="padding:7px 10px;font-size:12px;color:var(--slate)">${s.email||'\u2014'}</td>
+        <td style="padding:7px 10px;font-size:12px;color:var(--slate)">${projCt} proj \u00b7 ${intCt} int</td>
+        <td style="padding:7px 10px"><button class="btn btn-xs" style="font-size:10px" onclick="S.masterSearch='${name.replace(/'/g,String.fromCharCode(39))}';setView('master')">View</button></td>
+      </tr>`;
+    }).join('');
+    return `<div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:600;color:var(--amber);margin-bottom:6px">\u26a0 ${g.reason}</div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr>
+          <th style="padding:5px 10px;text-align:left;color:var(--fog);font-size:11px;border-bottom:1px solid var(--border)">Name</th>
+          <th style="padding:5px 10px;text-align:left;color:var(--fog);font-size:11px;border-bottom:1px solid var(--border)">Organization</th>
+          <th style="padding:5px 10px;text-align:left;color:var(--fog);font-size:11px;border-bottom:1px solid var(--border)">Email</th>
+          <th style="padding:5px 10px;text-align:left;color:var(--fog);font-size:11px;border-bottom:1px solid var(--border)">Usage</th>
+          <th style="padding:5px 10px;border-bottom:1px solid var(--border)"></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  }).join('');
+  el.innerHTML=`<div style="font-size:12px;color:var(--amber);margin-bottom:12px">Found ${dupGroups.length} potential duplicate group${dupGroups.length!==1?'s':''}. Review and merge manually — keep the contact with more interactions.</div>${sections}`;
+}
+// ── END DUPLICATE DETECTOR ────────────────────────────────────────
+
 // END SETTINGS VIEW
 // ══════════════════════════════════════════════════════════════════
 

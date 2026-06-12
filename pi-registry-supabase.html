@@ -1067,7 +1067,7 @@ function initDashRows(){
     }
   });
 }
-function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;
+function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;
   S.view=v;S.selStakeholder=null;S.selInteraction=null;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const navId=v==='commitments'?'nav-commitments':('nav-'+v);
@@ -1695,21 +1695,51 @@ function renderMaster(el){
   <div class="content">
     <div class="split">
       <div class="list-pane">
+        ${stakes.length>0?`
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px 4px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02)">
+          <div onclick="toggleMasterSelectAll()" style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:11px;color:var(--slate);user-select:none">
+            <div style="width:14px;height:14px;border-radius:3px;border:2px solid ${(S.masterBulkSelected||[]).length===stakes.length&&stakes.length>0?'var(--sky-lt)':'rgba(255,255,255,.25)'};background:${(S.masterBulkSelected||[]).length===stakes.length&&stakes.length>0?'var(--sky-lt)':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              ${(S.masterBulkSelected||[]).length===stakes.length&&stakes.length>0?'<svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="white" stroke-width="2"><path d="M1.5 5l2.5 2.5 4.5-4.5"/></svg>':''}
+            </div>
+            ${(S.masterBulkSelected||[]).length>0?`<span style="color:var(--sky-lt);font-weight:600">${(S.masterBulkSelected||[]).length} selected</span>`:'Select all'}
+          </div>
+          ${(S.masterBulkSelected||[]).length>0?`
+          <div style="display:flex;align-items:center;gap:6px">
+            <select id="master-bulk-influence-sel" style="font-size:11px;padding:3px 7px;background:var(--navy-mid);border:1px solid var(--border);border-radius:5px;color:var(--white)">
+              <option value="">— Influence tier —</option>
+              <option value="High">High</option>
+              <option value="Medium">Medium</option>
+              <option value="Low">Low</option>
+            </select>
+            <select id="master-bulk-type-sel" style="font-size:11px;padding:3px 7px;background:var(--navy-mid);border:1px solid var(--border);border-radius:5px;color:var(--white)">
+              <option value="">— Type —</option>
+              ${['Resident','Business','Agency','Community Group','Elected Official','Media','Utility','Tribal','Non-profit','Other'].map(t=>`<option value="${t}">${t}</option>`).join('')}
+            </select>
+            <button class="btn btn-sm btn-primary" style="font-size:11px;padding:4px 10px" onclick="applyMasterBulkUpdate()">Apply to ${(S.masterBulkSelected||[]).length}</button>
+            <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 8px" onclick="S.masterBulkSelected=[];renderMaster(document.getElementById('main'))">✕</button>
+          </div>`:''}
+        </div>`:''}
         <div class="data-list" id="ms-data-list">
           ${stakes.length===0?`<div class="pane-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="9" cy="7" r="4"/><path d="M2 20c0-3.314 3.134-6 7-6s7 2.686 7 6"/></svg><div class="pe-title">No stakeholders found</div></div>`
           :stakes.map(s=>{
             const projCount=ps.filter(x=>String(x.stakeholderId)===String(s.id)).length;
             const intCount=ints.filter(i=>String(i.stakeholderId)===String(s.id)).length;
             const col=acol(s.firstName+s.lastName);
-            return`<div class="lrow${s.id===sel?' sel':''}" onclick="selectStake('${s.id}')">
+            const isChecked=(S.masterBulkSelected||[]).includes(String(s.id));
+            return`<div class="lrow${s.id===sel?' sel':''}${isChecked?' bulk-checked':''}" style="${isChecked?'background:rgba(90,135,198,.15);border-left:3px solid var(--sky-lt);':''}" onclick="selectStake('${s.id}')">
+              <div onclick="event.stopPropagation();toggleMasterBulkSelect('${s.id}')" style="padding:0 6px 0 2px;display:flex;align-items:center;cursor:pointer;flex-shrink:0">
+                <div style="width:16px;height:16px;border-radius:3px;border:2px solid ${isChecked?'var(--sky-lt)':'rgba(255,255,255,.25)'};background:${isChecked?'var(--sky-lt)':'transparent'};display:flex;align-items:center;justify-content:center;transition:all .15s">
+                  ${isChecked?'<svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="white" stroke-width="2"><path d="M1.5 5l2.5 2.5 4.5-4.5"/></svg>':''}
+                </div>
+              </div>
               <div class="avatar" style="background:${col}22;color:${col}">${ini(s.firstName,s.lastName)}</div>
               <div class="lrow-body">
                 <div class="lrow-name">${dispName(s)}${isOrgContact(s)?'<span class="badge b-sky" style="font-size:9px;margin-left:5px">ORG</span>':''}</div>
                 <div class="lrow-sub">${s.org||s.type||'—'}${s.title?' · '+s.title:''}</div>
               </div>
               <div class="lrow-meta">
-                
-                      <span style="font-size:11px;color:var(--slate)">${projCount} proj · ${intCount} log${intCount!==1?'s':''}</span>
+                ${s.influenceTier?`<span class="badge b-gray" style="font-size:10px">${s.influenceTier}</span>`:''}
+                <span style="font-size:11px;color:var(--slate)">${projCount} proj · ${intCount} log${intCount!==1?'s':''}</span>
               </div>
             </div>`;
           }).join('')}
@@ -2108,6 +2138,63 @@ async function deleteIssue(id, projectId){
   renderStakeholders(document.getElementById('main'));
 }
 
+
+
+// ── MASTER LIST BULK UPDATE ───────────────────────────────────────
+function toggleMasterBulkSelect(id) {
+  if (!S.masterBulkSelected) S.masterBulkSelected = [];
+  const idx = S.masterBulkSelected.indexOf(String(id));
+  if (idx > -1) S.masterBulkSelected.splice(idx, 1);
+  else S.masterBulkSelected.push(String(id));
+  renderMaster(document.getElementById('main'));
+}
+
+function toggleMasterSelectAll() {
+  const allStakes = DB.get('stakeholders').filter(s => s.isMaster || s.isMasterList);
+  // Apply same filters as current view
+  let filtered = allStakes;
+  if (S.masterSearch) {
+    const q = S.masterSearch.toLowerCase();
+    filtered = filtered.filter(s => (s.firstName+' '+s.lastName+' '+(s.org||'')).toLowerCase().includes(q));
+  }
+  if (S.masterType) filtered = filtered.filter(s => s.type === S.masterType);
+  const allIds = filtered.map(s => String(s.id));
+  if (!S.masterBulkSelected) S.masterBulkSelected = [];
+  if (S.masterBulkSelected.length === allIds.length) {
+    S.masterBulkSelected = [];
+  } else {
+    S.masterBulkSelected = allIds.slice();
+  }
+  renderMaster(document.getElementById('main'));
+}
+
+function applyMasterBulkUpdate() {
+  if (!S.masterBulkSelected || !S.masterBulkSelected.length) return;
+  const influence = document.getElementById('master-bulk-influence-sel')?.value || '';
+  const type = document.getElementById('master-bulk-type-sel')?.value || '';
+  if (!influence && !type) {
+    showToast('Select an influence tier or type to apply.', 'warn', 3000);
+    return;
+  }
+  const parts = [];
+  if (influence) parts.push('influence → ' + influence);
+  if (type) parts.push('type → ' + type);
+  if (!confirm(`Apply ${parts.join(', ')} to ${S.masterBulkSelected.length} stakeholder${S.masterBulkSelected.length!==1?'s':''}?`)) return;
+
+  const allStakes = DB.get('stakeholders');
+  allStakes.forEach(s => {
+    if (S.masterBulkSelected.includes(String(s.id))) {
+      if (influence) s.influenceTier = influence;
+      if (type) s.type = type;
+    }
+  });
+  DB.set('stakeholders', allStakes);
+  const n = S.masterBulkSelected.length;
+  S.masterBulkSelected = [];
+  showToast(`✓ Updated ${n} stakeholder${n!==1?'s':''}`, 'info', 3000);
+  renderMaster(document.getElementById('main'));
+}
+// ── END MASTER BULK UPDATE ────────────────────────────────────────
 
 // ── BULK STAKEHOLDER UPDATE ───────────────────────────────────────
 function toggleBulkSelect(id) {

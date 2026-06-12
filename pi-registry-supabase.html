@@ -1063,7 +1063,7 @@ function initDashRows(){
     }
   });
 }
-function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;
+function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;
   S.view=v;S.selStakeholder=null;S.selInteraction=null;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const navId=v==='commitments'?'nav-commitments':('nav-'+v);
@@ -1803,13 +1803,45 @@ function renderStakeholders(el){
   <div class="content">
     <div class="split">
       <div class="list-pane">
+        ${S.projectFilter&&listItems.length>0?`
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px 4px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02)">
+          <div onclick="toggleSelectAll()" style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:11px;color:var(--slate);user-select:none">
+            <div style="width:14px;height:14px;border-radius:3px;border:2px solid ${(S.bulkSelected||[]).length===listItems.length&&listItems.length>0?'var(--sky-lt)':'rgba(255,255,255,.25)'};background:${(S.bulkSelected||[]).length===listItems.length&&listItems.length>0?'var(--sky-lt)':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              ${(S.bulkSelected||[]).length===listItems.length&&listItems.length>0?'<svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="white" stroke-width="2"><path d="M1.5 5l2.5 2.5 4.5-4.5"/></svg>':''}
+            </div>
+            ${(S.bulkSelected||[]).length>0?`<span style="color:var(--sky-lt);font-weight:600">${(S.bulkSelected||[]).length} selected</span>`:'Select all'}
+          </div>
+          ${(S.bulkSelected||[]).length>0?`
+          <div style="display:flex;align-items:center;gap:6px">
+            <select id="bulk-sentiment-sel" style="font-size:11px;padding:3px 7px;background:var(--navy-mid);border:1px solid var(--border);border-radius:5px;color:var(--white)">
+              <option value="">— Sentiment —</option>
+              <option value="Champion">Champion</option>
+              <option value="Neutral">Neutral</option>
+              <option value="Opponent">Opponent</option>
+            </select>
+            <select id="bulk-influence-sel" style="font-size:11px;padding:3px 7px;background:var(--navy-mid);border:1px solid var(--border);border-radius:5px;color:var(--white)">
+              <option value="">— Influence —</option>
+              <option value="High">High</option>
+              <option value="Medium">Medium</option>
+              <option value="Low">Low</option>
+            </select>
+            <button class="btn btn-sm btn-primary" style="font-size:11px;padding:4px 10px" onclick="applyBulkUpdate()">Apply to ${(S.bulkSelected||[]).length}</button>
+            <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 8px" onclick="S.bulkSelected=[];renderStakeholders(document.getElementById('main'))">✕</button>
+          </div>`:''}
+        </div>`:''}
         <div class="data-list">
           ${listItems.length===0?`<div class="pane-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="9" cy="7" r="4"/><path d="M2 20c0-3.314 3.134-6 7-6s7 2.686 7 6"/></svg><div class="pe-title">No stakeholders</div><div class="pe-sub">${S.projectFilter?'Add or link stakeholders to this project.':'Add your first stakeholder.'}</div></div>`
           :listItems.map(s=>{
             const lk=S.projectFilter?ps.find(x=>x.projectId===S.projectFilter&&String(x.stakeholderId)===String(s.id)):null;
             const intCt=ints.filter(i=>String(i.stakeholderId)===String(s.id)&&(!S.projectFilter||i.projectId===S.projectFilter)).length;
             const col=acol(s.firstName+s.lastName);
-            return`<div class="lrow${s.id===sel?' sel':''}" onclick="selectStake('${s.id}')">
+            const isChecked=(S.bulkSelected||[]).includes(String(s.id));
+            return`<div class="lrow${s.id===sel?' sel':''}${isChecked?' bulk-checked':''}" style="${isChecked?'background:rgba(90,135,198,.15);border-left:3px solid var(--sky-lt);':''}" onclick="selectStake('${s.id}')">
+              ${S.projectFilter?`<div onclick="event.stopPropagation();toggleBulkSelect('${s.id}')" style="padding:0 6px 0 2px;display:flex;align-items:center;cursor:pointer;flex-shrink:0">
+                <div style="width:16px;height:16px;border-radius:3px;border:2px solid ${isChecked?'var(--sky-lt)':'rgba(255,255,255,.25)'};background:${isChecked?'var(--sky-lt)':'transparent'};display:flex;align-items:center;justify-content:center;transition:all .15s">
+                  ${isChecked?'<svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="white" stroke-width="2"><path d="M1.5 5l2.5 2.5 4.5-4.5"/></svg>':''}
+                </div>
+              </div>`:''}
               <div class="avatar" style="background:${col}22;color:${col}">${ini(s.firstName,s.lastName)}</div>
               <div class="lrow-body">
                 <div class="lrow-name">${dispName(s)}${isOrgContact(s)?'<span class="badge b-sky" style="font-size:9px;margin-left:5px">ORG</span>':''}</div>
@@ -2071,6 +2103,72 @@ async function deleteIssue(id, projectId){
   renderStakeholders(document.getElementById('main'));
 }
 
+
+// ── BULK STAKEHOLDER UPDATE ───────────────────────────────────────
+function toggleBulkSelect(id) {
+  if (!S.bulkSelected) S.bulkSelected = [];
+  const idx = S.bulkSelected.indexOf(String(id));
+  if (idx > -1) S.bulkSelected.splice(idx, 1);
+  else S.bulkSelected.push(String(id));
+  renderStakeholders(document.getElementById('main'));
+}
+
+function toggleSelectAll() {
+  if (!S.projectFilter) return;
+  const ps = DB.get('project_stakeholders').filter(x => String(x.projectId) === String(S.projectFilter));
+  const allStakes = DB.get('stakeholders');
+  const listItems = ps.map(lk => allStakes.find(s => String(s.id) === String(lk.stakeholderId))).filter(Boolean);
+  const allIds = listItems.map(s => String(s.id));
+  if (!S.bulkSelected) S.bulkSelected = [];
+  if (S.bulkSelected.length === allIds.length) {
+    S.bulkSelected = [];
+  } else {
+    S.bulkSelected = allIds.slice();
+  }
+  renderStakeholders(document.getElementById('main'));
+}
+
+function applyBulkUpdate() {
+  if (!S.bulkSelected || !S.bulkSelected.length) return;
+  const sentiment = document.getElementById('bulk-sentiment-sel')?.value || '';
+  const influence = document.getElementById('bulk-influence-sel')?.value || '';
+  if (!sentiment && !influence) {
+    showToast('Select a sentiment or influence tier to apply.', 'warn', 3000);
+    return;
+  }
+  const parts = [];
+  if (sentiment) parts.push('sentiment → ' + sentiment);
+  if (influence) parts.push('influence → ' + influence);
+  if (!confirm(`Apply ${parts.join(', ')} to ${S.bulkSelected.length} stakeholder${S.bulkSelected.length!==1?'s':''}?`)) return;
+
+  // Update project_stakeholders for sentiment
+  if (sentiment) {
+    const allPS = DB.get('project_stakeholders');
+    allPS.forEach(lk => {
+      if (String(lk.projectId) === String(S.projectFilter) && S.bulkSelected.includes(String(lk.stakeholderId))) {
+        lk.support = sentiment;
+      }
+    });
+    DB.set('project_stakeholders', allPS);
+  }
+
+  // Update stakeholders master record for influence tier
+  if (influence) {
+    const allStakes = DB.get('stakeholders');
+    allStakes.forEach(s => {
+      if (S.bulkSelected.includes(String(s.id))) {
+        s.influenceTier = influence;
+      }
+    });
+    DB.set('stakeholders', allStakes);
+  }
+
+  const n = S.bulkSelected.length;
+  S.bulkSelected = [];
+  showToast(`✓ Updated ${n} stakeholder${n!==1?'s':''}`, 'info', 3000);
+  renderStakeholders(document.getElementById('main'));
+}
+// ── END BULK UPDATE ───────────────────────────────────────────────
 function selectStake(id){
   const msVal=document.getElementById('ms-search')?.value||'';
   const skVal=document.getElementById('sk-search')?.value||'';

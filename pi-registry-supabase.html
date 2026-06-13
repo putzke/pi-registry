@@ -4931,13 +4931,13 @@ function generateReport(type){
       var nameB = ((b.s.lastName||'') + (b.s.firstName||'') + (b.s.org||'')).toLowerCase();
       return nameA.localeCompare(nameB);
     });
-    body='<table style="width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed"><thead><tr>'
-      +'<th style="width:16%;padding:4px 6px;background:#1a3a5c;color:#fff;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.4px">Name</th>'
-      +'<th style="width:20%;padding:4px 6px;background:#1a3a5c;color:#fff;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.4px">Organization</th>'
-      +'<th style="width:16%;padding:4px 6px;background:#1a3a5c;color:#fff;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.4px">Title</th>'
-      +'<th style="width:26%;padding:4px 6px;background:#1a3a5c;color:#fff;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.4px">Email</th>'
-      +'<th style="width:14%;padding:4px 6px;background:#1a3a5c;color:#fff;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.4px">Phone</th>'
-      +'<th style="width:8%;padding:4px 6px;background:#1a3a5c;color:#fff;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.4px">Type</th>'
+    body='<table style="width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed"><thead><tr>'
+      +'<th style="width:16%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px">Name</th>'
+      +'<th style="width:20%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px">Organization</th>'
+      +'<th style="width:16%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px">Title</th>'
+      +'<th style="width:26%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px">Email</th>'
+      +'<th style="width:14%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px">Phone</th>'
+      +'<th style="width:8%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px">Type</th>'
       +'</tr></thead><tbody>';
     var lastRole = null;
     sortedStakes.forEach(function(item){
@@ -4950,33 +4950,33 @@ function generateReport(type){
       }
       var dgBadges=(lk.distributionGroups||'').split(',').filter(Boolean).map(function(g){return '<span class="badge b-teal" style="margin:1px">'+g.trim()+'</span>'}).join('');
       body+='<tr>'
-        +'<td style="font-weight:600;padding:5px 6px;border-bottom:1px solid #e0e0e0;word-wrap:break-word;vertical-align:top">'+s.firstName+' '+s.lastName+'</td>'
-        +'<td style="padding:5px 6px;border-bottom:1px solid #e0e0e0;word-wrap:break-word;vertical-align:top">'+(s.org||'—')+'</td>'
-        +'<td style="padding:5px 6px;border-bottom:1px solid #e0e0e0;word-wrap:break-word;vertical-align:top">'+(s.title||'—')+'</td>'
-        +'<td style="padding:5px 6px;border-bottom:1px solid #e0e0e0;word-wrap:break-word;vertical-align:top;color:#1a5fb4">'+(s.email||'—')+'</td>'
-        +'<td style="padding:5px 6px;border-bottom:1px solid #e0e0e0;vertical-align:top">'+(s.phone||'—')+'</td>'
-        +'<td style="padding:5px 6px;border-bottom:1px solid #e0e0e0;vertical-align:top">'+(s.type||'—')+'</td></tr>';
+        +'<td style="font-weight:600;padding:9px 10px;border-bottom:1px solid #e0e0e0;word-wrap:break-word;vertical-align:top">'+s.firstName+' '+s.lastName+'</td>'
+        +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;word-wrap:break-word;vertical-align:top">'+(s.org||'—')+'</td>'
+        +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;word-wrap:break-word;vertical-align:top">'+(s.title||'—')+'</td>'
+        +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;word-wrap:break-word;vertical-align:top;color:#1a5fb4">'+(s.email||'—')+'</td>'
+        +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top">'+(s.phone||'—')+'</td>'
+        +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top">'+(s.type||'—')+'</td></tr>';
     });
     body+='</tbody></table>';
     if(sortedStakes.length===0)body='<div style="padding:32px;text-align:center;color:var(--fog)">No stakeholders match the selected distribution groups.</div>';
 
   } else if(type==='interaction-log'){
     var sorted=logInts.slice().sort(function(a,b){return b.date.localeCompare(a.date)});
-    body='<table style="width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed"><thead><tr>'
-      +'<th style="width:10%;padding:4px 6px;background:#1a3a5c;color:#fff;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Date</th>'
-      +'<th style="width:16%;padding:4px 6px;background:#1a3a5c;color:#fff;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Stakeholder</th>'
-      +'<th style="width:13%;padding:4px 6px;background:#1a3a5c;color:#fff;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Channel</th>'
-      +'<th style="width:51%;padding:4px 6px;background:#1a3a5c;color:#fff;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Summary</th>'
-      +'<th style="width:10%;padding:4px 6px;background:#1a3a5c;color:#fff;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Logged by</th>'
+    body='<table style="width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed"><thead><tr>'
+      +'<th style="width:10%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Date</th>'
+      +'<th style="width:16%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Stakeholder</th>'
+      +'<th style="width:13%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Channel</th>'
+      +'<th style="width:51%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Summary</th>'
+      +'<th style="width:10%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Logged by</th>'
       +'</tr></thead><tbody>';
     sorted.forEach(function(i){
       var s=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
       body+='<tr>'
-        +'<td style="padding:5px 6px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-family:monospace;font-size:8px">'+fmt(i.date)+'</td>'
-        +'<td style="padding:5px 6px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-weight:600">'+(s?dispName(s):'Unknown')+'</td>'
-        +'<td style="padding:5px 6px;border-bottom:1px solid #e0e0e0;vertical-align:top">'+(i.channel||'—')+'</td>'
-        +'<td style="padding:5px 6px;border-bottom:1px solid #e0e0e0;vertical-align:top;line-height:1.5">'+i.summary+'</td>'
-        +'<td style="padding:5px 6px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:8px;color:#555">'+(i.loggedBy||'—')+'</td></tr>';
+        +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-family:monospace;font-size:12px">'+fmt(i.date)+'</td>'
+        +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-weight:600">'+(s?dispName(s):'Unknown')+'</td>'
+        +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top">'+(i.channel||'—')+'</td>'
+        +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top;line-height:1.6">'+i.summary+'</td>'
+        +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:12px;color:#555">'+(i.loggedBy||'—')+'</td></tr>';
     });
     body+='</tbody></table>';
 

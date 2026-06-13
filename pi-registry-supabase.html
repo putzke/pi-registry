@@ -2458,7 +2458,52 @@ function renderStakeDetail(s,link){
     ${ps.length>0?`<hr class="div"><div class="sec-t" style="margin-bottom:10px">Projects linked (${ps.length})</div>
     ${ps.map(lk=>{const p=projs.find(x=>x.id===lk.projectId);return p?`<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid var(--border)"><span class="badge b-sky" style="font-family:var(--mono);font-size:11px">${p.pid}</span><span style="font-size:13px;color:var(--mist)">${p.name}</span><span style="margin-left:auto;display:flex;gap:5px"><span class="badge ${(lk.stakeholderRole||'External')==='Internal'?'b-sky':'b-teal'}" style="font-size:10px">${lk.stakeholderRole||'External'}</span>${supBadge(lk.support)}</span></div>`:'';}).join('')}`:''}
   </div>`;
+  // ── Engagement stats (merged into Interaction Log tab) ─────────────────────
+  const allProjs = DB.get('projects');
+  const firstContact = allInts.length ? allInts.reduce((a,b)=>(a.date<b.date?a:b)).date : null;
+  const lastContact  = allInts.length ? allInts.reduce((a,b)=>(a.date>b.date?a:b)).date : null;
+  const openFUs = allInts.filter(i=>i.followUp&&!i.followUpDone).length;
+  const chanCounts = {};
+  allInts.forEach(i=>{ chanCounts[i.channel||'Other']=(chanCounts[i.channel||'Other']||0)+1; });
+  const chanPills = Object.entries(chanCounts).sort((a,b)=>b[1]-a[1]).map(([ch,ct])=>
+    '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:12px;font-size:11px;color:var(--slate);margin:2px"><span style="color:var(--sky-lt);font-weight:600">'+ct+'</span> '+ch+'</span>'
+  ).join('');
+  // ── Events attended by this stakeholder ──────────────────────────────────────
+  const allMeetings = DB.get('meetings')||[];
+  const attendedMeetings = allMeetings.filter(function(m){
+    if(!m.attendeeIds||!Array.isArray(m.attendeeIds)) return false;
+    return m.attendeeIds.map(String).includes(String(s.id));
+  }).filter(function(m){
+    return !S.projectFilter||String(m.projectId)===String(S.projectFilter);
+  }).sort((a,b)=>b.date.localeCompare(a.date));
+  const eventsSection = (function(){
+    if(!attendedMeetings.length) return '';
+    var rows = attendedMeetings.map(function(m){
+      var proj = allProjs.find(function(p){return String(p.id)===String(m.projectId);});
+      var sc = m.status==='Completed'?'b-green':m.status==='Planned'?'b-sky':'b-gray';
+      return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:12px">'
+        +'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px;flex-shrink:0;color:var(--slate)"><rect x="2" y="3" width="12" height="11" rx="1"/><path d="M5 1v4M11 1v4M2 7h12"/></svg>'
+        +'<span style="color:var(--fog);flex-shrink:0;width:80px">'+fmt(m.date)+'</span>'
+        +'<span style="color:var(--mist);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+m.title+'</span>'
+        +'<span class="badge '+sc+'" style="font-size:10px;flex-shrink:0">'+(m.status||'Planned')+'</span>'
+        +(proj?'<span class="badge b-dark" style="font-size:10px;font-family:var(--mono);flex-shrink:0">'+proj.pid+'</span>':'')
+        +'</div>';
+    }).join('');
+    return '<div style="margin-bottom:14px">'
+      +'<div style="font-size:11px;font-weight:700;color:var(--slate);letter-spacing:.04em;text-transform:uppercase;margin-bottom:8px">Events attended ('+attendedMeetings.length+')</div>'
+      +rows+'</div>';
+  })();
+  const statsBar = allInts.length===0 ? '' :
+    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">'
+    +'<div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--sky-lt)">'+allInts.length+'</div><div style="font-size:10px;color:var(--fog);margin-top:1px">Total</div></div>'
+    +'<div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center"><div style="font-size:20px;font-weight:700;color:'+(openFUs>0?'var(--amber)':'var(--green)')+'">'+openFUs+'</div><div style="font-size:10px;color:var(--fog);margin-top:1px">Open follow-ups</div></div>'
+    +'<div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center"><div style="font-size:11px;font-weight:700;color:var(--white)">'+(firstContact?fmt(firstContact):'—')+'</div><div style="font-size:10px;color:var(--fog);margin-top:1px">First contact</div></div>'
+    +'<div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center"><div style="font-size:11px;font-weight:700;color:var(--white)">'+(lastContact?fmt(lastContact):'—')+'</div><div style="font-size:10px;color:var(--fog);margin-top:1px">Last contact</div></div>'
+    +'</div>'
+    +'<div style="margin-bottom:12px">'+chanPills+'</div>';
   const logHTML=`<div class="det-body">
+    ${statsBar}
+    ${eventsSection}
     <div class="sec-hd"><span class="sec-t">Interaction history (${ints.length})</span><button class="btn btn-primary btn-xs" onclick="openIntModal('${s.id}')">+ Log</button></div>
     ${ints.length===0?`<div class="pane-empty" style="padding:24px 0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" style="width:28px;height:28px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><div class="pe-sub">No interactions logged — this contact is on the list without any recorded interactions.</div></div>`
     :ints.sort((a,b)=>b.date.localeCompare(a.date)).map((i,idx,arr)=>`
@@ -2476,87 +2521,9 @@ function renderStakeDetail(s,link){
         ${i.followUp?`<div class="log-fu${i.followUpDone?' done':''}">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">${i.followUpDone?'<path d="M3 8l4 4 6-6"/>':'<circle cx="8" cy="8" r="6"/><path d="M8 5v4M8 11v1"/>'}</svg>
           <span>${i.followUpDone?'Resolved: ':'Follow-up: '}<strong>${i.followUpNote}</strong>${i.followUpDone&&i.followUpResolved?' — '+fmt(i.followUpResolved):''}${!i.followUpDone&&i.followUpDue?' — due '+fmt(i.followUpDue):''}</span>
-          ${!i.followUpDone?`<button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" style="margin-left:auto" onclick="resolveFollowUp('${i.id}')">Resolve</button>`:''}
-        </div>`:''}
-        <div style="margin-top:6px"><button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="openEditIntModal('${i.id}')">Edit</button></div>
+          ${!i.followUpDone?`<button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" style="margin-left:auto" onclick="resolveFollowUp('${i.id}')">Resolve</button>`:''}        </div>`:''}        <div style="margin-top:6px"><button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="openEditIntModal('${i.id}')">Edit</button></div>
       </div>
     </div>`).join('')}
-  </div>`;
-  // ── Engagement History Tab ───────────────────────────────────────
-  const allProjs = DB.get('projects');
-  const firstContact = allInts.length ? allInts.reduce((a,b)=>(a.date<b.date?a:b)).date : null;
-  const lastContact  = allInts.length ? allInts.reduce((a,b)=>(a.date>b.date?a:b)).date : null;
-  const openFUs = allInts.filter(i=>i.followUp&&!i.followUpDone).length;
-  // Channel breakdown
-  const chanCounts = {};
-  allInts.forEach(i=>{ chanCounts[i.channel||'Other']=(chanCounts[i.channel||'Other']||0)+1; });
-  const chanPills = Object.entries(chanCounts).sort((a,b)=>b[1]-a[1]).map(([ch,ct])=>
-    `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:12px;font-size:11px;color:var(--slate);margin:2px">
-      <span style="color:var(--sky-lt);font-weight:600">${ct}</span> ${ch}
-    </span>`).join('');
-  // Group by project then by year
-  const byProj = {};
-  allInts.forEach(i=>{
-    const key = String(i.projectId||'none');
-    if(!byProj[key]) byProj[key]=[];
-    byProj[key].push(i);
-  });
-  // Show all projects or just current
-  const showAllProjs = S.engHistShowAll || !S.projectFilter;
-  const projKeys = showAllProjs ? Object.keys(byProj) : Object.keys(byProj).filter(k=>String(k)===String(S.projectFilter));
-  const projSections = projKeys.map(pid=>{
-    const proj = allProjs.find(p=>String(p.id)===String(pid));
-    const projInts = byProj[pid].sort((a,b)=>b.date.localeCompare(a.date));
-    const isLinked = DB.get('project_stakeholders').some(x=>String(x.projectId)===String(pid)&&String(x.stakeholderId)===String(s.id));
-    const projLabel = proj ? `<span class="badge b-sky" style="font-family:var(--mono);font-size:10px">${proj.pid}</span> ${proj.name}` : `Project ${pid}`;
-    const notLinkedTag = !isLinked ? `<span class="badge b-amber" style="font-size:10px;margin-left:6px">Not linked</span>` : '';
-    const rows = projInts.map(i=>`
-      <div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05);align-items:flex-start">
-        <div style="width:70px;flex-shrink:0;font-size:11px;color:var(--fog);padding-top:2px">${fmt(i.date)}</div>
-        <div style="flex-shrink:0;margin-top:3px">${chIco(i.channel)}</div>
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:3px">
-            <span class="badge ${i.direction==='Incoming'?'b-sky':'b-green'}" style="font-size:10px">${i.direction}</span>
-            <span class="badge b-gray" style="font-size:10px">${i.channel||'—'}</span>
-            ${i.loggedBy?`<span style="font-size:10px;color:var(--fog)">${i.loggedBy}</span>`:''}
-            ${i.followUp?`<span class="badge ${i.followUpDone?'b-green':'b-amber'}" style="font-size:10px">${i.followUpDone?'✓ Follow-up':'Follow-up'}</span>`:''}
-          </div>
-          <div style="font-size:12px;color:var(--mist);line-height:1.5">${i.summary||'—'}</div>
-        </div>
-      </div>`).join('');
-    return `<div style="margin-bottom:16px">
-      <div style="font-size:11px;font-weight:700;color:var(--slate);margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-        ${projLabel}${notLinkedTag}
-        <span style="color:var(--fog);font-weight:400">${projInts.length} interaction${projInts.length!==1?'s':''}</span>
-      </div>
-      ${rows}
-    </div>`;
-  }).join('');
-  const engHistHTML=`<div class="det-body">
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
-      <div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
-        <div style="font-size:22px;font-weight:700;color:var(--sky-lt)">${allInts.length}</div>
-        <div style="font-size:10px;color:var(--fog);margin-top:2px">Total interactions</div>
-      </div>
-      <div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
-        <div style="font-size:22px;font-weight:700;color:${openFUs>0?'var(--amber)':'var(--green)'}">${openFUs}</div>
-        <div style="font-size:10px;color:var(--fog);margin-top:2px">Open follow-ups</div>
-      </div>
-      <div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
-        <div style="font-size:11px;font-weight:700;color:var(--white)">${firstContact?fmt(firstContact):'—'}</div>
-        <div style="font-size:10px;color:var(--fog);margin-top:2px">First contact</div>
-      </div>
-      <div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
-        <div style="font-size:11px;font-weight:700;color:var(--white)">${lastContact?fmt(lastContact):'—'}</div>
-        <div style="font-size:10px;color:var(--fog);margin-top:2px">Last contact</div>
-      </div>
-    </div>
-    ${allInts.length>0?`<div style="margin-bottom:12px">${chanPills}</div>`:''}
-    ${S.projectFilter?`<div style="margin-bottom:10px;font-size:11px;color:var(--fog);display:flex;align-items:center;gap:8px">
-      <span>Showing: ${showAllProjs?'all projects':'current project'}</span>
-      <button class="btn btn-ghost btn-xs" onclick="S.engHistShowAll=${showAllProjs?'false':'true'};${cb}">${showAllProjs?'Show current project only':'Show all projects'}</button>
-    </div>`:''}
-    ${allInts.length===0?`<div class="pane-empty" style="padding:24px 0"><div class="pe-sub">No interactions recorded yet.</div></div>`:projSections}
   </div>`;
 
   return`<div class="det-hdr">
@@ -2586,9 +2553,8 @@ function renderStakeDetail(s,link){
   <div class="dtabs">
     <button class="dtab${tab==='info'?' active':''}" onclick="S.stakeTab='info';${cb}">Profile & project</button>
     <button class="dtab${tab==='log'?' active':''}" onclick="S.stakeTab='log';${cb}">Interaction log (${ints.length})</button>
-    <button class="dtab${tab==='history'?' active':''}" onclick="S.stakeTab='history';${cb}">Engagement history${allInts.length>0?' ('+allInts.length+')':''}</button>
   </div>
-  ${tab==='info'?infoHTML:tab==='log'?logHTML:engHistHTML}`;
+  ${tab==='info'?infoHTML:logHTML}`;
 }
 
 
@@ -6477,11 +6443,17 @@ function renderMeetings(el){
       ${meetings.map(m=>{
         const statusColor=m.status==='Completed'?'b-green':m.status==='Planned'?'b-sky':m.status==='Cancelled'?'b-red':'b-gray';
         const actionItems=(DB.get('interactions')||[]).filter(i=>i.meetingId===m.id&&i.followUp&&!i.followUpDone).length;
+        const mAttIds=Array.isArray(m.attendeeIds)?m.attendeeIds:[];
+        const allSt=DB.get('stakeholders')||[];
+        const namedAtt=mAttIds.map(function(id){return allSt.find(function(x){return String(x.id)===String(id);});}).filter(Boolean);
+        const attChips=namedAtt.slice(0,3).map(function(s){return '<span style="display:inline-block;padding:1px 6px;background:rgba(90,135,198,.15);border:1px solid rgba(90,135,198,.3);border-radius:10px;font-size:10px;color:var(--sky-lt);margin:1px">'+(s.firstName||'').charAt(0)+'. '+(s.lastName||'')+'</span>';}).join('');
+        const extraChip=namedAtt.length>3?'<span style="font-size:10px;color:var(--fog);margin-left:2px">+' +(namedAtt.length-3)+' more</span>':'';
         return`<tr>
           <td class="td-mono" style="white-space:nowrap">${fmt(m.date)}</td>
           <td>
             <div style="font-weight:500;color:var(--white)">${m.title}</div>
             ${m.location?`<div style="font-size:11px;color:var(--fog)">${m.location}</div>`:''}
+            ${namedAtt.length>0?`<div style="margin-top:3px">${attChips}${extraChip}</div>`:''}
             ${actionItems>0?`<div style="margin-top:3px"><span class="badge b-amber" style="font-size:10px">${actionItems} open action${actionItems!==1?'s':''}</span></div>`:''}
           </td>
           <td><span class="badge b-dark" style="font-size:11px">${m.type||'—'}</span></td>
@@ -6541,8 +6513,29 @@ function openMeetingModal(id){
     <div class="fr"><label>Handouts distributed</label><input id="f-mh" value="${m.handouts||''}" placeholder="e.g. Fact sheet, Project map"></div>
     <div class="fr"><label>Virtual / in-person</label><select id="f-mfm"><option${(m.format||'In-person')==='In-person'?' selected':''}>In-person</option><option${m.format==='Virtual'?' selected':''}>Virtual</option><option${m.format==='Hybrid'?' selected':''}>Hybrid</option></select></div>
   </div>
-  <div class="fr"><label>Key attendees <span style="font-weight:400;color:var(--fog)">(named contacts worth documenting)</span></label>
-    <input id="f-matt" value="${(m.attendeeIds||[]).join?((m.attendeeIds||[]).join(', ')):(m.attendeeIds||'')}" placeholder="e.g. Mayor Johnson, Sarah Kim (UDOT R3), Bob Torres">
+  <div class="fr"><label>Linked attendees <span style="font-weight:400;color:var(--fog)">(stakeholders from this project)</span></label>
+    <div id="f-matt-wrap" style="display:flex;flex-wrap:wrap;gap:6px;padding:8px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:6px;max-height:150px;overflow-y:auto">
+    ${(function(){
+      var projId=v('f-mp')||pF;
+      var ps=DB.get('project_stakeholders')||[];
+      var linked=projId?ps.filter(function(x){return String(x.projectId)===String(projId);}):[];
+      var stakes=DB.get('stakeholders')||[];
+      var existingIds=Array.isArray(m.attendeeIds)?m.attendeeIds.map(String):[];
+      if(!projId||linked.length===0) return '<span style="font-size:12px;color:var(--fog);padding:4px 2px">Select a project above to pick linked stakeholders.</span>';
+      return linked.map(function(lk){
+        var s=stakes.find(function(x){return String(x.id)===String(lk.stakeholderId);});
+        if(!s) return '';
+        var checked=existingIds.includes(String(s.id));
+        var nm=(s.firstName||'')+' '+(s.lastName||'');
+        var bg=checked?'rgba(90,135,198,.2)':'rgba(255,255,255,.05)';
+        var bd=checked?'var(--sky-lt)':'var(--border)';
+        return '<label style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;background:'+bg+';border:1px solid '+bd+';border-radius:12px;cursor:pointer;font-size:12px;color:var(--mist);white-space:nowrap">'
+          +'<input type="checkbox" value="'+s.id+'" '+(checked?'checked':'')+' style="accent-color:var(--sky-lt);width:12px;height:12px"> '
+          +nm.trim()+(s.org?' <span style="color:var(--fog);font-size:10px">('+s.org+')</span>':'')
+          +'</label>';
+      }).join('');
+    })()}
+    </div>
   </div>
   <div class="fr"><label>Purpose / agenda</label><textarea id="f-mga" style="height:60px">${m.agenda||''}</textarea></div>
   <div class="fr"><label>Key concerns raised</label><textarea id="f-mkc" style="height:60px">${m.keyConcerns||''}</textarea></div>
@@ -6560,7 +6553,9 @@ async function saveMeeting(){
   if(!title){alert('Event title is required.');return;}
   if(!date){alert('Event date is required.');return;}
 
-  const attendeeIds=v('f-matt')||'';
+  // Collect checked stakeholder IDs from attendee picker
+  const attBoxes=document.querySelectorAll('#f-matt-wrap input[type=checkbox]:checked');
+  const attendeeIds=Array.from(attBoxes).map(function(cb){return cb.value;});
   const actionItemsText=v('f-mai').trim();
 
   const data={

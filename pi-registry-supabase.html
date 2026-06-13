@@ -1036,7 +1036,7 @@ const S={
   intSortDir:'desc',
   fuSortCol:'dueDate',
   fuSortDir:'asc',
-  delSortCol:'type',
+  delSortCol:'',
   delSortDir:'asc'
 };
 
@@ -2619,9 +2619,31 @@ function setFuSort(col){
   else{S.fuSortCol=col;S.fuSortDir='asc';}
   renderFollowups(document.getElementById('main'));
 }
+// Status priority for default sort:
+// In progress → Not started → Complete → Cancelled
+// Within each status: soonest due first (no date → bottom), then type alpha
+const DEL_STATUS_ORDER = {'In progress':0,'Not started':1,'Complete':2,'Cancelled':3};
+
+function _delDefaultSort(a, b) {
+  // 1. Status priority
+  const sa = DEL_STATUS_ORDER[a.status] ?? 1;
+  const sb = DEL_STATUS_ORDER[b.status] ?? 1;
+  if (sa !== sb) return sa - sb;
+  // 2. Soonest due date first (no date = far future)
+  const da = a.dueDate || a.nextDue || '9999-99-99';
+  const db = b.dueDate || b.nextDue || '9999-99-99';
+  if (da < db) return -1; if (da > db) return 1;
+  // 3. Type alphabetically
+  return (a.type||'').toLowerCase().localeCompare((b.type||'').toLowerCase());
+}
+
 function sortDeliverables(dels){
-  const col=S.delSortCol||'project';
+  const col=S.delSortCol||'';
   const dir=S.delSortDir||'asc';
+  // If no explicit user sort column, use smart default
+  if(!col || col==='default'){
+    return dels.slice().sort(_delDefaultSort);
+  }
   return dels.slice().sort(function(a,b){
     let av,bv;
     if(col==='project'){av=a._projName||a.projectId||'';bv=b._projName||b.projectId||'';}
@@ -2638,12 +2660,7 @@ function sortDeliverables(dels){
     if(numCols.includes(col)){cmp=parseFloat(av)-parseFloat(bv);}
     else{cmp=av.toLowerCase().localeCompare(bv.toLowerCase());}
     if(cmp!==0)return dir==='asc'?cmp:-cmp;
-    // secondary sort: nearest due date asc, then type
-    const da=(a.dueDate||'9999'),db=(b.dueDate||'9999');
-    if(da<db)return -1;if(da>db)return 1;
-    const ta=(a.type||'').toLowerCase(),tb=(b.type||'').toLowerCase();
-    if(ta<tb)return -1;if(ta>tb)return 1;
-    return 0;
+    return _delDefaultSort(a,b);
   });
 }
 function setDelSort(col){
@@ -2948,7 +2965,7 @@ function renderDelScope(pF){
   const projList=pF?projs.filter(p=>p.id===pF):projs;
   if(projList.length===0)return`<div class="pane-empty"><div class="pe-title">Select a project to view scope.</div></div>`;
   return`<div style="padding:18px">`+projList.map(proj=>{
-    const dels=allDels.filter(d=>d.projectId===proj.id);
+    const dels=sortDeliverables(allDels.filter(d=>d.projectId===proj.id).map(d=>({...d,_projName:proj.pid+' '+proj.name,_proj:proj})));
     const total=dels.length,done=dels.filter(d=>d.status==='Complete').length;
     const inprog=dels.filter(d=>d.status==='In progress').length;
     const cancelled=dels.filter(d=>d.status==='Cancelled').length;

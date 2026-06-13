@@ -2019,7 +2019,7 @@ function renderIssuesPanel(projectId){
     linkedInts.forEach(function(i){
       const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
       det+='<div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:12px">';
-      det+='<div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--sky-lt);font-weight:600">'+i.date+'</span><span style="color:var(--slate)">'+i.channel+'</span></div>';
+      det+='<div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--sky-lt);font-weight:600">'+fmt(i.date)+'</span><span style="color:var(--slate)">'+i.channel+'</span></div>';
       det+='<div style="color:var(--mist)">'+(i.summary||'')+'</div>';
       if(s) det+='<div style="color:var(--slate);margin-top:2px">'+(s.firstName||'')+' '+(s.lastName||'')+'</div>';
       det+='</div>';
@@ -2911,7 +2911,7 @@ function renderInteractions(el){
             const p=projs.find(x=>x.id===i.projectId);
             const od=i.followUp&&!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<new Date();
             return`<tr>
-              <td class="td-mono" style="white-space:nowrap">${i.date}</td>
+              <td class="td-mono" style="white-space:nowrap">${fmt(i.date)}</td>
               <td><span class="badge b-dark td-mono">${p?p.pid:'?'}</span></td>
               <td><div class="td-link" onclick="selectStake('${i.stakeholderId}');setView('stakeholders')">${s?dispName(s):'Unknown'}</div><div style="font-size:11px;color:var(--fog)">${s?s.org||s.type||'':''}</div></td>
               <td><span class="badge ${chCls(i.channel)}">${i.channel}</span></td>
@@ -4168,7 +4168,7 @@ function renderIssuesView(el){
           ${linkedInts.length?linkedInts.map(i=>{
             const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
             return`<div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:12px">
-              <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--sky-lt);font-weight:600">${i.date}</span><span style="color:var(--slate)">${i.channel}</span></div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--sky-lt);font-weight:600">${fmt(i.date)}</span><span style="color:var(--slate)">${i.channel}</span></div>
               <div style="color:var(--mist)">${i.summary||''}</div>
               ${s?`<div style="color:var(--slate);margin-top:2px">${s.firstName||''} ${s.lastName||''}</div>`:''}
             </div>`;
@@ -5005,7 +5005,7 @@ function generateReport(type){
     sorted.forEach(function(i){
       var s=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
       body+='<tr>'
-        +'<td style="padding:5px 6px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-family:monospace;font-size:8px">'+i.date+'</td>'
+        +'<td style="padding:5px 6px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-family:monospace;font-size:8px">'+fmt(i.date)+'</td>'
         +'<td style="padding:5px 6px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-weight:600">'+(s?dispName(s):'Unknown')+'</td>'
         +'<td style="padding:5px 6px;border-bottom:1px solid #e0e0e0;vertical-align:top">'+(i.channel||'—')+'</td>'
         +'<td style="padding:5px 6px;border-bottom:1px solid #e0e0e0;vertical-align:top;line-height:1.5">'+i.summary+'</td>'
@@ -5033,7 +5033,7 @@ function generateReport(type){
         +'<td style="font-weight:500;color:var(--white)">'+(i.followUpNote||'—')+'</td>'
         +'<td>'+(s?dispName(s):'Unknown')+'</td>'
         +'<td>'+(i.followUpDone?'<span class="badge b-green">Resolved</span>'+(i.followUpResolved?'<div style="font-size:10px;color:var(--green);margin-top:2px">'+new Date(i.followUpResolved+'T00:00:00').toLocaleDateString('en-US',{month:"short",day:"numeric",year:"numeric"})+'</div>':''):'<span class="badge b-amber">Open</span>')+'</td>'
-        +'<td class="td-mono">'+i.date+'</td>'
+        +'<td class="td-mono">'+fmt(i.date)+'</td>'
         +'<td style="font-size:12px;color:var(--slate)">'+(i.loggedBy||'—')+'</td></tr>';
     });
     body+='</tbody></table>';
@@ -5128,7 +5128,7 @@ function generateReport(type){
       +'<th>Date</th><th>Name</th><th>Organization</th><th>Channel</th><th>Comment / summary</th><th>Response status</th><th>Follow-up notes</th></tr></thead><tbody>';
     comments.forEach(function(i){
       var s=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
-      body+='<tr><td class="td-mono">'+i.date+'</td>'
+      body+='<tr><td class="td-mono">'+fmt(i.date)+'</td>'
         +'<td style="font-weight:500;color:var(--white)">'+(s?dispName(s):'Unknown')+'</td>'
         +'<td>'+(s?s.org||'':'—')+'</td>'
         +'<td><span class="badge '+chCls(i.channel)+'">'+i.channel+'</span></td>'
@@ -6478,7 +6478,7 @@ function renderMeetings(el){
         const statusColor=m.status==='Completed'?'b-green':m.status==='Planned'?'b-sky':m.status==='Cancelled'?'b-red':'b-gray';
         const actionItems=(DB.get('interactions')||[]).filter(i=>i.meetingId===m.id&&i.followUp&&!i.followUpDone).length;
         return`<tr>
-          <td class="td-mono" style="white-space:nowrap">${m.date}</td>
+          <td class="td-mono" style="white-space:nowrap">${fmt(m.date)}</td>
           <td>
             <div style="font-weight:500;color:var(--white)">${m.title}</div>
             ${m.location?`<div style="font-size:11px;color:var(--fog)">${m.location}</div>`:''}

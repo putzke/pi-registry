@@ -1205,6 +1205,7 @@ function renderDash(el){
   const openFUCt=ints.filter(i=>i.followUp&&!i.followUpDone).length;
   const overdueCt=ints.filter(i=>i.followUp&&!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<new Date()).length;
   const todayStr=localToday();
+  const projF=null; // Dashboard shows all projects
   const allCommD=DB.get('commitments').filter(c=>!projF||String(c.projectId)===String(projF));
   const openCommCt=allCommD.filter(c=>c.status==='Open'||c.status==='Overdue').length;
   const commOverdueCt=allCommD.filter(c=>(c.status==='Open'||c.status==='Overdue')&&c.dueDate&&c.dueDate<todayStr).length;

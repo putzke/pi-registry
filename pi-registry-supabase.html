@@ -2008,7 +2008,7 @@ function renderIssuesPanel(projectId){
   det+='</div>';
   if(sel.description) det+='<div style="font-size:13px;color:var(--mist);line-height:1.6;margin-bottom:16px">'+sel.description+'</div>';
   det+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;font-size:12px">';
-  det+='<div><span style="color:var(--slate)">Date raised:</span> <span style="color:var(--mist)">'+(sel.dateRaised||'—')+'</span></div>';
+  det+='<div><span style="color:var(--slate)">Date raised:</span> <span style="color:var(--mist)">'+(fmt(sel.dateRaised)||'—')+'</span></div>';
   det+='<div><span style="color:var(--slate)">Date resolved:</span> <span style="color:var(--mist)">'+(sel.dateResolved||'—')+'</span></div>';
   det+='<div><span style="color:var(--slate)">Assigned to:</span> <span style="color:var(--mist)">'+(sel.assignedTo||'—')+'</span></div>';
   det+='<div><span style="color:var(--slate)">Logged by:</span> <span style="color:var(--mist)">'+(sel.createdBy||'—')+'</span></div>';
@@ -2055,7 +2055,7 @@ function openIssueModal(id, projectId){
     <div class="fr"><label>Assigned to</label><input id="iss-assigned" value="${iss.assignedTo||''}" placeholder="Name or team member"></div>
   </div>
   <div class="fgrid fg2f">
-    <div class="fr"><label>Date raised</label><input type="date" id="iss-raised" value="${iss.dateRaised||''}"></div>
+    <div class="fr"><label>Date raised</label><input type="date" id="iss-raised" value="${fmt(iss.dateRaised)||''}"></div>
     <div class="fr"><label>Date resolved</label><input type="date" id="iss-resolved" value="${iss.dateResolved||''}"></div>
   </div>
   <div class="fr"><label>Description</label><textarea id="iss-desc" style="height:70px">${iss.description||''}</textarea></div>
@@ -4124,7 +4124,7 @@ function renderIssuesView(el){
           </div>
           ${selIss.description?`<div style="font-size:13px;color:var(--mist);line-height:1.6;margin-bottom:16px">${selIss.description}</div>`:''}
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;font-size:12px">
-            <div><span style="color:var(--slate)">Date raised:</span> <span style="color:var(--mist)">${selIss.dateRaised||'—'}</span></div>
+            <div><span style="color:var(--slate)">Date raised:</span> <span style="color:var(--mist)">${fmt(selIss.dateRaised)||'—'}</span></div>
             <div><span style="color:var(--slate)">Date resolved:</span> <span style="color:var(--mist)">${selIss.dateResolved||'—'}</span></div>
             <div><span style="color:var(--slate)">Assigned to:</span> <span style="color:var(--mist)">${selIss.assignedTo||'—'}</span></div>
             <div><span style="color:var(--slate)">Logged by:</span> <span style="color:var(--mist)">${selIss.createdBy||'—'}</span></div>
@@ -4242,7 +4242,7 @@ function exportIssuesSummaryDocx(){
       iss.priority||'\u2014',
       iss.category||'\u2014',
       p?p.pid:'',
-      iss.dateRaised||'\u2014',
+      fmt(iss.dateRaised)||'\u2014',
       lc?String(lc):'\u2014'
     ];
     xml+='<w:tr>';
@@ -4269,7 +4269,7 @@ function exportIssuesSummaryDocx(){
     // Issue title + badges
     xml+='<w:p><w:pPr><w:spacing w:before="120" w:after="60" w:line="240" w:lineRule="auto"/></w:pPr><w:r>'+H.boldRpr+'<w:t xml:space="preserve">'+escXml(iss.title||'Untitled')+'</w:t></w:r></w:p>';
     xml+=H.para((iss.status||'Open')+' \u00b7 '+(iss.priority||'')+' priority \u00b7 '+(iss.category||'Uncategorized')+(p?' \u00b7 '+p.pid+' \u2014 '+p.name:''),H.smallRpr);
-    xml+=H.kv('Date raised',iss.dateRaised);
+    xml+=H.kv('Date raised',fmt(iss.dateRaised));
     if(iss.dateResolved) xml+=H.kv('Date resolved',iss.dateResolved);
     if(iss.assignedTo)   xml+=H.kv('Assigned to',iss.assignedTo);
     if(iss.createdBy)    xml+=H.kv('Logged by',iss.createdBy);
@@ -4380,7 +4380,7 @@ function exportIssueSingleDocx(issueId){
   xml+='<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/><w:tblBorders><w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/><w:insideH w:val="none"/><w:insideV w:val="none"/></w:tblBorders></w:tblPr>';
   xml+='<w:tblGrid><w:gridCol w:w="2340"/><w:gridCol w:w="2340"/><w:gridCol w:w="2340"/><w:gridCol w:w="2340"/></w:tblGrid>';
   xml+='<w:tr>'+metaCell('Status',iss.status||'Open',2340)+metaCell('Priority',(iss.priority||'\u2014')+' priority',2340)+metaCell('Category',iss.category||'\u2014',2340)+metaCell('Project',p?p.pid+' \u2014 '+p.name:'\u2014',2340)+'</w:tr>';
-  xml+='<w:tr>'+metaCell('Date raised',iss.dateRaised||'\u2014',2340)+metaCell('Date resolved',iss.dateResolved||'\u2014',2340)+metaCell('Assigned to',iss.assignedTo||'\u2014',2340)+metaCell('Logged by',iss.createdBy||'\u2014',2340)+'</w:tr>';
+  xml+='<w:tr>'+metaCell('Date raised',fmt(iss.dateRaised)||'\u2014',2340)+metaCell('Date resolved',fmt(iss.dateResolved)||'\u2014',2340)+metaCell('Assigned to',iss.assignedTo||'\u2014',2340)+metaCell('Logged by',iss.createdBy||'\u2014',2340)+'</w:tr>';
   xml+='</w:tbl>';
   xml+=H.spacer();
 
@@ -4529,7 +4529,7 @@ function exportIssuesPdf(){
       '<td><span style="background:'+pc+'22;color:'+pc+';border:1px solid '+pc+'44;border-radius:4px;padding:1px 6px;font-size:8px">'+escHtml(iss.priority||'—')+'</span></td>'+
       '<td>'+escHtml(iss.category||'—')+'</td>'+
       '<td>'+escHtml(p?p.pid+' — '+p.name:'—')+'</td>'+
-      '<td>'+escHtml(iss.dateRaised||'—')+'</td>'+
+      '<td>'+escHtml(fmt(iss.dateRaised)||'—')+'</td>'+
       '<td style="text-align:center">'+(lc||'—')+'</td>'+
     '</tr>';
   }).join('');
@@ -4550,7 +4550,7 @@ function exportIssuesPdf(){
       '</div>'+
       (iss.description?'<div style="font-size:10px;color:#333;margin-bottom:8px;line-height:1.5">'+escHtml(iss.description)+'</div>':'')+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:9px;color:#555;margin-bottom:8px">'+
-        (iss.dateRaised?'<div><b>Date raised:</b> '+escHtml(iss.dateRaised)+'</div>':'')+
+        (iss.dateRaised?'<div><b>Date raised:</b> '+escHtml(fmt(iss.dateRaised))+'</div>':'')+
         (iss.dateResolved?'<div><b>Date resolved:</b> '+escHtml(iss.dateResolved)+'</div>':'')+
         (iss.assignedTo?'<div><b>Assigned to:</b> '+escHtml(iss.assignedTo)+'</div>':'')+
         (iss.createdBy?'<div><b>Logged by:</b> '+escHtml(iss.createdBy)+'</div>':'')+
@@ -6078,7 +6078,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
           var statusLine=(iss.status||'Open')+' · '+(iss.priority||'Medium')+' priority · '+(iss.category||'General');
           xml+='<w:p><w:pPr><w:spacing w:before="120" w:after="40" w:line="240" w:lineRule="auto"/></w:pPr><w:r>'+boldRpr+'<w:t xml:space="preserve">'+escXml(iss.title||'Untitled')+'</w:t></w:r></w:p>';
           xml+=para(statusLine,grayRpr);
-          if(iss.dateRaised) xml+=para('Raised: '+iss.dateRaised+(iss.dateResolved?' · Resolved: '+iss.dateResolved:''),grayRpr);
+          if(iss.dateRaised) xml+=para('Raised: '+fmt(iss.dateRaised)+(iss.dateResolved?' · Resolved: '+fmt(iss.dateResolved):''),grayRpr);
           if(iss.description) xml+=para(iss.description);
           if(iss.resolutionSummary) xml+='<w:p>'+bodyPpr+'<w:r>'+boldRpr+'<w:t xml:space="preserve">Resolution: </w:t></w:r><w:r>'+bodyRpr+'<w:t xml:space="preserve">'+escXml(iss.resolutionSummary)+'</w:t></w:r></w:p>';
           if(linkedInts2.length){
@@ -6338,7 +6338,7 @@ function exportProject(projectId) {
       .map(sid => { const s = allStake.find(x => String(x.id) === String(sid)); return s ? dispName(s) : ''; })
       .filter(Boolean).join(', ');
     return [
-      iss.dateRaised||'', iss.title||'', iss.category||'', iss.status||'', iss.priority||'',
+      fmt(iss.dateRaised)||'', iss.title||'', iss.category||'', iss.status||'', iss.priority||'',
       iss.description||'', iss.assignedTo||'', iss.dateResolved||'',
       iss.resolutionSummary||'', relNames
     ];

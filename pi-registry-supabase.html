@@ -4540,7 +4540,7 @@ function exportIssuesPdf(){
     const linkedInts=linked.map(l=>ints.find(i=>String(i.id)===String(l.interactionId))).filter(Boolean);
     const sc=stC[iss.status]||'#444';
     const pc=prC[iss.priority]||'#444';
-    const intHtml=linkedInts.length?linkedInts.map(i=>'<tr><td>'+escHtml(i.date||'')+'</td><td>'+escHtml(i.channel||'')+'</td><td>'+escHtml(i.summary||'')+'</td></tr>').join(''):'<tr><td colspan="3" style="color:#888;font-style:italic">No interactions linked.</td></tr>';
+    const intHtml=linkedInts.length?linkedInts.map(i=>'<tr><td style="white-space:nowrap">'+escHtml(fmt(i.date)||'')+'</td><td>'+escHtml(i.channel||'')+'</td><td>'+escHtml(i.summary||'')+'</td></tr>').join(''):'<tr><td colspan="3" style="color:#888;font-style:italic">No interactions linked.</td></tr>';
     return '<div style="margin-bottom:20px;padding:14px;border:1px solid #dde3ea;border-radius:6px">'+
       '<div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">'+
         '<div style="flex:1"><div style="font-size:12px;font-weight:700;color:#111;margin-bottom:4px">'+escHtml(iss.title||'Untitled')+'</div>'+
@@ -4557,10 +4557,10 @@ function exportIssuesPdf(){
       '</div>'+
       (iss.resolutionSummary?'<div style="background:#f0f9f4;border:1px solid #c3e6d4;border-radius:4px;padding:8px 10px;font-size:9px;color:#1a7a50;margin-bottom:8px"><b>Resolution:</b> '+escHtml(iss.resolutionSummary)+'</div>':'')+
       '<div style="font-size:9px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">Linked interactions ('+linkedInts.length+')</div>'+
-      '<table style="width:100%;border-collapse:collapse;font-size:9px"><thead><tr>'+
-        '<th style="text-align:left;padding:3px 6px;background:#e8eef4;color:#1a3a5c;font-weight:700">Date</th>'+
-        '<th style="text-align:left;padding:3px 6px;background:#e8eef4;color:#1a3a5c;font-weight:700">Channel</th>'+
-        '<th style="text-align:left;padding:3px 6px;background:#e8eef4;color:#1a3a5c;font-weight:700">Summary</th>'+
+      '<table style="width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed"><thead><tr>'+
+        '<th style="text-align:left;padding:3px 6px;background:#e8eef4;color:#1a3a5c;font-weight:700;width:16%;white-space:nowrap">Date</th>'+
+        '<th style="text-align:left;padding:3px 6px;background:#e8eef4;color:#1a3a5c;font-weight:700;width:14%">Channel</th>'+
+        '<th style="text-align:left;padding:3px 6px;background:#e8eef4;color:#1a3a5c;font-weight:700;width:70%">Summary</th>'+
       '</tr></thead><tbody>'+intHtml+'</tbody></table>'+
     '</div>';
   }).join('');
@@ -4577,8 +4577,8 @@ function exportIssuesPdf(){
     '<div style="font-size:18px;font-weight:700;color:#1a3a5c;margin-bottom:4px">Issues Tracker</div>'+
     '<div style="font-size:10px;color:#555;margin-bottom:4px">'+filtered.length+' issue'+(filtered.length!==1?'s':'')+' &bull; '+filtered.filter(x=>x.status==='Open'||x.status==='In Progress').length+' open &bull; Exported '+new Date().toLocaleDateString()+'</div>'+
     filterLine+
-    '<table style="width:100%;border-collapse:collapse;margin-bottom:24px"><thead><tr>'+
-      '<th>Title</th><th>Status</th><th>Priority</th><th>Category</th><th>Project</th><th>Date Raised</th><th>Links</th>'+
+    '<table style="width:100%;border-collapse:collapse;margin-bottom:24px;table-layout:fixed"><thead><tr>'+
+      '<th style="width:28%">Title</th><th style="width:9%">Status</th><th style="width:9%">Priority</th><th style="width:14%">Category</th><th style="width:22%">Project</th><th style="width:12%;white-space:nowrap">Date Raised</th><th style="width:6%">Links</th>'+
     '</tr></thead><tbody>'+rows+'</tbody></table>'+
     '<div style="font-size:13px;font-weight:700;color:#1a3a5c;margin-bottom:12px;border-bottom:2px solid #1a3a5c;padding-bottom:4px">Issue Details</div>'+
     details+
@@ -4953,7 +4953,7 @@ function generateReport(type){
         +'<td style="font-weight:600;padding:9px 10px;border-bottom:1px solid #e0e0e0;word-wrap:break-word;vertical-align:top">'+s.firstName+' '+s.lastName+'</td>'
         +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;word-wrap:break-word;vertical-align:top">'+(s.org||'—')+'</td>'
         +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;word-wrap:break-word;vertical-align:top">'+(s.title||'—')+'</td>'
-        +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;word-wrap:break-word;vertical-align:top;color:#1a5fb4">'+(s.email||'—')+'</td>'
+        +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;word-wrap:break-word;vertical-align:top;color:#0066cc">'+(s.email||'—')+'</td>'
         +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top">'+(s.phone||'—')+'</td>'
         +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top">'+(s.type||'—')+'</td></tr>';
     });

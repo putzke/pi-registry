@@ -635,7 +635,9 @@ const SB_TABLES = {
   meetings:             'pi_meetings',
   issues:               'pi_issues',
   issue_interactions:   'pi_issue_interactions',
-  commitments:          'pi_commitments'
+  commitments:          'pi_commitments',
+  groups:               'pi_groups',
+  group_members:        'pi_group_members'
 };
 
 // Map our internal field names to Supabase column names
@@ -697,6 +699,14 @@ const SB_TO_INT = {
     dateMade:'date_made', dueDate:'due_date', category:'category',
     status:'status', fulfilledDate:'fulfilled_date',
     fulfilledNotes:'fulfilled_notes', notes:'notes', createdAt:'created_at'
+  },
+  pi_groups: {
+    id:'id', projectId:'project_id', name:'name', color:'color',
+    spatialLabel:'spatial_label', spatialValue:'spatial_value',
+    description:'description', sortOrder:'sort_order', createdAt:'created_at'
+  },
+  pi_group_members: {
+    id:'id', groupId:'group_id', stakeholderId:'stakeholder_id', createdAt:'created_at'
   }
 };
 
@@ -826,7 +836,7 @@ function cacheClear(k) { delete _cache[k]; delete _cacheTime[k]; }
 const _syncCache = {};
 
 async function loadAllData() {
-  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments'];
+  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members'];
   await Promise.all(tables.map(async t => { _syncCache[t] = await sbGet(t); }));
 }
 
@@ -1076,7 +1086,7 @@ function initDashRows(){
     }
   });
 }
-function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;
+function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;
   S.view=v;S.selStakeholder=null;S.selInteraction=null;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const navId=v==='commitments'?'nav-commitments':('nav-'+v);
@@ -1786,6 +1796,7 @@ function renderStakeholders(el){
   if(search)listItems=listItems.filter(s=>(s.firstName+' '+s.lastName+' '+(s.org||'')).toLowerCase().includes(search));
   if(typeF)listItems=listItems.filter(s=>s.type===typeF);
   if(S.skOrgOnly)listItems=listItems.filter(s=>isOrgContact(s));
+  if(S.projectFilter)listItems=_applyGroupFilter(listItems,S.projectFilter);
   const sel=S.selStakeholder;
   const selData=sel?allStakes.find(x=>x.id===sel):null;
   const selLink=sel&&S.projectFilter?ps.find(x=>x.projectId===S.projectFilter&&x.stakeholderId===sel):null;
@@ -1847,6 +1858,7 @@ function renderStakeholders(el){
   <div class="content">
     <div class="split">
       <div class="list-pane">
+        ${S.projectFilter?_buildGroupFilterBar(S.projectFilter):''}
         ${S.projectFilter&&listItems.length>0?`
         <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px 4px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02)">
           <div onclick="toggleSelectAll()" style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:11px;color:var(--slate);user-select:none">
@@ -1880,7 +1892,9 @@ function renderStakeholders(el){
             const intCt=ints.filter(i=>String(i.stakeholderId)===String(s.id)&&(!S.projectFilter||i.projectId===S.projectFilter)).length;
             const col=acol(s.firstName+s.lastName);
             const isChecked=(S.bulkSelected||[]).includes(String(s.id));
-            return`<div class="lrow${s.id===sel?' sel':''}${isChecked?' bulk-checked':''}" style="${isChecked?'background:rgba(90,135,198,.15);border-left:3px solid var(--sky-lt);':''}" onclick="selectStake('${s.id}')">
+            const grpColor=S.projectFilter?_getGroupColor(s.id,S.projectFilter):null;
+            const borderStyle=isChecked?'background:rgba(90,135,198,.15);border-left:3px solid var(--sky-lt);':grpColor?`border-left:3px solid ${grpColor};`:'';
+            return`<div class="lrow${s.id===sel?' sel':''}${isChecked?' bulk-checked':''}" style="${borderStyle}" onclick="selectStake('${s.id}')">
               ${S.projectFilter?`<div onclick="event.stopPropagation();toggleBulkSelect('${s.id}')" style="padding:0 6px 0 2px;display:flex;align-items:center;cursor:pointer;flex-shrink:0">
                 <div style="width:16px;height:16px;border-radius:3px;border:2px solid ${isChecked?'var(--sky-lt)':'rgba(255,255,255,.25)'};background:${isChecked?'var(--sky-lt)':'transparent'};display:flex;align-items:center;justify-content:center;transition:all .15s">
                   ${isChecked?'<svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="white" stroke-width="2"><path d="M1.5 5l2.5 2.5 4.5-4.5"/></svg>':''}
@@ -3404,6 +3418,10 @@ function renderProjects(el){
             <button class="btn btn-sm" style="color:var(--sky-lt);border-color:rgba(90,135,198,.4)" onclick="showStakeholderMap('${p.id}')">
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:13px;height:13px"><path d="M8 2C5.8 2 4 3.8 4 6c0 3 4 8 4 8s4-5 4-8c0-2.2-1.8-4-4-4z"/><circle cx="8" cy="6" r="1.5"/></svg>
               Map
+            </button>
+            <button class="btn btn-sm" style="color:#4db6ac;border-color:rgba(77,182,172,.4)" onclick="showGroupsManager('${p.id}')">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:13px;height:13px"><circle cx="6" cy="5" r="2.5"/><circle cx="11" cy="5" r="2.5"/><path d="M1 13c0-2.2 2.2-4 5-4s5 1.8 5 4"/><path d="M11 9c1.7.4 3 1.9 3 3.5"/></svg>
+              Groups
             </button>
             <button class="btn btn-sm" style="color:#b39ddb;border-color:rgba(179,157,219,.4)" onclick="showEngagementMatrix('${p.id}')">
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:13px;height:13px"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>
@@ -6627,12 +6645,19 @@ function showStakeholderMap(projectId) {
     <div id="smap-wrap" style="position:relative">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <div style="font-size:12px;color:var(--slate)">${withAddr.length} stakeholder${withAddr.length!==1?'s':''} with addresses</div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <span style="font-size:11px;color:var(--fog)">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--fog)">
+            <span>Color by:</span>
+            <select id="smap-color-mode" onchange="_smapRecolor('${projectId}')" style="font-size:11px;padding:2px 6px;background:var(--navy-mid);border:1px solid var(--border);border-radius:4px;color:var(--white)">
+              <option value="sentiment">Sentiment</option>
+              <option value="group">Group</option>
+            </select>
+          </div>
+          <div id="smap-legend" style="font-size:11px;color:var(--fog)">
             <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#28A870;margin-right:3px"></span>Champion
             <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#5a87c6;margin-left:8px;margin-right:3px"></span>Neutral
             <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#C0392B;margin-left:8px;margin-right:3px"></span>Opponent
-          </span>
+          </div>
           <button class="btn btn-sm" onclick="printStakeholderMap('${projectId}','${projectName.replace(/'/g,"\'")}')">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M4 6V2h8v4"/><rect x="2" y="6" width="12" height="7" rx="1"/><path d="M4 10h8M4 13h5"/></svg>
             Print map
@@ -6728,6 +6753,9 @@ async function _smapGeocodeAndRender(projectId, projectName, stakes, psLinks) {
   const infoWindow = new window.google.maps.InfoWindow();
   const bounds = new window.google.maps.LatLngBounds();
 
+  window._smapGeocoded = geocoded;
+  window._smapProjectId = projectId;
+  window._smapMarkers = [];
   geocoded.forEach((g, idx) => {
     const color = pinColors[g.support] || pinColors.Neutral;
     const name = ((g.stake.firstName||'') + ' ' + (g.stake.lastName||'')).trim() || g.stake.org || 'Unknown';
@@ -6753,6 +6781,7 @@ async function _smapGeocodeAndRender(projectId, projectName, stakes, psLinks) {
         strokeWeight: 2
       }
     });
+    window._smapMarkers.push({marker, stakeId: g.stake.id, support: g.support});
     bounds.extend({ lat: g.lat, lng: g.lng });
 
     marker.addListener('click', () => {
@@ -7700,6 +7729,320 @@ function runDuplicateScan() {
 // ── END DUPLICATE DETECTOR ────────────────────────────────────────
 
 // END SETTINGS VIEW
+// ══════════════════════════════════════════════════════════════════
+
+
+// ══════════════════════════════════════════════════════════════════
+// STAKEHOLDER GROUPS / COALITIONS
+// Project-level named groups with optional spatial indicators.
+// Each stakeholder can belong to multiple groups.
+// Groups drive: list filtering, map pin coloring, report targeting.
+// ══════════════════════════════════════════════════════════════════
+
+const GROUP_COLORS = ['#4db6ac','#7986cb','#ef9f27','#e57373','#81c784',
+  '#64b5f6','#f06292','#a1887f','#90a4ae','#ffb74d'];
+
+// ── Groups Manager Modal ──────────────────────────────────────────
+function showGroupsManager(projectId) {
+  const proj = DB.get('projects').find(p => String(p.id) === String(projectId));
+  if (!proj) return;
+  S._groupsProjId = projectId;
+  _renderGroupsManager();
+}
+
+function _renderGroupsManager() {
+  const projectId = S._groupsProjId;
+  const proj = DB.get('projects').find(p => String(p.id) === String(projectId));
+  const groups = (DB.get('groups') || []).filter(g => String(g.projectId) === String(projectId))
+    .sort((a,b) => (a.sortOrder||0) - (b.sortOrder||0));
+  const members = DB.get('group_members') || [];
+  const stakes = DB.get('stakeholders');
+  const ps = DB.get('project_stakeholders').filter(x => String(x.projectId) === String(projectId));
+
+  const groupRows = groups.length === 0
+    ? `<div style="padding:24px;text-align:center;color:var(--fog);font-size:13px">No groups yet. Add your first group below.</div>`
+    : groups.map(g => {
+        const mCount = members.filter(m => String(m.groupId) === String(g.id)).length;
+        const spatial = g.spatialLabel && g.spatialValue ? `<span style="font-size:11px;color:var(--fog)">${g.spatialLabel}: ${g.spatialValue}</span>` : '';
+        return `<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border)">
+          <div style="width:12px;height:12px;border-radius:50%;background:${g.color||'#4db6ac'};flex-shrink:0"></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;color:var(--white)">${g.name}</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:2px">
+              ${spatial}
+              ${g.description?`<span style="font-size:11px;color:var(--slate)">${g.description}</span>`:''}
+            </div>
+          </div>
+          <span style="font-size:11px;color:var(--sky-lt);background:rgba(90,135,198,.15);padding:2px 8px;border-radius:10px;flex-shrink:0">${mCount} member${mCount!==1?'s':''}</span>
+          <button class="btn btn-ghost btn-xs" onclick="_openGroupMembersModal('${g.id}')">Members</button>
+          <button class="btn btn-ghost btn-xs" onclick="_openGroupEditModal('${g.id}')">Edit</button>
+          <button class="btn btn-xs" style="color:var(--red);border-color:rgba(217,64,64,.3)" onclick="_deleteGroup('${g.id}')">×</button>
+        </div>`;
+      }).join('');
+
+  const body = `
+    <div style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <span style="font-size:12px;color:var(--slate)">${groups.length} group${groups.length!==1?'s':''} · ${ps.length} stakeholders in project</span>
+        <button class="btn btn-primary btn-sm" onclick="_openGroupEditModal(null)">+ Add group</button>
+      </div>
+      <div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        ${groupRows}
+      </div>
+    </div>`;
+
+  openM(proj.name + ' — Stakeholder Groups', body,
+    `<button class="btn" onclick="closeM()">Close</button>`, true);
+}
+
+// ── Add / Edit Group Modal ────────────────────────────────────────
+function _openGroupEditModal(groupId) {
+  const g = groupId ? (DB.get('groups')||[]).find(x => String(x.id) === String(groupId)) : {};
+  const isNew = !groupId;
+  const existingGroups = (DB.get('groups')||[]).filter(x => String(x.projectId) === String(S._groupsProjId));
+  const defaultColor = GROUP_COLORS[existingGroups.length % GROUP_COLORS.length];
+
+  const colorSwatches = GROUP_COLORS.map(c =>
+    `<div onclick="document.getElementById('g-color-val').value='${c}';document.querySelectorAll('.g-swatch').forEach(s=>s.style.outline='none');this.style.outline='2px solid white'"
+      class="g-swatch"
+      style="width:22px;height:22px;border-radius:50%;background:${c};cursor:pointer;flex-shrink:0;outline:${(g.color||defaultColor)===c?'2px solid white':'none'};outline-offset:2px"></div>`
+  ).join('');
+
+  const body = `
+    <div class="fsec">Group details</div>
+    <div class="fr"><label>Group name *</label>
+      <input id="g-name" value="${g.name||''}" placeholder="e.g. Ogden Canyon Corridor, Adjacent Property Owners, Weber County Agencies">
+    </div>
+    <div class="fr"><label>Color</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px">
+        ${colorSwatches}
+      </div>
+      <input type="hidden" id="g-color-val" value="${g.color||defaultColor}">
+    </div>
+    <div class="fsec">Spatial indicator <span style="font-weight:400;color:var(--fog);font-size:11px">(optional — leave blank if not applicable)</span></div>
+    <div class="fgrid fg2f">
+      <div class="fr"><label>Spatial label</label>
+        <input id="g-splabel" value="${g.spatialLabel||''}" placeholder="e.g. Community, Milepost range, Trail segment, Zone, Phase">
+      </div>
+      <div class="fr"><label>Spatial value</label>
+        <input id="g-spvalue" value="${g.spatialValue||''}" placeholder="e.g. Wheeler Creek, MP 2.4–7.1, Segment A">
+      </div>
+    </div>
+    <div class="fr"><label>Description</label>
+      <input id="g-desc" value="${g.description||''}" placeholder="Brief description of who belongs to this group">
+    </div>`;
+
+  const footer = `
+    <button class="btn" onclick="_renderGroupsManager()">Back</button>
+    <button class="btn btn-primary" onclick="_saveGroup('${groupId||''}')">Save group</button>`;
+
+  openM(isNew ? 'New group' : 'Edit group', body, footer, true);
+}
+
+function _saveGroup(groupId) {
+  const name = document.getElementById('g-name')?.value?.trim();
+  if (!name) { alert('Group name is required.'); return; }
+  const data = {
+    projectId: S._groupsProjId,
+    name,
+    color: document.getElementById('g-color-val')?.value || GROUP_COLORS[0],
+    spatialLabel: document.getElementById('g-splabel')?.value?.trim() || null,
+    spatialValue: document.getElementById('g-spvalue')?.value?.trim() || null,
+    description: document.getElementById('g-desc')?.value?.trim() || null,
+    sortOrder: 0
+  };
+  const all = DB.get('groups') || [];
+  if (groupId) {
+    const idx = all.findIndex(x => String(x.id) === String(groupId));
+    if (idx > -1) all[idx] = { ...all[idx], ...data };
+  } else {
+    data.id = DB.uid();
+    data.sortOrder = all.filter(g => String(g.projectId) === String(S._groupsProjId)).length;
+    all.push(data);
+  }
+  DB.set('groups', all);
+  _renderGroupsManager();
+}
+
+function _deleteGroup(groupId) {
+  if (!confirm('Delete this group? Members will be unassigned but not deleted.')) return;
+  const groups = (DB.get('groups')||[]).filter(x => String(x.id) !== String(groupId));
+  const members = (DB.get('group_members')||[]).filter(x => String(x.groupId) !== String(groupId));
+  DB.set('groups', groups);
+  DB.set('group_members', members);
+  _renderGroupsManager();
+}
+
+// ── Group Members Modal ───────────────────────────────────────────
+function _openGroupMembersModal(groupId) {
+  const g = (DB.get('groups')||[]).find(x => String(x.id) === String(groupId));
+  if (!g) return;
+  S._editGroupId = groupId;
+  _renderGroupMembersModal();
+}
+
+function _renderGroupMembersModal() {
+  const groupId = S._editGroupId;
+  const g = (DB.get('groups')||[]).find(x => String(x.id) === String(groupId));
+  if (!g) return;
+  const members = (DB.get('group_members')||[]).filter(m => String(m.groupId) === String(groupId));
+  const memberIds = new Set(members.map(m => String(m.stakeholderId)));
+  const stakes = DB.get('stakeholders');
+  const ps = DB.get('project_stakeholders').filter(x => String(x.projectId) === String(g.projectId));
+  const projStakes = ps.map(lk => stakes.find(s => String(s.id) === String(lk.stakeholderId))).filter(Boolean)
+    .sort((a,b) => (a.lastName+a.firstName).localeCompare(b.lastName+b.firstName));
+
+  const rows = projStakes.map(s => {
+    const isMember = memberIds.has(String(s.id));
+    const name = (((s.firstName||'')+' '+(s.lastName||'')).trim()) || s.org || 'Unknown';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border)">
+      <div onclick="event.stopPropagation();_toggleGroupMember('${groupId}','${s.id}')"
+        style="width:18px;height:18px;border-radius:4px;border:2px solid ${isMember?'var(--sky-lt)':'rgba(255,255,255,.25)'};background:${isMember?'var(--sky-lt)':'transparent'};display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all .15s">
+        ${isMember?'<svg width="11" height="11" viewBox="0 0 10 10" fill="none" stroke="white" stroke-width="2"><path d="M1.5 5l2.5 2.5 4.5-4.5"/></svg>':''}
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;color:var(--white)">${name}</div>
+        ${s.org?`<div style="font-size:11px;color:var(--fog)">${s.org}</div>`:''}
+      </div>
+      ${isMember?`<span style="font-size:10px;color:var(--sky-lt)">✓ In group</span>`:''}
+    </div>`;
+  }).join('');
+
+  const memberCount = memberIds.size;
+  const body = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <div style="width:10px;height:10px;border-radius:50%;background:${g.color}"></div>
+      <span style="font-size:13px;font-weight:600;color:var(--white)">${g.name}</span>
+      ${g.spatialLabel&&g.spatialValue?`<span style="font-size:11px;color:var(--fog)">${g.spatialLabel}: ${g.spatialValue}</span>`:''}
+      <span style="margin-left:auto;font-size:12px;color:var(--sky-lt)">${memberCount} member${memberCount!==1?'s':''}</span>
+    </div>
+    <div style="font-size:12px;color:var(--slate);margin-bottom:8px">Check stakeholders to add them to this group:</div>
+    <div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;overflow:hidden;max-height:340px;overflow-y:auto">
+      ${projStakes.length===0?'<div style="padding:20px;text-align:center;color:var(--fog);font-size:13px">No stakeholders in this project yet.</div>':rows}
+    </div>`;
+
+  const footer = `<button class="btn" onclick="_renderGroupsManager()">← Back to groups</button>
+    <button class="btn btn-primary" onclick="_renderGroupsManager()">Done</button>`;
+
+  openM('Manage members — ' + g.name, body, footer, true);
+}
+
+function _toggleGroupMember(groupId, stakeholderId) {
+  const all = DB.get('group_members') || [];
+  const idx = all.findIndex(m => String(m.groupId)===String(groupId) && String(m.stakeholderId)===String(stakeholderId));
+  if (idx > -1) {
+    all.splice(idx, 1);
+  } else {
+    all.push({ id: DB.uid(), groupId, stakeholderId });
+  }
+  DB.set('group_members', all);
+  _renderGroupMembersModal();
+}
+
+// ── Group filter chips on stakeholder list ────────────────────────
+function _getProjectGroups(projectId) {
+  return (DB.get('groups')||[]).filter(g => String(g.projectId) === String(projectId))
+    .sort((a,b) => (a.sortOrder||0) - (b.sortOrder||0));
+}
+
+function _getGroupColor(stakeId, projectId) {
+  if (!projectId) return null;
+  const groups = _getProjectGroups(projectId);
+  const members = DB.get('group_members') || [];
+  for (const g of groups) {
+    if (members.some(m => String(m.groupId)===String(g.id) && String(m.stakeholderId)===String(stakeId))) {
+      return g.color;
+    }
+  }
+  return null;
+}
+
+// ── Group filter bar HTML builder ─────────────────────────────────
+function _buildGroupFilterBar(projectId) {
+  const groups = _getProjectGroups(projectId);
+  if (groups.length === 0) return '';
+  const active = S.groupFilter || '';
+  const chips = groups.map(g => {
+    const isActive = active === String(g.id);
+    return `<span onclick="S.groupFilter='${isActive?'':g.id}';renderStakeholders(document.getElementById('main'))"
+      style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:12px;font-size:11px;cursor:pointer;
+        background:${isActive?g.color:'rgba(255,255,255,.06)'};
+        color:${isActive?'#fff':'var(--slate)'};
+        border:1px solid ${isActive?g.color:'rgba(255,255,255,.12)'};
+        transition:all .15s">
+      <span style="width:7px;height:7px;border-radius:50%;background:${g.color};flex-shrink:0;opacity:${isActive?0:1}"></span>
+      ${g.name}${isActive?' ×':''}
+    </span>`;
+  }).join('');
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;padding:7px 10px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02)">
+    <span style="font-size:10px;color:var(--fog);align-self:center;margin-right:2px">Groups:</span>
+    ${chips}
+    ${active?`<span onclick="S.groupFilter='';renderStakeholders(document.getElementById('main'))" style="font-size:11px;color:var(--fog);cursor:pointer;align-self:center;margin-left:4px">Clear</span>`:''}
+  </div>`;
+}
+
+// ── Apply group filter to listItems in renderStakeholders ─────────
+// Called from within renderStakeholders — filters the list if a group is active
+function _applyGroupFilter(listItems, projectId) {
+  if (!S.groupFilter || !projectId) return listItems;
+  const members = DB.get('group_members') || [];
+  const memberIds = new Set(
+    members.filter(m => String(m.groupId) === String(S.groupFilter)).map(m => String(m.stakeholderId))
+  );
+  return listItems.filter(s => memberIds.has(String(s.id)));
+}
+
+
+// ── Map recolor by group or sentiment ────────────────────────────
+function _smapRecolor(projectId) {
+  const mode = document.getElementById('smap-color-mode')?.value || 'sentiment';
+  const markers = window._smapMarkers || [];
+  const pinColors = { Champion: '#28A870', Neutral: '#5a87c6', Opponent: '#C0392B' };
+  const groups = _getProjectGroups(projectId);
+  const members = DB.get('group_members') || [];
+
+  markers.forEach(({marker, stakeId, support}) => {
+    let color;
+    if (mode === 'group') {
+      const grp = groups.find(g => members.some(m => String(m.groupId)===String(g.id) && String(m.stakeholderId)===String(stakeId)));
+      color = grp ? grp.color : '#888';
+    } else {
+      color = pinColors[support] || pinColors.Neutral;
+    }
+    marker.setIcon({
+      path: window.google.maps.SymbolPath.CIRCLE,
+      scale: 9,
+      fillColor: color,
+      fillOpacity: 0.95,
+      strokeColor: '#ffffff',
+      strokeWeight: 2
+    });
+  });
+
+  // Update legend
+  const legend = document.getElementById('smap-legend');
+  if (!legend) return;
+  if (mode === 'group') {
+    if (groups.length === 0) {
+      legend.innerHTML = '<span style="color:var(--fog)">No groups defined — add groups from the project card</span>';
+    } else {
+      legend.innerHTML = groups.map(g =>
+        `<span style="display:inline-flex;align-items:center;gap:3px;margin-right:10px">
+          <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${g.color}"></span>
+          <span>${g.name}</span>
+        </span>`
+      ).join('') + '<span style="display:inline-flex;align-items:center;gap:3px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#888"></span><span>Ungrouped</span></span>';
+    }
+  } else {
+    legend.innerHTML = `
+      <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#28A870;margin-right:3px"></span>Champion
+      <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#5a87c6;margin-left:8px;margin-right:3px"></span>Neutral
+      <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#C0392B;margin-left:8px;margin-right:3px"></span>Opponent`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// END STAKEHOLDER GROUPS
 // ══════════════════════════════════════════════════════════════════
 
 </script>

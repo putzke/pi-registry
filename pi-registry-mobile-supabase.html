@@ -473,7 +473,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
       <div id="iss-list"></div>
     </div>
     <!-- Issue detail panel (slides up) -->
-    <div id="iss-detail-panel" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:150;overflow-y:auto;padding-bottom:env(safe-area-inset-bottom)">
+    <div id="iss-detail-panel" style="display:none;position:fixed;top:0;left:0;right:0;bottom:calc(56px + env(safe-area-inset-bottom));background:var(--bg);z-index:149;overflow-y:auto;padding-bottom:16px">
       <div style="position:sticky;top:0;background:var(--surface);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:10px;z-index:10">
         <button onclick="closeIssueDetail()" style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:7px 12px;cursor:pointer;color:var(--accent);font-size:13px;font-weight:600;flex-shrink:0">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>

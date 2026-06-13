@@ -1444,26 +1444,128 @@ function showContactDetail(id){
         </div>`:'';
       }).join('')}
     </div>`:''}
-    <!-- Interaction history -->
-    <div class="section-hdr">Interaction history (${ints.length})</div>
-    <div class="card" style="border-radius:0;border-left:none;border-right:none">
-      ${ints.length===0?'<div class="empty" style="padding:20px"><div class="empty-title">No interactions logged</div></div>':
-      ints.map(i=>`<div class="int-item" onclick="editInteraction('${i.id}')" style="cursor:pointer">
-        <div class="int-header">
-          <span class="int-date">${i.date}</span>
-          <span class="badge b-gray" style="font-size:12px">${i.channel}</span>
-          <span class="badge b-sky" style="font-size:12px">${i.subject||'General'}</span>
-          ${i.followUp?`<span class="badge ${i.followUpDone?'b-green':'b-amber'}" style="font-size:10px">${i.followUpDone?'Resolved'+(i.followUpResolved?' '+fmtShort(i.followUpResolved):''):'Open F/U'}</span>`:''}
-        </div>
-        <div class="int-summary">${i.summary}</div>
-        ${i.followUpNote&&!i.followUpDone?`<div style="margin-top:6px;padding:8px 10px;background:#FEF3CD;border-radius:6px;font-size:12px;color:#6B4400">→ ${i.followUpNote}${i.followUpDue?' ('+fmtShort(i.followUpDue)+')':''}</div>`:''}
-      </div>`).join('')}
+    <!-- Tab bar -->
+    <div style="display:flex;border-bottom:1px solid var(--border);margin-top:4px;background:var(--bg2)">
+      <button id="dtab-log" onclick="switchDetailTab('log','${id}')"
+        style="flex:1;padding:11px 4px;font-size:12px;font-weight:600;border:none;background:transparent;color:var(--accent);border-bottom:2px solid var(--accent)">
+        Interactions (${ints.length})
+      </button>
+      <button id="dtab-eng" onclick="switchDetailTab('eng','${id}')"
+        style="flex:1;padding:11px 4px;font-size:12px;font-weight:600;border:none;background:transparent;color:var(--text3);border-bottom:2px solid transparent">
+        Engagement history
+      </button>
     </div>
+
+    <!-- Interaction log tab -->
+    <div id="detail-tab-log">
+      <div class="card" style="border-radius:0;border-left:none;border-right:none">
+        ${ints.length===0?'<div class="empty" style="padding:20px"><div class="empty-title">No interactions logged</div></div>':
+        ints.map(i=>`<div class="int-item" onclick="editInteraction('${i.id}')" style="cursor:pointer">
+          <div class="int-header">
+            <span class="int-date">${i.date}</span>
+            <span class="badge b-gray" style="font-size:12px">${i.channel}</span>
+            <span class="badge b-sky" style="font-size:12px">${i.subject||'General'}</span>
+            ${i.followUp?`<span class="badge ${i.followUpDone?'b-green':'b-amber'}" style="font-size:10px">${i.followUpDone?'Resolved'+(i.followUpResolved?' '+fmtShort(i.followUpResolved):''):'Open F/U'}</span>`:''}
+          </div>
+          <div class="int-summary">${i.summary}</div>
+          ${i.followUpNote&&!i.followUpDone?`<div style="margin-top:6px;padding:8px 10px;background:#FEF3CD;border-radius:6px;font-size:12px;color:#6B4400">→ ${i.followUpNote}${i.followUpDue?' ('+fmtShort(i.followUpDue)+')':''}</div>`:''}
+        </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- Engagement history tab (hidden by default) -->
+    <div id="detail-tab-eng" style="display:none">
+      ${_buildMobileEngHistory(id, ints)}
+    </div>
+
     <div style="height:20px"></div>
   `;
 
   showScreen('screen-contact-detail');
 }
+
+
+// ── ENGAGEMENT HISTORY (mobile simplified) ────────────────────────────
+function _buildMobileEngHistory(stakeId, ints) {
+  const allInts = DB.get('interactions').filter(i => String(i.stakeholderId) === String(stakeId));
+  if (allInts.length === 0) {
+    return '<div class="empty" style="padding:20px"><div class="empty-title">No interactions logged</div></div>';
+  }
+
+  // Stats — 2 cells: total + last contact
+  const sorted = allInts.slice().sort((a,b) => b.date.localeCompare(a.date));
+  const lastContact = sorted[0].date;
+
+  // Channel breakdown pills
+  const chanCounts = {};
+  allInts.forEach(i => { chanCounts[i.channel||'Other'] = (chanCounts[i.channel||'Other']||0) + 1; });
+  const pills = Object.entries(chanCounts).sort((a,b) => b[1]-a[1]).map(([ch,ct]) =>
+    `<span style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;background:rgba(255,255,255,.08);border-radius:12px;font-size:11px;color:var(--text2);margin:2px">
+      <span style="color:var(--accent);font-weight:600">${ct}</span> ${ch}
+    </span>`).join('');
+
+  // Flat timeline — all interactions newest first with logged-by
+  const rows = sorted.map(i => {
+    const fuBadge = i.followUp ?
+      `<span class="badge ${i.followUpDone?'b-green':'b-amber'}" style="font-size:10px">${i.followUpDone?'✓ F/U':'F/U open'}</span>` : '';
+    const loggedBy = i.loggedBy ? `<span style="font-size:11px;color:var(--text3)">${i.loggedBy}</span>` : '';
+    return `<div style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
+        <span style="font-size:11px;color:var(--text3)">${i.date}</span>
+        <span class="badge b-gray" style="font-size:11px">${i.channel||'—'}</span>
+        <span class="badge ${i.direction==='Incoming'?'b-sky':'b-green'}" style="font-size:10px">${i.direction||'—'}</span>
+        ${fuBadge}
+        ${loggedBy}
+      </div>
+      <div style="font-size:13px;color:var(--text1);line-height:1.5">${i.summary||'—'}</div>
+    </div>`;
+  }).join('');
+
+  return `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px 16px">
+      <div style="background:rgba(255,255,255,.06);border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:24px;font-weight:700;color:var(--accent)">${allInts.length}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">Total interactions</div>
+      </div>
+      <div style="background:rgba(255,255,255,.06);border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:13px;font-weight:700;color:var(--text1)">${lastContact}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">Last contact</div>
+      </div>
+    </div>
+    <div style="padding:0 16px 8px;display:flex;flex-wrap:wrap">${pills}</div>
+    <div style="padding:0 16px">${rows}</div>`;
+}
+
+function switchDetailTab(tab, stakeId) {
+  const logTab  = document.getElementById('detail-tab-log');
+  const engTab  = document.getElementById('detail-tab-eng');
+  const logBtn  = document.getElementById('dtab-log');
+  const engBtn  = document.getElementById('dtab-eng');
+  if (!logTab || !engTab) return;
+
+  if (tab === 'log') {
+    logTab.style.display = '';
+    engTab.style.display = 'none';
+    logBtn.style.color = 'var(--accent)';
+    logBtn.style.borderBottomColor = 'var(--accent)';
+    engBtn.style.color = 'var(--text3)';
+    engBtn.style.borderBottomColor = 'transparent';
+  } else {
+    logTab.style.display = 'none';
+    engTab.style.display = '';
+    logBtn.style.color = 'var(--text3)';
+    logBtn.style.borderBottomColor = 'transparent';
+    engBtn.style.color = 'var(--accent)';
+    engBtn.style.borderBottomColor = 'var(--accent)';
+    // Lazy-build engagement history if not yet populated
+    if (!engTab.dataset.built) {
+      const allInts = DB.get('interactions').filter(i => String(i.stakeholderId) === String(stakeId));
+      engTab.innerHTML = _buildMobileEngHistory(stakeId, allInts);
+      engTab.dataset.built = '1';
+    }
+  }
+}
+// ── END ENGAGEMENT HISTORY ─────────────────────────────────────────────
 
 function openLogForContact(id){
   window._detailStakeId=id;

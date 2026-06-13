@@ -3759,12 +3759,20 @@ function _getIntStakeList(){
 }
 
 function filterIntStakeList(){
-  const search=(document.getElementById('f-is-search')?.value||'').toLowerCase();
+  const inp=document.getElementById('f-is-search');
+  const search=(inp?.value||'').toLowerCase();
   const lst=document.getElementById('f-is-list');
-  if(!lst) return;
+  if(!lst||!inp) return;
   const list=_getIntStakeList();
   const filtered=search?list.filter(s=>(dispName(s)+' '+(s.org||'')).toLowerCase().includes(search)):list;
   if(filtered.length===0&&!search){ lst.style.display='none'; return; }
+  // Position using fixed coords to escape overflow:auto on modal body
+  const rect=inp.getBoundingClientRect();
+  lst.style.position='fixed';
+  lst.style.top=(rect.bottom+2)+'px';
+  lst.style.left=rect.left+'px';
+  lst.style.width=rect.width+'px';
+  lst.style.zIndex='99999';
   const items=[{id:'',label:'— None / Anonymous —'},...filtered.map(s=>({id:s.id,label:dispName(s)+(s.org?' — '+s.org:'')}))];
   lst.innerHTML=items.map(item=>`<div onclick="selectIntStake('${item.id}','${(item.label||'').replace(/'/g,"\\'")}')"
     style="padding:8px 12px;cursor:pointer;font-size:13px;color:var(--mist);border-bottom:1px solid rgba(255,255,255,.06)"
@@ -3788,10 +3796,10 @@ function openIntModal(preStake){
   openM('Log interaction',
   `<div class="fgrid fg2f">
     <div class="fr"><label>Project *</label><select id="f-ip" onchange="updateIntStakeholders();updateIntIssues()"><option value="">— Select project —</option>${projs.map(p=>`<option value="${p.id}"${S.projectFilter===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
-    <div class="fr"><label>Stakeholder</label>
+    <div class="fr" style="position:relative"><label>Stakeholder</label>
       <input id="f-is-search" autocomplete="off" placeholder="Search by name or org..." oninput="filterIntStakeList()" onfocus="filterIntStakeList()" style="width:100%;box-sizing:border-box">
       <input type="hidden" id="f-is" value="${preStake||''}">
-      <div id="f-is-list" style="display:none;position:absolute;z-index:99999;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;max-height:200px;overflow-y:auto;width:calc(100% - 32px);box-shadow:0 4px 16px rgba(0,0,0,.5)"></div>
+      <div id="f-is-list" style="display:none;position:absolute;z-index:99999;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;max-height:220px;overflow-y:auto;width:100%;left:0;top:100%;margin-top:2px;box-shadow:0 4px 16px rgba(0,0,0,.6)"></div>
     </div>
     <div class="fr"><label>Date *</label><input type="date" id="f-id" value="${localToday()}"></div>
     <div class="fr"><label>Channel</label><select id="f-ic">${['Phone','Email','In-person','Public meeting','Public event','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'].map(c=>`<option>${c}</option>`).join('')}</select></div>

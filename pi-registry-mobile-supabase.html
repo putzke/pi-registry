@@ -914,6 +914,14 @@ const SB_TO_INT = {
 };
 
 // Convert our internal object to Supabase column names
+function localToday(){
+  const d=new Date();
+  const y=d.getFullYear();
+  const m=String(d.getMonth()+1).padStart(2,'0');
+  const day=String(d.getDate()).padStart(2,'0');
+  return y+'-'+m+'-'+day;
+}
+
 const DATE_FIELDS = new Set(['interaction_date','follow_up_due','follow_up_resolved','due_date','start_date','end_date','precon_date','added_date','meeting_date','date_raised','date_resolved']);
 
 // Integer FK columns that Supabase expects as numbers, not strings
@@ -1080,7 +1088,7 @@ function isOrgContact(s){
 }
 function fmt(d){if(!d)return'—';const dt=new Date(d+'T00:00:00');return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}
 function fmtShort(d){if(!d)return'—';const dt=new Date(d+'T00:00:00');return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});}
-function today(){return new Date().toISOString().slice(0,10)}
+function today(){return localToday()}
 
 // ── PHONE UTILITIES ────────────────────────────────────────────────────
 function cleanPhone(raw){ return (raw||'').replace(/\D/g,''); }

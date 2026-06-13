@@ -1138,6 +1138,12 @@ function openSheet(id){
 function closeSheet(id,e){
   if(e&&e.target!==document.getElementById(id))return;
   document.getElementById(id).classList.remove('open');
+  // Always reset edit state when log sheet closes so "Log Interaction" starts fresh
+  if(id==='sheet-log'){
+    window._editIntId=null;
+    const title=document.getElementById('sheet-log').querySelector('.sheet-title');
+    if(title)title.textContent='Log Interaction';
+  }
 }
 
 // ── POPULATE PROJECT DROPDOWNS ─────────────────────────────────────────

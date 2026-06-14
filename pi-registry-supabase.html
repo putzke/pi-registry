@@ -4789,7 +4789,7 @@ function renderReports(el){
 
   if(!projF){
     // ── CROSS-PROJECT PORTFOLIO OVERVIEW ──────────────────────────────
-    var allProjs=DB.get('projects').filter(function(p){return p.status==='Active'||p.status==='On hold';});
+    var allProjs=DB.get('projects').filter(function(p){return p.status!=='Cancelled';});
     var allPS=DB.get('project_stakeholders');
     var allInts=DB.get('interactions');
     var allFU=allInts.filter(function(i){return i.followUp&&!i.followUpDone;});
@@ -4802,38 +4802,55 @@ function renderReports(el){
     allProjs.forEach(function(p){var cl=p.client||'(No client)';if(!clientMap[cl])clientMap[cl]=[];clientMap[cl].push(p);});
     var clientKeys=Object.keys(clientMap).sort();
 
-    // Build client blocks
+    var STATUS_COLOR={Active:'#1a7a50','On hold':'#b36b00',Complete:'#5a87c6',Completed:'#5a87c6','Not started':'#78909c'};
+    var STATUS_BG={Active:'rgba(26,122,80,.15)','On hold':'rgba(179,107,0,.15)',Complete:'rgba(90,135,198,.15)',Completed:'rgba(90,135,198,.15)','Not started':'rgba(120,144,156,.12)'};
+
+    // Build client sections with 4-per-row project cards
     var crossHTML='';
     clientKeys.forEach(function(cl){
       var cProjs=clientMap[cl];
-      var projRows='';
-      cProjs.forEach(function(p){
+      var cards=cProjs.map(function(p){
         var ps=allPS.filter(function(x){return x.projectId===p.id;});
-        var extCt=ps.filter(function(x){return(x.stakeholderRole||'External')==='External';}).length;
-        var intCt=ps.filter(function(x){return(x.stakeholderRole||'External')==='Internal';}).length;
-        var projInts=allInts.filter(function(i){return i.projectId===p.id;});
         var openFU=allFU.filter(function(i){return i.projectId===p.id;}).length;
-        var overdueFUct=allOverdueFU.filter(function(i){return i.projectId===p.id;}).length;
-        var openComm=allComm.filter(function(c){return c.projectId===p.id;}).length;
+        var overdueCount=allOverdueFU.filter(function(i){return i.projectId===p.id;}).length;
         var openIss=allIssues.filter(function(iss){return iss.projectId===p.id;}).length;
-        var lastInt=projInts.filter(function(i){return i.date;}).sort(function(a,b){return b.date.localeCompare(a.date);})[0];
-        var lastIntStr=lastInt?fmt(lastInt.date):'—';
-        var statusColor=p.status==='Active'?'#1a7a50':'#b36b00';
-        projRows+='<tr onclick="S.projectFilter=\''+p.id+'\';renderReports(document.getElementById(\'main\'))" style="cursor:pointer" onmouseover="this.style.background=\'rgba(255,255,255,.04)\'" onmouseout="this.style.background=\'\'">'+'<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06)">'+'<div style="font-weight:600;font-size:12px;color:var(--white)">'+p.name+'</div>'+'<div style="font-size:10px;color:var(--fog);margin-top:1px">'+p.pid+' &middot; <span style="color:'+statusColor+'">'+p.status+'</span></div>'+'</td>'+'<td style="padding:8px 6px;border-bottom:1px solid rgba(255,255,255,.06);text-align:center;font-size:12px;color:var(--mist)">'+extCt+(intCt?' <span style="font-size:9px;color:var(--fog)">+'+intCt+'</span>':'')+'</td>'+'<td style="padding:8px 6px;border-bottom:1px solid rgba(255,255,255,.06);text-align:center;font-size:12px;color:var(--mist)">'+projInts.length+'</td>'+'<td style="padding:8px 6px;border-bottom:1px solid rgba(255,255,255,.06);text-align:center;font-size:12px">'+(openFU>0?'<span style="color:'+(overdueFUct>0?'#e05252':'var(--mist)')+'">'+openFU+'</span>':'<span style="color:var(--fog)">—</span>')+'</td>'+'<td style="padding:8px 6px;border-bottom:1px solid rgba(255,255,255,.06);text-align:center;font-size:12px">'+(openComm>0?'<span style="color:var(--amber)">'+openComm+'</span>':'<span style="color:var(--fog)">—</span>')+'</td>'+'<td style="padding:8px 6px;border-bottom:1px solid rgba(255,255,255,.06);text-align:center;font-size:12px">'+(openIss>0?'<span style="color:#e05252">'+openIss+'</span>':'<span style="color:var(--fog)">—</span>')+'</td>'+'<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06);font-size:11px;color:var(--fog)">'+lastIntStr+'</td>'+'</tr>';
-      });
-      crossHTML+='<div style="background:#1A3050;border:1px solid rgba(255,255,255,.12);border-radius:12px;overflow:hidden"><div style="padding:12px 14px;background:rgba(45,90,142,.4);border-bottom:1px solid rgba(255,255,255,.10);display:flex;align-items:center;justify-content:space-between"><div style="font-size:13px;font-weight:700;color:var(--white)">'+cl+'</div><div style="font-size:11px;color:var(--slate)">'+cProjs.length+' project'+(cProjs.length!==1?'s':'')+'</div></div><table style="width:100%;border-collapse:collapse"><thead><tr style="background:rgba(255,255,255,.04)"><th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600;color:var(--fog);text-transform:uppercase;letter-spacing:.5px">Project</th><th style="padding:7px 6px;text-align:center;font-size:10px;font-weight:600;color:var(--fog);text-transform:uppercase;letter-spacing:.5px">Stk</th><th style="padding:7px 6px;text-align:center;font-size:10px;font-weight:600;color:var(--fog);text-transform:uppercase;letter-spacing:.5px">Int</th><th style="padding:7px 6px;text-align:center;font-size:10px;font-weight:600;color:var(--fog);text-transform:uppercase;letter-spacing:.5px">FU</th><th style="padding:7px 6px;text-align:center;font-size:10px;font-weight:600;color:var(--fog);text-transform:uppercase;letter-spacing:.5px">Comm</th><th style="padding:7px 6px;text-align:center;font-size:10px;font-weight:600;color:var(--fog);text-transform:uppercase;letter-spacing:.5px">Iss</th><th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600;color:var(--fog);text-transform:uppercase;letter-spacing:.5px">Last Activity</th></tr></thead><tbody>'+projRows+'</tbody></table></div>';
+        var sc=STATUS_COLOR[p.status]||'#78909c';
+        var sb=STATUS_BG[p.status]||'rgba(120,144,156,.12)';
+        var meta='';
+        if(openFU>0) meta+='<span style="font-size:11px;color:'+(overdueCount>0?'#e05252':'var(--amber)')+'">'+openFU+' FU</span> ';
+        if(openIss>0) meta+='<span style="font-size:11px;color:#e05252">'+openIss+' iss</span>';
+        var card=document.createElement('div');
+        card.style.cssText='background:#1A3050;border:1px solid rgba(255,255,255,.12);border-left:3px solid '+sc+';border-radius:8px;padding:12px 14px;cursor:pointer;transition:background .15s';
+        card.onmouseover=function(){this.style.background='#1e3a5f';};
+        card.onmouseout=function(){this.style.background='#1A3050';};
+        card.onclick=function(){S.projectFilter=p.id;renderReports(document.getElementById('main'));};
+        card.innerHTML='<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px">'
+          +'<div style="font-size:12px;font-weight:600;color:var(--white);line-height:1.3;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.name+'</div>'
+          +'<span style="font-size:9px;font-weight:700;color:'+sc+';background:'+sb+';border-radius:4px;padding:2px 6px;flex-shrink:0;margin-left:6px">'+p.status+'</span>'
+          +'</div>'
+          +'<div style="font-size:10px;color:var(--fog);font-family:var(--mono);margin-bottom:6px">'+p.pid+(p.county?' · '+p.county:'')+'</div>'
+          +'<div style="display:flex;gap:10px;font-size:11px;color:var(--slate)">'
+          +'<span>'+ps.length+' stk</span>'+(meta?meta:'')
+          +'</div>';
+        return card.outerHTML;
+      }).join('');
+
+      crossHTML+='<div style="margin-bottom:20px">'
+        +'<div style="font-size:12px;font-weight:700;color:var(--mist);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.10)">'+cl+' <span style="font-weight:400;color:var(--fog)">('+cProjs.length+')</span></div>'
+        +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">'+cards+'</div>'
+        +'</div>';
     });
 
     // Totals bar
     var totalOpenFU=allFU.length,totalOverdue=allOverdueFU.length,totalComm=allComm.length,totalIss=allIssues.length;
-    var totalsBar='<div style="display:flex;gap:16px;margin-bottom:24px;flex-wrap:wrap">'
-      +'<div style="flex:1;min-width:140px;background:#1A3050;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:16px 20px"><div style="font-size:11px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Active Projects</div><div style="font-size:28px;font-weight:700;color:var(--white)">'+allProjs.length+'</div></div>'
-      +'<div style="flex:1;min-width:140px;background:#1A3050;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:16px 20px"><div style="font-size:11px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Open Follow-ups</div><div style="font-size:28px;font-weight:700;color:'+(totalOverdue>0?'#e05252':'var(--white)')+'">'+totalOpenFU+'</div>'+(totalOverdue>0?'<div style="font-size:11px;color:#e05252;margin-top:2px">'+totalOverdue+' overdue</div>':'')+'</div>'
-      +'<div style="flex:1;min-width:140px;background:#1A3050;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:16px 20px"><div style="font-size:11px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Open Commitments</div><div style="font-size:28px;font-weight:700;color:'+(totalComm>0?'var(--amber)':'var(--white)')+'">'+totalComm+'</div></div>'
-      +'<div style="flex:1;min-width:140px;background:#1A3050;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:16px 20px"><div style="font-size:11px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Open Issues</div><div style="font-size:28px;font-weight:700;color:'+(totalIss>0?'#e05252':'var(--white)')+'">'+totalIss+'</div></div>'
+    var totalsBar='<div style="display:flex;gap:16px;margin-bottom:20px;flex-wrap:wrap">'
+      +'<div style="flex:1;min-width:140px;background:#1A3050;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px 18px"><div style="font-size:11px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Projects</div><div style="font-size:26px;font-weight:700;color:var(--white)">'+allProjs.length+'</div></div>'
+      +'<div style="flex:1;min-width:140px;background:#1A3050;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px 18px"><div style="font-size:11px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Open Follow-ups</div><div style="font-size:26px;font-weight:700;color:'+(totalOverdue>0?'#e05252':'var(--white)')+'">'+totalOpenFU+'</div>'+(totalOverdue>0?'<div style="font-size:11px;color:#e05252">'+totalOverdue+' overdue</div>':'')+'</div>'
+      +'<div style="flex:1;min-width:140px;background:#1A3050;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px 18px"><div style="font-size:11px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Open Commitments</div><div style="font-size:26px;font-weight:700;color:'+(totalComm>0?'var(--amber)':'var(--white)')+'">'+totalComm+'</div></div>'
+      +'<div style="flex:1;min-width:140px;background:#1A3050;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px 18px"><div style="font-size:11px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Open Issues</div><div style="font-size:26px;font-weight:700;color:'+(totalIss>0?'#e05252':'var(--white)')+'">'+totalIss+'</div></div>'
       +'</div>';
 
-    el.innerHTML=topbar
+el.innerHTML=topbar
       +'<div class="content" style="overflow-y:auto;padding:24px;flex-direction:column">'
       +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
       +'<div style="font-size:18px;font-weight:700;color:var(--white)">Portfolio Overview</div>'

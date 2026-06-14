@@ -5192,13 +5192,13 @@ function generateReport(type){
     var matLabels={'High-Champion':'Key Ally','High-Neutral':'Keep Satisfied','High-Opponent':'Manage Closely','Medium-Champion':'Engage Actively','Medium-Neutral':'Keep Informed','Medium-Opponent':'Monitor','Low-Champion':'Leverage','Low-Neutral':'Minimal Effort','Low-Opponent':'Watch'};
 
     // Matrix header
-    var matHdr='<th style="width:72px;padding:7px;background:rgba(26,48,80,.9);border:1px solid rgba(255,255,255,.15);font-size:10px;color:rgba(255,255,255,.5)">Influence</th>';
-    matCols.forEach(function(c){matHdr+='<th style="padding:7px;background:rgba(26,48,80,.7);border:1px solid rgba(255,255,255,.15);text-align:center;font-size:12px;font-weight:700;color:'+matColors[c]+'">'+matColHdr[c]+'</th>';});
+    var matHdr='<th style="width:72px;padding:7px;background:#1a3a5c;border:1px solid rgba(255,255,255,.18);font-size:10px;color:#aabbcc">Influence</th>';
+    matCols.forEach(function(c){matHdr+='<th style="padding:7px;background:#152c4a;border:1px solid rgba(255,255,255,.18);text-align:center;font-size:12px;font-weight:700;color:'+matColors[c]+'">'+matColHdr[c]+'</th>';});
 
     // Matrix rows
     var matBodyRows='';
     matRows.forEach(function(inf){
-      var cells='<td style="padding:7px 9px;background:rgba(26,48,80,.9);border:1px solid rgba(255,255,255,.12);font-size:11px;font-weight:700;color:var(--white);text-align:right;vertical-align:middle;white-space:nowrap">'+inf+'<div style="font-size:9px;color:var(--fog);font-weight:400">influence</div></td>';
+      var cells='<td style="padding:7px 9px;background:#1a3a5c;border:1px solid rgba(255,255,255,.18);font-size:11px;font-weight:700;color:#ffffff;text-align:right;vertical-align:middle;white-space:nowrap">'+inf+'<div style="font-size:9px;color:rgba(255,255,255,.6);font-weight:400">influence</div></td>';
       matCols.forEach(function(sent){
         var key=inf+'-'+sent;
         var grp=matStakes.filter(function(s){return s.influence===inf&&s.sentiment===sent});
@@ -5213,15 +5213,15 @@ function generateReport(type){
     matCols.forEach(function(c){matLegend+='<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+matColors[c]+';margin-right:4px"></span>'+matColHdr[c]+'</span>';});
     matLegend+='<span style="margin-left:auto;font-style:italic;color:var(--fog);font-size:10px">Hover initials for name · All project stakeholders</span></div>';
 
-    body='<div style="page-break-inside:avoid;margin-bottom:20px">'      +'<div style="font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Stakeholder Engagement Matrix</div>'      +matLegend      +'<table style="width:100%;border-collapse:separate;border-spacing:3px"><thead><tr>'+matHdr+'</tr></thead><tbody>'+matBodyRows+'</tbody></table>'      +'</div>'      +'<div style="font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-top:14px;border-top:1px solid var(--border)">External Stakeholder Detail ('+externalFilteredPS.length+' contacts)</div>'      +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px">';
+    body='<div style="page-break-inside:avoid;margin-bottom:20px">'      +'<div style="font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Stakeholder Engagement Matrix</div>'      +matLegend      +'<table style="width:100%;border-collapse:separate;border-spacing:3px"><thead><tr>'+matHdr+'</tr></thead><tbody>'+matBodyRows+'</tbody></table>'      +'</div>'      +'<div style="font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-top:14px;border-top:1px solid var(--border);page-break-before:always">External Stakeholder Detail ('+externalFilteredPS.length+' contacts)</div>'      +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px">';
     ['Champion','Neutral','Opponent'].forEach(function(g){
       var color=g==='Champion'?'var(--green)':g==='Opponent'?'var(--red)':'var(--slate)';
       var bg=g==='Champion'?'rgba(40,168,112,.08)':g==='Opponent'?'rgba(217,64,64,.08)':'rgba(255,255,255,.03)';
-      body+='<div style="background:'+bg+';border:1px solid var(--border);border-radius:12px;padding:16px 18px">'        +'<div style="font-size:14px;font-weight:600;color:'+color+';margin-bottom:12px">'+g+'s ('+groupsExt[g].length+')</div>';
+      body+='<div style="background:'+bg+';border:1px solid var(--border);border-radius:12px;padding:16px 18px;page-break-inside:avoid">'        +'<div style="font-size:14px;font-weight:600;color:'+color+';margin-bottom:12px">'+g+'s ('+groupsExt[g].length+')</div>';
       if(groupsExt[g].length===0)body+='<div style="font-size:12px;color:var(--fog);padding:12px 0">None in this category.</div>';
       groupsExt[g].forEach(function(item){
         var tags=(item.lk.issueTags||'').split(',').filter(Boolean).map(function(t){return '<span class="badge b-dark" style="margin:1px">'+t.trim()+'</span>'}).join('');
-        body+='<div style="padding:8px 0;border-bottom:1px solid var(--border)">'          +'<div style="font-weight:500;color:var(--white);font-size:13px">'+item.s.firstName+' '+item.s.lastName+'</div>'          +'<div style="font-size:12px;color:var(--slate)">'+(item.s.org||item.s.type||'')+'</div>'          +(tags?'<div style="margin-top:4px">'+tags+'</div>':'')+'</div>';
+        body+='<div style="padding:8px 0;border-bottom:1px solid var(--border);page-break-inside:avoid">'          +'<div style="font-weight:500;color:var(--white);font-size:13px">'+item.s.firstName+' '+item.s.lastName+'</div>'          +'<div style="font-size:12px;color:var(--slate)">'+(item.s.org||item.s.type||'')+'</div>'          +(tags?'<div style="margin-top:4px">'+tags+'</div>':'')+'</div>';
       });
       body+='</div>';
     });
@@ -5344,11 +5344,17 @@ function saveAsPdf(){
   wrapper.appendChild(contentDiv);
   // Footer will be added per-page in jsPDF instead
 
-  // Apply light theme overrides inline
+  // Apply light theme overrides inline — skip elements with dark backgrounds
   wrapper.querySelectorAll('*').forEach(function(el){
-    var cs=window.getComputedStyle(el);
-    if(cs.color && cs.color.includes('var(')) el.style.color='#111';
-    el.style.color='#111';
+    var bg=el.style.background||el.style.backgroundColor||'';
+    var hasDarkBg = bg.includes('#1a3a5c')||bg.includes('#152c4a')||bg.includes('#1a3050')||bg.includes('#1A3050');
+    if(!hasDarkBg){
+      el.style.color='#111';
+    }
+    // Remove CSS vars which don't resolve in off-screen clone
+    if((el.style.color||'').includes('var(')) el.style.color=hasDarkBg?'#ffffff':'#111';
+    if((el.style.background||'').includes('var(--border)')) el.style.background='#dde3ea';
+    if((el.style.borderColor||'').includes('var(')) el.style.borderColor='#dde3ea';
   });
 
   // Fix scope-stat boxes for PDF - light background, dark text

@@ -3703,7 +3703,19 @@ function openEditLinkModal(lid){
 function saveEditLink(lid){
   const all=DB.get('project_stakeholders');
   const i=all.findIndex(x=>x.id===lid);
-  if(i>-1){all[i].stakeholderRole=document.getElementById('f-lksr')?.value||'External';all[i].support=document.getElementById('f-lksu')?.value;all[i].issueTags=document.getElementById('f-lktg')?.value||'';all[i].notes=document.getElementById('f-lkno')?.value||'';all[i].distributionGroups=[...document.querySelectorAll('.f-lkdg-cb:checked')].map(c=>c.value).join(',');}
+  if(i>-1){
+    const newRole=document.getElementById('f-lksr')?.value||'External';
+    const oldRole=all[i].stakeholderRole||'External';
+    const hasGroups=[...document.querySelectorAll('.f-lkdg-cb:checked')].length>0;
+    if(newRole==='Internal'&&oldRole==='External'&&hasGroups){
+      showToast('Note: This stakeholder has distribution groups assigned. They will be ignored while marked as Internal, but remain saved if you switch back to External.','info',6000);
+    }
+    all[i].stakeholderRole=newRole;
+    all[i].support=document.getElementById('f-lksu')?.value;
+    all[i].issueTags=document.getElementById('f-lktg')?.value||'';
+    all[i].notes=document.getElementById('f-lkno')?.value||'';
+    all[i].distributionGroups=[...document.querySelectorAll('.f-lkdg-cb:checked')].map(c=>c.value).join(',');
+  }
   DB.set('project_stakeholders',all);closeM();render();
 }
 

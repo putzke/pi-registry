@@ -114,7 +114,8 @@ body{font-family:var(--font);font-size:13px;background:var(--navy);color:var(--w
 .lrow.sel{background:var(--sky-dim);border-left:2px solid var(--sky)}
 .avatar{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;letter-spacing:-.2px}
 .lrow-body{flex:1;min-width:0}
-.lrow-name{font-size:13px;font-weight:500;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lrow-name{font-size:14px;font-weight:600;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lrow-org{display:block;font-size:11px;font-weight:400;color:var(--slate);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
 .lrow-sub{font-size:12px;color:var(--mist);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lrow-meta{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0}
 
@@ -1673,7 +1674,7 @@ function filterMasterList(){
       return'<div class="lrow'+(s.id===sel?' sel':'')+'" onclick="selectStake(\''+s.id+'\')">'+
         '<div class="avatar" style="background:'+col+'22;color:'+col+'">'+ini(s.firstName,s.lastName)+'</div>'+
         '<div class="lrow-body">'+
-          '<div class="lrow-name">'+s.firstName+' '+s.lastName+(s.org||s.organization?'<span class="lrow-org">'+(s.org||s.organization)+'</span>':'')+'</div>'+
+          '<div class="lrow-name">'+dispName(s)+'</div>'+(s.org||s.organization?'<span class="lrow-org">'+(s.org||s.organization||'')+'</span>':'')+
           '<div class="lrow-meta">'+(s.type||'')+(projCount?' · '+projCount+' proj':'')+(intCount?' · '+intCount+' int':'')+'</div>'+
         '</div>'+
       '</div>';

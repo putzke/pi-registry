@@ -7776,10 +7776,10 @@ function printEngagementMatrix(projectId) {
 
     return `<tr style="page-break-inside:avoid">
       <td style="padding:10px 12px;vertical-align:middle;width:72px;
-        background:${rowBgLight[inf]};border:1px solid #d0d8e4;text-align:center">
-        <div style="font-size:12px;font-weight:700;color:${rowTextColor[inf]}">${inf}</div>
-        <div style="font-size:8px;color:#888;margin-top:2px">influence</div>
-        <div style="font-size:14px;font-weight:700;color:${rowTextColor[inf]};margin-top:4px">
+        background:#1A3050;border:1px solid #2d5a8e;text-align:center">
+        <div style="font-size:12px;font-weight:700;color:#ffffff">${inf}</div>
+        <div style="font-size:8px;color:#aabbcc;margin-top:2px">influence</div>
+        <div style="font-size:16px;font-weight:700;color:#ffffff;margin-top:4px">
           ${stakes.filter(s=>s.influence===inf).length}
         </div>
       </td>
@@ -7798,18 +7798,26 @@ function printEngagementMatrix(projectId) {
   const rosterRows = rows.flatMap(inf => cols.map(sent => {
     const group = stakes.filter(s => s.influence===inf && s.sentiment===sent);
     if (!group.length) return '';
-    return `<tr style="page-break-inside:avoid;background:${colBgLight[sent]}">
-      <td style="padding:6px 8px;font-size:10px;font-weight:700;color:${colColors[sent]};
-        border:1px solid #d0d8e4;white-space:nowrap">${inf} / ${sent}</td>
-      <td style="padding:6px 8px;font-size:10px;color:#222;border:1px solid #d0d8e4">
-        ${group.map(s=>s.name+(s.org?` (${s.org})`:'')).join('<br>')}
-      </td>
-      <td style="padding:6px 8px;font-size:10px;color:#555;border:1px solid #d0d8e4;
-        white-space:nowrap">${quadrantLabels[inf+'-'+sent]}</td>
-      <td style="padding:6px 8px;font-size:9px;color:#888;border:1px solid #d0d8e4">
-        ${quadrantDesc[inf+'-'+sent]}
-      </td>
-    </tr>`;
+    const key = inf+'-'+sent;
+    const color = colColors[sent];
+    const names = group.map(s =>
+      '<tr><td style="padding:5px 8px;font-size:11px;font-weight:600;color:#222;border-bottom:1px solid #eee;width:35%">'+s.name+'</td>'
+      +'<td style="padding:5px 8px;font-size:11px;color:#555;border-bottom:1px solid #eee">'+(s.org||'—')+'</td></tr>'
+    ).join('');
+    return '<div style="margin-bottom:14px;page-break-inside:avoid">'
+      +'<table style="width:100%;border-collapse:collapse">'
+      +'<thead>'
+      +'<tr><th colspan="2" style="padding:8px 12px;background:#1A3050;text-align:left;border-radius:4px 4px 0 0">'
+      +'<span style="font-size:13px;font-weight:700;color:'+color+'">'+sent+'</span>'
+      +'&nbsp;&nbsp;<span style="font-size:11px;color:#aabbcc">'+inf+' influence</span>'
+      +'&nbsp;·&nbsp;<span style="font-size:11px;font-weight:600;color:#e8f0ff">'+quadrantLabels[key]+'</span>'
+      +'<span style="float:right;font-size:11px;color:#aabbcc">'+group.length+' stakeholder'+(group.length!==1?'s':'')+'</span>'
+      +'</th></tr>'
+      +'<tr><td colspan="2" style="padding:4px 12px;background:#f5f7fa;font-size:10px;color:#666;font-style:italic;border-left:1px solid #d0d8e4;border-right:1px solid #d0d8e4">'+quadrantDesc[key]+'</td></tr>'
+      +'<tr><th style="padding:4px 8px;background:#f0f4f8;font-size:9px;color:#555;text-transform:uppercase;letter-spacing:.4px;border:1px solid #d0d8e4;width:35%">Name</th>'
+      +'<th style="padding:4px 8px;background:#f0f4f8;font-size:9px;color:#555;text-transform:uppercase;letter-spacing:.4px;border:1px solid #d0d8e4">Organization</th></tr>'
+      +'</thead><tbody>'+names+'</tbody></table>'
+      +'</div>';
   })).filter(Boolean).join('');
 
   const date  = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
@@ -7875,15 +7883,8 @@ function printEngagementMatrix(projectId) {
   </table>
 
   <div class="section-title page-break">Stakeholder Roster by Quadrant</div>
-  <table>
-    <thead><tr>
-      <th style="padding:7px 8px;background:#1A3050;color:#fff;font-size:10px;text-align:left;width:120px">Influence / Sentiment</th>
-      <th style="padding:7px 8px;background:#1A3050;color:#fff;font-size:10px;text-align:left">Stakeholders</th>
-      <th style="padding:7px 8px;background:#1A3050;color:#fff;font-size:10px;text-align:left;width:130px">Strategy</th>
-      <th style="padding:7px 8px;background:#1A3050;color:#fff;font-size:10px;text-align:left">Recommended Approach</th>
-    </tr></thead>
-    <tbody>${rosterRows}</tbody>
-  </table>
+  <p style="font-size:10px;color:#666;margin:0 0 12px">Sorted by influence level then sentiment. Only non-empty quadrants shown.</p>
+  ${rosterRows}
 
   <div class="footer">
     <span>PI Registry · Sunrise Engineering</span>

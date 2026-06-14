@@ -4775,7 +4775,11 @@ function renderReports(el){
 
     el.innerHTML=topbar
       +'<div class="content" style="overflow-y:auto;padding:24px">'
-      +'<div style="font-size:18px;font-weight:700;color:var(--white);margin-bottom:4px">Portfolio Overview</div>'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
+      +'<div style="font-size:18px;font-weight:700;color:var(--white)">Portfolio Overview</div>'
+      +'<button class="btn btn-sm" onclick="exportPortfolio()" style="color:var(--green);border-color:rgba(40,168,112,.4);gap:6px">'
+      +'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M8 2v8M5 7l3 3 3-3"/><rect x="2" y="11" width="12" height="2" rx="1"/></svg>'
+      +' Export All Projects</button></div>'
       +'<div style="font-size:13px;color:var(--slate);margin-bottom:20px">All active and on-hold projects &mdash; click any row to open that project reports</div>'
       +totalsBar+crossHTML+'</div>';
     return;
@@ -6422,6 +6426,43 @@ function exportProject(projectId) {
   styleSheet(ws5, [11,30,18,12,10,50,18,12,40,30]);
   XLSX.utils.book_append_sheet(wb, ws5, 'Issues');
 
+  // ── TAB 6: Commitments ────────────────────────────────────
+  const allComms = DB.get('commitments') || [];
+  const pComms = allComms.filter(x => x.projectId === projectId);
+  const commHeaders = [
+    'Date Made','Title','Category','Status',
+    'Made To','Made By','Due Date',
+    'Description','Fulfilled Date','Notes'
+  ];
+  const commRows = pComms.map(c => [
+    fmt(c.dateMade)||'', c.title||'', c.category||'', c.status||'',
+    c.madeTo||'', c.madeBy||'', fmt(c.dueDate)||'',
+    c.description||'', fmt(c.fulfilledDate)||'', c.notes||''
+  ]);
+  const ws6 = XLSX.utils.aoa_to_sheet([commHeaders, ...commRows]);
+  styleSheet(ws6, [11,30,18,12,22,18,11,50,11,36]);
+  XLSX.utils.book_append_sheet(wb, ws6, 'Commitments');
+
+  // ── TAB 7: Project Info ────────────────────────────────────
+  const projHeaders = ['Field','Value'];
+  const projRows = [
+    ['PIN / Project ID', proj.pid||''],
+    ['Project Name', proj.name||''],
+    ['Client / Sponsor', proj.client||''],
+    ['Project Type', proj.type||''],
+    ['County', proj.county||''],
+    ['Phase', proj.phase||''],
+    ['Status', proj.status||''],
+    ['Start Date', fmt(proj.startDate)||''],
+    ['End Date', fmt(proj.endDate)||''],
+    ['Pre-Con Date', fmt(proj.preconDate)||''],
+    ['Notes', proj.notes||''],
+    ['Export Date', localToday()],
+  ];
+  const ws7 = XLSX.utils.aoa_to_sheet([projHeaders, ...projRows]);
+  styleSheet(ws7, [22, 60]);
+  XLSX.utils.book_append_sheet(wb, ws7, 'Project Info');
+
   // ── DOWNLOAD ───────────────────────────────────────────────
   const dateStr  = localToday();
   const safeName = (proj.name||'Project').replace(/[/\\:*?"<>|]/g, '-');
@@ -6444,6 +6485,103 @@ function exportProject(projectId) {
     console.error('Export error:', err);
     alert('Export failed: ' + err.message);
   }
+}
+
+// ── PORTFOLIO EXPORT (all active projects) ───────────────────
+function exportPortfolio() {
+  if (typeof XLSX === 'undefined' || !XLSX.utils) {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = () => exportPortfolio();
+    s.onerror = () => alert('SheetJS could not be loaded.');
+    document.body.appendChild(s);
+    return;
+  }
+
+  const allProjs = (DB.get('projects')||[]).filter(p=>p.status==='Active'||p.status==='On hold');
+  if(!allProjs.length){showToast('No active projects to export.');return;}
+  showToast('Building portfolio export…');
+
+  const wb = XLSX.utils.book_new();
+  const allStake  = DB.get('stakeholders')         || [];
+  const allPS     = DB.get('project_stakeholders') || [];
+  const allInts   = DB.get('interactions')         || [];
+  const allDels   = DB.get('deliverables')         || [];
+  const allMeet   = DB.get('meetings')             || [];
+  const allIss    = DB.get('issues')               || [];
+  const allComms  = DB.get('commitments')          || [];
+
+  function styleSheet(ws, colWidths) {
+    ws['!views'] = [{ state: 'frozen', xSplit: 0, ySplit: 1, topLeftCell: 'A2' }];
+    if (colWidths) ws['!cols'] = colWidths.map(w => ({ wch: w }));
+  }
+
+  // Summary tab first
+  const summaryHeaders = ['PIN','Project Name','Client','Status','Phase','Stakeholders','Interactions','Open Follow-ups','Open Commitments','Open Issues','Last Activity'];
+  const summaryRows = allProjs.map(p => {
+    const ps = allPS.filter(x=>x.projectId===p.id);
+    const pInts = allInts.filter(x=>x.projectId===p.id);
+    const openFU = pInts.filter(i=>i.followUp&&!i.followUpDone).length;
+    const openComm = allComms.filter(c=>c.projectId===p.id&&c.status!=='Fulfilled').length;
+    const openIss = allIss.filter(i=>i.projectId===p.id&&(i.status==='Open'||i.status==='In Progress')).length;
+    const lastInt = pInts.filter(i=>i.date).sort((a,b)=>b.date.localeCompare(a.date))[0];
+    return [p.pid||'', p.name||'', p.client||'', p.status||'', p.phase||'',
+      ps.length, pInts.length, openFU, openComm, openIss, lastInt?fmt(lastInt.date):'—'];
+  });
+  const wsSummary = XLSX.utils.aoa_to_sheet([summaryHeaders, ...summaryRows]);
+  styleSheet(wsSummary, [10,32,22,12,20,13,13,14,16,12,14]);
+  XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+
+  // Per-project tabs — prefix with PIN, max 28 chars (Excel tab limit 31)
+  allProjs.forEach(function(proj) {
+    const pid = (proj.pid||'').toString().substring(0,8);
+    const ps = allPS.filter(x=>x.projectId===proj.id);
+    const pInts = allInts.filter(x=>x.projectId===proj.id).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+    const pDels = allDels.filter(x=>x.projectId===proj.id);
+    const pMeet = allMeet.filter(x=>x.projectId===proj.id).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+    const pIss  = allIss.filter(x=>x.projectId===proj.id);
+    const pComm = allComms.filter(x=>x.projectId===proj.id);
+
+    // Stakeholders
+    const stakeRows = ps.map(lk=>{
+      const s=allStake.find(x=>String(x.id)===String(lk.stakeholderId));
+      if(!s)return null;
+      return [s.firstName||'',s.lastName||'',s.org||'',s.title||'',s.email||'',s.phone||'',s.type||'',lk.stakeholderRole||'External',lk.support||'',lk.distributionGroups||'',lk.notes||''];
+    }).filter(Boolean);
+    const ws1=XLSX.utils.aoa_to_sheet([['First Name','Last Name','Organization','Title','Email','Phone','Type','Role','Support','Distribution Groups','Notes'],...stakeRows]);
+    styleSheet(ws1,[12,14,26,20,28,14,14,10,10,22,30]);
+    XLSX.utils.book_append_sheet(wb,ws1,`${pid}-Stakeholders`.substring(0,31));
+
+    // Interactions
+    const intRows=pInts.map(i=>{const s=allStake.find(x=>String(x.id)===String(i.stakeholderId));return [fmt(i.date)||'',s?dispName(s):'Unknown',s?s.org||'':'',i.channel||'',i.summary||'',i.loggedBy||'',i.followUp?'Yes':'No',i.followUpNote||'',fmt(i.followUpDue)||'',i.followUpDone?'Yes':'No'];});
+    const ws2=XLSX.utils.aoa_to_sheet([['Date','Stakeholder','Organization','Channel','Summary','Logged By','Follow-Up','FU Action','FU Due','FU Done'],...intRows]);
+    styleSheet(ws2,[11,22,24,12,55,12,10,30,11,10]);
+    XLSX.utils.book_append_sheet(wb,ws2,`${pid}-Interactions`.substring(0,31));
+
+    // Commitments
+    const commRows=pComm.map(c=>[fmt(c.dateMade)||'',c.title||'',c.category||'',c.status||'',c.madeTo||'',c.madeBy||'',fmt(c.dueDate)||'',c.description||'']);
+    const ws3=XLSX.utils.aoa_to_sheet([['Date Made','Title','Category','Status','Made To','Made By','Due Date','Description'],...commRows]);
+    styleSheet(ws3,[11,28,16,12,20,16,11,48]);
+    XLSX.utils.book_append_sheet(wb,ws3,`${pid}-Commitments`.substring(0,31));
+
+    // Issues
+    const issRows=pIss.map(i=>[fmt(i.dateRaised)||'',i.title||'',i.category||'',i.status||'',i.priority||'',i.description||'',i.assignedTo||'',fmt(i.dateResolved)||'']);
+    const ws4=XLSX.utils.aoa_to_sheet([['Date Raised','Title','Category','Status','Priority','Description','Assigned To','Date Resolved'],...issRows]);
+    styleSheet(ws4,[11,28,16,12,10,48,18,11]);
+    XLSX.utils.book_append_sheet(wb,ws4,`${pid}-Issues`.substring(0,31));
+  });
+
+  const dateStr = localToday();
+  const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const blob = new Blob([wbOut], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `PI Registry - Portfolio Export ${dateStr}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+  showToast(`Portfolio exported: ${allProjs.length} projects`);
 }
 
 // ── INIT ──────────────────────────────────────

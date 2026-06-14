@@ -5187,9 +5187,9 @@ function generateReport(type){
     body+='</tbody></table>';
 
   } else if(type==='sentiment-summary'){
-    // Build groups for matrix (all project stakeholders) and detail cards (external only)
+    // Build groups for matrix (external only) and detail cards (external only)
     var matStakes=[];
-    ps.forEach(function(lk){
+    externalFilteredPS.forEach(function(lk){
       var s=allStakes.find(function(x){return String(x.id)===String(lk.stakeholderId)});
       if(s)matStakes.push({name:((s.firstName||'')+' '+(s.lastName||'')).trim()||(s.org||'?'),org:s.org||'',influence:s.influenceTier||'Medium',sentiment:lk.support||'Neutral'});
     });
@@ -5227,7 +5227,7 @@ function generateReport(type){
     // Legend
     var matLegend='<div style="display:flex;gap:14px;margin-bottom:8px;font-size:11px;color:var(--slate)">';
     matCols.forEach(function(c){matLegend+='<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+matColors[c]+';margin-right:4px"></span>'+matColHdr[c]+'</span>';});
-    matLegend+='<span style="margin-left:auto;font-style:italic;color:var(--fog);font-size:10px">Hover initials for name · All project stakeholders</span></div>';
+    matLegend+='<span style="margin-left:auto;font-style:italic;color:var(--fog);font-size:10px">Hover initials for name · External stakeholders only</span></div>';
 
     body='<div style="page-break-inside:avoid;page-break-after:always;margin-bottom:20px">'      +'<div style="font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Stakeholder Engagement Matrix</div>'      +matLegend      +'<table style="width:100%;border-collapse:separate;border-spacing:3px"><thead><tr>'+matHdr+'</tr></thead><tbody>'+matBodyRows+'</tbody></table>'      +'</div>'      +'<div style="font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-top:14px;border-top:1px solid var(--border);page-break-before:always">External Stakeholder Detail ('+externalFilteredPS.length+' contacts)</div>'
       +'<table style="width:100%;border-collapse:collapse;table-layout:fixed"><thead><tr>'

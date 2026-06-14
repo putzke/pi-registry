@@ -1851,10 +1851,7 @@ function renderStakeholders(el){
     </div>
   </div>` : S.skView==='bubble'&&S.projectFilter ? `
   <div class="content" style="overflow-y:auto;padding:20px" id="bubble-container">
-    <div style="font-size:12px;color:var(--fog);margin-bottom:16px">
-      Bubble size = interaction count &nbsp;·&nbsp; X = influence tier &nbsp;·&nbsp; Y = sentiment &nbsp;·&nbsp; Hover for name &amp; details
-    </div>
-    <div id="bubble-chart-mount" style="width:100%;height:460px;position:relative"></div>
+    <div id="bubble-chart-mount" style="width:100%;position:relative"></div>
   </div>` : `
   <div class="content">
     <div class="split">
@@ -2305,199 +2302,139 @@ function renderBubbleChart(projectId){
   try{
     var mount=document.getElementById('bubble-chart-mount');
     if(!mount)return;
+
     var ps=DB.get('project_stakeholders').filter(function(x){return x.projectId===projectId;});
     var allStakes=DB.get('stakeholders');
     var ints=DB.get('interactions');
-    var projs=DB.get('projects');
-    var proj=projs.find(function(p){return p.id===projectId;})||{};
-
-    var W=Math.min(mount.offsetWidth||700, mount.parentElement?mount.parentElement.offsetWidth-40:700), H=500;
-    var PAD={top:56,right:120,bottom:72,left:88};
-    var CW=W-PAD.left-PAD.right, CH=H-PAD.top-PAD.bottom;
+    var proj=(DB.get('projects')||[]).find(function(p){return p.id===projectId;})||{};
 
     var X_TIERS=['Low','Medium','High'];
-    var Y_LEVELS=['Opponent','Neutral','Champion'];
+    var Y_LEVELS=['Champion','Neutral','Opponent'];
     var SENT_COLORS={Champion:'#28A870',Neutral:'#5a87c6',Opponent:'#D94040'};
-    var SENT_BG={Champion:'rgba(40,168,112,.13)',Neutral:'rgba(255,255,255,.03)',Opponent:'rgba(217,64,64,.13)'};
-    var ROLE_STROKE={Internal:'#4A9BE8',External:'rgba(255,255,255,.3)'};
-
+    var SENT_BG={Champion:'rgba(40,168,112,.12)',Neutral:'rgba(255,255,255,.03)',Opponent:'rgba(217,64,64,.12)'};
+    var SENT_BG_HI={Champion:'rgba(40,168,112,.22)',Neutral:'rgba(255,255,255,.06)',Opponent:'rgba(217,64,64,.22)'};
     var QUAD_LABELS={
-      'High-Champion':'KEY ALLY','High-Neutral':'KEEP SATISFIED','High-Opponent':'MANAGE CLOSELY',
-      'Medium-Champion':'ENGAGE ACTIVELY','Medium-Neutral':'KEEP INFORMED','Medium-Opponent':'MONITOR',
-      'Low-Champion':'LEVERAGE','Low-Neutral':'MINIMAL EFFORT','Low-Opponent':'WATCH'
+      'Low-Champion':'Leverage',    'Medium-Champion':'Engage Actively', 'High-Champion':'Key Ally',
+      'Low-Neutral':'Minimal Effort','Medium-Neutral':'Keep Informed',   'High-Neutral':'Keep Satisfied',
+      'Low-Opponent':'Watch',        'Medium-Opponent':'Monitor',         'High-Opponent':'Manage Closely'
     };
-    var QUAD_LABEL_COLOR={
-      'High-Champion':'rgba(40,168,112,.5)','High-Neutral':'rgba(232,184,75,.4)','High-Opponent':'rgba(217,64,64,.5)',
-      'Medium-Champion':'rgba(40,168,112,.35)','Medium-Neutral':'rgba(255,255,255,.2)','Medium-Opponent':'rgba(217,64,64,.35)',
-      'Low-Champion':'rgba(40,168,112,.25)','Low-Neutral':'rgba(255,255,255,.12)','Low-Opponent':'rgba(217,64,64,.25)'
-    };
+    var TIER_COLORS={High:'#e8b84b',Medium:'#90a4c8',Low:'#78909c'};
 
-    var xStep=CW/(X_TIERS.length-1);
-    var yStep=CH/(Y_LEVELS.length-1);
-
-    // Build bubble data
-    var bubbles=ps.map(function(lk){
+    // Enrich data
+    var stakes=ps.map(function(lk){
       var s=allStakes.find(function(x){return String(x.id)===String(lk.stakeholderId);});
       if(!s)return null;
       var intCt=ints.filter(function(i){return String(i.stakeholderId)===String(s.id)&&i.projectId===projectId;}).length;
-      var xi=X_TIERS.indexOf(s.influenceTier||'Medium');if(xi<0)xi=1;
-      var yi=Y_LEVELS.indexOf(lk.support||'Neutral');if(yi<0)yi=1;
-      // Deterministic jitter per stakeholder
-      var seed=s.id?String(s.id).split('').reduce(function(a,c){return a+c.charCodeAt(0);},0):0;
-      var jx=(Math.sin(seed*7.3)*0.38);
-      var jy=(Math.cos(seed*13.1)*0.38);
-      var minR=12,maxR=32;
-      var r=intCt===0?minR:Math.min(maxR,minR+Math.sqrt(intCt)*4.5);
-      var cx=PAD.left+(xi*xStep)+jx*(xStep*0.55);
-      var cy=PAD.top+((Y_LEVELS.length-1-yi)*yStep)+jy*(yStep*0.55);
-      return{s:s,lk:lk,intCt:intCt,r:r,cx:cx,cy:cy,
-        color:SENT_COLORS[lk.support]||SENT_COLORS.Neutral,
-        stroke:ROLE_STROKE[lk.stakeholderRole]||ROLE_STROKE.External,
-        inf:s.influenceTier||'Medium', sent:lk.support||'Neutral'};
+      return{s:s,lk:lk,intCt:intCt,
+        tier:s.influenceTier||'Medium',
+        sent:lk.support||'Neutral'};
     }).filter(Boolean);
 
-    var svg='<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg" style="overflow:visible;display:block">';
-
-    // Quadrant background fills (9 cells)
-    X_TIERS.forEach(function(xt,xi){
-      Y_LEVELS.forEach(function(yt,yi){
-        var key=xt+'-'+yt;
-        var col=SENT_BG[yt]||'rgba(255,255,255,.03)';
-        // Make high-influence quadrants more saturated
-        if(xt==='High') col=col.replace(/[\d.]+\)$/,function(m){return String(parseFloat(m)*2.2)+')';});
-        var qx=PAD.left+(xi*xStep)-(xStep/2);
-        var qy=PAD.top+((Y_LEVELS.length-1-yi)*yStep)-(yStep/2);
-        var qw=xStep, qh=yStep;
-        // Edge cells need half-width/height adjustments
-        if(xi===0){qx=PAD.left-2;qw=xStep/2+2;}
-        else if(xi===X_TIERS.length-1){qw=xStep/2+2;}
-        if(yi===0){qy=PAD.top+CH-yStep/2;qh=yStep/2+2;}
-        else if(yi===Y_LEVELS.length-1){qy=PAD.top-2;qh=yStep/2+2;}
-        svg+='<rect x="'+qx+'" y="'+qy+'" width="'+qw+'" height="'+qh+'" fill="'+col+'"/>';
-      });
+    // Summary stats
+    var total=stakes.length;
+    var byTier={High:0,Medium:0,Low:0};
+    var bySent={Champion:0,Neutral:0,Opponent:0};
+    stakes.forEach(function(st){
+      if(byTier[st.tier]!==undefined)byTier[st.tier]++;
+      if(bySent[st.sent]!==undefined)bySent[st.sent]++;
     });
 
-    // Outer border
-    svg+='<rect x="'+PAD.left+'" y="'+PAD.top+'" width="'+CW+'" height="'+CH+'" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="1.5" rx="4"/>';
+    // Build HTML grid
+    var html='';
 
-    // Grid lines — stronger
-    X_TIERS.forEach(function(t,i){
-      if(i===0||i===X_TIERS.length-1)return;
-      var x=PAD.left+(i*xStep);
-      svg+='<line x1="'+x+'" y1="'+PAD.top+'" x2="'+x+'" y2="'+(PAD.top+CH)+'" stroke="rgba(255,255,255,.14)" stroke-width="1" stroke-dasharray="5 4"/>';
+    // Header
+    html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">';
+    html+='<div style="font-size:13px;font-weight:600;color:var(--white)">'+proj.pid+' — '+proj.name+'</div>';
+    html+='<div style="display:flex;gap:8px">';
+    ['Champion','Neutral','Opponent'].forEach(function(s){
+      html+='<div style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:4px 10px">'
+        +'<div style="width:8px;height:8px;border-radius:50%;background:'+SENT_COLORS[s]+'"></div>'
+        +'<span style="font-size:12px;color:'+SENT_COLORS[s]+';font-weight:600">'+bySent[s]+'</span>'
+        +'<span style="font-size:11px;color:var(--fog)">'+s+'</span></div>';
     });
-    Y_LEVELS.forEach(function(t,i){
-      if(i===0||i===Y_LEVELS.length-1)return;
-      var y=PAD.top+((Y_LEVELS.length-1-i)*yStep);
-      svg+='<line x1="'+PAD.left+'" y1="'+y+'" x2="'+(PAD.left+CW)+'" y2="'+y+'" stroke="rgba(255,255,255,.14)" stroke-width="1" stroke-dasharray="5 4"/>';
-    });
+    html+='</div></div>';
 
-    // Quadrant strategy labels — positioned in top-left of each cell area
-    X_TIERS.forEach(function(xt,xi){
-      Y_LEVELS.forEach(function(yt,yi){
-        var key=xt+'-'+yt;
+    // Column headers (Influence tiers)
+    html+='<div style="display:grid;grid-template-columns:80px 1fr 1fr 1fr;gap:4px;margin-bottom:4px">';
+    html+='<div></div>';
+    X_TIERS.forEach(function(tier){
+      html+='<div style="text-align:center;padding:8px 4px;background:rgba(255,255,255,.04);border-radius:6px 6px 0 0;border:1px solid rgba(255,255,255,.08);border-bottom:none">'
+        +'<div style="font-size:12px;font-weight:700;color:'+TIER_COLORS[tier]+'">'+tier+'</div>'
+        +'<div style="font-size:10px;color:var(--fog)">influence &nbsp;·&nbsp; '+byTier[tier]+' stakeholder'+(byTier[tier]!==1?'s':'')+'</div>'
+        +'</div>';
+    });
+    html+='</div>';
+
+    // Grid rows
+    html+='<div style="display:grid;grid-template-columns:80px 1fr 1fr 1fr;gap:4px">';
+
+    Y_LEVELS.forEach(function(sent){
+      var sentColor=SENT_COLORS[sent];
+
+      // Row label
+      html+='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;'
+        +'background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:10px 6px">'
+        +'<div style="width:3px;height:36px;background:'+sentColor+';border-radius:2px;margin-bottom:6px"></div>'
+        +'<div style="font-size:11px;font-weight:700;color:'+sentColor+';writing-mode:horizontal-tb;text-align:center">'+sent+'</div>'
+        +'<div style="font-size:10px;color:var(--fog);margin-top:2px">'+bySent[sent]+'</div>'
+        +'</div>';
+
+      // Cells
+      X_TIERS.forEach(function(tier){
+        var key=tier+'-'+sent;
+        var group=stakes.filter(function(st){return st.tier===tier&&st.sent===sent;});
+        var bg=tier==='High'?SENT_BG_HI[sent]:SENT_BG[sent];
         var label=QUAD_LABELS[key]||'';
-        var color=QUAD_LABEL_COLOR[key]||'rgba(255,255,255,.15)';
-        // Top-left corner of each quadrant area
-        var cellLeft=PAD.left+(xi*xStep)-(xStep/2);
-        var cellTop=PAD.top+((Y_LEVELS.length-1-yi)*yStep)-(yStep/2);
-        if(xi===0){cellLeft=PAD.left+4;}
-        if(yi===Y_LEVELS.length-1){cellTop=PAD.top+12;}
-        var tx=cellLeft+6;
-        var ty=cellTop+12;
-        svg+='<text x="'+tx+'" y="'+ty+'" text-anchor="start" font-size="8" font-weight="700" fill="'+color+'" font-family="IBM Plex Sans,sans-serif" letter-spacing="0.6">'+label+'</text>';
+
+        html+='<div style="background:'+bg+';border:1px solid rgba(255,255,255,.09);border-radius:6px;padding:10px 12px;min-height:90px">';
+        html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">';
+        html+='<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:'+sentColor+';opacity:.75">'+label+'</div>';
+        if(group.length>0){
+          html+='<div style="font-size:10px;font-weight:700;color:'+sentColor+';background:rgba(255,255,255,.08);'
+            +'border-radius:10px;padding:1px 7px;min-width:20px;text-align:center">'+group.length+'</div>';
+        }
+        html+='</div>';
+
+        // Avatar chips
+        html+='<div style="display:flex;flex-wrap:wrap;gap:4px">';
+        group.forEach(function(st){
+          var initials=((st.s.firstName||'')[0]||'')+((st.s.lastName||'')[0]||'');
+          initials=(initials||'?').toUpperCase();
+          var intCt=st.intCt;
+          var size=intCt===0?28:intCt<3?30:intCt<8?34:38;
+          var tip=(st.s.firstName+' '+st.s.lastName).trim()+(st.s.org?' · '+st.s.org:'')+' | '+intCt+' interaction'+(intCt!==1?'s':'');
+          html+='<div title="'+tip+'" onclick="selectStake(\''+st.s.id+'\');S.skView=\'list\';renderStakeholders(document.getElementById(\'main\'))"'
+            +' style="display:inline-flex;align-items:center;justify-content:center;'
+            +'width:'+size+'px;height:'+size+'px;border-radius:50%;'
+            +'background:'+sentColor+'33;border:2px solid '+sentColor+';'
+            +'color:'+sentColor+';font-size:'+(size<=30?9:10)+'px;font-weight:700;'
+            +'cursor:pointer;flex-shrink:0;'
+            +'transition:transform .1s,box-shadow .1s" '
+            +'onmouseover="this.style.transform=\'scale(1.15)\';this.style.boxShadow=\'0 2px 8px rgba(0,0,0,.5)\'"'
+            +'onmouseout="this.style.transform=\'\';this.style.boxShadow=\'\'">'
+            +initials+'</div>';
+        });
+
+        if(group.length===0){
+          html+='<div style="font-size:10px;color:rgba(255,255,255,.2);font-style:italic;padding:4px 0">—</div>';
+        }
+        html+='</div>';
+        html+='</div>';
       });
     });
 
-    // Y axis label + tick lines
-    Y_LEVELS.forEach(function(t,i){
-      var y=PAD.top+((Y_LEVELS.length-1-i)*yStep);
-      var color=SENT_COLORS[t];
-      svg+='<line x1="'+(PAD.left-6)+'" y1="'+y+'" x2="'+PAD.left+'" y2="'+y+'" stroke="'+color+'" stroke-width="1.5"/>';
-      svg+='<text x="'+(PAD.left-12)+'" y="'+(y+4)+'" text-anchor="end" font-size="13" font-weight="700" fill="'+color+'" font-family="IBM Plex Sans,sans-serif">'+t+'</text>';
-    });
-    // Y axis title
-    svg+='<text transform="rotate(-90)" x="-'+(PAD.top+CH/2)+'" y="22" text-anchor="middle" font-size="11" fill="rgba(255,255,255,.4)" font-family="IBM Plex Sans,sans-serif" letter-spacing="0.5">SENTIMENT</text>';
+    html+='</div>';
 
-    // X axis label + tick lines
-    X_TIERS.forEach(function(t,i){
-      var x=PAD.left+(i*xStep);
-      svg+='<line x1="'+x+'" y1="'+(PAD.top+CH)+'" x2="'+x+'" y2="'+(PAD.top+CH+6)+'" stroke="rgba(255,255,255,.3)" stroke-width="1.5"/>';
-      svg+='<text x="'+x+'" y="'+(PAD.top+CH+22)+'" text-anchor="middle" font-size="13" font-weight="700" fill="rgba(255,255,255,.65)" font-family="IBM Plex Sans,sans-serif">'+t+'</text>';
-    });
-    svg+='<text x="'+(PAD.left+CW/2)+'" y="'+(H-8)+'" text-anchor="middle" font-size="11" fill="rgba(255,255,255,.4)" font-family="IBM Plex Sans,sans-serif" letter-spacing="0.5">INFLUENCE TIER</text>';
+    // Footer hint
+    html+='<div style="margin-top:10px;font-size:10px;color:rgba(255,255,255,.3);display:flex;align-items:center;gap:5px">'
+      +'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:11px;height:11px;flex-shrink:0"><circle cx="8" cy="8" r="6"/><path d="M8 7v4M8 5.5v.5"/></svg>'
+      +'Bubble size = interaction count &nbsp;·&nbsp; Hover for name &amp; details &nbsp;·&nbsp; Click to open stakeholder record'
+      +'</div>';
 
-    // Project label + count
-    svg+='<text x="'+PAD.left+'" y="'+(PAD.top-16)+'" font-size="12" font-weight="600" fill="rgba(255,255,255,.5)" font-family="IBM Plex Sans,sans-serif">'+proj.pid+' — '+proj.name+'</text>';
-    svg+='<text x="'+(W-PAD.right)+'" y="'+(PAD.top-16)+'" text-anchor="end" font-size="11" fill="rgba(255,255,255,.4)" font-family="IBM Plex Sans,sans-serif">'+bubbles.length+' contacts plotted</text>';
+    mount.innerHTML=html;
 
-    // Bubbles (largest first so small ones render on top)
-    bubbles.sort(function(a,b){return b.r-a.r;}).forEach(function(b,idx){
-      var name=(b.s.firstName+' '+b.s.lastName).trim().replace(/'/g,'&apos;');
-      var org=(b.s.org||b.s.type||'').replace(/'/g,'&apos;');
-      var tip=name+(org?' · '+org:'')+' | '+b.intCt+' interaction'+(b.intCt!==1?'s':'');
-      // Glow ring for high influence
-      if(b.inf==='High'){
-        svg+='<circle cx="'+b.cx+'" cy="'+b.cy+'" r="'+(b.r+5)+'" fill="none" stroke="'+b.color+'" stroke-width="1" opacity="0.3"/>';
-      }
-      svg+='<circle class="bubble" cx="'+b.cx+'" cy="'+b.cy+'" r="'+b.r+'"'
-        +' fill="'+b.color+'40"'
-        +' stroke="'+b.color+'" stroke-width="2"'
-        +' style="cursor:pointer;transition:r .15s,opacity .15s"'
-        +' data-tip="'+tip+'"'
-        +' onclick="selectStake(\''+b.s.id+'\');S.skView=\'list\';renderStakeholders(document.getElementById(\'main\'))"'
-        +'></circle>';
-      // Initials for all bubbles
-      var initials=((b.s.firstName||'')[0]||'')+((b.s.lastName||'')[0]||'');
-      if(initials){
-        svg+='<text x="'+b.cx+'" y="'+(b.cy+4)+'" text-anchor="middle" font-size="'+(b.r>=20?11:9)+'" font-weight="700" fill="'+b.color+'" font-family="IBM Plex Sans,sans-serif" pointer-events="none">'+initials+'</text>';
-      }
-    });
-
-    // Legend — in right padding area
-    var lgx=PAD.left+CW+14;
-    var lgy=PAD.top+20;
-    svg+='<text x="'+lgx+'" y="'+lgy+'" font-size="9" font-weight="700" fill="rgba(255,255,255,.4)" font-family="IBM Plex Sans,sans-serif" letter-spacing="0.5">SENTIMENT</text>';
-    [{label:'Champion',color:'#28A870'},{label:'Neutral',color:'#5a87c6'},{label:'Opponent',color:'#D94040'}].forEach(function(item,i){
-      var iy=lgy+18+(i*20);
-      svg+='<circle cx="'+(lgx+5)+'" cy="'+iy+'" r="6" fill="'+item.color+'50" stroke="'+item.color+'" stroke-width="1.5"/>';
-      svg+='<text x="'+(lgx+15)+'" y="'+(iy+4)+'" font-size="11" font-weight="600" fill="'+item.color+'" font-family="IBM Plex Sans,sans-serif">'+item.label+'</text>';
-    });
-    // Bubble size legend
-    var bly=lgy+90;
-    svg+='<text x="'+lgx+'" y="'+bly+'" font-size="9" font-weight="700" fill="rgba(255,255,255,.4)" font-family="IBM Plex Sans,sans-serif" letter-spacing="0.5">BUBBLE SIZE</text>';
-    svg+='<text x="'+lgx+'" y="'+(bly+14)+'" font-size="9" fill="rgba(255,255,255,.35)" font-family="IBM Plex Sans,sans-serif">= interactions</text>';
-    [{r:6,label:'0'},{r:10,label:'3'},{r:14,label:'8+'}].forEach(function(item,i){
-      var by=bly+36+(i*28);
-      svg+='<circle cx="'+(lgx+item.r+2)+'" cy="'+by+'" r="'+item.r+'" fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.3)" stroke-width="1.5"/>';
-      svg+='<text x="'+(lgx+item.r*2+10)+'" y="'+(by+4)+'" font-size="10" fill="rgba(255,255,255,.45)" font-family="IBM Plex Sans,sans-serif">'+item.label+'</text>';
-    });
-
-    svg+='</svg>';
-    mount.innerHTML=svg;
-
-    // Tooltip
-    var tip2=document.createElement('div');
-    tip2.className='bubble-tooltip';tip2.style.display='none';
-    mount.appendChild(tip2);
-    mount.querySelectorAll('.bubble').forEach(function(el){
-      el.addEventListener('mouseenter',function(){
-        tip2.textContent=el.dataset.tip;tip2.style.display='block';
-        el.setAttribute('stroke-width','3');
-      });
-      el.addEventListener('mousemove',function(e){
-        var rect=mount.getBoundingClientRect();
-        var tx=e.clientX-rect.left+14,ty=e.clientY-rect.top-40;
-        if(tx+220>W)tx=e.clientX-rect.left-220;
-        tip2.style.left=tx+'px';tip2.style.top=ty+'px';
-      });
-      el.addEventListener('mouseleave',function(){
-        tip2.style.display='none';
-        el.setAttribute('stroke-width','2');
-      });
-    });
   }catch(err){
-    console.error('Bubble chart error:',err);
+    console.error('Influence map error:',err);
     var mount=document.getElementById('bubble-chart-mount');
     if(mount)mount.innerHTML='<div style="color:var(--fog);font-size:13px;padding:20px">Chart unavailable</div>';
   }

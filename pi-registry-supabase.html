@@ -4692,58 +4692,39 @@ function exportIssuesPdf(){
     details+
   '</div>';
 
-  const wrapper=document.createElement('div');
-  wrapper.style.cssText='position:fixed;left:-9999px;top:0;width:816px;background:#fff;color:#111;font-family:Arial,sans-serif;font-size:10px;padding:0;line-height:1.4;-webkit-print-color-adjust:exact;print-color-adjust:exact';
-  const lhHeader=document.createElement('div');
-  lhHeader.style.cssText='width:100%;margin-bottom:16px';
-  lhHeader.innerHTML='<img src="'+window._srHeader+'" style="width:100%;display:block;" alt="Sunrise Engineering">';
-  wrapper.appendChild(lhHeader);
-  const contentDiv=document.createElement('div');
-  contentDiv.style.cssText='padding:0 32px 24px 32px';
-  contentDiv.innerHTML=html;
-  wrapper.appendChild(contentDiv);
-  wrapper.querySelectorAll('th').forEach(function(th){
-    th.style.background='#1a3a5c';th.style.color='#ffffff';th.style.fontWeight='700';
-    th.style.padding='5px 8px';th.style.fontSize='8px';th.style.textTransform='uppercase';th.style.textAlign='left';
-  });
-  wrapper.querySelectorAll('td').forEach(function(td){
-    td.style.padding='5px 8px';td.style.borderBottom='1px solid #e0e0e0';td.style.verticalAlign='top';
-  });
-  document.body.appendChild(wrapper);
-
-  html2canvas(wrapper,{scale:2,useCORS:true,logging:false,backgroundColor:'#ffffff'}).then(function(canvas){
-    document.body.removeChild(wrapper);
-    const imgData=canvas.toDataURL('image/png');
-    const pdf=new window.jspdf.jsPDF({orientation:'portrait',unit:'mm',format:'letter'});
-    const pdfW=pdf.internal.pageSize.getWidth();
-    const pdfH=pdf.internal.pageSize.getHeight();
-    const footerH=window._srFooter?14:0;
-    const imgW=pdfW;
-    const imgH=(canvas.height*pdfW)/canvas.width;
-    const contentH=pdfH-footerH;
-    const pages=Math.ceil(imgH/contentH);
-    // Build project label for footer
-    var issProjs=DB.get('projects')||[];
-    var isssProjF=S.issViewProj||S.projectFilter||'';
-    var issProj=isssProjF?issProjs.find(function(p){return p.id===isssProjF;}):null;
-    var issProjLabel=issProj?issProj.pid+' — '+issProj.name:'All Projects';
-    for(let pageNum=0;pageNum<pages;pageNum++){
-      if(pageNum>0) pdf.addPage();
-      pdf.addImage(imgData,'PNG',0,-(pageNum*contentH),imgW,imgH);
-      if(window._srFooter) pdf.addImage(window._srFooter,'JPEG',0,pdfH-footerH,pdfW,footerH);
-      // Page number + project label overlay on footer
-      pdf.setFontSize(7);
-      pdf.setTextColor(120,120,120);
-      pdf.text(issProjLabel+' · Issues Tracker',10,pdfH-4);
-      pdf.text('Page '+(pageNum+1)+' of '+pages,pdfW-10,pdfH-4,{align:'right'});
-    }
-    const fname='issues-tracker-'+(localToday())+'.pdf';
-    pdf.save(fname);
-    showToast('Issues PDF saved to your Downloads folder.');
-  }).catch(function(){
-    if(document.body.contains(wrapper)) document.body.removeChild(wrapper);
-    showToast('PDF generation failed. Try again.','error');
-  });
+  var issProjs=DB.get('projects')||[];
+  var isssProjF=S.issViewProj||S.projectFilter||'';
+  var issProj=isssProjF?issProjs.find(function(p){return p.id===isssProjF;}):null;
+  var issProjLabel=issProj?(issProj.pid+' — '+issProj.name):'All Projects';
+  var issDateStr=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  var win=window.open('','_blank');
+  win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Issues Tracker</title><style>'
+    +'*{box-sizing:border-box}'
+    +'body{font-family:Arial,sans-serif;font-size:10px;color:#111;margin:0;padding:0;background:#fff}'
+    +'@page{size:letter portrait;margin:9.5mm 14mm 14mm 14mm}'
+    +'@media print{button{display:none!important}.no-print{display:none!important}}'
+    +'table{width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed}'
+    +'th{background:#1a3a5c!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;padding:5px 8px!important;font-size:8px!important;text-transform:uppercase;letter-spacing:.4px;text-align:left}'
+    +'td{padding:5px 8px!important;border-bottom:1px solid #ddd!important;vertical-align:top!important;word-wrap:break-word;font-size:9px!important}'
+    +'tr{page-break-inside:avoid}'
+    +'thead{display:table-header-group}'
+    +'</style></head><body>'
+    +'<div class="no-print" style="padding:10px 16px;background:#f5f5f5;border-bottom:1px solid #ddd;display:flex;align-items:center;gap:12px">'
+    +'<button onclick="window.print()" style="padding:6px 14px;background:#1A3050;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer">Print / Save PDF</button>'
+    +'<span style="font-size:11px;color:#555">Issues Tracker — '+issProjLabel+'</span>'
+    +'</div>'
+    +'<div style="padding:0 0 8px 0">'
+    +'<div style="font-size:15px;font-weight:700;color:#1a3a5c;margin-bottom:2px">Issues Tracker</div>'
+    +'<div style="font-size:11px;color:#555;margin-bottom:2px">'+issProjLabel+'</div>'
+    +'<div style="font-size:10px;color:#888;margin-bottom:10px">Generated '+issDateStr+'</div>'
+    +'</div>'
+    +html
+    +'<div style="margin-top:20px;padding-top:8px;border-top:1px solid #ddd;font-size:8px;color:#aaa;display:flex;justify-content:space-between">'
+    +'<span>PI Registry · Sunrise Engineering</span>'
+    +'<span>'+issProjLabel+' · Issues Tracker</span>'
+    +'</div>'
+    +'</body></html>');
+  win.document.close();
 }
 
 function renderReports(el){
@@ -5341,137 +5322,26 @@ function saveAsPdf(){
   var html=output.innerHTML.trim();
   if(!html){showToast('Generate a report first, then click Save as PDF.');return;}
 
-  showToast('Generating PDF — please wait...');
+  // Gather labels
+  var rptProjs=DB.get('projects')||[];
+  var rptProjF=S.projectFilter||'';
+  var rptProj=rptProjF?rptProjs.find(function(p){return p.id===rptProjF;}):null;
+  var rptProjLabel=rptProj?(rptProj.pid+' — '+rptProj.name):'';
+  var rptTitleEl=output.querySelector('h2');
+  var rptTitle=rptTitleEl?rptTitleEl.textContent.trim():'PI Report';
+  var dateStr=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
 
-  // Create a clean off-screen div with light styling for rendering
-  var wrapper=document.createElement('div');
-  wrapper.style.cssText='position:fixed;left:-9999px;top:0;width:816px;background:#fff;color:#111;font-family:Arial,sans-serif;font-size:10px;padding:0;line-height:1.4;-webkit-print-color-adjust:exact;print-color-adjust:exact';
-  // Add letterhead header
-  var lhHeader=document.createElement('div');
-  lhHeader.style.cssText='width:100%;margin-bottom:16px';
-  lhHeader.innerHTML='<img src="'+window._srHeader+'" style="width:100%;display:block;" alt="Sunrise Engineering">';
-  wrapper.appendChild(lhHeader);
-  // Content wrapper with padding
-  var contentDiv=document.createElement('div');
-  contentDiv.style.cssText='padding:0 32px 24px 32px';
-  // Inject print-optimized CSS
-  var printStyle=document.createElement('style');
-  printStyle.textContent=
-    '@page{size:portrait;margin:0}'+
-    'body{margin:0;padding:0}'+
-    'table{border-collapse:collapse;width:100%;font-size:9px}'+
-    'th{background:#1a3a5c!important;color:#fff!important;padding:4px 6px!important;font-size:8px!important;text-transform:uppercase;letter-spacing:.4px}'+
-    'tr{page-break-inside:avoid!important}'+
-    'td{padding:5px 6px!important;border-bottom:1px solid #e0e0e0!important;font-size:9px!important;word-wrap:break-word;vertical-align:top!important;text-align:left!important;page-break-inside:avoid!important}'+
-    '.badge{font-size:8px!important;padding:1px 4px!important}'+
-    'h2{font-size:14px!important}'+
-    '[style*="4A9BE8"]{color:#1565c0!important}';
-  contentDiv.insertBefore(printStyle, contentDiv.firstChild);
-  // Extract summary text and inject before report content
+  // Extract summary text
   var summaryEl=output.querySelector('#rpt-summary-text');
   var summaryTxt=summaryEl?summaryEl.value.trim():'';
-  // Clone output HTML without the summary textarea wrapper
-  var summaryWrap=output.querySelector('#rpt-summary-wrap');
+
+  // Clone output, strip summary wrapper
   var outputClone=output.cloneNode(true);
   var wrapClone=outputClone.querySelector('#rpt-summary-wrap');
   if(wrapClone)wrapClone.remove();
-  contentDiv.innerHTML=outputClone.innerHTML;
-  // Inject summary block after the distributed-to banner (if present)
-  if(summaryTxt){
-    var summDiv=document.createElement('div');
-    summDiv.style.cssText='margin-bottom:18px;padding:12px 14px;background:#f0f4f8;border-left:4px solid #1a3a5c;border-radius:0 6px 6px 0;font-size:10px;color:#222;line-height:1.7;white-space:pre-wrap;word-wrap:break-word';
-    var summLabel=document.createElement('div');
-    summLabel.style.cssText='font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#1a3a5c;margin-bottom:6px';
-    summLabel.textContent='Summary';
-    summDiv.insertBefore(summLabel,summDiv.firstChild);
-    summDiv.appendChild(document.createTextNode(summaryTxt));
-    // Find the distributed-to banner and insert summary after it, not at top
-    var distBanner=contentDiv.querySelector('[style*="background:#e8eef4"]');
-    if(distBanner && distBanner.nextSibling){
-      contentDiv.insertBefore(summDiv, distBanner.nextSibling);
-    } else if(distBanner){
-      distBanner.parentNode.appendChild(summDiv);
-    } else {
-      // No dist banner — insert after the report header block
-      var firstTable=contentDiv.querySelector('table');
-      if(firstTable){contentDiv.insertBefore(summDiv,firstTable);}
-      else{contentDiv.insertBefore(summDiv,contentDiv.firstChild);}
-    }
-  }
-  wrapper.appendChild(contentDiv);
-  // Footer will be added per-page in jsPDF instead
 
-  // Apply light theme overrides inline — skip elements with dark backgrounds
-  wrapper.querySelectorAll('*').forEach(function(el){
-    var bg=el.style.background||el.style.backgroundColor||'';
-    var hasDarkBg = bg.includes('#1a3a5c')||bg.includes('#152c4a')||bg.includes('#1a3050')||bg.includes('#1A3050')||bg.includes('#0e1e30')||bg.includes('#0E1E30');
-    if(!hasDarkBg){
-      el.style.color='#111';
-    } else {
-      // Preserve light text on dark backgrounds
-      if(!el.style.color||(el.style.color||'').includes('var(')) el.style.color='#ffffff';
-    }
-    // Remove CSS vars which don't resolve in off-screen clone
-    if((el.style.color||'').includes('var(')) el.style.color=hasDarkBg?'#ffffff':'#111';
-    if((el.style.background||'').includes('var(--border)')) el.style.background='#dde3ea';
-    if((el.style.borderColor||'').includes('var(')) el.style.borderColor='#dde3ea';
-  });
-
-  // Fix scope-stat boxes for PDF - light background, dark text
-  wrapper.querySelectorAll('.scope-stat').forEach(function(el){
-    el.style.background='#f0f4f8';
-    el.style.border='1px solid #ccd6e0';
-    el.style.borderRadius='6px';
-    el.style.padding='10px 14px';
-  });
-  wrapper.querySelectorAll('.scope-stat b').forEach(function(el){
-    el.style.fontSize='24px';
-    el.style.fontWeight='700';
-    el.style.display='block';
-    // Keep color but darken for print
-    var c=el.style.color||'';
-    if(c.includes('amber')||c.includes('E8A020')||c.includes('--amber'))el.style.color='#b36b00';
-    if(c.includes('red')||c.includes('D94040')||c.includes('--red'))el.style.color='#b32020';
-    if(c.includes('green')||c.includes('28A870')||c.includes('--green'))el.style.color='#1a7a50';
-  });
-  wrapper.querySelectorAll('.scope-stat span').forEach(function(el){
-    el.style.color='#444';
-  });
-
-  // Fix distributed-to banner
-  wrapper.querySelectorAll('[style*="background:#1"]').forEach(function(el){
-    el.style.background='#e8eef4';
-    el.style.color='#111';
-    el.style.border='1px solid #ccd6e0';
-  });
-
-  // Fix badge colors for print
-  wrapper.querySelectorAll('.badge').forEach(function(el){
-    el.style.border='1px solid #ccc';
-    if(el.classList.contains('b-amber')){el.style.background='#fff3cd';el.style.color='#856404';}
-    if(el.classList.contains('b-green')){el.style.background='#d1f0e0';el.style.color='#1a7a50';}
-    if(el.classList.contains('b-red')){el.style.background='#f8d7da';el.style.color='#842029';}
-  });
-
-  // Fix table headers explicitly
-  wrapper.querySelectorAll('th').forEach(function(th){
-    th.style.background='#1a3a5c';
-    th.style.color='#ffffff';
-    th.style.fontWeight='700';
-    th.style.padding='6px 10px';
-  });
-  wrapper.querySelectorAll('td').forEach(function(td){
-    td.style.padding='6px 10px';
-    td.style.borderColor='#ccc';
-    td.style.color='#111';
-  });
-  wrapper.querySelectorAll('table').forEach(function(t){
-    t.style.borderCollapse='collapse';
-    t.style.width='100%';
-  });
-
-  // Resolve any remaining CSS variables to print-safe values
-  contentDiv.innerHTML=contentDiv.innerHTML
+  // Fix CSS variables to print-safe values in the cloned HTML
+  var bodyHtml=outputClone.innerHTML
     .replace(/color:var\(--fog\)/g,'color:#666')
     .replace(/color:var\(--mist\)/g,'color:#444')
     .replace(/color:var\(--slate\)/g,'color:#444')
@@ -5482,97 +5352,70 @@ function saveAsPdf(){
     .replace(/color:var\(--red\)/g,'color:#b32020')
     .replace(/color:var\(--green\)/g,'color:#1a7a50')
     .replace(/background:var\(--navy-dk\)/g,'background:#e8eef4')
-    .replace(/background:var\(--navy\)/g,'background:#f0f4f8');
-
-  // Clean up dark colors
-  contentDiv.innerHTML=contentDiv.innerHTML
-    .replace(/color:#F5F8FB/gi,'color:#111')
-    .replace(/color:#D4E6F4/gi,'color:#111')
-    .replace(/color:#A8C2D8/gi,'color:#444')
-    .replace(/color:#7A99B0/gi,'color:#666')
-    .replace(/color:#4A9BE8/gi,'color:#1a5fb4')
-    .replace(/background:#1A3050/gi,'background:#f8f8f8')
-    .replace(/background:#0E1E30/gi,'background:#f0f0f0')
-    .replace(/background:#112236/gi,'background:#e8e8e8')
-    .replace(/background:#0B1929/gi,'background:#fff')
+    .replace(/background:var\(--navy\)/g,'background:#f0f4f8')
     .replace(/var\(--white\)/gi,'#111')
     .replace(/var\(--slate\)/gi,'#444')
     .replace(/var\(--fog\)/gi,'#666')
     .replace(/var\(--sky-lt\)/gi,'#1a5fb4')
-    .replace(/rgba\(255,255,255,[^)]+\)/gi,'#ccc');
+    .replace(/rgba\(255,255,255,[^)]+\)/gi,'#ccc')
+    .replace(/color:#F5F8FB/gi,'color:#111')
+    .replace(/color:#D4E6F4/gi,'color:#111')
+    .replace(/color:#A8C2D8/gi,'color:#444')
+    .replace(/color:#4A9BE8/gi,'color:#1a5fb4')
+    .replace(/background:#1A3050/gi,'background:#f8f8f8')
+    .replace(/background:#0E1E30/gi,'background:#f0f0f0')
+    .replace(/background:#0B1929/gi,'background:#fff');
 
-  // Hide buttons in the output
-  wrapper.querySelectorAll('button').forEach(function(b){b.style.display='none';});
+  // Build summary block if present
+  var summaryBlock='';
+  if(summaryTxt){
+    summaryBlock='<div style="margin-bottom:16px;padding:10px 14px;background:#f0f4f8;border-left:4px solid #1a3a5c;border-radius:0 6px 6px 0;font-size:10px;color:#222;line-height:1.7;white-space:pre-wrap;word-wrap:break-word">'
+      +'<div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#1a3a5c;margin-bottom:5px">Summary</div>'
+      +summaryTxt.replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      +'</div>';
+  }
 
-  document.body.appendChild(wrapper);
+  var footerLabel=(rptProjLabel?(rptProjLabel+' · '):'')+rptTitle;
 
-  html2canvas(wrapper,{
-    scale:2,
-    useCORS:true,
-    backgroundColor:'#ffffff',
-    logging:false,
-    width:816,
-    windowWidth:816
-  }).then(function(canvas){
-    document.body.removeChild(wrapper);
-    var imgData=canvas.toDataURL('image/png');
-    // US Letter portrait: 215.9mm x 279.4mm
-    var pdf=new window.jspdf.jsPDF({
-      orientation:'portrait',
-      unit:'mm',
-      format:'letter'
-    });
-    var pdfW=pdf.internal.pageSize.getWidth();   // 215.9mm
-    var pdfH=pdf.internal.pageSize.getHeight();  // 279.4mm
-    var imgW=pdfW;
-    var imgH=(canvas.height*pdfW)/canvas.width;
-
-    // Footer image dimensions: full width, proportional height (~22mm)
-    var ftImg=new Image();
-    ftImg.src=window._srFooter||'';
-    var ftH=ftImg.naturalHeight>0?(ftImg.naturalWidth>0?(22*ftImg.naturalHeight/ftImg.naturalHeight):22):22;
-    var footerH=22; // mm - footer height on page
-    var contentH=pdfH-footerH; // usable content height per page
-
-    // Gather project + report label for footer
-    var rptProjs=DB.get('projects')||[];
-    var rptProjF=S.projectFilter||'';
-    var rptProj=rptProjF?rptProjs.find(function(p){return p.id===rptProjF;}):null;
-    var rptProjLabel=rptProj?rptProj.pid+' — '+rptProj.name:'';
-    var rptTitleEl=wrapper.querySelector('h2')||output.querySelector('h2');
-    var rptTitle=rptTitleEl?rptTitleEl.textContent:'PI Report';
-    var totalPages=Math.ceil(imgH/contentH);
-
-    var y=0;
-    var pageNum=0;
-    while(y<imgH){
-      if(pageNum>0)pdf.addPage();
-      // Add content slice
-      pdf.addImage(imgData,'PNG',0,-(y)*(pdfW/imgW),imgW,imgH);
-      // Add footer at bottom of each page
-      if(window._srFooter){
-        pdf.addImage(window._srFooter,'JPEG',0,pdfH-footerH,pdfW,footerH);
-      }
-      // Page number + project label overlay
-      pdf.setFontSize(7);
-      pdf.setTextColor(120,120,120);
-      var footerLeft=rptProjLabel?(rptProjLabel+' · '+rptTitle):rptTitle;
-      pdf.text(footerLeft,10,pdfH-4);
-      pdf.text('Page '+(pageNum+1)+' of '+totalPages,pdfW-10,pdfH-4,{align:'right'});
-      y+=contentH;
-      pageNum++;
-    }
-
-    // Get report title for filename
-    var titleEl=wrapper.querySelector('h2')||output.querySelector('h2');
-    var fname=(titleEl?titleEl.textContent.replace(/[^a-z0-9]/gi,'-').toLowerCase():'pi-report')+'.pdf';
-    pdf.save(fname);
-    showToast('PDF saved to your Downloads folder.');
-  }).catch(function(e){
-    document.body.removeChild(wrapper);
-    showToast('PDF generation failed. Try again.','error');
-    console.error(e);
-  });
+  var win=window.open('','_blank');
+  win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+rptTitle+'</title><style>'
+    +'*{box-sizing:border-box}'
+    +'body{font-family:Arial,sans-serif;font-size:10px;color:#111;margin:0;padding:0;background:#fff}'
+    /* 3/8 inch top margin = 9.525mm ≈ 36px at 96dpi — used as letterhead space */
+    +'@page{size:letter portrait;margin:9.5mm 14mm 14mm 14mm}'
+    +'@media print{button{display:none!important}.no-print{display:none!important}}'
+    +'table{width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed}'
+    +'th{background:#1a3a5c!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;padding:5px 8px!important;font-size:8px!important;text-transform:uppercase;letter-spacing:.4px;text-align:left}'
+    +'td{padding:5px 8px!important;border-bottom:1px solid #ddd!important;vertical-align:top!important;word-wrap:break-word;font-size:9px!important}'
+    +'tr{page-break-inside:avoid}'
+    +'thead{display:table-header-group}'
+    +'.badge{font-size:8px!important;padding:1px 5px!important;border-radius:10px;border:1px solid #ccc}'
+    +'.b-green{background:#d1f0e0!important;color:#1a7a50!important}'
+    +'.b-amber{background:#fff3cd!important;color:#856404!important}'
+    +'.b-red{background:#f8d7da!important;color:#842029!important}'
+    +'.b-sky,.b-blue{background:#e8f0fb!important;color:#1a3a5c!important}'
+    +'.b-dark{background:#eee!important;color:#333!important}'
+    +'.scope-stat{display:inline-block;background:#f0f4f8;border:1px solid #ccd6e0;border-radius:6px;padding:8px 14px;margin:0 6px 8px 0;text-align:center}'
+    +'.scope-stat b{display:block;font-size:20px;font-weight:700}'
+    +'a{color:#1a5fb4}'
+    +'</style></head><body>'
+    +'<div class="no-print" style="padding:10px 16px;background:#f5f5f5;border-bottom:1px solid #ddd;display:flex;align-items:center;gap:12px">'
+    +'<button onclick="window.print()" style="padding:6px 14px;background:#1A3050;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer">Print / Save PDF</button>'
+    +'<span style="font-size:11px;color:#555">'+rptTitle+(rptProjLabel?' — '+rptProjLabel:'')+'</span>'
+    +'</div>'
+    +'<div style="padding:0 0 8px 0">'
+    +'<div style="font-size:15px;font-weight:700;color:#1a3a5c;margin-bottom:3px">'+rptTitle+'</div>'
+    +(rptProjLabel?'<div style="font-size:11px;color:#555;margin-bottom:2px">'+rptProjLabel+'</div>':'')
+    +'<div style="font-size:10px;color:#888;margin-bottom:10px">Generated '+dateStr+'</div>'
+    +summaryBlock
+    +'</div>'
+    +bodyHtml
+    +'<div style="margin-top:20px;padding-top:8px;border-top:1px solid #ddd;font-size:8px;color:#aaa;display:flex;justify-content:space-between">'
+    +'<span>PI Registry · Sunrise Engineering</span>'
+    +'<span>'+footerLabel+'</span>'
+    +'</div>'
+    +'</body></html>');
+  win.document.close();
 }
 
 
@@ -6668,10 +6511,9 @@ function _portfolioPrintWin(title, bodyHtml) {
     .b-green{background:#eafaf1;color:#1a7a50}
     .b-blue{background:#e8f0fb;color:#1a3a5c}
     .footer{margin-top:24px;padding-top:10px;border-top:1px solid #ddd;font-size:9px;color:#aaa;display:flex;justify-content:space-between}
-    @media print{body{padding:0}button{display:none}@page{margin:12mm 14mm}tr{page-break-inside:avoid}}
+    @media print{body{padding:0}button{display:none}@page{margin:9.5mm 14mm 14mm 14mm}tr{page-break-inside:avoid}}
   </style>
   </head><body>
-  <img class="lh" src="${window._srHeader}" alt="Sunrise Engineering">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
     <div>
       <h1>${title}</h1>
@@ -7920,7 +7762,7 @@ function printEngagementMatrix(projectId) {
     @media print {
       body { padding: 0; }
       button { display: none; }
-      @page { margin: 12mm 14mm; size: landscape; }
+      @page { margin: 9.5mm 14mm 14mm 14mm; size: landscape; }
       .section-title { page-break-after: avoid; }
       tr { page-break-inside: avoid; }
       .no-break { page-break-inside: avoid; }

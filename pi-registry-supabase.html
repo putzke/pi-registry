@@ -5207,19 +5207,33 @@ function generateReport(type){
     matCols.forEach(function(c){matLegend+='<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+matColors[c]+';margin-right:4px"></span>'+matColHdr[c]+'</span>';});
     matLegend+='<span style="margin-left:auto;font-style:italic;color:var(--fog);font-size:10px">Hover initials for name · All project stakeholders</span></div>';
 
-    body='<div style="page-break-inside:avoid;page-break-after:always;margin-bottom:20px">'      +'<div style="font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Stakeholder Engagement Matrix</div>'      +matLegend      +'<table style="width:100%;border-collapse:separate;border-spacing:3px"><thead><tr>'+matHdr+'</tr></thead><tbody>'+matBodyRows+'</tbody></table>'      +'</div>'      +'<div style="font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-top:14px;border-top:1px solid var(--border);page-break-before:always">External Stakeholder Detail ('+externalFilteredPS.length+' contacts)</div>'      +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px">';
+    body='<div style="page-break-inside:avoid;page-break-after:always;margin-bottom:20px">'      +'<div style="font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Stakeholder Engagement Matrix</div>'      +matLegend      +'<table style="width:100%;border-collapse:separate;border-spacing:3px"><thead><tr>'+matHdr+'</tr></thead><tbody>'+matBodyRows+'</tbody></table>'      +'</div>'      +'<div style="font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-top:14px;border-top:1px solid var(--border);page-break-before:always">External Stakeholder Detail ('+externalFilteredPS.length+' contacts)</div>'
+      +'<table style="width:100%;border-collapse:collapse;table-layout:fixed"><thead><tr>'
+      +'<td style="width:33%;padding:8px 10px;background:rgba(40,168,112,.08);border:1px solid var(--border);font-size:13px;font-weight:600;color:var(--green)">Champions ('+groupsExt['Champion'].length+')</td>'
+      +'<td style="width:34%;padding:8px 10px;background:rgba(255,255,255,.03);border:1px solid var(--border);font-size:13px;font-weight:600;color:var(--slate)">Neutrals ('+groupsExt['Neutral'].length+')</td>'
+      +'<td style="width:33%;padding:8px 10px;background:rgba(217,64,64,.08);border:1px solid var(--border);font-size:13px;font-weight:600;color:var(--red)">Opponents ('+groupsExt['Opponent'].length+')</td>'
+      +'</tr></thead><tbody><tr style="vertical-align:top">';
+    // Build each column as a td
     ['Champion','Neutral','Opponent'].forEach(function(g){
       var color=g==='Champion'?'var(--green)':g==='Opponent'?'var(--red)':'var(--slate)';
       var bg=g==='Champion'?'rgba(40,168,112,.08)':g==='Opponent'?'rgba(217,64,64,.08)':'rgba(255,255,255,.03)';
-      body+='<div style="background:'+bg+';border:1px solid var(--border);border-radius:12px;padding:16px 18px;page-break-inside:avoid">'        +'<div style="font-size:14px;font-weight:600;color:'+color+';margin-bottom:12px">'+g+'s ('+groupsExt[g].length+')</div>';
-      if(groupsExt[g].length===0)body+='<div style="font-size:12px;color:var(--fog);padding:12px 0">None in this category.</div>';
-      groupsExt[g].forEach(function(item){
-        var tags=(item.lk.issueTags||'').split(',').filter(Boolean).map(function(t){return '<span class="badge b-dark" style="margin:1px">'+t.trim()+'</span>'}).join('');
-        body+='<div style="padding:8px 0;border-bottom:1px solid var(--border);page-break-inside:avoid">'          +'<div style="font-weight:500;color:var(--white);font-size:13px">'+item.s.firstName+' '+item.s.lastName+'</div>'          +'<div style="font-size:12px;color:var(--slate)">'+(item.s.org||item.s.type||'')+'</div>'          +(tags?'<div style="margin-top:4px">'+tags+'</div>':'')+'</div>';
-      });
-      body+='</div>';
+      body+='<td style="background:'+bg+';border:1px solid var(--border);padding:10px 12px;vertical-align:top">';
+      if(groupsExt[g].length===0){
+        body+='<div style="font-size:12px;color:var(--fog);padding:8px 0">None in this category.</div>';
+      } else {
+        groupsExt[g].forEach(function(item){
+          var tags=(item.lk.issueTags||'').split(',').filter(Boolean).map(function(t){return '<span class="badge b-dark" style="margin:1px">'+t.trim()+'</span>';}).join('');
+          body+='<div style="padding:7px 0;border-bottom:1px solid rgba(255,255,255,.06);page-break-inside:avoid">'
+            +'<div style="font-weight:600;color:var(--white);font-size:13px">'+item.s.firstName+' '+item.s.lastName+'</div>'
+            +'<div style="font-size:12px;color:var(--slate)">'+(item.s.org||item.s.type||'')+'</div>'
+            +(tags?'<div style="margin-top:3px">'+tags+'</div>':'')
+            +'</div>';
+        });
+      }
+      body+='</td>';
     });
-    body+='</div>';
+    body+='</tr></tbody></table>';
+
 
   } else if(type==='deliverable-status'){
     var complete=dels.filter(function(d){return d.status==='Complete'}).length;

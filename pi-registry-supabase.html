@@ -3054,7 +3054,7 @@ function renderDelScope(pF){
               <div class="del-pbar" title="${isOver2?'+'+overAmt2+' over contracted':''}" style="width:50px"><div class="del-pbar-fill ${isOver2?'amber':pct2===100?'done':pct2>75?'amber':''}" style="width:${pct2}%"></div></div>
               <span style="font-size:11px;color:${isOver2?'var(--amber)':'var(--slate)'}">${isOver2?rawPct2+'%':pct2+'%'}</span>
             </div></td>
-            <td><div style="display:flex;align-items:center;gap:4px"><span class="badge badge-btn ${d.status==='Complete'?'b-green':d.status==='In progress'?'b-sky':d.status==='On hold'?'b-amber':d.status==='Cancelled'?'b-red':'b-gray'}" style="font-size:11px;cursor:pointer;user-select:none" onclick="cycleDelStatus('${d.id}')" title="Click to change status">${d.status}</span>${isOver2?'<span class="badge b-amber" style="font-size:10px" title="Delivered exceeds contracted quantity">+'+overAmt2+' over</span>':''}</div></td>
+            <td><div style="display:flex;align-items:center;gap:4px"><span class="badge badge-btn ${d.status==='Complete'?'b-green':d.status==='In progress'?'b-sky':d.status==='On hold'?'b-amber':d.status==='Cancelled'?'b-red':'b-gray'}" style="font-size:11px">${d.status}</span>${isOver2?'<span class="badge b-amber" style="font-size:10px" title="Delivered exceeds contracted quantity">+'+overAmt2+' over</span>':''}</div></td>
             <td style="font-size:12px;color:var(--slate)">${d.scopeType==='recurring'?d.freq:d.milestoneStart||'—'}</td>
             <td style="font-size:12px;color:var(--slate)">${_dueHTML}</td>
             <td>${_paceHTML}</td>
@@ -3152,7 +3152,7 @@ function renderDelAll(pF){
               <button class="ictr-btn" onclick="adjDel('${d.id}',1)"><svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" style="width:8px;height:8px"><path d="M5 2v6M2 5h6"/></svg></button>
             </div></td>
             <td><div style="display:flex;align-items:center;gap:5px"><div class="del-pbar" style="width:60px"><div class="del-pbar-fill ${isOver?'amber':pct===100?'done':''}" style="width:${pct}%"></div></div><span style="font-size:12px;color:${isOver?'var(--amber)':'inherit'}">${isOver?rawPct+'%':pct+'%'}</span></div></td>
-            <td><div style="display:flex;align-items:center;gap:4px"><span class="badge badge-btn ${d.status==='Complete'?'b-green':d.status==='In progress'?'b-sky':d.status==='On hold'?'b-amber':d.status==='Cancelled'?'b-red':'b-gray'}" style="font-size:11px;cursor:pointer;user-select:none" onclick="cycleDelStatus('${d.id}')" title="Click to change status">${d.status}</span>${isOver?'<span class="badge b-amber" style="font-size:10px">+'+overAmt+' over</span>':''}</div></td>
+            <td><div style="display:flex;align-items:center;gap:4px"><span class="badge badge-btn ${d.status==='Complete'?'b-green':d.status==='In progress'?'b-sky':d.status==='On hold'?'b-amber':d.status==='Cancelled'?'b-red':'b-gray'}" style="font-size:11px">${d.status}</span>${isOver?'<span class="badge b-amber" style="font-size:10px">+'+overAmt+' over</span>':''}</div></td>
             <td style="font-size:12px;color:var(--slate)">${d.dueDate||'—'}</td>
             <td><button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="openDelModal('${d.id}')">Edit</button></td>
           </tr>`;
@@ -3203,7 +3203,7 @@ function renderDelAll(pF){
             <td style="padding-left:20px"><div style="display:flex;align-items:center;gap:6px"><span style="color:var(--sky-lt);flex-shrink:0">${delGroupIcon(d.type)}</span><span class="badge b-dark" style="font-size:11px">${d.type}</span></div></td>
             <td><span class="badge ${d.scopeType==='recurring'?'b-sky':d.scopeType==='milestone'?'b-purple':'b-gray'}" style="font-size:11px">${d.scopeType}</span></td>
             <td><div style="display:flex;align-items:center;gap:5px"><div class="del-pbar" style="width:70px"><div class="del-pbar-fill ${isOver?'amber':pct===100?'done':''}" style="width:${pct}%"></div></div><span style="font-size:12px;color:${isOver?'var(--amber)':'inherit'}">${isOver?rawPct+'%':pct+'%'}</span></div></td>
-            <td><div style="display:flex;align-items:center;gap:4px"><span class="badge badge-btn ${d.status==='Complete'?'b-green':d.status==='In progress'?'b-sky':d.status==='On hold'?'b-amber':d.status==='Cancelled'?'b-red':'b-gray'}" style="font-size:11px;cursor:pointer;user-select:none" onclick="cycleDelStatus('${d.id}')" title="Click to change status">${d.status}</span>${isOver?'<span class="badge b-amber" style="font-size:10px">+'+overAmt+' over</span>':''}</div></td>
+            <td><div style="display:flex;align-items:center;gap:4px"><span class="badge badge-btn ${d.status==='Complete'?'b-green':d.status==='In progress'?'b-sky':d.status==='On hold'?'b-amber':d.status==='Cancelled'?'b-red':'b-gray'}" style="font-size:11px">${d.status}</span>${isOver?'<span class="badge b-amber" style="font-size:10px">+'+overAmt+' over</span>':''}</div></td>
             <td style="font-size:12px;color:var(--slate)">${d.dueDate||'—'}</td>
             <td><button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="openDelModal('${d.id}')">Edit</button></td>
           </tr>`;

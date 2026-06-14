@@ -4860,42 +4860,39 @@ function renderReports(el){
     +'<div style="width:'+(neutCt/sentTot*100)+'%;background:var(--slate)" title="Neutral"></div>'
     +'<div style="width:'+(oppCt/sentTot*100)+'%;background:var(--red)" title="Opponents"></div></div>';
 
+  var fuColor=overdueFU>0?'var(--red)':openFUs>0?'var(--amber)':'var(--green)';
+  var delColor=delPctR>=75?'#28A870':delPctR>=40?'#5BA4CF':'#D9A544';
   var summaryBar='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px">'
-    // Stakeholders card
-    +'<div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:16px 18px">'
-    +'<div style="font-size:13px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Stakeholders</div>'
-    +'<div style="font-size:42px;font-weight:700;line-height:1;color:var(--white);margin-bottom:6px">'+projPS.length+'</div>'
-    +'<div style="display:flex;gap:10px;font-size:14px">'
+    +'<div style="background:linear-gradient(160deg,#1e3a5f,#1A3050);border:1px solid rgba(255,255,255,.14);border-top:3px solid var(--teal);border-radius:12px;padding:18px 20px">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--fog);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">Stakeholders</div>'
+    +'<div style="font-size:48px;font-weight:700;line-height:1;color:var(--white);margin-bottom:8px">'+projPS.length+'</div>'
+    +'<div style="display:flex;gap:10px;font-size:14px;margin-bottom:8px">'
     +'<span style="color:var(--teal)">'+extPS.length+' external</span>'
     +'<span style="color:var(--sky-lt)">'+intPS.length+' internal</span></div>'
     +sentMiniBar
-    +'<div style="font-size:12px;color:var(--fog);margin-bottom:4px;font-style:italic">External contacts only</div>'
-    +'<div style="display:flex;gap:8px;font-size:13px">'
+    +'<div style="display:flex;gap:10px;font-size:13px">'
     +'<span style="color:var(--green)">'+champCt+' champ</span>'
     +'<span style="color:var(--slate)">'+neutCt+' neutral</span>'
     +'<span style="color:var(--red)">'+oppCt+' opp</span></div>'
     +'</div>'
-    // Interactions card
-    +'<div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:16px 18px">'
-    +'<div style="font-size:13px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Interactions</div>'
-    +'<div style="font-size:28px;font-weight:700;color:var(--white);margin-bottom:4px">'+projInts.length+'</div>'
+    +'<div style="background:linear-gradient(160deg,#1e3a5f,#1A3050);border:1px solid rgba(255,255,255,.14);border-top:3px solid var(--sky-lt);border-radius:12px;padding:18px 20px">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--fog);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">Interactions</div>'
+    +'<div style="font-size:48px;font-weight:700;line-height:1;color:var(--white);margin-bottom:8px">'+projInts.length+'</div>'
     +'<div style="display:flex;gap:10px;font-size:14px">'
     +'<span style="color:var(--sky-lt)">'+projInts.filter(function(i){return i.direction==='Incoming'}).length+' incoming</span>'
     +'<span style="color:var(--green)">'+projInts.filter(function(i){return i.direction==='Outgoing'}).length+' outgoing</span></div>'
     +'</div>'
-    // Follow-ups card
-    +'<div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:16px 18px">'
-    +'<div style="font-size:13px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Follow-ups</div>'
-    +'<div style="font-size:42px;font-weight:700;line-height:1;color:'+(overdueFU>0?'var(--red)':openFUs>0?'var(--amber)':'var(--green)')+'">'+openFUs+'</div>'
-    +'<div style="font-size:14px;color:'+(overdueFU>0?'var(--red)':'var(--fog)')+'">'+(overdueFU>0?overdueFU+' overdue':openFUs>0?'All on track':'None pending')+'</div>'
+    +'<div style="background:linear-gradient(160deg,#1e3a5f,#1A3050);border:1px solid rgba(255,255,255,.14);border-top:3px solid '+fuColor+';border-radius:12px;padding:18px 20px">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--fog);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">Follow-ups</div>'
+    +'<div style="font-size:48px;font-weight:700;line-height:1;color:'+fuColor+';margin-bottom:8px">'+openFUs+'</div>'
+    +'<div style="font-size:14px;color:'+fuColor+'">'+(overdueFU>0?overdueFU+' overdue':openFUs>0?'All on track':'None pending')+'</div>'
     +'</div>'
-    // Deliverables card with donut
-    +'<div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:16px 18px">'
-    +'<div style="font-size:13px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Deliverables</div>'
-    +'<div style="display:flex;align-items:center;gap:14px">'
-    +miniDonut(delPctR,delPctR>=75?'#28A870':delPctR>=40?'#5BA4CF':'#D9A544',64)
-    +'<div><div style="font-size:18px;font-weight:600;color:var(--white)">'+doneDels+' of '+projDels.length+'</div>'
-    +'<div style="font-size:14px;color:var(--fog)">complete</div></div></div>'
+    +'<div style="background:linear-gradient(160deg,#1e3a5f,#1A3050);border:1px solid rgba(255,255,255,.14);border-top:3px solid '+delColor+';border-radius:12px;padding:18px 20px">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--fog);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">Deliverables</div>'
+    +'<div style="display:flex;align-items:center;gap:16px">'
+    +miniDonut(delPctR,delColor,88)
+    +'<div><div style="font-size:28px;font-weight:700;color:var(--white);line-height:1">'+doneDels+'<span style="font-size:18px;color:var(--fog);font-weight:400"> of '+projDels.length+'</span></div>'
+    +'<div style="font-size:14px;color:var(--fog);margin-top:4px">complete</div></div></div>'
     +'</div></div>';
 
   var groupPanel='<div style="margin-bottom:24px;background:#0E1E30;border:1px solid rgba(255,255,255,.13);border-radius:12px;padding:16px 20px">'

@@ -2917,7 +2917,7 @@ function renderInteractions(el){
             const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
             const p=projs.find(x=>x.id===i.projectId);
             const od=i.followUp&&!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<new Date();
-            return`<tr>
+            return`<tr style="page-break-inside:avoid">
               <td class="td-mono" style="white-space:nowrap">${fmt(i.date)}</td>
               <td><span class="badge b-dark td-mono">${p?p.pid:'?'}</span></td>
               <td><div class="td-link" onclick="selectStake('${i.stakeholderId}');setView('stakeholders')">${s?dispName(s):'Unknown'}</div><div style="font-size:11px;color:var(--fog)">${s?s.org||s.type||'':''}</div></td>
@@ -5098,8 +5098,8 @@ function generateReport(type){
       +'</tr></thead><tbody>';
     sorted.forEach(function(i){
       var s=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
-      body+='<tr>'
-        +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-family:monospace;font-size:13px">'+fmt(i.date)+'</td>'
+      body+='<tr style="page-break-inside:avoid">'
+        +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-family:monospace;font-size:13px;white-space:nowrap">'+fmt(i.date)+'</td>'
         +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-weight:600">'+(s?dispName(s):'Unknown')+'</td>'
         +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top">'+(i.channel||'—')+'</td>'
         +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top;line-height:1.6">'+i.summary+'</td>'
@@ -5222,11 +5222,11 @@ function generateReport(type){
       +'<th>Date</th><th>Name</th><th>Organization</th><th>Channel</th><th>Comment / summary</th><th>Response status</th><th>Follow-up notes</th></tr></thead><tbody>';
     comments.forEach(function(i){
       var s=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
-      body+='<tr><td class="td-mono">'+fmt(i.date)+'</td>'
+      body+='<tr style="page-break-inside:avoid"><td class="td-mono" style="white-space:nowrap">'+fmt(i.date)+'</td>'
         +'<td style="font-weight:500;color:var(--white)">'+(s?dispName(s):'Unknown')+'</td>'
         +'<td>'+(s?s.org||'':'—')+'</td>'
         +'<td><span class="badge '+chCls(i.channel)+'">'+i.channel+'</span></td>'
-        +'<td style="max-width:300px;line-height:1.5">'+i.summary+'</td>'
+        +'<td style="line-height:1.5">'+i.summary+'</td>'
         +'<td>'+(i.followUpDone?'<span class="badge b-green">Responded</span>':'<span class="badge b-amber">Pending</span>')+'</td>'
         +'<td style="font-size:12px;color:var(--slate)">'+(i.followUpNote||'—')+'</td></tr>';
     });
@@ -5267,7 +5267,8 @@ function saveAsPdf(){
     'body{margin:0;padding:0}'+
     'table{border-collapse:collapse;width:100%;font-size:9px}'+
     'th{background:#1a3a5c!important;color:#fff!important;padding:4px 6px!important;font-size:8px!important;text-transform:uppercase;letter-spacing:.4px}'+
-    'td{padding:5px 6px!important;border-bottom:1px solid #e0e0e0!important;font-size:9px!important;word-wrap:break-word;vertical-align:top!important;text-align:left!important}'+
+    'tr{page-break-inside:avoid!important}'+
+    'td{padding:5px 6px!important;border-bottom:1px solid #e0e0e0!important;font-size:9px!important;word-wrap:break-word;vertical-align:top!important;text-align:left!important;page-break-inside:avoid!important}'+
     '.badge{font-size:8px!important;padding:1px 4px!important}'+
     'h2{font-size:14px!important}'+
     '[style*="4A9BE8"]{color:#1565c0!important}';

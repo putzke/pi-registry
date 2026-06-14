@@ -4906,17 +4906,17 @@ function generateReport(type){
   // Report header
   var hdr='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;padding-bottom:14px;border-bottom:2px solid var(--border)">'
     +'<div><div style="font-size:18px;font-weight:600;color:var(--white);margin-bottom:3px">'+getReportTitle(type)+'</div>'
-    +'<div style="font-size:13px;color:var(--slate)">'+proj.name+' — '+proj.pid+'</div>'
-    +'<div style="font-size:12px;color:var(--fog);margin-top:4px">Generated '+dateStr+'</div></div>'
+    +'<div style="font-size:14px;color:var(--slate)">'+proj.name+' — '+proj.pid+'</div>'
+    +'<div style="font-size:13px;color:var(--fog);margin-top:4px">Generated '+dateStr+'</div></div>'
     +'<div style="display:flex;gap:8px"><button class="btn btn-sm" onclick="saveAsPdf()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M8 2v8M5 7l3 3 3-3"/><rect x="2" y="11" width="12" height="2" rx="1"/></svg> Save as PDF</button>'
     +'<button class="btn btn-sm" onclick="document.getElementById(\'rpt-output\').innerHTML=\'\'">Close</button></div></div>'
 ;
   // Distributed to box — kept separate so summary/narrative prints after it
-  var distBlock=(recipientNames.length>0?'<div style="margin-bottom:14px;padding:10px 14px;background:#e8eef4;border:1px solid #b0c4d8;border-radius:8px;font-size:12px"><span style="color:#444;text-transform:uppercase;letter-spacing:.5px;font-weight:600">Distributed to: </span><span style="color:#111">'+recipientNames.join(', ')+'</span><span style="color:var(--fog)"> ('+selGroups.join(', ')+')</span></div>':'');
+  var distBlock=(recipientNames.length>0?'<div style="margin-bottom:14px;padding:12px 16px;background:#e8eef4;border:1px solid #b0c4d8;border-radius:8px;font-size:14px"><span style="color:#444;text-transform:uppercase;letter-spacing:.5px;font-weight:600">Distributed to: </span><span style="color:#111">'+recipientNames.join(', ')+'</span><span style="color:var(--fog)"> ('+selGroups.join(', ')+')</span></div>':'');
 
   // Summary/narrative block — shown above report output, included in PDF
   var summaryBlock='<div id="rpt-summary-wrap" style="margin-bottom:18px;padding:14px 16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);border-radius:10px">'
-    +'<div style="font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Report summary / narrative <span style="font-weight:400;font-style:italic;text-transform:none;letter-spacing:0">(optional — prints after distributed to list)</span></div>'
+    +'<div style="font-size:13px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Report summary / narrative <span style="font-weight:400;font-style:italic;text-transform:none;letter-spacing:0">(optional — prints after distributed to list)</span></div>'
     +'<textarea id="rpt-summary-text" placeholder="Enter an executive summary, narrative overview, or context for this report..." '
     +'style="width:100%;min-height:90px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:10px 12px;resize:vertical;font-family:inherit;line-height:1.6;box-sizing:border-box"></textarea>'
     +'</div>';
@@ -4935,12 +4935,12 @@ function generateReport(type){
       return nameA.localeCompare(nameB);
     });
     body='<table style="width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed"><thead><tr>'
-      +'<th style="width:16%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px">Name</th>'
-      +'<th style="width:20%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px">Organization</th>'
-      +'<th style="width:16%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px">Title</th>'
-      +'<th style="width:26%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px">Email</th>'
-      +'<th style="width:14%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px">Phone</th>'
-      +'<th style="width:8%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px">Type</th>'
+      +'<th style="width:16%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px">Name</th>'
+      +'<th style="width:20%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px">Organization</th>'
+      +'<th style="width:16%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px">Title</th>'
+      +'<th style="width:26%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px">Email</th>'
+      +'<th style="width:14%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px">Phone</th>'
+      +'<th style="width:8%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px">Type</th>'
       +'</tr></thead><tbody>';
     var lastRole = null;
     sortedStakes.forEach(function(item){
@@ -4948,7 +4948,7 @@ function generateReport(type){
       var role=(lk.stakeholderRole||'External');
       if(role!==lastRole){
         var sectionColor=role==='Internal'?'#2d5a8e':'#4a7a4a';
-        body+='<tr><td colspan="6" style="padding:6px 6px 3px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:'+sectionColor+';border-bottom:2px solid '+sectionColor+';background:#f8f9fa">'+role+' Stakeholders</td></tr>';
+        body+='<tr><td colspan="6" style="padding:8px 8px 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:'+sectionColor+';border-bottom:2px solid '+sectionColor+';background:#f8f9fa">'+role+' Stakeholders</td></tr>';
         lastRole=role;
       }
       var dgBadges=(lk.distributionGroups||'').split(',').filter(Boolean).map(function(g){return '<span class="badge b-teal" style="margin:1px">'+g.trim()+'</span>'}).join('');
@@ -4966,20 +4966,20 @@ function generateReport(type){
   } else if(type==='interaction-log'){
     var sorted=logInts.slice().sort(function(a,b){return b.date.localeCompare(a.date)});
     body='<table style="width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed"><thead><tr>'
-      +'<th style="width:10%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Date</th>'
-      +'<th style="width:16%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Stakeholder</th>'
-      +'<th style="width:13%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Channel</th>'
-      +'<th style="width:51%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Summary</th>'
-      +'<th style="width:10%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Logged by</th>'
+      +'<th style="width:10%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Date</th>'
+      +'<th style="width:16%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Stakeholder</th>'
+      +'<th style="width:13%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Channel</th>'
+      +'<th style="width:51%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Summary</th>'
+      +'<th style="width:10%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Logged by</th>'
       +'</tr></thead><tbody>';
     sorted.forEach(function(i){
       var s=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
       body+='<tr>'
-        +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-family:monospace;font-size:12px">'+fmt(i.date)+'</td>'
+        +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-family:monospace;font-size:13px">'+fmt(i.date)+'</td>'
         +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-weight:600">'+(s?dispName(s):'Unknown')+'</td>'
         +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top">'+(i.channel||'—')+'</td>'
         +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top;line-height:1.6">'+i.summary+'</td>'
-        +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:12px;color:#555">'+(i.loggedBy||'—')+'</td></tr>';
+        +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:13px;color:#555">'+(i.loggedBy||'—')+'</td></tr>';
     });
     body+='</tbody></table>';
 

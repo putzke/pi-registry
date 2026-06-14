@@ -582,9 +582,10 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
           <div class="form-group">
             <label class="form-label">Subject</label>
             <select class="form-input form-select" id="log-subject">
-              <option>General</option><option>Traffic</option><option>Property</option>
-              <option>Environmental</option><option>Utility Service</option>
-              
+              <option>General</option><option>Traffic</option><option>Property Access</option>
+              <option>Property Issue</option><option>Environmental</option>
+              <option>Utility Service</option><option>Information</option>
+              <option>Noise / Hours</option><option>ROW / Easement</option><option>Other</option>
             </select>
           </div>
         </div>
@@ -592,6 +593,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
           <label class="form-label">Nature</label>
           <select class="form-input form-select" id="log-nature">
             <option>Inquiry</option><option>Complaint</option><option>Compliment</option>
+            <option>Comment</option><option>Request</option><option>Concern</option><option>Support</option>
           </select>
         </div>
         <div class="form-group">
@@ -866,7 +868,7 @@ const SB_TO_INT = {
   pi_projects: {
     id:'id', name:'name', pid:'pid', client:'client', type:'project_type',
     county:'county', phase:'phase', status:'status', startDate:'start_date',
-    endDate:'end_date', preconDate:'precon_date', notes:'notes'
+    endDate:'end_date', preconDate:'precon_date', notes:'notes', lastExported:'last_exported'
   },
   pi_stakeholders: {
     id:'id', firstName:'first_name', lastName:'last_name', org:'org',
@@ -921,7 +923,7 @@ function localToday(){
   return y+'-'+m+'-'+day;
 }
 
-const DATE_FIELDS = new Set(['interaction_date','follow_up_due','follow_up_resolved','due_date','start_date','end_date','precon_date','added_date','meeting_date','date_raised','date_resolved']);
+const DATE_FIELDS = new Set(['interaction_date','follow_up_due','follow_up_resolved','due_date','start_date','end_date','precon_date','added_date','meeting_date','date_raised','date_resolved','last_exported']);
 
 // Integer FK columns that Supabase expects as numbers, not strings
 const SB_INT_FIELDS = new Set(['project_id','stakeholder_id','issue_id','interaction_id','meeting_id']);

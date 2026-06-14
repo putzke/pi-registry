@@ -4728,13 +4728,56 @@ function renderReports(el){
     +projOpts+'</select></div></div>';
 
   if(!projF){
+    // ── CROSS-PROJECT PORTFOLIO OVERVIEW ──────────────────────────────
+    var allProjs=DB.get('projects').filter(function(p){return p.status==='Active'||p.status==='On hold';});
+    var allPS=DB.get('project_stakeholders');
+    var allInts=DB.get('interactions');
+    var allFU=allInts.filter(function(i){return i.followUp&&!i.followUpDone;});
+    var allOverdueFU=allFU.filter(function(i){return i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<new Date();});
+    var allComm=DB.get('commitments').filter(function(c){return c.status!=='Fulfilled';});
+    var allIssues=DB.get('issues').filter(function(iss){return iss.status==='Open'||iss.status==='In Progress';});
+
+    // Group by client
+    var clientMap={};
+    allProjs.forEach(function(p){var cl=p.client||'(No client)';if(!clientMap[cl])clientMap[cl]=[];clientMap[cl].push(p);});
+    var clientKeys=Object.keys(clientMap).sort();
+
+    // Build client blocks
+    var crossHTML='';
+    clientKeys.forEach(function(cl){
+      var cProjs=clientMap[cl];
+      var projRows='';
+      cProjs.forEach(function(p){
+        var ps=allPS.filter(function(x){return x.projectId===p.id;});
+        var extCt=ps.filter(function(x){return(x.stakeholderRole||'External')==='External';}).length;
+        var intCt=ps.filter(function(x){return(x.stakeholderRole||'External')==='Internal';}).length;
+        var projInts=allInts.filter(function(i){return i.projectId===p.id;});
+        var openFU=allFU.filter(function(i){return i.projectId===p.id;}).length;
+        var overdueFUct=allOverdueFU.filter(function(i){return i.projectId===p.id;}).length;
+        var openComm=allComm.filter(function(c){return c.projectId===p.id;}).length;
+        var openIss=allIssues.filter(function(iss){return iss.projectId===p.id;}).length;
+        var lastInt=projInts.filter(function(i){return i.date;}).sort(function(a,b){return b.date.localeCompare(a.date);})[0];
+        var lastIntStr=lastInt?fmt(lastInt.date):'—';
+        var statusColor=p.status==='Active'?'#1a7a50':'#b36b00';
+        projRows+='<tr onclick="S.projectFilter=\''+p.id+'\';renderReports(document.getElementById(\'main\'))" style="cursor:pointer" onmouseover="this.style.background=\'rgba(255,255,255,.04)\'" onmouseout="this.style.background=\'\'"><td style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06)"><div style="font-weight:600;font-size:13px;color:var(--white)">'+p.name+'</div><div style="font-size:11px;color:var(--fog);margin-top:2px">'+p.pid+' &middot; <span style="color:'+statusColor+'">'+p.status+'</span></div></td><td style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);text-align:center;font-size:13px;color:var(--mist)">'+extCt+'<span style="font-size:10px;color:var(--fog);margin-left:3px">ext</span>'+(intCt?' <span style="font-size:10px;color:var(--fog)">+'+intCt+' int</span>':'')+'</td><td style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);text-align:center;font-size:13px;color:var(--mist)">'+projInts.length+'</td><td style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);text-align:center">'+(openFU>0?'<span style="font-size:13px;color:'+(overdueFUct>0?'#e05252':'var(--mist)')+'">'+openFU+(overdueFUct>0?' <span style="font-size:10px">('+overdueFUct+' overdue)</span>':'')+'</span>':'<span style="color:var(--fog)">—</span>')+'</td><td style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);text-align:center">'+(openComm>0?'<span style="font-size:13px;color:var(--amber)">'+openComm+'</span>':'<span style="color:var(--fog)">—</span>')+'</td><td style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);text-align:center">'+(openIss>0?'<span style="font-size:13px;color:#e05252">'+openIss+'</span>':'<span style="color:var(--fog)">—</span>')+'</td><td style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px;color:var(--fog)">'+lastIntStr+'</td></tr>';
+      });
+      crossHTML+='<div style="margin-bottom:24px;background:#1A3050;border:1px solid rgba(255,255,255,.12);border-radius:12px;overflow:hidden"><div style="padding:14px 16px;background:rgba(45,90,142,.4);border-bottom:1px solid rgba(255,255,255,.10);display:flex;align-items:center;justify-content:space-between"><div style="font-size:15px;font-weight:700;color:var(--white)">'+cl+'</div><div style="font-size:12px;color:var(--slate)">'+cProjs.length+' project'+(cProjs.length!==1?'s':'')+'</div></div><table style="width:100%;border-collapse:collapse"><thead><tr style="background:rgba(255,255,255,.04)"><th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--fog);text-transform:uppercase;letter-spacing:.5px">Project</th><th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:600;color:var(--fog);text-transform:uppercase;letter-spacing:.5px">Stakeholders</th><th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:600;color:var(--fog);text-transform:uppercase;letter-spacing:.5px">Interactions</th><th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:600;color:var(--fog);text-transform:uppercase;letter-spacing:.5px">Open Follow-ups</th><th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:600;color:var(--fog);text-transform:uppercase;letter-spacing:.5px">Open Commitments</th><th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:600;color:var(--fog);text-transform:uppercase;letter-spacing:.5px">Open Issues</th><th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--fog);text-transform:uppercase;letter-spacing:.5px">Last Activity</th></tr></thead><tbody>'+projRows+'</tbody></table></div>';
+    });
+
+    // Totals bar
+    var totalOpenFU=allFU.length,totalOverdue=allOverdueFU.length,totalComm=allComm.length,totalIss=allIssues.length;
+    var totalsBar='<div style="display:flex;gap:16px;margin-bottom:24px;flex-wrap:wrap">'
+      +'<div style="flex:1;min-width:140px;background:#1A3050;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:16px 20px"><div style="font-size:11px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Active Projects</div><div style="font-size:28px;font-weight:700;color:var(--white)">'+allProjs.length+'</div></div>'
+      +'<div style="flex:1;min-width:140px;background:#1A3050;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:16px 20px"><div style="font-size:11px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Open Follow-ups</div><div style="font-size:28px;font-weight:700;color:'+(totalOverdue>0?'#e05252':'var(--white)')+'">'+totalOpenFU+'</div>'+(totalOverdue>0?'<div style="font-size:11px;color:#e05252;margin-top:2px">'+totalOverdue+' overdue</div>':'')+'</div>'
+      +'<div style="flex:1;min-width:140px;background:#1A3050;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:16px 20px"><div style="font-size:11px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Open Commitments</div><div style="font-size:28px;font-weight:700;color:'+(totalComm>0?'var(--amber)':'var(--white)')+'">'+totalComm+'</div></div>'
+      +'<div style="flex:1;min-width:140px;background:#1A3050;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:16px 20px"><div style="font-size:11px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Open Issues</div><div style="font-size:28px;font-weight:700;color:'+(totalIss>0?'#e05252':'var(--white)')+'">'+totalIss+'</div></div>'
+      +'</div>';
+
     el.innerHTML=topbar
-      +'<div class="content" style="overflow-y:auto">'
-      +'<div class="pane-empty" style="padding:80px">'
-      +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" style="width:48px;height:48px"><rect x="1" y="1" width="22" height="22" rx="2"/><path d="M6 17V14M10 17V10M14 17V12M18 17V7"/></svg>'
-      +'<div class="pe-title" style="font-size:16px;margin-top:8px">Select a project to get started</div>'
-      +'<div class="pe-sub">Choose a project from the dropdown above to generate stakeholder reports, interaction logs, and scope tracking documents.</div>'
-      +'</div></div>';
+      +'<div class="content" style="overflow-y:auto;padding:24px">'
+      +'<div style="font-size:18px;font-weight:700;color:var(--white);margin-bottom:4px">Portfolio Overview</div>'
+      +'<div style="font-size:13px;color:var(--slate);margin-bottom:20px">All active and on-hold projects &mdash; click any row to open that project reports</div>'
+      +totalsBar+crossHTML+'</div>';
     return;
   }
 

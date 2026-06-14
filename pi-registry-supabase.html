@@ -5121,21 +5121,29 @@ function generateReport(type){
 
   } else if(type==='interaction-log'){
     var sorted=logInts.slice().sort(function(a,b){return b.date.localeCompare(a.date)});
-    body='<table style="width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed"><thead><tr>'
-      +'<th style="width:10%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Date</th>'
-      +'<th style="width:16%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Stakeholder</th>'
-      +'<th style="width:13%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Channel</th>'
-      +'<th style="width:51%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Summary</th>'
-      +'<th style="width:10%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px;vertical-align:top">Logged by</th>'
+    body='<table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">'
+      +'<colgroup><col style="width:12%"><col style="width:17%"><col style="width:12%"><col style="width:49%"><col style="width:10%"></colgroup>'
+      +'<thead><tr>'
+      +'<th style="padding:7px 8px;background:#1a3a5c;color:#fff;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px">Date</th>'
+      +'<th style="padding:7px 8px;background:#1a3a5c;color:#fff;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px">Stakeholder</th>'
+      +'<th style="padding:7px 8px;background:#1a3a5c;color:#fff;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px">Channel</th>'
+      +'<th style="padding:7px 8px;background:#1a3a5c;color:#fff;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px">Summary</th>'
+      +'<th style="padding:7px 8px;background:#1a3a5c;color:#fff;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px">By</th>'
       +'</tr></thead><tbody>';
     sorted.forEach(function(i){
       var s=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
+      var sName=s?dispName(s):'Unknown';
+      var sOrg=s?(s.org||''):'';
       body+='<tr style="page-break-inside:avoid">'
-        +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-family:monospace;font-size:13px;white-space:nowrap">'+fmt(i.date)+'</td>'
-        +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-weight:600">'+(s?dispName(s):'Unknown')+'</td>'
-        +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top">'+(i.channel||'—')+'</td>'
-        +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top;line-height:1.6">'+i.summary+'</td>'
-        +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:13px;color:#555">'+(i.loggedBy||'—')+'</td></tr>';
+        +'<td style="padding:8px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:11px;white-space:nowrap">'+fmt(i.date)+'</td>'
+        +'<td style="padding:8px;border-bottom:1px solid #e0e0e0;vertical-align:top">'
+        +'<div style="font-weight:700;font-size:12px;color:#222">'+sName+'</div>'
+        +(sOrg?'<div style="font-size:10px;color:#888;margin-top:1px">'+sOrg+'</div>':'')
+        +'</td>'
+        +'<td style="padding:8px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:12px">'+(i.channel||'—')+'</td>'
+        +'<td style="padding:8px;border-bottom:1px solid #e0e0e0;vertical-align:top;line-height:1.6;font-size:12px">'+i.summary+'</td>'
+        +'<td style="padding:8px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:11px;color:#555">'+(i.loggedBy||'—')+'</td>'
+        +'</tr>';
     });
     body+='</tbody></table>';
 

@@ -4701,7 +4701,7 @@ function exportIssuesPdf(){
   win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Issues Tracker</title><style>'
     +'*{box-sizing:border-box}'
     +'body{font-family:Arial,sans-serif;font-size:10px;color:#111;margin:0;padding:0;background:#fff}'
-    +'@page{size:letter portrait;margin:9.5mm 14mm 14mm 14mm}'
+    +'@page{size:letter portrait;margin:19mm 14mm 14mm 14mm}'
     +'@media print{button{display:none!important}.no-print{display:none!important}}'
     +'table{width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed}'
     +'th{background:#1a3a5c!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;padding:5px 8px!important;font-size:8px!important;text-transform:uppercase;letter-spacing:.4px;text-align:left}'
@@ -5062,7 +5062,6 @@ function generateReport(type){
     +'<div><div style="font-size:18px;font-weight:600;color:var(--white);margin-bottom:3px">'+getReportTitle(type)+'</div>'
     +'<div style="font-size:14px;color:var(--slate)">'+proj.name+' — '+proj.pid+'</div>'
     +'<div style="font-size:13px;color:var(--fog);margin-top:4px">Generated '+dateStr+'</div></div>'
-    +'<div style="display:flex;gap:8px"><button class="btn btn-sm" onclick="saveAsPdf()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M8 2v8M5 7l3 3 3-3"/><rect x="2" y="11" width="12" height="2" rx="1"/></svg> Save as PDF</button>'
     +'<button class="btn btn-sm" onclick="document.getElementById(\'rpt-output\').innerHTML=\'\'">Close</button></div></div>'
 ;
   // Distributed to box — kept separate so summary/narrative prints after it
@@ -5382,7 +5381,7 @@ function saveAsPdf(){
     +'*{box-sizing:border-box}'
     +'body{font-family:Arial,sans-serif;font-size:10px;color:#111;margin:0;padding:0;background:#fff}'
     /* 3/8 inch top margin = 9.525mm ≈ 36px at 96dpi — used as letterhead space */
-    +'@page{size:letter portrait;margin:9.5mm 14mm 14mm 14mm}'
+    +'@page{size:letter portrait;margin:19mm 14mm 14mm 14mm}'
     +'@media print{button{display:none!important}.no-print{display:none!important}}'
     +'table{width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed}'
     +'th{background:#1a3a5c!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;padding:5px 8px!important;font-size:8px!important;text-transform:uppercase;letter-spacing:.4px;text-align:left}'
@@ -6511,7 +6510,7 @@ function _portfolioPrintWin(title, bodyHtml) {
     .b-green{background:#eafaf1;color:#1a7a50}
     .b-blue{background:#e8f0fb;color:#1a3a5c}
     .footer{margin-top:24px;padding-top:10px;border-top:1px solid #ddd;font-size:9px;color:#aaa;display:flex;justify-content:space-between}
-    @media print{body{padding:0}button{display:none}@page{margin:9.5mm 14mm 14mm 14mm}tr{page-break-inside:avoid}}
+    @media print{body{padding:0}button{display:none}@page{margin:19mm 14mm 14mm 14mm}tr{page-break-inside:avoid}}
   </style>
   </head><body>
   <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
@@ -7762,7 +7761,7 @@ function printEngagementMatrix(projectId) {
     @media print {
       body { padding: 0; }
       button { display: none; }
-      @page { margin: 9.5mm 14mm 14mm 14mm; size: landscape; }
+      @page { margin: 19mm 14mm 14mm 14mm; size: landscape; }
       .section-title { page-break-after: avoid; }
       tr { page-break-inside: avoid; }
       .no-break { page-break-inside: avoid; }

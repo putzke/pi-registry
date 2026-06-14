@@ -4956,7 +4956,7 @@ function generateReport(type){
         +'<td style="font-weight:600;padding:9px 10px;border-bottom:1px solid #e0e0e0;word-wrap:break-word;vertical-align:top">'+s.firstName+' '+s.lastName+'</td>'
         +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;word-wrap:break-word;vertical-align:top">'+(s.org||'—')+'</td>'
         +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;word-wrap:break-word;vertical-align:top">'+(s.title||'—')+'</td>'
-        +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;word-wrap:break-word;vertical-align:top;color:#0066cc">'+(s.email||'—')+'</td>'
+        +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;word-wrap:break-word;vertical-align:top;color:#4A9BE8">'+(s.email||'—')+'</td>'
         +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top">'+(s.phone||'—')+'</td>'
         +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top">'+(s.type||'—')+'</td></tr>';
     });
@@ -5145,7 +5145,8 @@ function saveAsPdf(){
     'th{background:#1a3a5c!important;color:#fff!important;padding:4px 6px!important;font-size:8px!important;text-transform:uppercase;letter-spacing:.4px}'+
     'td{padding:5px 6px!important;border-bottom:1px solid #e0e0e0!important;font-size:9px!important;word-wrap:break-word;vertical-align:top!important;text-align:left!important}'+
     '.badge{font-size:8px!important;padding:1px 4px!important}'+
-    'h2{font-size:14px!important}';
+    'h2{font-size:14px!important}'+
+    '[style*="4A9BE8"]{color:#1565c0!important}';
   contentDiv.insertBefore(printStyle, contentDiv.firstChild);
   // Extract summary text and inject before report content
   var summaryEl=output.querySelector('#rpt-summary-text');

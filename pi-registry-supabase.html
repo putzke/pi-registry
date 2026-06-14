@@ -4699,12 +4699,12 @@ function exportIssuesPdf(){
   var issDateStr=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
   var win=window.open('','_blank');
   win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Issues Tracker</title><style>'
-    +'*{box-sizing:border-box}'
+    +'*{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
     +'body{font-family:Arial,sans-serif;font-size:10px;color:#111;margin:0;padding:0;background:#fff}'
     +'@page{size:letter portrait;margin:19mm 14mm 14mm 14mm}'
     +'@media print{button{display:none!important}.no-print{display:none!important}}'
     +'table{width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed}'
-    +'th{background:#1a3a5c!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;padding:5px 8px!important;font-size:8px!important;text-transform:uppercase;letter-spacing:.4px;text-align:left}'
+    +'th{background:#1a3a5c!important;color:#fff!important;padding:5px 8px!important;font-size:8px!important;text-transform:uppercase;letter-spacing:.4px;text-align:left}'
     +'td{padding:5px 8px!important;border-bottom:1px solid #ddd!important;vertical-align:top!important;word-wrap:break-word;font-size:9px!important}'
     +'tr{page-break-inside:avoid}'
     +'thead{display:table-header-group}'
@@ -5062,6 +5062,7 @@ function generateReport(type){
     +'<div><div style="font-size:18px;font-weight:600;color:var(--white);margin-bottom:3px">'+getReportTitle(type)+'</div>'
     +'<div style="font-size:14px;color:var(--slate)">'+proj.name+' — '+proj.pid+'</div>'
     +'<div style="font-size:13px;color:var(--fog);margin-top:4px">Generated '+dateStr+'</div></div>'
+    +'<div style="display:flex;gap:8px"><button class="btn btn-sm" onclick="saveAsPdf()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M8 2v8M5 7l3 3 3-3"/><rect x="2" y="11" width="12" height="2" rx="1"/></svg> Save as PDF</button>'
     +'<button class="btn btn-sm" onclick="document.getElementById(\'rpt-output\').innerHTML=\'\'">Close</button></div></div>'
 ;
   // Distributed to box — kept separate so summary/narrative prints after it
@@ -5378,13 +5379,12 @@ function saveAsPdf(){
 
   var win=window.open('','_blank');
   win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+rptTitle+'</title><style>'
-    +'*{box-sizing:border-box}'
+    +'*{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
     +'body{font-family:Arial,sans-serif;font-size:10px;color:#111;margin:0;padding:0;background:#fff}'
-    /* 3/8 inch top margin = 9.525mm ≈ 36px at 96dpi — used as letterhead space */
     +'@page{size:letter portrait;margin:19mm 14mm 14mm 14mm}'
     +'@media print{button{display:none!important}.no-print{display:none!important}}'
     +'table{width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed}'
-    +'th{background:#1a3a5c!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;padding:5px 8px!important;font-size:8px!important;text-transform:uppercase;letter-spacing:.4px;text-align:left}'
+    +'th{background:#1a3a5c!important;color:#fff!important;padding:5px 8px!important;font-size:8px!important;text-transform:uppercase;letter-spacing:.4px;text-align:left}'
     +'td{padding:5px 8px!important;border-bottom:1px solid #ddd!important;vertical-align:top!important;word-wrap:break-word;font-size:9px!important}'
     +'tr{page-break-inside:avoid}'
     +'thead{display:table-header-group}'
@@ -5394,6 +5394,8 @@ function saveAsPdf(){
     +'.b-red{background:#f8d7da!important;color:#842029!important}'
     +'.b-sky,.b-blue{background:#e8f0fb!important;color:#1a3a5c!important}'
     +'.b-dark{background:#eee!important;color:#333!important}'
+    +'.b-teal{background:#d0f0ec!important;color:#0e6b5e!important}'
+    +'.b-purple{background:#ede8fb!important;color:#4a2d8a!important}'
     +'.scope-stat{display:inline-block;background:#f0f4f8;border:1px solid #ccd6e0;border-radius:6px;padding:8px 14px;margin:0 6px 8px 0;text-align:center}'
     +'.scope-stat b{display:block;font-size:20px;font-weight:700}'
     +'a{color:#1a5fb4}'

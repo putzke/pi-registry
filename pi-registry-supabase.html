@@ -7149,7 +7149,6 @@ function showEngagementMatrix(projectId) {
   const psLinks = DB.get('project_stakeholders').filter(x => String(x.projectId) === String(projectId));
   const allStakes = DB.get('stakeholders');
 
-  // Build enriched list
   const stakes = psLinks.map(lk => {
     const s = allStakes.find(x => String(x.id) === String(lk.stakeholderId));
     if (!s) return null;
@@ -7162,115 +7161,168 @@ function showEngagementMatrix(projectId) {
     };
   }).filter(Boolean);
 
-  if (stakes.length === 0) {
-    showToast('No stakeholders found for this project.', 'warn', 3000);
-    return;
-  }
+  if (stakes.length === 0) { showToast('No stakeholders found for this project.', 'warn', 3000); return; }
 
-  // Matrix config
-  const rows    = ['High','Medium','Low'];
-  const cols    = ['Opponent','Neutral','Champion'];
-  const colColors = { Champion:'#28A870', Neutral:'#5a87c6', Opponent:'#C0392B' };
+  const rows = ['High','Medium','Low'];
+  const cols = ['Opponent','Neutral','Champion'];
+
+  const colColors  = { Champion:'#28A870', Neutral:'#5a87c6', Opponent:'#C0392B' };
+  const colBg      = { Champion:'rgba(40,168,112,.15)', Neutral:'rgba(90,135,198,.10)', Opponent:'rgba(192,57,43,.15)' };
+  const rowLabels  = { High:'HIGH INFLUENCE', Medium:'MEDIUM INFLUENCE', Low:'LOW INFLUENCE' };
+  const rowColors  = { High:'#e8b84b', Medium:'#90a4c8', Low:'#78909c' };
+
   const quadrantLabels = {
-    'High-Opponent':  'Manage Closely',
-    'High-Neutral':   'Keep Satisfied',
-    'High-Champion':  'Key Ally',
-    'Medium-Opponent':'Monitor',
-    'Medium-Neutral': 'Keep Informed',
-    'Medium-Champion':'Engage Actively',
-    'Low-Opponent':   'Watch',
-    'Low-Neutral':    'Minimal Effort',
-    'Low-Champion':   'Leverage'
+    'High-Opponent':'Manage Closely',  'High-Neutral':'Keep Satisfied',  'High-Champion':'Key Ally',
+    'Medium-Opponent':'Monitor',       'Medium-Neutral':'Keep Informed',  'Medium-Champion':'Engage Actively',
+    'Low-Opponent':'Watch',            'Low-Neutral':'Minimal Effort',    'Low-Champion':'Leverage'
+  };
+  const quadrantDesc = {
+    'High-Opponent':'High priority — frequent engagement, address concerns proactively',
+    'High-Neutral':'Invest in relationship — work toward support',
+    'High-Champion':'Amplify voice — involve in outreach and advocacy',
+    'Medium-Opponent':'Track sentiment — prevent escalation',
+    'Medium-Neutral':'Regular updates — build awareness and trust',
+    'Medium-Champion':'Collaborate on outreach — good resource',
+    'Low-Opponent':'Low risk — periodic check-ins sufficient',
+    'Low-Neutral':'Standard notifications only',
+    'Low-Champion':'Acknowledge — may elevate if project grows'
   };
   const quadrantBg = {
-    'High-Opponent':  'rgba(192,57,43,.18)',
-    'High-Neutral':   'rgba(209,169,68,.12)',
-    'High-Champion':  'rgba(40,168,112,.18)',
-    'Medium-Opponent':'rgba(192,57,43,.10)',
-    'Medium-Neutral': 'rgba(255,255,255,.04)',
-    'Medium-Champion':'rgba(40,168,112,.10)',
-    'Low-Opponent':   'rgba(192,57,43,.06)',
-    'Low-Neutral':    'rgba(255,255,255,.02)',
-    'Low-Champion':   'rgba(40,168,112,.06)'
+    'High-Opponent':'rgba(192,57,43,.20)',   'High-Neutral':'rgba(232,184,75,.12)',   'High-Champion':'rgba(40,168,112,.20)',
+    'Medium-Opponent':'rgba(192,57,43,.10)', 'Medium-Neutral':'rgba(255,255,255,.04)', 'Medium-Champion':'rgba(40,168,112,.10)',
+    'Low-Opponent':'rgba(192,57,43,.05)',    'Low-Neutral':'rgba(255,255,255,.02)',    'Low-Champion':'rgba(40,168,112,.05)'
   };
 
-  // Build cell contents
   function cellHTML(inf, sent) {
-    const key = inf+'-'+sent;
+    const key   = inf+'-'+sent;
     const group = stakes.filter(s => s.influence===inf && s.sentiment===sent);
     const color = colColors[sent];
-    const bg = quadrantBg[key] || 'rgba(255,255,255,.03)';
+    const bg    = quadrantBg[key] || 'rgba(255,255,255,.03)';
     const label = quadrantLabels[key] || '';
+    const desc  = quadrantDesc[key] || '';
+
     const dots = group.map(s => {
       const initials = (s.name.split(' ').map(w=>w[0]).filter(Boolean).slice(0,2).join('')).toUpperCase() || '?';
-      return `<div title="${s.name}${s.org?' · '+s.org:''}" style="
-        display:inline-flex;align-items:center;justify-content:center;
-        width:28px;height:28px;border-radius:50%;
-        background:${color};color:#fff;font-size:9px;font-weight:700;
-        margin:2px;cursor:default;flex-shrink:0;
-        box-shadow:0 1px 4px rgba(0,0,0,.35)">${initials}</div>`;
+      return `<div title="${s.name}${s.org?' · '+s.org:''}"
+        style="display:inline-flex;align-items:center;justify-content:center;
+        width:34px;height:34px;border-radius:50%;
+        background:${color};color:#fff;font-size:10px;font-weight:700;
+        margin:3px;cursor:default;flex-shrink:0;
+        border:2px solid rgba(255,255,255,.25);
+        box-shadow:0 2px 6px rgba(0,0,0,.4)">${initials}</div>`;
     }).join('');
-    return `<td style="
-      width:33%;padding:10px 8px;vertical-align:top;
-      background:${bg};border:1px solid rgba(255,255,255,.08);
-      border-radius:6px;min-height:90px">
-      <div style="font-size:9px;font-weight:600;text-transform:uppercase;
-        letter-spacing:.5px;color:${color};opacity:.7;margin-bottom:6px">${label}</div>
-      <div style="display:flex;flex-wrap:wrap;gap:2px;min-height:32px">${dots}</div>
-      ${group.length>0?`<div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:4px">${group.length} stakeholder${group.length!==1?'s':''}</div>`:''}
+
+    return `<td style="padding:0;vertical-align:top;background:${bg};
+      border:1px solid rgba(255,255,255,.10);position:relative;min-width:180px">
+      <div style="padding:12px 12px 10px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;
+            letter-spacing:.6px;color:${color}">${label}</div>
+          ${group.length>0?`<div style="font-size:10px;font-weight:600;color:${color};
+            background:rgba(255,255,255,.08);border-radius:10px;padding:1px 7px">${group.length}</div>`:''}
+        </div>
+        <div style="font-size:10px;color:rgba(255,255,255,.40);line-height:1.4;margin-bottom:8px;min-height:28px">${desc}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:1px;min-height:40px">${dots}</div>
+        ${group.length===0?'<div style="font-size:10px;color:rgba(255,255,255,.25);font-style:italic;margin-top:4px">No stakeholders</div>':''}
+      </div>
     </td>`;
   }
 
-  // Build table rows
   const tableRows = rows.map(inf => `
     <tr>
-      <td style="padding:8px 12px 8px 0;vertical-align:middle;white-space:nowrap;width:70px">
-        <div style="font-size:11px;font-weight:700;color:var(--white);text-align:right">${inf}</div>
-        <div style="font-size:9px;color:var(--fog);text-align:right">influence</div>
+      <td style="padding:0;vertical-align:middle;width:90px;background:rgba(255,255,255,.03);
+        border:1px solid rgba(255,255,255,.08)">
+        <div style="padding:12px 10px;text-align:center">
+          <div style="width:3px;height:40px;background:${rowColors[inf]};border-radius:2px;margin:0 auto 8px"></div>
+          <div style="font-size:10px;font-weight:700;color:${rowColors[inf]};text-transform:uppercase;
+            letter-spacing:.5px;line-height:1.3">${rowLabels[inf].replace(' INFLUENCE','')}</div>
+          <div style="font-size:9px;color:rgba(255,255,255,.35);margin-top:2px">influence</div>
+          <div style="font-size:18px;font-weight:700;color:${rowColors[inf]};margin-top:4px">
+            ${stakes.filter(s=>s.influence===inf).length}</div>
+        </div>
       </td>
       ${cols.map(sent => cellHTML(inf, sent)).join('')}
     </tr>`).join('');
 
-  // Summary counts
   const total = stakes.length;
   const champ = stakes.filter(s=>s.sentiment==='Champion').length;
   const opp   = stakes.filter(s=>s.sentiment==='Opponent').length;
+  const neut  = total - champ - opp;
   const hi    = stakes.filter(s=>s.influence==='High').length;
 
   const modalHTML = `
     <div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-        <div style="display:flex;gap:16px;font-size:12px">
-          <span style="color:var(--fog)">${total} stakeholders</span>
-          <span style="color:#28A870">${champ} champion${champ!==1?'s':''}</span>
-          <span style="color:#C0392B">${opp} opponent${opp!==1?'s':''}</span>
-          <span style="color:var(--slate)">${hi} high influence</span>
+      <!-- Stats bar -->
+      <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+        <div style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);border-radius:8px;padding:10px 16px;text-align:center;min-width:80px">
+          <div style="font-size:22px;font-weight:700;color:var(--white)">${total}</div>
+          <div style="font-size:10px;color:var(--fog);text-transform:uppercase;letter-spacing:.4px">Total</div>
         </div>
-        <button class="btn btn-sm" onclick="printEngagementMatrix('${projectId}')">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M4 6V2h8v4"/><rect x="2" y="6" width="12" height="7" rx="1"/><path d="M4 10h8M4 13h5"/></svg>
-          Print / PDF
-        </button>
+        <div style="background:rgba(40,168,112,.10);border:1px solid rgba(40,168,112,.25);border-radius:8px;padding:10px 16px;text-align:center;min-width:80px">
+          <div style="font-size:22px;font-weight:700;color:#28A870">${champ}</div>
+          <div style="font-size:10px;color:#28A870;text-transform:uppercase;letter-spacing:.4px">Champions</div>
+        </div>
+        <div style="background:rgba(90,135,198,.10);border:1px solid rgba(90,135,198,.25);border-radius:8px;padding:10px 16px;text-align:center;min-width:80px">
+          <div style="font-size:22px;font-weight:700;color:#5a87c6">${neut}</div>
+          <div style="font-size:10px;color:#5a87c6;text-transform:uppercase;letter-spacing:.4px">Neutral</div>
+        </div>
+        <div style="background:rgba(192,57,43,.10);border:1px solid rgba(192,57,43,.25);border-radius:8px;padding:10px 16px;text-align:center;min-width:80px">
+          <div style="font-size:22px;font-weight:700;color:#C0392B">${opp}</div>
+          <div style="font-size:10px;color:#C0392B;text-transform:uppercase;letter-spacing:.4px">Opponents</div>
+        </div>
+        <div style="background:rgba(232,184,75,.10);border:1px solid rgba(232,184,75,.25);border-radius:8px;padding:10px 16px;text-align:center;min-width:80px">
+          <div style="font-size:22px;font-weight:700;color:#e8b84b">${hi}</div>
+          <div style="font-size:10px;color:#e8b84b;text-transform:uppercase;letter-spacing:.4px">High Infl.</div>
+        </div>
+        <div style="margin-left:auto;display:flex;align-items:center">
+          <button class="btn btn-sm" onclick="printEngagementMatrix('${projectId}')">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M4 6V2h8v4"/><rect x="2" y="6" width="12" height="7" rx="1"/><path d="M4 10h8M4 13h5"/></svg>
+            Print / PDF
+          </button>
+        </div>
       </div>
-      <table style="width:100%;border-collapse:separate;border-spacing:4px">
-        <thead>
-          <tr>
-            <td style="width:70px"></td>
-            ${cols.map(c=>`<td style="text-align:center;padding-bottom:6px">
-              <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${colColors[c]};margin-right:5px;vertical-align:middle"></span>
-              <span style="font-size:11px;font-weight:700;color:${colColors[c]}">${c}</span>
-            </td>`).join('')}
-          </tr>
-        </thead>
-        <tbody>${tableRows}</tbody>
-      </table>
-      <div style="margin-top:12px;font-size:10px;color:var(--fog)">
-        Hover over initials to see stakeholder name · Each dot represents one stakeholder
+
+      <!-- Column headers -->
+      <div style="display:grid;grid-template-columns:90px 1fr 1fr 1fr;gap:4px;margin-bottom:4px">
+        <div></div>
+        ${cols.map(c=>`<div style="text-align:center;padding:8px 4px;background:${colBg[c]};
+          border-radius:6px 6px 0 0;border:1px solid rgba(255,255,255,.10);border-bottom:none">
+          <div style="display:inline-flex;align-items:center;gap:6px">
+            <div style="width:10px;height:10px;border-radius:50%;background:${colColors[c]}"></div>
+            <span style="font-size:12px;font-weight:700;color:${colColors[c]};text-transform:uppercase;letter-spacing:.5px">${c}</span>
+          </div>
+        </div>`).join('')}
+      </div>
+
+      <!-- Axis label -->
+      <div style="display:flex;align-items:stretch;gap:0;margin-bottom:0">
+        <div style="writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg);
+          font-size:10px;font-weight:700;color:rgba(255,255,255,.3);text-transform:uppercase;
+          letter-spacing:.8px;padding:0 6px;display:flex;align-items:center;justify-content:center;
+          width:18px;flex-shrink:0">INFLUENCE LEVEL</div>
+        <div style="flex:1">
+          <table style="width:100%;border-collapse:separate;border-spacing:4px">
+            <tbody>${tableRows}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Sentiment axis label -->
+      <div style="text-align:center;font-size:10px;font-weight:700;color:rgba(255,255,255,.3);
+        text-transform:uppercase;letter-spacing:.8px;margin-top:6px;padding-left:108px">
+        ← SENTIMENT →
+      </div>
+
+      <div style="margin-top:10px;font-size:10px;color:rgba(255,255,255,.35);display:flex;align-items:center;gap:6px">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:12px;height:12px;flex-shrink:0"><circle cx="8" cy="8" r="6"/><path d="M8 7v4M8 5.5v.5"/></svg>
+        Hover over initials to see stakeholder name and organization
       </div>
     </div>`;
 
   openM(projectName + ' — Stakeholder Engagement Matrix', modalHTML,
     '<button class="btn" onclick="closeM()">Close</button>', true);
 }
+
 
 function printEngagementMatrix(projectId) {
   const projObj = DB.get('projects').find(p => String(p.id) === String(projectId));

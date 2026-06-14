@@ -5540,6 +5540,7 @@ function openPIReport(){
     +'<div class="topbar-sp"></div>'
     +'<div class="topbar-acts">'
     +'<button class="btn" onclick="savePIReportDraft()">Save draft</button>'
+    +'<label style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--slate);cursor:pointer;margin-right:6px"><input type="checkbox" id="docx-letterhead-cb" checked style="accent-color:var(--sky-lt);width:13px;height:13px"> Letterhead</label>'
     +'<button class="btn btn-primary" onclick="exportPIDocx()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:14px;height:14px"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg> Export .docx</button>'
     +'<button class="btn btn-ghost" onclick="renderReports(document.getElementById(\'main\'))">Back to reports</button>'
     +'</div></div>'
@@ -5701,15 +5702,44 @@ function exportPIDocx(){
   // Get deliverables for this project
   var dels=DB.get('deliverables').filter(function(d){return d.projectId===projF});
 
-  buildDocx(proj,saved,periodInts,recipients,allStakes,dels);
+  var withLH=!document.getElementById('docx-letterhead-cb')||document.getElementById('docx-letterhead-cb').checked;
+  buildDocx(proj,saved,periodInts,recipients,allStakes,dels,withLH);
 }
 
 // ── TEMPLATE-BASED DOCX EXPORT ────────────────────
-function buildDocx(proj,saved,periodInts,recipients,allStakes,dels){
-  _buildDocxWithTemplate(proj,saved,periodInts,recipients,allStakes,dels);
+function buildDocx(proj,saved,periodInts,recipients,allStakes,dels,withLH){
+  _buildDocxWithTemplate(proj,saved,periodInts,recipients,allStakes,dels,withLH!==false);
 }
 
-function _buildDocxWithTemplate(proj,saved,periodInts,recipients,allStakes,dels){
+function _stripLetterheadFromZip(zip,docXmlStr){
+  // Remove header/footer references from sectPr in document.xml
+  var s=docXmlStr;
+  s=s.replace(/<w:headerReference[^/]*\/>/g,'');
+  s=s.replace(/<w:footerReference[^/]*\/>/g,'');
+  s=s.replace(/<w:titlePg\/>/g,'');
+  // Set header/footer margin to 0
+  s=s.replace(/(w:header=")[0-9]+(")/,'$10$2');
+  s=s.replace(/(w:footer=")[0-9]+(")/,'$10$2');
+  zip.file('word/document.xml',s);
+  // Patch _rels to remove header/footer relationships
+  var relsXml=zip.file('word/_rels/document.xml.rels');
+  if(relsXml){
+    relsXml.async('string').then(function(r){
+      r=r.replace(/<Relationship[^>]*relationships\/(header|footer)[^>]*\/>/g,'');
+      zip.file('word/_rels/document.xml.rels',r);
+    });
+  }
+  // Remove header/footer files and their rels
+  ['word/header1.xml','word/footer1.xml','word/footer2.xml',
+   'word/_rels/header1.xml.rels','word/_rels/footer1.xml.rels','word/_rels/footer2.xml.rels',
+   'word/media/image1.jpeg','word/media/image2.jpeg','word/media/image3.jpeg'].forEach(function(f){
+    try{zip.remove(f);}catch(e){}
+  });
+  return zip;
+}
+
+function _buildDocxWithTemplate(proj,saved,periodInts,recipients,allStakes,dels,withLH){
+  if(withLH===undefined)withLH=true;
   var templateB64=window._piDocxTemplate;
   if(!templateB64){alert('Document template not loaded.');return;}
 
@@ -5729,8 +5759,13 @@ function _buildDocxWithTemplate(proj,saved,periodInts,recipients,allStakes,dels)
       var beforeBody=docXml.substring(0,bodyIdx+8);
       var sectAndAfter=docXml.substring(sectIdx);
 
-      // Inject report content and generate
-      zip.file('word/document.xml',beforeBody+contentXML+sectAndAfter);
+      // Inject report content
+      var finalDocXml=beforeBody+contentXML+sectAndAfter;
+      if(!withLH){
+        zip=_stripLetterheadFromZip(zip,finalDocXml);
+      } else {
+        zip.file('word/document.xml',finalDocXml);
+      }
       return zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
     });
   }).then(function(blob){

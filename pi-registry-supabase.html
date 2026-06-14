@@ -2567,6 +2567,38 @@ function renderStakeDetail(s,link){
       </div>
     </div>`).join('')}
   </div>`;
+  // ── Events Attended tab ─────────────────────────────────────────────────────
+  const stakeMeetings=(DB.get('meetings')||[]).filter(function(m){
+    return Array.isArray(m.attendeeIds)&&m.attendeeIds.map(String).includes(String(s.id));
+  }).sort(function(a,b){return (b.date||'').localeCompare(a.date||'');});
+  const eventsProjs=DB.get('projects')||[];
+  const eventsHTML=`<div class="det-body">
+    ${stakeMeetings.length===0
+      ?`<div class="pane-empty" style="padding:36px 0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" style="width:28px;height:28px"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><div class="pe-sub">No events logged with this stakeholder as a named attendee.</div></div>`
+      :`<table class="dtable">
+        <thead><tr>
+          <th style="width:95px">Date</th>
+          <th>Event</th>
+          <th style="width:110px">Type</th>
+          <th style="width:90px">Project</th>
+          <th style="width:70px">Status</th>
+        </tr></thead>
+        <tbody>
+        ${stakeMeetings.map(function(m){
+          const p=eventsProjs.find(function(x){return x.id===m.projectId;});
+          const statusColor=m.status==='Completed'?'b-green':m.status==='Planned'?'b-sky':m.status==='Cancelled'?'b-red':'b-gray';
+          return '<tr>'
+            +'<td class="td-mono" style="white-space:nowrap">'+fmt(m.date)+'</td>'
+            +'<td><div style="font-weight:500;color:var(--white)">'+m.title+'</div>'+(m.location?'<div style="font-size:11px;color:var(--fog)">'+m.location+'</div>':'')+'</td>'
+            +'<td><span class="badge b-dark" style="font-size:11px">'+(m.type||'—')+'</span></td>'
+            +'<td>'+(p?'<span class="badge b-sky" style="font-family:var(--mono);font-size:10px">'+p.pid+'</span>':'<span style="color:var(--fog)">—</span>')+'</td>'
+            +'<td><span class="badge '+statusColor+'" style="font-size:11px">'+(m.status||'Planned')+'</span></td>'
+            +'</tr>';
+        }).join('')}
+        </tbody>
+      </table>`
+    }
+  </div>`;
 
   return`<div class="det-hdr">
     <div class="det-hero">
@@ -2595,8 +2627,9 @@ function renderStakeDetail(s,link){
   <div class="dtabs">
     <button class="dtab${tab==='info'?' active':''}" onclick="S.stakeTab='info';${cb}">Profile & project</button>
     <button class="dtab${tab==='log'?' active':''}" onclick="S.stakeTab='log';${cb}">Interaction log (${ints.length})</button>
+    <button class="dtab${tab==='events'?' active':''}" onclick="S.stakeTab='events';${cb}">Events attended (${(function(){var ms=DB.get('meetings')||[];return ms.filter(function(m){return Array.isArray(m.attendeeIds)&&m.attendeeIds.map(String).includes(String(s.id));}).length;})()})</button>
   </div>
-  ${tab==='info'?infoHTML:logHTML}`;
+  ${tab==='info'?infoHTML:tab==='log'?logHTML:eventsHTML}`;
 }
 
 
@@ -7100,6 +7133,36 @@ function renderMeetings(el){
   });
 }
 
+function rebuildMeetingAttendeePicker(projId) {
+  var wrap = document.getElementById('f-matt-wrap');
+  if (!wrap) return;
+  if (!projId) {
+    wrap.innerHTML = '<span style="font-size:12px;color:var(--fog);padding:4px 2px">Select a project above to pick linked stakeholders.</span>';
+    return;
+  }
+  var ps = DB.get('project_stakeholders') || [];
+  var linked = ps.filter(function(x){ return String(x.projectId) === String(projId); });
+  var stakes = DB.get('stakeholders') || [];
+  // Preserve currently-checked IDs
+  var checked = Array.from(wrap.querySelectorAll('input[type=checkbox]:checked')).map(function(cb){ return cb.value; });
+  if (linked.length === 0) {
+    wrap.innerHTML = '<span style="font-size:12px;color:var(--fog);padding:4px 2px">No stakeholders linked to this project yet.</span>';
+    return;
+  }
+  wrap.innerHTML = linked.map(function(lk) {
+    var s = stakes.find(function(x){ return String(x.id) === String(lk.stakeholderId); });
+    if (!s) return '';
+    var isChecked = checked.includes(String(s.id));
+    var nm = (s.firstName||'') + ' ' + (s.lastName||'');
+    var bg = isChecked ? 'rgba(90,135,198,.2)' : 'rgba(255,255,255,.05)';
+    var bd = isChecked ? 'var(--sky-lt)' : 'var(--border)';
+    return '<label style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;background:'+bg+';border:1px solid '+bd+';border-radius:12px;cursor:pointer;font-size:12px;color:var(--mist);white-space:nowrap">'
+      +       + '<input type="checkbox" value="'+s.id+'" '+(isChecked?'checked':'')+' style="accent-color:var(--sky-lt);width:12px;height:12px">'
+      + nm.trim() + (s.org ? ' <span style="color:var(--fog);font-size:10px">('+s.org+')</span>' : '')
+      + '</label>';
+  }).join('');
+}
+
 function cycleMeetingStatus(id){
   const all=DB.get('meetings')||[];
   const i=all.findIndex(x=>x.id===id);if(i<0)return;
@@ -7123,7 +7186,7 @@ function openMeetingModal(id){
     <div class="fr"><label>Date *</label><input type="date" id="f-md" value="${m.date||''}"></div>
   </div>
   <div class="fgrid fg2f">
-    <div class="fr"><label>Project</label><select id="f-mp">${projs.map(p=>`<option value="${p.id}"${(m.projectId||pF)===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
+    <div class="fr"><label>Project</label><select id="f-mp" onchange="rebuildMeetingAttendeePicker(this.value)">${projs.map(p=>`<option value="${p.id}"${(m.projectId||pF)===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
     <div class="fr"><label>Event type</label><select id="f-mty">${MEETING_TYPES.map(t=>`<option${m.type===t?' selected':''}>${t}</option>`).join('')}</select></div>
   </div>
   <div class="fgrid fg2f">

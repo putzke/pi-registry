@@ -7683,7 +7683,7 @@ async function _smapGeocodeAndRenderInEl(containerId, loadingId, errorsId, proje
 // ══════════════════════════════════════════════════════════════════
 
 const COMM_CATS = ['Noise / Hours','Access / Traffic','Notification','ROW / Property','Environmental','Agency Coordination','Meeting Follow-up','Other'];
-const COMM_STATUSES = ['Open','Fulfilled','Overdue'];
+const COMM_STATUSES = ['Open','Fulfilled'];
 
 function renderCommitments(m) {
   const projF = S.projectFilter || '';
@@ -7822,6 +7822,18 @@ function renderCommitments(m) {
   m.innerHTML = `<div style="padding:24px;max-width:900px;margin:0 auto">${html}</div>`;
 }
 
+function toggleFulfilledFields(){
+  const sel=document.getElementById('f-cstat');
+  const wrap=document.getElementById('f-fulfilled-wrap');
+  if(sel&&wrap){
+    wrap.style.display=sel.value==='Fulfilled'?'block':'none';
+    if(sel.value==='Fulfilled'){
+      const fd=document.getElementById('f-cfuldate');
+      if(fd&&!fd.value) fd.value=localToday();  // pre-fill today when switching to Fulfilled
+    }
+  }
+}
+
 function openCommModal(id) {
   S.editId = id || null;
   const c = id ? (DB.get('commitments').find(x=>x.id===id)||{}) : {};
@@ -7845,8 +7857,8 @@ function openCommModal(id) {
         </select>
       </div>
       <div class="fr"><label>Status</label>
-        <select id="f-cstat">
-          ${COMM_STATUSES.map(s=>`<option value="${s}" ${(c.status||'Open')===s?'selected':''}>${s}</option>`).join('')}
+        <select id="f-cstat" onchange="toggleFulfilledFields()">
+          ${COMM_STATUSES.map(s=>`<option value="${s}" ${((c.status==='Overdue'?'Open':c.status)||'Open')===s?'selected':''}>${s}</option>`).join('')}
         </select>
       </div>
     </div>
@@ -7874,13 +7886,17 @@ function openCommModal(id) {
       </div>
     </div>
     <div class="fsec">Dates</div>
-    <div class="fgrid fg3f">
+    <div class="fgrid fg2f">
       <div class="fr"><label>Date made</label><input type="date" id="f-cdatemade" value="${c.dateMade||''}"></div>
       <div class="fr"><label>Due date</label><input type="date" id="f-cduedate" value="${c.dueDate||''}"></div>
-      <div class="fr"><label>Fulfilled date</label><input type="date" id="f-cfuldate" value="${c.fulfilledDate||''}"></div>
     </div>
-    <div class="fr"><label>Fulfillment notes</label>
-      <input id="f-cfulnotes" value="${c.fulfilledNotes||''}" placeholder="How was this commitment fulfilled?">
+    <div id="f-fulfilled-wrap" style="display:${(c.status==='Fulfilled'||c.status==='Overdue'&&c.fulfilledDate)?'block':'none'}">
+      <div class="fgrid fg2f">
+        <div class="fr"><label>Fulfilled date</label><input type="date" id="f-cfuldate" value="${c.fulfilledDate||''}"></div>
+        <div class="fr"><label>Fulfillment notes</label>
+          <input id="f-cfulnotes" value="${c.fulfilledNotes||''}" placeholder="How was this commitment fulfilled?">
+        </div>
+      </div>
     </div>
     <div class="fr"><label>Notes</label>
       <input id="f-cnotes" value="${c.notes||''}" placeholder="Source document, meeting where commitment was made, etc.">
@@ -7910,8 +7926,18 @@ function saveCommitment() {
     dateMade: vDate('f-cdatemade'),
     dueDate: vDate('f-cduedate'),
     category: v('f-ccat'),
-    status: v('f-cstat') || 'Open',
-    fulfilledDate: vDate('f-cfuldate'),
+    status: (()=>{
+      const sel=v('f-cstat')||'Open';
+      const fd=vDate('f-cfuldate');
+      if(fd) return 'Fulfilled';  // fulfilled date entered → always Fulfilled
+      return sel;
+    })(),
+    fulfilledDate: (()=>{
+      const fd=vDate('f-cfuldate');
+      const sel=v('f-cstat')||'Open';
+      if(sel==='Fulfilled'&&!fd) return localToday();  // auto-set today if fulfilled with no date
+      return fd||null;
+    })(),
     fulfilledNotes: v('f-cfulnotes'),
     notes: v('f-cnotes')
   };

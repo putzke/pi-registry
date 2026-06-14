@@ -5062,8 +5062,7 @@ function generateReport(type){
     +'<div><div style="font-size:18px;font-weight:600;color:var(--white);margin-bottom:3px">'+getReportTitle(type)+'</div>'
     +'<div style="font-size:14px;color:var(--slate)">'+proj.name+' — '+proj.pid+'</div>'
     +'<div style="font-size:13px;color:var(--fog);margin-top:4px">Generated '+dateStr+'</div></div>'
-    +'<div style="display:flex;gap:8px"><button class="btn btn-sm" onclick="saveAsPdf()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M8 2v8M5 7l3 3 3-3"/><rect x="2" y="11" width="12" height="2" rx="1"/></svg> Save as PDF</button>'
-    +'<button class="btn btn-sm" onclick="document.getElementById(\'rpt-output\').innerHTML=\'\'">Close</button></div></div>'
+    +'<button class="btn btn-sm" onclick="saveAsPdf()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M8 2v8M5 7l3 3 3-3"/><rect x="2" y="11" width="12" height="2" rx="1"/></svg> Save as PDF</button></div></div>'
 ;
   // Distributed to box — kept separate so summary/narrative prints after it
   var distBlock=(recipientNames.length>0?'<div style="margin-bottom:14px;padding:12px 16px;background:#e8eef4;border:1px solid #b0c4d8;border-radius:8px;font-size:14px"><span style="color:#444;text-transform:uppercase;letter-spacing:.5px;font-weight:600">Distributed to: </span><span style="color:#111">'+recipientNames.join(', ')+'</span><span style="color:var(--fog)"> ('+selGroups.join(', ')+')</span></div>':'');

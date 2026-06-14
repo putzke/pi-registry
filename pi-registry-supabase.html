@@ -4924,14 +4924,20 @@ function generateReport(type){
   var body='';
 
   if(type==='contact-list'){
-    // Sort: Internal stakeholders first (alpha), then External (alpha)
+    // Sort: Internal first (alpha), then External by type then last name
     var sortedStakes = filteredStakes.slice().sort(function(a, b) {
       var roleA = (a.lk.stakeholderRole || 'External') === 'Internal' ? 'internal' : 'external';
       var roleB = (b.lk.stakeholderRole || 'External') === 'Internal' ? 'internal' : 'external';
       if (roleA === 'internal' && roleB !== 'internal') return -1;
       if (roleA !== 'internal' && roleB === 'internal') return 1;
-      var nameA = ((a.s.lastName||'') + (a.s.firstName||'') + (a.s.org||'')).toLowerCase();
-      var nameB = ((b.s.lastName||'') + (b.s.firstName||'') + (b.s.org||'')).toLowerCase();
+      // Within External: sort by type first, then last name
+      if (roleA === 'external') {
+        var typeA = (a.s.type||'').toLowerCase();
+        var typeB = (b.s.type||'').toLowerCase();
+        if (typeA !== typeB) return typeA.localeCompare(typeB);
+      }
+      var nameA = ((a.s.lastName||'') + (a.s.firstName||'')).toLowerCase();
+      var nameB = ((b.s.lastName||'') + (b.s.firstName||'')).toLowerCase();
       return nameA.localeCompare(nameB);
     });
     body='<table style="width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed"><thead><tr>'
@@ -4943,6 +4949,7 @@ function generateReport(type){
       +'<th style="width:8%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px">Type</th>'
       +'</tr></thead><tbody>';
     var lastRole = null;
+    var lastType = null;
     sortedStakes.forEach(function(item){
       var s=item.s,lk=item.lk;
       var role=(lk.stakeholderRole||'External')==='Internal'?'Internal':'External';
@@ -4950,6 +4957,15 @@ function generateReport(type){
         var sectionColor=role==='Internal'?'#2d5a8e':'#4a7a4a';
         body+='<tr><td colspan="6" style="padding:8px 8px 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:'+sectionColor+';border-bottom:2px solid '+sectionColor+';background:#f8f9fa">'+role+' Stakeholders</td></tr>';
         lastRole=role;
+        lastType=null;
+      }
+      // Within External: show type sub-header when type changes
+      if(role==='External'){
+        var stakeType=(s.type||'Other');
+        if(stakeType!==lastType){
+          body+='<tr><td colspan="6" style="padding:5px 12px 3px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#666;background:#f0f4f8;border-bottom:1px solid #dde3ea">'+stakeType+'</td></tr>';
+          lastType=stakeType;
+        }
       }
       var dgBadges=(lk.distributionGroups||'').split(',').filter(Boolean).map(function(g){return '<span class="badge b-teal" style="margin:1px">'+g.trim()+'</span>'}).join('');
       body+='<tr>'

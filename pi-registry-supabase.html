@@ -4029,6 +4029,7 @@ function renderIssuesView(el){
   const projs=DB.get('projects')||[];
   const ints=DB.get('interactions')||[];
   const iLinks=DB.get('issue_interactions')||[];
+  const allStakes=DB.get('stakeholders')||[];
   const stakes=DB.get('stakeholders')||[];
 
   // Filters
@@ -4428,7 +4429,7 @@ function exportIssueSingleDocx(issueId){
       var name=sk?(sk.firstName||'')+' '+(sk.lastName||''):'';
       var fu=i.followUp?(i.followUpDone?'Resolved':'Open\u2014'+(i.followUpDue||'no date')+(i.followUpNote?' | '+i.followUpNote:'')):'';
       var rowFill=ri%2!==0?'<w:shd w:val="clear" w:color="auto" w:fill="EEF4FB"/>':'';
-      var vals=[i.date||'',i.channel||'',name,i.summary||'',fu];
+      var vals=[fmt(i.date)||'',i.channel||'',name,i.summary||'',fu];
       xml+='<w:tr>';
       vals.forEach(function(v,ci){
         xml+='<w:tc><w:tcPr><w:tcW w:w="'+intCols[ci]+'" w:type="dxa"/>'+H.cellBdr+rowFill+'</w:tcPr>';
@@ -4503,6 +4504,7 @@ function exportIssuesPdf(){
   const projs=DB.get('projects')||[];
   const ints=DB.get('interactions')||[];
   const iLinks=DB.get('issue_interactions')||[];
+  const allStakes=DB.get('stakeholders')||[];
   const projF=S.issViewProj||'';
   const statF=S.issViewStatus||'';
   const catF=S.issViewCat||'';
@@ -4540,7 +4542,7 @@ function exportIssuesPdf(){
     const linkedInts=linked.map(l=>ints.find(i=>String(i.id)===String(l.interactionId))).filter(Boolean);
     const sc=stC[iss.status]||'#444';
     const pc=prC[iss.priority]||'#444';
-    const intHtml=linkedInts.length?linkedInts.map(i=>'<tr><td style="white-space:nowrap">'+escHtml(fmt(i.date)||'')+'</td><td>'+escHtml(i.channel||'')+'</td><td>'+escHtml(i.summary||'')+'</td></tr>').join(''):'<tr><td colspan="3" style="color:#888;font-style:italic">No interactions linked.</td></tr>';
+    const intHtml=linkedInts.length?linkedInts.map(i=>{const sk=allStakes.find(x=>String(x.id)===String(i.stakeholderId));const skName=sk?(sk.firstName+' '+sk.lastName).trim():'—';return '<tr><td style="white-space:nowrap">'+escHtml(fmt(i.date)||'')+'</td><td>'+escHtml(skName)+'</td><td>'+escHtml(i.channel||'')+'</td><td>'+escHtml(i.summary||'')+'</td></tr>';}).join(''):'<tr><td colspan="4" style="color:#888;font-style:italic">No interactions linked.</td></tr>';
     return '<div style="margin-bottom:20px;padding:14px;border:1px solid #dde3ea;border-radius:6px">'+
       '<div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">'+
         '<div style="flex:1"><div style="font-size:12px;font-weight:700;color:#111;margin-bottom:4px">'+escHtml(iss.title||'Untitled')+'</div>'+
@@ -4558,9 +4560,10 @@ function exportIssuesPdf(){
       (iss.resolutionSummary?'<div style="background:#f0f9f4;border:1px solid #c3e6d4;border-radius:4px;padding:8px 10px;font-size:9px;color:#1a7a50;margin-bottom:8px"><b>Resolution:</b> '+escHtml(iss.resolutionSummary)+'</div>':'')+
       '<div style="font-size:9px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">Linked interactions ('+linkedInts.length+')</div>'+
       '<table style="width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed"><thead><tr>'+
-        '<th style="text-align:left;padding:3px 6px;background:#e8eef4;color:#1a3a5c;font-weight:700;width:16%;white-space:nowrap">Date</th>'+
-        '<th style="text-align:left;padding:3px 6px;background:#e8eef4;color:#1a3a5c;font-weight:700;width:14%">Channel</th>'+
-        '<th style="text-align:left;padding:3px 6px;background:#e8eef4;color:#1a3a5c;font-weight:700;width:70%">Summary</th>'+
+        '<th style="text-align:left;padding:3px 6px;background:#e8eef4;color:#1a3a5c;font-weight:700;width:13%;white-space:nowrap">Date</th>'+
+        '<th style="text-align:left;padding:3px 6px;background:#e8eef4;color:#1a3a5c;font-weight:700;width:18%">Stakeholder</th>'+
+        '<th style="text-align:left;padding:3px 6px;background:#e8eef4;color:#1a3a5c;font-weight:700;width:12%">Channel</th>'+
+        '<th style="text-align:left;padding:3px 6px;background:#e8eef4;color:#1a3a5c;font-weight:700;width:57%">Summary</th>'+
       '</tr></thead><tbody>'+intHtml+'</tbody></table>'+
     '</div>';
   }).join('');

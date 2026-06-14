@@ -2302,25 +2302,38 @@ function selectStake(id){
 
 // ── INFLUENCE-SENTIMENT BUBBLE CHART ───────────────────────────────
 function renderBubbleChart(projectId){
-  var mount=document.getElementById('bubble-chart-mount');
-  if(!mount)return;
   try{
-    var allStakes=DB.get('stakeholders');
+    var mount=document.getElementById('bubble-chart-mount');
+    if(!mount)return;
     var ps=DB.get('project_stakeholders').filter(function(x){return x.projectId===projectId;});
+    var allStakes=DB.get('stakeholders');
     var ints=DB.get('interactions');
     var projs=DB.get('projects');
     var proj=projs.find(function(p){return p.id===projectId;})||{};
 
-    // Chart dimensions
-    var W=mount.offsetWidth||700,H=460;
-    var PAD={top:40,right:40,bottom:60,left:70};
-    var CW=W-PAD.left-PAD.right,CH=H-PAD.top-PAD.bottom;
+    var W=mount.offsetWidth||800, H=520;
+    var PAD={top:56,right:56,bottom:72,left:88};
+    var CW=W-PAD.left-PAD.right, CH=H-PAD.top-PAD.bottom;
 
-    // Axis definitions
-    var X_TIERS=['Low','Medium','High'];           // influence
-    var Y_LEVELS=['Opponent','Neutral','Champion']; // sentiment bottom→top
-    var SENT_COLORS={Champion:'#28A870',Neutral:'#A8C2D8',Opponent:'#D94040'};
-    var ROLE_STROKE={Internal:'#4A9BE8',External:'rgba(255,255,255,.25)'};
+    var X_TIERS=['Low','Medium','High'];
+    var Y_LEVELS=['Opponent','Neutral','Champion'];
+    var SENT_COLORS={Champion:'#28A870',Neutral:'#5a87c6',Opponent:'#D94040'};
+    var SENT_BG={Champion:'rgba(40,168,112,.13)',Neutral:'rgba(255,255,255,.03)',Opponent:'rgba(217,64,64,.13)'};
+    var ROLE_STROKE={Internal:'#4A9BE8',External:'rgba(255,255,255,.3)'};
+
+    var QUAD_LABELS={
+      'High-Champion':'KEY ALLY','High-Neutral':'KEEP SATISFIED','High-Opponent':'MANAGE CLOSELY',
+      'Medium-Champion':'ENGAGE ACTIVELY','Medium-Neutral':'KEEP INFORMED','Medium-Opponent':'MONITOR',
+      'Low-Champion':'LEVERAGE','Low-Neutral':'MINIMAL EFFORT','Low-Opponent':'WATCH'
+    };
+    var QUAD_LABEL_COLOR={
+      'High-Champion':'rgba(40,168,112,.5)','High-Neutral':'rgba(232,184,75,.4)','High-Opponent':'rgba(217,64,64,.5)',
+      'Medium-Champion':'rgba(40,168,112,.35)','Medium-Neutral':'rgba(255,255,255,.2)','Medium-Opponent':'rgba(217,64,64,.35)',
+      'Low-Champion':'rgba(40,168,112,.25)','Low-Neutral':'rgba(255,255,255,.12)','Low-Opponent':'rgba(217,64,64,.25)'
+    };
+
+    var xStep=CW/(X_TIERS.length-1);
+    var yStep=CH/(Y_LEVELS.length-1);
 
     // Build bubble data
     var bubbles=ps.map(function(lk){
@@ -2329,94 +2342,145 @@ function renderBubbleChart(projectId){
       var intCt=ints.filter(function(i){return String(i.stakeholderId)===String(s.id)&&i.projectId===projectId;}).length;
       var xi=X_TIERS.indexOf(s.influenceTier||'Medium');if(xi<0)xi=1;
       var yi=Y_LEVELS.indexOf(lk.support||'Neutral');if(yi<0)yi=1;
-      // Jitter within cell to prevent full overlap
-      var jx=(Math.sin(s.id.charCodeAt?s.id.charCodeAt(0)*7:0)*0.3);
-      var jy=(Math.cos(s.id.charCodeAt?s.id.charCodeAt(1)*13:1)*0.3);
-      var minR=10,maxR=30;
-      var r=intCt===0?minR:Math.min(maxR,minR+Math.sqrt(intCt)*5);
-      var cx=PAD.left+(xi/(X_TIERS.length-1))*CW+jx*(CW/X_TIERS.length*0.6);
-      var cy=PAD.top+((Y_LEVELS.length-1-yi)/(Y_LEVELS.length-1))*CH+jy*(CH/Y_LEVELS.length*0.6);
+      // Deterministic jitter per stakeholder
+      var seed=s.id?String(s.id).split('').reduce(function(a,c){return a+c.charCodeAt(0);},0):0;
+      var jx=(Math.sin(seed*7.3)*0.38);
+      var jy=(Math.cos(seed*13.1)*0.38);
+      var minR=12,maxR=32;
+      var r=intCt===0?minR:Math.min(maxR,minR+Math.sqrt(intCt)*4.5);
+      var cx=PAD.left+(xi*xStep)+jx*(xStep*0.55);
+      var cy=PAD.top+((Y_LEVELS.length-1-yi)*yStep)+jy*(yStep*0.55);
       return{s:s,lk:lk,intCt:intCt,r:r,cx:cx,cy:cy,
-        color:SENT_COLORS[lk.support]||'#A8C2D8',
-        stroke:ROLE_STROKE[lk.stakeholderRole]||ROLE_STROKE.External};
+        color:SENT_COLORS[lk.support]||SENT_COLORS.Neutral,
+        stroke:ROLE_STROKE[lk.stakeholderRole]||ROLE_STROKE.External,
+        inf:s.influenceTier||'Medium', sent:lk.support||'Neutral'};
     }).filter(Boolean);
 
-    // Build SVG
-    var svg='<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg" style="overflow:visible">';
+    var svg='<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg" style="overflow:visible;display:block">';
 
-    // Grid lines
+    // Quadrant background fills (9 cells)
+    X_TIERS.forEach(function(xt,xi){
+      Y_LEVELS.forEach(function(yt,yi){
+        var key=xt+'-'+yt;
+        var col=SENT_BG[yt]||'rgba(255,255,255,.03)';
+        // Make high-influence quadrants more saturated
+        if(xt==='High') col=col.replace(/[\d.]+\)$/,function(m){return String(parseFloat(m)*2.2)+')';});
+        var qx=PAD.left+(xi*xStep)-(xStep/2);
+        var qy=PAD.top+((Y_LEVELS.length-1-yi)*yStep)-(yStep/2);
+        var qw=xStep, qh=yStep;
+        // Edge cells need half-width/height adjustments
+        if(xi===0){qx=PAD.left-2;qw=xStep/2+2;}
+        else if(xi===X_TIERS.length-1){qw=xStep/2+2;}
+        if(yi===0){qy=PAD.top+CH-yStep/2;qh=yStep/2+2;}
+        else if(yi===Y_LEVELS.length-1){qy=PAD.top-2;qh=yStep/2+2;}
+        svg+='<rect x="'+qx+'" y="'+qy+'" width="'+qw+'" height="'+qh+'" fill="'+col+'"/>';
+      });
+    });
+
+    // Outer border
+    svg+='<rect x="'+PAD.left+'" y="'+PAD.top+'" width="'+CW+'" height="'+CH+'" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="1.5" rx="4"/>';
+
+    // Grid lines — stronger
     X_TIERS.forEach(function(t,i){
-      var x=PAD.left+(i/(X_TIERS.length-1))*CW;
-      svg+='<line x1="'+x+'" y1="'+PAD.top+'" x2="'+x+'" y2="'+(PAD.top+CH)+'" stroke="rgba(255,255,255,.07)" stroke-width="1" stroke-dasharray="4 4"/>';
+      if(i===0||i===X_TIERS.length-1)return;
+      var x=PAD.left+(i*xStep);
+      svg+='<line x1="'+x+'" y1="'+PAD.top+'" x2="'+x+'" y2="'+(PAD.top+CH)+'" stroke="rgba(255,255,255,.14)" stroke-width="1" stroke-dasharray="5 4"/>';
     });
     Y_LEVELS.forEach(function(t,i){
-      var y=PAD.top+((Y_LEVELS.length-1-i)/(Y_LEVELS.length-1))*CH;
-      svg+='<line x1="'+PAD.left+'" y1="'+y+'" x2="'+(PAD.left+CW)+'" y2="'+y+'" stroke="rgba(255,255,255,.07)" stroke-width="1" stroke-dasharray="4 4"/>';
+      if(i===0||i===Y_LEVELS.length-1)return;
+      var y=PAD.top+((Y_LEVELS.length-1-i)*yStep);
+      svg+='<line x1="'+PAD.left+'" y1="'+y+'" x2="'+(PAD.left+CW)+'" y2="'+y+'" stroke="rgba(255,255,255,.14)" stroke-width="1" stroke-dasharray="5 4"/>';
     });
 
-    // Quadrant shading: top-right (high influence, champion) = green tint
-    var qx=PAD.left+CW/2,qy=PAD.top+CH/2;
-    svg+='<rect x="'+qx+'" y="'+PAD.top+'" width="'+CW/2+'" height="'+CH/2+'" fill="rgba(40,168,112,.04)" rx="4"/>';
-    svg+='<rect x="'+PAD.left+'" y="'+qy+'" width="'+CW/2+'" height="'+CH/2+'" fill="rgba(217,64,64,.04)" rx="4"/>';
-
-    // X axis labels
-    X_TIERS.forEach(function(t,i){
-      var x=PAD.left+(i/(X_TIERS.length-1))*CW;
-      svg+='<text x="'+x+'" y="'+(PAD.top+CH+22)+'" text-anchor="middle" font-size="12" fill="#A8C2D8" font-family="IBM Plex Sans,sans-serif">'+t+'</text>';
+    // Quadrant strategy labels (background text)
+    X_TIERS.forEach(function(xt,xi){
+      Y_LEVELS.forEach(function(yt,yi){
+        var key=xt+'-'+yt;
+        var label=QUAD_LABELS[key]||'';
+        var color=QUAD_LABEL_COLOR[key]||'rgba(255,255,255,.15)';
+        var lx=PAD.left+(xi*xStep);
+        var ly=PAD.top+((Y_LEVELS.length-1-yi)*yStep);
+        // Position label in corner of each quadrant cell
+        var tx=lx+(xi===0?6:xi===X_TIERS.length-1?-6:0);
+        var ty=ly+(yi===Y_LEVELS.length-1?16:yi===0?-6:0);
+        svg+='<text x="'+tx+'" y="'+ty+'" text-anchor="middle" font-size="9" font-weight="700" fill="'+color+'" font-family="IBM Plex Sans,sans-serif" letter-spacing="0.8">'+label+'</text>';
+      });
     });
-    svg+='<text x="'+(PAD.left+CW/2)+'" y="'+(H-8)+'" text-anchor="middle" font-size="11" fill="#7A99B0" font-family="IBM Plex Sans,sans-serif">Influence Tier</text>';
 
-    // Y axis labels
+    // Y axis label + tick lines
     Y_LEVELS.forEach(function(t,i){
-      var y=PAD.top+((Y_LEVELS.length-1-i)/(Y_LEVELS.length-1))*CH;
+      var y=PAD.top+((Y_LEVELS.length-1-i)*yStep);
       var color=SENT_COLORS[t];
-      svg+='<text x="'+(PAD.left-10)+'" y="'+(y+4)+'" text-anchor="end" font-size="12" fill="'+color+'" font-family="IBM Plex Sans,sans-serif">'+t+'</text>';
+      svg+='<line x1="'+(PAD.left-6)+'" y1="'+y+'" x2="'+PAD.left+'" y2="'+y+'" stroke="'+color+'" stroke-width="1.5"/>';
+      svg+='<text x="'+(PAD.left-12)+'" y="'+(y+4)+'" text-anchor="end" font-size="13" font-weight="700" fill="'+color+'" font-family="IBM Plex Sans,sans-serif">'+t+'</text>';
     });
+    // Y axis title
+    svg+='<text transform="rotate(-90)" x="-'+(PAD.top+CH/2)+'" y="22" text-anchor="middle" font-size="11" fill="rgba(255,255,255,.4)" font-family="IBM Plex Sans,sans-serif" letter-spacing="0.5">SENTIMENT</text>';
 
-    // Bubbles (sorted largest first so small ones render on top)
-    bubbles.sort(function(a,b){return b.r-a.r;}).forEach(function(b,i){
-      var delay=i*40;
-      var name=(b.s.firstName+' '+b.s.lastName).replace(/'/g,'&apos;');
+    // X axis label + tick lines
+    X_TIERS.forEach(function(t,i){
+      var x=PAD.left+(i*xStep);
+      svg+='<line x1="'+x+'" y1="'+(PAD.top+CH)+'" x2="'+x+'" y2="'+(PAD.top+CH+6)+'" stroke="rgba(255,255,255,.3)" stroke-width="1.5"/>';
+      svg+='<text x="'+x+'" y="'+(PAD.top+CH+22)+'" text-anchor="middle" font-size="13" font-weight="700" fill="rgba(255,255,255,.65)" font-family="IBM Plex Sans,sans-serif">'+t+'</text>';
+    });
+    svg+='<text x="'+(PAD.left+CW/2)+'" y="'+(H-8)+'" text-anchor="middle" font-size="11" fill="rgba(255,255,255,.4)" font-family="IBM Plex Sans,sans-serif" letter-spacing="0.5">INFLUENCE TIER</text>';
+
+    // Project label + count
+    svg+='<text x="'+PAD.left+'" y="'+(PAD.top-16)+'" font-size="12" font-weight="600" fill="rgba(255,255,255,.5)" font-family="IBM Plex Sans,sans-serif">'+proj.pid+' — '+proj.name+'</text>';
+    svg+='<text x="'+(W-PAD.right)+'" y="'+(PAD.top-16)+'" text-anchor="end" font-size="11" fill="rgba(255,255,255,.4)" font-family="IBM Plex Sans,sans-serif">'+bubbles.length+' contacts plotted</text>';
+
+    // Bubbles (largest first so small ones render on top)
+    bubbles.sort(function(a,b){return b.r-a.r;}).forEach(function(b,idx){
+      var name=(b.s.firstName+' '+b.s.lastName).trim().replace(/'/g,'&apos;');
       var org=(b.s.org||b.s.type||'').replace(/'/g,'&apos;');
       var tip=name+(org?' · '+org:'')+' | '+b.intCt+' interaction'+(b.intCt!==1?'s':'');
+      // Glow ring for high influence
+      if(b.inf==='High'){
+        svg+='<circle cx="'+b.cx+'" cy="'+b.cy+'" r="'+(b.r+5)+'" fill="none" stroke="'+b.color+'" stroke-width="1" opacity="0.3"/>';
+      }
       svg+='<circle class="bubble" cx="'+b.cx+'" cy="'+b.cy+'" r="'+b.r+'"'
-        +' fill="'+b.color+'33"'
-        +' stroke="'+b.color+'" stroke-width="1.8"'
-        +' style="animation-delay:'+delay+'ms;transform-origin:'+b.cx+'px '+b.cy+'px"'
+        +' fill="'+b.color+'40"'
+        +' stroke="'+b.color+'" stroke-width="2"'
+        +' style="cursor:pointer;transition:r .15s,opacity .15s"'
         +' data-tip="'+tip+'"'
         +' onclick="selectStake(\''+b.s.id+'\');S.skView=\'list\';renderStakeholders(document.getElementById(\'main\'))"'
         +'></circle>';
-      // Initials label for larger bubbles
-      if(b.r>=16){
-        var initials=((b.s.firstName||'')[0]||'')+((b.s.lastName||'')[0]||'');
-        svg+='<text x="'+b.cx+'" y="'+(b.cy+4)+'" text-anchor="middle" font-size="10" font-weight="600" fill="'+b.color+'" font-family="IBM Plex Sans,sans-serif" pointer-events="none" style="animation-delay:'+delay+'ms">'+initials+'</text>';
+      // Initials for all bubbles
+      var initials=((b.s.firstName||'')[0]||'')+((b.s.lastName||'')[0]||'');
+      if(initials){
+        svg+='<text x="'+b.cx+'" y="'+(b.cy+4)+'" text-anchor="middle" font-size="'+(b.r>=20?11:9)+'" font-weight="700" fill="'+b.color+'" font-family="IBM Plex Sans,sans-serif" pointer-events="none">'+initials+'</text>';
       }
     });
 
-    // Legend
-    var lx=PAD.left,ly=PAD.top-22;
-    svg+='<text x="'+lx+'" y="'+ly+'" font-size="11" fill="#7A99B0" font-family="IBM Plex Sans,sans-serif">'+proj.pid+' — '+proj.name+'</text>';
-    svg+='<text x="'+(W-PAD.right)+'" y="'+ly+'" text-anchor="end" font-size="11" fill="#7A99B0" font-family="IBM Plex Sans,sans-serif">'+bubbles.length+' contacts plotted</text>';
+    // Legend bottom-right
+    var lx=PAD.left+CW-10, ly2=PAD.top+CH-10;
+    [{label:'Champion',color:'#28A870'},{label:'Neutral',color:'#5a87c6'},{label:'Opponent',color:'#D94040'}].forEach(function(item,i){
+      svg+='<circle cx="'+(lx-90)+'" cy="'+(ly2-i*18)+'" r="5" fill="'+item.color+'60" stroke="'+item.color+'" stroke-width="1.5"/>';
+      svg+='<text x="'+(lx-81)+'" y="'+(ly2-i*18+4)+'" font-size="10" fill="rgba(255,255,255,.55)" font-family="IBM Plex Sans,sans-serif">'+item.label+'</text>';
+    });
 
     svg+='</svg>';
     mount.innerHTML=svg;
 
-    // Tooltip on hover
-    var tip=document.createElement('div');
-    tip.className='bubble-tooltip';tip.style.display='none';
-    mount.appendChild(tip);
+    // Tooltip
+    var tip2=document.createElement('div');
+    tip2.className='bubble-tooltip';tip2.style.display='none';
+    mount.appendChild(tip2);
     mount.querySelectorAll('.bubble').forEach(function(el){
-      el.addEventListener('mouseenter',function(e){
-        tip.textContent=el.dataset.tip;
-        tip.style.display='block';
+      el.addEventListener('mouseenter',function(){
+        tip2.textContent=el.dataset.tip;tip2.style.display='block';
+        el.setAttribute('stroke-width','3');
       });
       el.addEventListener('mousemove',function(e){
         var rect=mount.getBoundingClientRect();
-        var tx=e.clientX-rect.left+12,ty=e.clientY-rect.top-36;
-        if(tx+200>W)tx=e.clientX-rect.left-200;
-        tip.style.left=tx+'px';tip.style.top=ty+'px';
+        var tx=e.clientX-rect.left+14,ty=e.clientY-rect.top-40;
+        if(tx+220>W)tx=e.clientX-rect.left-220;
+        tip2.style.left=tx+'px';tip2.style.top=ty+'px';
       });
-      el.addEventListener('mouseleave',function(){tip.style.display='none';});
+      el.addEventListener('mouseleave',function(){
+        tip2.style.display='none';
+        el.setAttribute('stroke-width','2');
+      });
     });
   }catch(err){
     console.error('Bubble chart error:',err);

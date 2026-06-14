@@ -5192,14 +5192,14 @@ function generateReport(type){
     // Matrix rows
     var matBodyRows='';
     matRows.forEach(function(inf){
-      var cells='<td style="padding:7px 9px;background:#1a3a5c;border:1px solid rgba(255,255,255,.18);font-size:11px;font-weight:700;color:#ffffff;text-align:right;vertical-align:middle;white-space:nowrap">'+inf+'<div style="font-size:9px;color:rgba(255,255,255,.6);font-weight:400">influence</div></td>';
+      var cells='<td style="padding:7px 9px;background:#1a3a5c;border:1px solid rgba(255,255,255,.18);font-size:11px;font-weight:700;color:#e8f0ff;text-align:right;vertical-align:middle;white-space:nowrap">'+inf+'<div style="font-size:9px;color:#aabbcc;font-weight:400">influence</div></td>';
       matCols.forEach(function(sent){
         var key=inf+'-'+sent;
         var grp=matStakes.filter(function(s){return s.influence===inf&&s.sentiment===sent});
         var dots=grp.map(function(s){var init=(s.name.split(' ').map(function(w){return w[0]||''}).filter(Boolean).slice(0,2).join('')).toUpperCase()||'?';return '<span title="'+s.name+(s.org?' · '+s.org:'')+'" style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:'+matColors[sent]+';color:#fff;font-size:9px;font-weight:700;margin:2px;box-shadow:0 1px 3px rgba(0,0,0,.4)">'+init+'</span>';}).join('');
         cells+='<td style="padding:7px;background:'+matBg[key]+';border:1px solid rgba(255,255,255,.10);vertical-align:top;min-width:110px"><div style="font-size:9px;font-weight:600;color:'+matColors[sent]+';opacity:.8;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">'+matLabels[key]+'</div><div style="display:flex;flex-wrap:wrap">'+dots+'</div>'+(grp.length?'<div style="font-size:10px;color:rgba(255,255,255,.3);margin-top:2px">'+grp.length+'</div>':'')+'</td>';
       });
-      matBodyRows+='<tr>'+cells+'</tr>';
+      matBodyRows+='<tr style="page-break-inside:avoid">'+cells+'</tr>';
     });
 
     // Legend
@@ -5207,7 +5207,7 @@ function generateReport(type){
     matCols.forEach(function(c){matLegend+='<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+matColors[c]+';margin-right:4px"></span>'+matColHdr[c]+'</span>';});
     matLegend+='<span style="margin-left:auto;font-style:italic;color:var(--fog);font-size:10px">Hover initials for name · All project stakeholders</span></div>';
 
-    body='<div style="page-break-inside:avoid;margin-bottom:20px">'      +'<div style="font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Stakeholder Engagement Matrix</div>'      +matLegend      +'<table style="width:100%;border-collapse:separate;border-spacing:3px"><thead><tr>'+matHdr+'</tr></thead><tbody>'+matBodyRows+'</tbody></table>'      +'</div>'      +'<div style="font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-top:14px;border-top:1px solid var(--border);page-break-before:always">External Stakeholder Detail ('+externalFilteredPS.length+' contacts)</div>'      +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px">';
+    body='<div style="page-break-inside:avoid;page-break-after:always;margin-bottom:20px">'      +'<div style="font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Stakeholder Engagement Matrix</div>'      +matLegend      +'<table style="width:100%;border-collapse:separate;border-spacing:3px"><thead><tr>'+matHdr+'</tr></thead><tbody>'+matBodyRows+'</tbody></table>'      +'</div>'      +'<div style="font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-top:14px;border-top:1px solid var(--border);page-break-before:always">External Stakeholder Detail ('+externalFilteredPS.length+' contacts)</div>'      +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px">';
     ['Champion','Neutral','Opponent'].forEach(function(g){
       var color=g==='Champion'?'var(--green)':g==='Opponent'?'var(--red)':'var(--slate)';
       var bg=g==='Champion'?'rgba(40,168,112,.08)':g==='Opponent'?'rgba(217,64,64,.08)':'rgba(255,255,255,.03)';
@@ -5349,9 +5349,12 @@ function saveAsPdf(){
   // Apply light theme overrides inline — skip elements with dark backgrounds
   wrapper.querySelectorAll('*').forEach(function(el){
     var bg=el.style.background||el.style.backgroundColor||'';
-    var hasDarkBg = bg.includes('#1a3a5c')||bg.includes('#152c4a')||bg.includes('#1a3050')||bg.includes('#1A3050');
+    var hasDarkBg = bg.includes('#1a3a5c')||bg.includes('#152c4a')||bg.includes('#1a3050')||bg.includes('#1A3050')||bg.includes('#0e1e30')||bg.includes('#0E1E30');
     if(!hasDarkBg){
       el.style.color='#111';
+    } else {
+      // Preserve light text on dark backgrounds
+      if(!el.style.color||(el.style.color||'').includes('var(')) el.style.color='#ffffff';
     }
     // Remove CSS vars which don't resolve in off-screen clone
     if((el.style.color||'').includes('var(')) el.style.color=hasDarkBg?'#ffffff':'#111';

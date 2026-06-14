@@ -4830,6 +4830,13 @@ function renderReports(el){
       +'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M8 2v8M5 7l3 3 3-3"/><rect x="2" y="11" width="12" height="2" rx="1"/></svg>'
       +' Export All Projects</button></div>'
       +'<div style="font-size:13px;color:var(--slate);margin-bottom:20px">All active and on-hold projects &mdash; click any row to open that project reports</div>'
+      +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;padding:14px 16px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.10);border-radius:10px">'
+      +'<div style="font-size:11px;font-weight:700;color:var(--fog);text-transform:uppercase;letter-spacing:.6px;width:100%;margin-bottom:8px">Cross-project reports</div>'
+      +'<button class="btn btn-sm" onclick="generatePortfolioContactList()" style="gap:6px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M8 2v8M5 7l3 3 3-3"/><rect x="2" y="11" width="12" height="2" rx="1"/></svg>Master contact list</button>'
+      +'<button class="btn btn-sm" onclick="generatePortfolioFollowups()" style="gap:6px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M8 2v8M5 7l3 3 3-3"/><rect x="2" y="11" width="12" height="2" rx="1"/></svg>Open follow-ups</button>'
+      +'<button class="btn btn-sm" onclick="generatePortfolioCommitments()" style="gap:6px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M8 2v8M5 7l3 3 3-3"/><rect x="2" y="11" width="12" height="2" rx="1"/></svg>Open commitments</button>'
+      +'<button class="btn btn-sm" onclick="generatePortfolioIssues()" style="gap:6px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M8 2v8M5 7l3 3 3-3"/><rect x="2" y="11" width="12" height="2" rx="1"/></svg>Open issues</button>'
+      +'</div>'
       +totalsBar+'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px">'+crossHTML+'</div>'+'</div>';
     return;
   }
@@ -6543,6 +6550,285 @@ function exportProject(projectId) {
     alert('Export failed: ' + err.message);
   }
 }
+
+// ── CROSS-PROJECT REPORT HELPERS ───────────────────────────────────────────
+
+function _portfolioPrintWin(title, bodyHtml) {
+  var date = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  var win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html><head>
+  <title>${title}</title>
+  <style>
+    *{box-sizing:border-box}
+    body{font-family:Arial,sans-serif;margin:0;padding:20px 28px;color:#222;background:#fff}
+    img.lh{width:100%;display:block;margin-bottom:16px}
+    h1{font-size:18px;color:#1A3050;margin:0 0 3px}
+    .sub{font-size:11px;color:#666;margin-bottom:18px}
+    table{width:100%;border-collapse:collapse;font-size:10px}
+    th{background:#1A3050;color:#fff;padding:6px 8px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.4px}
+    td{padding:6px 8px;border-bottom:1px solid #e0e0e0;vertical-align:top;word-wrap:break-word}
+    tr{page-break-inside:avoid}
+    .proj-hdr{background:#e8eef6;font-weight:700;font-size:11px;color:#1A3050;padding:8px 8px 6px;margin:16px 0 4px;border-left:3px solid #1A3050}
+    .badge{display:inline-block;padding:1px 6px;border-radius:10px;font-size:8px;font-weight:700}
+    .b-red{background:#fdecea;color:#8b1a1a}
+    .b-amber{background:#fef9e7;color:#7a5500}
+    .b-green{background:#eafaf1;color:#1a7a50}
+    .b-blue{background:#e8f0fb;color:#1a3a5c}
+    .footer{margin-top:24px;padding-top:10px;border-top:1px solid #ddd;font-size:9px;color:#aaa;display:flex;justify-content:space-between}
+    @media print{body{padding:0}button{display:none}@page{margin:12mm 14mm}tr{page-break-inside:avoid}}
+  </style>
+  </head><body>
+  <img class="lh" src="${window._srHeader}" alt="Sunrise Engineering">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+    <div>
+      <h1>${title}</h1>
+      <div class="sub">Generated ${date} &nbsp;·&nbsp; Sunrise Engineering — Public Involvement Services &nbsp;·&nbsp; All active projects</div>
+    </div>
+    <button onclick="window.print()" style="padding:6px 14px;background:#1A3050;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;flex-shrink:0;margin-top:4px">Print / Save PDF</button>
+  </div>
+  ${bodyHtml}
+  <div class="footer"><span>PI Registry · Sunrise Engineering</span><span>${title} · ${date}</span></div>
+  <script>window.onload=function(){window.print()}<\/script>
+  </body></html>`);
+  win.document.close();
+}
+
+// ── 1. MASTER CONTACT LIST ─────────────────────────────────────────────────
+function generatePortfolioContactList() {
+  var allProjs = (DB.get('projects')||[]).filter(p=>p.status==='Active'||p.status==='On hold');
+  var allPS    = DB.get('project_stakeholders')||[];
+  var allStake = DB.get('stakeholders')||[];
+
+  // Collect unique stakeholders with their project memberships
+  var stakeMap = {};
+  allPS.forEach(function(lk){
+    var proj = allProjs.find(p=>p.id===lk.projectId);
+    if(!proj) return;
+    var s = allStake.find(x=>String(x.id)===String(lk.stakeholderId));
+    if(!s) return;
+    var key = String(s.id);
+    if(!stakeMap[key]) stakeMap[key]={s:s,lk:lk,projects:[]};
+    stakeMap[key].projects.push(proj.pid+' — '+proj.name);
+  });
+
+  // Group by client then type
+  var rows = Object.values(stakeMap);
+  rows.sort(function(a,b){
+    var pa=(a.projects[0]||'').toLowerCase(),pb=(b.projects[0]||'').toLowerCase();
+    if(pa!==pb)return pa.localeCompare(pb);
+    var ta=(a.s.type||'').toLowerCase(),tb=(b.s.type||'').toLowerCase();
+    if(ta!==tb)return ta.localeCompare(tb);
+    return ((a.s.lastName||'')+(a.s.firstName||'')).toLowerCase().localeCompare(((b.s.lastName||'')+(b.s.firstName||'')).toLowerCase());
+  });
+
+  var total=rows.length;
+  var tableRows=rows.map(function(item){
+    var s=item.s,lk=item.lk;
+    var name=((s.firstName||'')+' '+(s.lastName||'')).trim()||s.org||'—';
+    var role=(lk.stakeholderRole||'External')==='Internal'?'<span class="badge b-blue">Internal</span>':'';
+    var sent=lk.support==='Champion'?'<span class="badge b-green">Champion</span>':lk.support==='Opponent'?'<span class="badge b-red">Opponent</span>':'';
+    return '<tr>'
+      +'<td style="font-weight:600">'+name+'</td>'
+      +'<td>'+escHtml(s.org||'—')+'</td>'
+      +'<td>'+escHtml(s.title||'—')+'</td>'
+      +'<td>'+escHtml(s.type||'—')+'</td>'
+      +'<td><a href="mailto:'+escHtml(s.email||'')+'">'+escHtml(s.email||'—')+'</a></td>'
+      +'<td>'+escHtml(s.phone||'—')+'</td>'
+      +'<td>'+role+' '+sent+'</td>'
+      +'<td style="font-size:9px;color:#666">'+item.projects.join('<br>')+'</td>'
+      +'</tr>';
+  }).join('');
+
+  var body = '<div style="font-size:11px;color:#666;margin-bottom:10px">'+total+' stakeholders across '+allProjs.length+' active projects</div>'
+    +'<table><thead><tr>'
+    +'<th style="width:14%">Name</th><th style="width:16%">Organization</th><th style="width:14%">Title</th>'
+    +'<th style="width:9%">Type</th><th style="width:18%">Email</th><th style="width:10%">Phone</th>'
+    +'<th style="width:8%">Role / Sentiment</th><th style="width:11%">Projects</th>'
+    +'</tr></thead><tbody>'+tableRows+'</tbody></table>';
+
+  _portfolioPrintWin('Master Stakeholder Contact List', body);
+}
+
+// ── 2. OPEN FOLLOW-UPS ─────────────────────────────────────────────────────
+function generatePortfolioFollowups() {
+  var allProjs = (DB.get('projects')||[]).filter(p=>p.status==='Active'||p.status==='On hold');
+  var allInts  = DB.get('interactions')||[];
+  var allStake = DB.get('stakeholders')||[];
+  var today    = localToday();
+
+  var openFUs = allInts.filter(function(i){return i.followUp&&!i.followUpDone;});
+  openFUs.sort(function(a,b){
+    var ad=a.followUpDue||'9999',bd=b.followUpDue||'9999';
+    return ad.localeCompare(bd);
+  });
+
+  var body = '';
+  var projGroups={};
+  openFUs.forEach(function(i){
+    var pid=i.projectId||'unknown';
+    if(!projGroups[pid])projGroups[pid]=[];
+    projGroups[pid].push(i);
+  });
+
+  var projIds=Object.keys(projGroups).sort(function(a,b){
+    var pa=allProjs.find(p=>p.id===a),pb=allProjs.find(p=>p.id===b);
+    return ((pa?pa.name:'')+'').localeCompare((pb?pb.name:'')+'' );
+  });
+
+  var total=openFUs.length;
+  var overdue=openFUs.filter(function(i){return i.followUpDue&&i.followUpDue<today;}).length;
+
+  body+='<div style="display:flex;gap:16px;margin-bottom:14px">'
+    +'<div style="padding:10px 16px;background:#f5f7fa;border-radius:6px;text-align:center"><div style="font-size:22px;font-weight:700;color:#1A3050">'+total+'</div><div style="font-size:10px;color:#666;text-transform:uppercase">Open</div></div>'
+    +'<div style="padding:10px 16px;background:#fdecea;border-radius:6px;text-align:center"><div style="font-size:22px;font-weight:700;color:#8b1a1a">'+overdue+'</div><div style="font-size:10px;color:#8b1a1a;text-transform:uppercase">Overdue</div></div>'
+    +'<div style="padding:10px 16px;background:#f5f7fa;border-radius:6px;text-align:center"><div style="font-size:22px;font-weight:700;color:#1A3050">'+allProjs.length+'</div><div style="font-size:10px;color:#666;text-transform:uppercase">Projects</div></div>'
+    +'</div>';
+
+  projIds.forEach(function(pid){
+    var proj=allProjs.find(p=>p.id===pid);
+    var pName=proj?(proj.pid+' — '+proj.name):'Unknown project';
+    var items=projGroups[pid];
+    body+='<div class="proj-hdr">'+pName+' <span style="font-weight:400;color:#555">('+items.length+' open)</span></div>';
+    body+='<table><thead><tr><th style="width:11%">Due date</th><th style="width:17%">Stakeholder</th><th style="width:13%">Channel</th><th style="width:39%">Interaction summary</th><th style="width:20%">Follow-up action</th></tr></thead><tbody>';
+    items.forEach(function(i){
+      var s=allStake.find(x=>String(x.id)===String(i.stakeholderId));
+      var sName=s?((s.firstName||'')+' '+(s.lastName||'')).trim():'Unknown';
+      var isOD=i.followUpDue&&i.followUpDue<today;
+      var dueFmt=i.followUpDue?fmt(i.followUpDue):'—';
+      body+='<tr>'
+        +'<td style="white-space:nowrap;color:'+(isOD?'#8b1a1a':'#222')+'">'+dueFmt+(isOD?' <span class="badge b-red">Overdue</span>':'')+'</td>'
+        +'<td style="font-weight:600">'+escHtml(sName)+'</td>'
+        +'<td>'+escHtml(i.channel||'—')+'</td>'
+        +'<td>'+escHtml(i.summary||'—')+'</td>'
+        +'<td>'+escHtml(i.followUpNote||'—')+'</td>'
+        +'</tr>';
+    });
+    body+='</tbody></table>';
+  });
+
+  if(!total) body='<div style="padding:40px;text-align:center;color:#888;font-size:13px">No open follow-ups across active projects.</div>';
+
+  _portfolioPrintWin('Open Follow-ups — All Projects', body);
+}
+
+// ── 3. OPEN COMMITMENTS ────────────────────────────────────────────────────
+function generatePortfolioCommitments() {
+  var allProjs = (DB.get('projects')||[]).filter(p=>p.status==='Active'||p.status==='On hold');
+  var allComm  = DB.get('commitments')||[];
+  var allStake = DB.get('stakeholders')||[];
+  var today    = localToday();
+
+  var open = allComm.filter(function(c){
+    return c.status!=='Fulfilled';
+  });
+  open.sort(function(a,b){
+    var ad=a.dueDate||'9999',bd=b.dueDate||'9999';
+    return ad.localeCompare(bd);
+  });
+
+  var overdue=open.filter(function(c){return c.dueDate&&c.dueDate<today;}).length;
+
+  var projGroups={};
+  open.forEach(function(c){
+    var pid=c.projectId||'unknown';
+    if(!projGroups[pid])projGroups[pid]=[];
+    projGroups[pid].push(c);
+  });
+
+  var projIds=Object.keys(projGroups).sort(function(a,b){
+    var pa=allProjs.find(p=>p.id===a),pb=allProjs.find(p=>p.id===b);
+    return ((pa?pa.name:'')+'').localeCompare((pb?pb.name:'')+'' );
+  });
+
+  var body='<div style="display:flex;gap:16px;margin-bottom:14px">'
+    +'<div style="padding:10px 16px;background:#f5f7fa;border-radius:6px;text-align:center"><div style="font-size:22px;font-weight:700;color:#1A3050">'+open.length+'</div><div style="font-size:10px;color:#666;text-transform:uppercase">Open</div></div>'
+    +'<div style="padding:10px 16px;background:#fdecea;border-radius:6px;text-align:center"><div style="font-size:22px;font-weight:700;color:#8b1a1a">'+overdue+'</div><div style="font-size:10px;color:#8b1a1a;text-transform:uppercase">Overdue</div></div>'
+    +'</div>';
+
+  projIds.forEach(function(pid){
+    var proj=allProjs.find(p=>p.id===pid);
+    var pName=proj?(proj.pid+' — '+proj.name):'Unknown project';
+    var items=projGroups[pid];
+    body+='<div class="proj-hdr">'+pName+' <span style="font-weight:400;color:#555">('+items.length+' open)</span></div>';
+    body+='<table><thead><tr><th style="width:11%">Due date</th><th style="width:12%">Category</th><th style="width:38%">Commitment</th><th style="width:16%">Made to</th><th style="width:13%">Made by</th><th style="width:10%">Date made</th></tr></thead><tbody>';
+    items.forEach(function(c){
+      var s=c.stakeholderId?allStake.find(x=>String(x.id)===String(c.stakeholderId)):null;
+      var madeTo=c.madeTo||(s?((s.firstName||'')+' '+(s.lastName||'')).trim():'—');
+      var isOD=c.dueDate&&c.dueDate<today;
+      body+='<tr>'
+        +'<td style="white-space:nowrap;color:'+(isOD?'#8b1a1a':'#222')+'">'+( c.dueDate?fmt(c.dueDate):'—')+(isOD?' <span class="badge b-red">Overdue</span>':'')+'</td>'
+        +'<td>'+escHtml(c.category||'—')+'</td>'
+        +'<td style="font-weight:500">'+escHtml(c.commitment||c.title||'—')+'</td>'
+        +'<td>'+escHtml(madeTo)+'</td>'
+        +'<td>'+escHtml(c.madeBy||'—')+'</td>'
+        +'<td style="white-space:nowrap">'+( c.dateMade?fmt(c.dateMade):'—')+'</td>'
+        +'</tr>';
+    });
+    body+='</tbody></table>';
+  });
+
+  if(!open.length) body='<div style="padding:40px;text-align:center;color:#888;font-size:13px">No open commitments across active projects.</div>';
+
+  _portfolioPrintWin('Open Commitments — All Projects', body);
+}
+
+// ── 4. OPEN ISSUES ─────────────────────────────────────────────────────────
+function generatePortfolioIssues() {
+  var allProjs = (DB.get('projects')||[]).filter(p=>p.status==='Active'||p.status==='On hold');
+  var allIssues= DB.get('issues')||[];
+
+  var open=allIssues.filter(function(i){return i.status==='Open'||i.status==='In Progress';});
+  open.sort(function(a,b){
+    var pa={'High':0,'Medium':1,'Low':2};
+    var diff=(pa[a.priority]||1)-(pa[b.priority]||1);
+    if(diff!==0)return diff;
+    return ((a.dateRaised||'')).localeCompare(b.dateRaised||'');
+  });
+
+  var projGroups={};
+  open.forEach(function(i){
+    var pid=i.projectId||'unknown';
+    if(!projGroups[pid])projGroups[pid]=[];
+    projGroups[pid].push(i);
+  });
+
+  var high=open.filter(function(i){return i.priority==='High';}).length;
+
+  var body='<div style="display:flex;gap:16px;margin-bottom:14px">'
+    +'<div style="padding:10px 16px;background:#f5f7fa;border-radius:6px;text-align:center"><div style="font-size:22px;font-weight:700;color:#1A3050">'+open.length+'</div><div style="font-size:10px;color:#666;text-transform:uppercase">Open</div></div>'
+    +'<div style="padding:10px 16px;background:#fdecea;border-radius:6px;text-align:center"><div style="font-size:22px;font-weight:700;color:#8b1a1a">'+high+'</div><div style="font-size:10px;color:#8b1a1a;text-transform:uppercase">High priority</div></div>'
+    +'</div>';
+
+  Object.keys(projGroups).sort(function(a,b){
+    var pa=allProjs.find(p=>p.id===a),pb=allProjs.find(p=>p.id===b);
+    return ((pa?pa.name:'')+'').localeCompare((pb?pb.name:'')+'' );
+  }).forEach(function(pid){
+    var proj=allProjs.find(p=>p.id===pid);
+    var pName=proj?(proj.pid+' — '+proj.name):'Unknown project';
+    var items=projGroups[pid];
+    body+='<div class="proj-hdr">'+pName+' <span style="font-weight:400;color:#555">('+items.length+' open)</span></div>';
+    body+='<table><thead><tr><th style="width:10%">Date raised</th><th style="width:9%">Status</th><th style="width:9%">Priority</th><th style="width:13%">Category</th><th style="width:35%">Title / Description</th><th style="width:14%">Assigned to</th><th style="width:10%">Logged by</th></tr></thead><tbody>';
+    items.forEach(function(iss){
+      var prC={'High':'b-red','Medium':'b-amber','Low':'b-green'};
+      var stC={'Open':'b-red','In Progress':'b-amber'};
+      body+='<tr>'
+        +'<td style="white-space:nowrap">'+( iss.dateRaised?fmt(iss.dateRaised):'—')+'</td>'
+        +'<td><span class="badge '+( stC[iss.status]||'b-blue')+'">'+escHtml(iss.status||'—')+'</span></td>'
+        +'<td><span class="badge '+( prC[iss.priority]||'b-blue')+'">'+escHtml(iss.priority||'—')+'</span></td>'
+        +'<td>'+escHtml(iss.category||'—')+'</td>'
+        +'<td><div style="font-weight:600">'+escHtml(iss.title||'—')+'</div>'+(iss.description?'<div style="font-size:9px;color:#555;margin-top:2px">'+escHtml(iss.description.substring(0,120))+(iss.description.length>120?'…':'')+'</div>':'')+'</td>'
+        +'<td>'+escHtml(iss.assignedTo||'—')+'</td>'
+        +'<td>'+escHtml(iss.createdBy||'—')+'</td>'
+        +'</tr>';
+    });
+    body+='</tbody></table>';
+  });
+
+  if(!open.length) body='<div style="padding:40px;text-align:center;color:#888;font-size:13px">No open issues across active projects.</div>';
+
+  _portfolioPrintWin('Open Issues — All Projects', body);
+}
+
 
 // ── PORTFOLIO EXPORT (all active projects) ───────────────────
 function exportPortfolio() {

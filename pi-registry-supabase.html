@@ -645,7 +645,7 @@ const SB_TO_INT = {
   pi_projects: {
     id:'id', name:'name', pid:'pid', client:'client', type:'project_type',
     county:'county', phase:'phase', status:'status', startDate:'start_date',
-    endDate:'end_date', preconDate:'precon_date', notes:'notes'
+    endDate:'end_date', preconDate:'precon_date', notes:'notes', lastExported:'last_exported'
   },
   pi_stakeholders: {
     id:'id', firstName:'first_name', lastName:'last_name', org:'org',
@@ -721,7 +721,7 @@ function localToday(){
   return y+'-'+m+'-'+day;
 }
 
-const DATE_FIELDS = new Set(['interaction_date','follow_up_due','follow_up_resolved','due_date','start_date','end_date','precon_date','added_date','meeting_date','date_raised','date_resolved','date_made','fulfilled_date']);
+const DATE_FIELDS = new Set(['interaction_date','follow_up_due','follow_up_resolved','due_date','start_date','end_date','precon_date','added_date','meeting_date','date_raised','date_resolved','date_made','fulfilled_date','last_exported']);
 
 // Integer FK columns that Supabase expects as numbers
 const SB_INT_FIELDS = new Set(['project_id','stakeholder_id','issue_id','interaction_id','meeting_id']);
@@ -3402,6 +3402,15 @@ function renderProjects(el){
             <span style="color:var(--slate)">${intCt} interactions</span>
             ${openFU>0?`<span style="color:var(--amber);margin-left:auto">${openFU} open FU</span>`:''}
           </div>
+          ${(()=>{
+            const le=p.lastExported;
+            if(!le)return '<div style="font-size:11px;margin-top:6px;padding:4px 8px;border-radius:5px;background:rgba(255,255,255,.04);color:var(--fog);display:inline-flex;align-items:center;gap:5px"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" style="width:10px;height:10px"><circle cx="6" cy="6" r="5"/><path d="M6 3v3l2 1"/></svg>Never exported</div>';
+            const days=Math.floor((new Date()-new Date(le+'T00:00:00'))/86400000);
+            const col=days<=14?'#1a7a50':days<=30?'#b36b00':'#b32020';
+            const bg=days<=14?'rgba(26,122,80,.12)':days<=30?'rgba(179,107,0,.12)':'rgba(179,50,50,.12)';
+            const label=days===0?'Exported today':days===1?'Exported yesterday':`Exported ${days}d ago`;
+            return `<div style="font-size:11px;margin-top:6px;padding:4px 8px;border-radius:5px;background:${bg};color:${col};display:inline-flex;align-items:center;gap:5px"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" style="width:10px;height:10px"><path d="M6 1v4M4 3l2 2 2-2"/><rect x="1" y="7" width="10" height="3" rx="1"/></svg>${label} · ${fmt(le)}</div>`;
+          })()}
           <div style="margin-top:11px">
             <div style="display:flex;gap:5px;margin-bottom:5px">
               <button class="btn btn-sm" onclick="filterByProject('${p.id}');setView('stakeholders')">Contacts</button>
@@ -6479,6 +6488,10 @@ function exportProject(projectId) {
   a.click();
   setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
 
+  // Update lastExported on the project
+  const allProjsE=DB.get('projects')||[];
+  const projIdx=allProjsE.findIndex(x=>x.id===projectId);
+  if(projIdx>-1){allProjsE[projIdx].lastExported=localToday();DB.set('projects',allProjsE);}
   showToast(`Exported: ${filename}`);
 
   } catch(err) {
@@ -6581,6 +6594,14 @@ function exportPortfolio() {
   document.body.appendChild(a);
   a.click();
   setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+  // Update lastExported on all exported projects
+  const allProjsP=DB.get('projects')||[];
+  const todayStr=localToday();
+  allProjs.forEach(function(p){
+    const pi=allProjsP.findIndex(x=>x.id===p.id);
+    if(pi>-1){allProjsP[pi].lastExported=todayStr;}
+  });
+  DB.set('projects',allProjsP);
   showToast(`Portfolio exported: ${allProjs.length} projects`);
 }
 

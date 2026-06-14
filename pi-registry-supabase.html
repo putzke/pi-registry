@@ -3849,10 +3849,12 @@ function openIntModal(preStake){
     </div>
     <div class="fr"><label>Date *</label><input type="date" id="f-id" value="${localToday()}"></div>
     <div class="fr"><label>Channel</label><select id="f-ic">${['Phone','Email','In-person','Public meeting','Public event','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'].map(c=>`<option>${c}</option>`).join('')}</select></div>
+  </div>
+  <div class="fgrid fg3f">
     <div class="fr"><label>Direction</label><select id="f-idr">${['Incoming','Outgoing','In-person'].map(d=>`<option>${d}</option>`).join('')}</select></div>
-    <div class="fr"><label>Subject</label><select id="f-isub">${['General','Traffic','Property','Environmental','Utility Service'].map(s=>`<option>${s}</option>`).join('')}</select></div>
-    <div class="fr"><label>Nature</label><select id="f-inat"><option>Inquiry</option><option>Complaint</option><option>Compliment</option></select></div>
-    <div class="fr"><label>Logged by</label><div style="font-size:13px;color:var(--white);padding:6px 0" id="f-il-display"></div><input type="hidden" id="f-il"></div>
+    <div class="fr"><label>Subject</label><select id="f-isub">${['General','Traffic','Property Access','Property Issue','Environmental','Utility Service','Information','Noise / Hours','ROW / Easement','Other'].map(s=>`<option>${s}</option>`).join('')}</select></div>
+    <div class="fr"><label>Nature</label><select id="f-inat">${['Inquiry','Complaint','Compliment','Comment','Request','Concern','Support'].map(n=>`<option>${n}</option>`).join('')}</select></div>
+  <input type="hidden" id="f-il">
   </div>
   <div class="fr"><label>Summary *</label><textarea id="f-isu" style="min-height:86px" placeholder="Describe the interaction in detail…"></textarea></div>
   <div class="fr"><label>Link to issue <span style="font-weight:400;color:var(--fog)">(optional — tag this interaction to an existing issue)</span></label>
@@ -3884,9 +3886,13 @@ function openEditIntModal(id){
     <div class="fr"><label>Stakeholder</label><select id="f-is">${stakes.map(s=>`<option value="${s.id}"${String(i.stakeholderId)===String(s.id)?' selected':''}>${dispName(s)}${(s.firstName||s.lastName)&&s.org?' — '+s.org:''}</option>`).join('')}</select></div>
     <div class="fr"><label>Date</label><input type="date" id="f-id" value="${i.date||''}"></div>
     <div class="fr"><label>Channel</label><select id="f-ic">${['Phone','Email','In-person','Public meeting','Public event','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'].map(c=>`<option${i.channel===c?' selected':''}>${c}</option>`).join('')}</select></div>
-    <div class="fr"><label>Direction</label><select id="f-idr">${['Incoming','Outgoing','In-person'].map(d=>`<option${i.direction===d?' selected':''}>${d}</option>`).join('')}</select></div>
-    <div class="fr"><label>Logged by</label><div style="font-size:13px;color:var(--white);padding:6px 0" id="f-il-display">${i.loggedBy||getLoggedBy()}</div><input type="hidden" id="f-il" value="${i.loggedBy||getLoggedBy()}"></div>
   </div>
+  <div class="fgrid fg3f">
+    <div class="fr"><label>Direction</label><select id="f-idr">${['Incoming','Outgoing','In-person'].map(d=>`<option${i.direction===d?' selected':''}>${d}</option>`).join('')}</select></div>
+    <div class="fr"><label>Subject</label><select id="f-isub">${['General','Traffic','Property Access','Property Issue','Environmental','Utility Service','Information','Noise / Hours','ROW / Easement','Other'].map(s=>`<option${(i.subject||'General')===s?' selected':''}>${s}</option>`).join('')}</select></div>
+    <div class="fr"><label>Nature</label><select id="f-inat">${['Inquiry','Complaint','Compliment','Comment','Request','Concern','Support'].map(n=>`<option${(i.nature||'Inquiry')===n?' selected':''}>${n}</option>`).join('')}</select></div>
+  </div>
+  <input type="hidden" id="f-il" value="${i.loggedBy||getLoggedBy()}">
   <div class="fr"><label>Summary</label><textarea id="f-isu" style="min-height:86px">${i.summary||''}</textarea></div>
   <div class="fr"><label>Link to issue <span style="font-weight:400;color:var(--fog)">(optional)</span></label>
     <select id="f-iissue">${(()=>{
@@ -3897,13 +3903,17 @@ function openEditIntModal(id){
     })()}</select>
   </div>
   <div class="fsec">Follow-up</div>
-  <div class="fr"><div class="fcheck"><input type="checkbox" id="f-ifu"${i.followUp?' checked':''} onchange="document.getElementById('fu-f').style.display=this.checked?'':'none'"><label for="f-ifu">Requires follow-up</label></div></div>
+  <div class="fr"><div style="display:flex;gap:20px;flex-wrap:wrap">
+    <div class="fcheck"><input type="checkbox" id="f-ifu"${i.followUp?' checked':''} onchange="document.getElementById('fu-f').style.display=this.checked?'':'none';document.getElementById('fu-done-wrap').style.display=this.checked?'':'none'"><label for="f-ifu">Requires follow-up</label></div>
+    <div class="fcheck" id="fu-done-wrap" style="${i.followUp?'':'display:none'}"><input type="checkbox" id="f-ifudo"${i.followUpDone?' checked':''} onchange="document.getElementById('fu-rdate').style.display=this.checked?'block':'none'"><label for="f-ifudo">Follow-up resolved</label></div>
+  </div></div>
   <div id="fu-f" style="${i.followUp?'':'display:none'}"><div class="fgrid fg2f">
     <div class="fr"><label>Action</label><input id="f-ifun" value="${i.followUpNote||''}"></div>
-    <div class="fr"><label>Due date</label><input type="date" id="f-ifud" value="${i.followUpDue||''}"></div>
-  </div>
-  <div class="fr"><div class="fcheck"><input type="checkbox" id="f-ifudo"${i.followUpDone?' checked':''} onchange="document.getElementById('fu-rdate').style.display=this.checked?'':'none'"><label for="f-ifudo">Follow-up resolved</label></div></div>
-  <div id="fu-rdate" style="${i.followUpDone?'':'display:none'}"><div class="fr"><label>Date resolved</label><input type="date" id="f-ifudr" value="${i.followUpResolved||localToday()}"></div></div></div>`,
+    <div class="fr" style="display:flex;gap:10px">
+      <div style="flex:1"><label>Due date</label><input type="date" id="f-ifud" value="${i.followUpDue||''}"></div>
+      <div id="fu-rdate" style="${i.followUpDone?'flex:1':'display:none'}"><label>Date resolved</label><input type="date" id="f-ifudr" value="${i.followUpResolved||localToday()}"></div>
+    </div>
+  </div></div>`,
   `<button class="btn btn-danger btn-sm" onclick="delInt('${id}')">Delete</button>
   <button class="btn" onclick="closeM()">Cancel</button>
   <button class="btn btn-primary" onclick="saveInt()">Save changes</button>`,true);

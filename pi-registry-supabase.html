@@ -5005,7 +5005,15 @@ function generateReport(type){
   var proj=projs.find(function(p){return p.id===projF});
   if(!proj)return;
   var allStakes=DB.get('stakeholders');
-  var ps=DB.get('project_stakeholders').filter(function(x){return x.projectId===projF});
+  var ps=DB.get('project_stakeholders').filter(function(x){return x.projectId===projF})
+    .slice().sort(function(a,b){
+      var sA=allStakes.find(function(x){return String(x.id)===String(a.stakeholderId);})||{};
+      var sB=allStakes.find(function(x){return String(x.id)===String(b.stakeholderId);})||{};
+      var rA=(a.stakeholderRole||'External')==='Internal'?0:1;
+      var rB=(b.stakeholderRole||'External')==='Internal'?0:1;
+      if(rA!==rB)return rA-rB;
+      return(sA.lastName||'').toLowerCase().localeCompare((sB.lastName||'').toLowerCase());
+    });
   var ints=DB.get('interactions').filter(function(i){return i.projectId===projF});
   var dels=DB.get('deliverables').filter(function(d){return d.projectId===projF});
 
@@ -5881,7 +5889,16 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
   ];
 
   // Get project stakeholder data for auto sections
-  var ps=DB.get('project_stakeholders').filter(function(x){return x.projectId===proj.id});
+  var _psRaw=DB.get('project_stakeholders').filter(function(x){return x.projectId===proj.id});
+  var _allSk=DB.get('stakeholders');
+  var ps=_psRaw.slice().sort(function(a,b){
+    var sA=_allSk.find(function(x){return String(x.id)===String(a.stakeholderId);})||{};
+    var sB=_allSk.find(function(x){return String(x.id)===String(b.stakeholderId);})||{};
+    var rA=(a.stakeholderRole||'External')==='Internal'?0:1;
+    var rB=(b.stakeholderRole||'External')==='Internal'?0:1;
+    if(rA!==rB)return rA-rB;
+    return(sA.lastName||'').toLowerCase().localeCompare((sB.lastName||'').toLowerCase());
+  });
   var externalPS=ps.filter(function(lk){return(lk.stakeholderRole||'External')==='External'});
   var now=new Date();
 
@@ -7485,7 +7502,16 @@ function showEngagementMatrix(projectId) {
   if (!projObj) return;
   const projectName = projObj.name;
 
-  const psLinks = DB.get('project_stakeholders').filter(x => String(x.projectId) === String(projectId));
+  const psLinks = DB.get('project_stakeholders').filter(x => String(x.projectId) === String(projectId))
+    .slice().sort(function(a,b){
+      var allSk=DB.get('stakeholders');
+      var sA=allSk.find(x=>String(x.id)===String(a.stakeholderId))||{};
+      var sB=allSk.find(x=>String(x.id)===String(b.stakeholderId))||{};
+      var rA=(a.stakeholderRole||'External')==='Internal'?0:1;
+      var rB=(b.stakeholderRole||'External')==='Internal'?0:1;
+      if(rA!==rB)return rA-rB;
+      return(sA.lastName||'').toLowerCase().localeCompare((sB.lastName||'').toLowerCase());
+    });
   const allStakes = DB.get('stakeholders');
 
   const stakes = psLinks.map(lk => {
@@ -7668,7 +7694,16 @@ function printEngagementMatrix(projectId) {
   if (!projObj) return;
   const projectName = projObj.name;
 
-  const psLinks = DB.get('project_stakeholders').filter(x => String(x.projectId) === String(projectId));
+  const psLinks = DB.get('project_stakeholders').filter(x => String(x.projectId) === String(projectId))
+    .slice().sort(function(a,b){
+      var allSk=DB.get('stakeholders');
+      var sA=allSk.find(x=>String(x.id)===String(a.stakeholderId))||{};
+      var sB=allSk.find(x=>String(x.id)===String(b.stakeholderId))||{};
+      var rA=(a.stakeholderRole||'External')==='Internal'?0:1;
+      var rB=(b.stakeholderRole||'External')==='Internal'?0:1;
+      if(rA!==rB)return rA-rB;
+      return(sA.lastName||'').toLowerCase().localeCompare((sB.lastName||'').toLowerCase());
+    });
   const allStakes = DB.get('stakeholders');
   const stakes = psLinks.map(lk => {
     const s = allStakes.find(x => String(x.id) === String(lk.stakeholderId));

@@ -1677,11 +1677,19 @@ function _getPickerList(){
   const ps=DB.get('project_stakeholders');
   let list;
   if(pF){
-    list=ps.filter(x=>x.projectId===pF).map(lk=>stakes.find(x=>String(x.id)===String(lk.stakeholderId))).filter(Boolean);
+    const psF=ps.filter(x=>x.projectId===pF);
+    list=psF.slice().sort(function(a,b){
+      var sA=stakes.find(x=>String(x.id)===String(a.stakeholderId))||{};
+      var sB=stakes.find(x=>String(x.id)===String(b.stakeholderId))||{};
+      var rA=(a.stakeholderRole||'External')==='Internal'?0:1;
+      var rB=(b.stakeholderRole||'External')==='Internal'?0:1;
+      if(rA!==rB)return rA-rB;
+      return(sA.lastName||'').toLowerCase().localeCompare((sB.lastName||'').toLowerCase());
+    }).map(lk=>stakes.find(x=>String(x.id)===String(lk.stakeholderId))).filter(Boolean);
   } else {
-    list=stakes;
+    list=stakes.slice().sort((a,b)=>(a.lastName+a.firstName).localeCompare(b.lastName+b.firstName));
   }
-  return list.sort((a,b)=>(a.lastName+a.firstName).localeCompare(b.lastName+b.firstName));
+  return list;
 }
 
 function _clearCallerFields(){

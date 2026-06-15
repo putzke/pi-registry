@@ -1824,6 +1824,15 @@ function renderStakeholders(el){
   if(typeF)listItems=listItems.filter(s=>s.type===typeF);
   if(S.skOrgOnly)listItems=listItems.filter(s=>isOrgContact(s));
   if(S.projectFilter)listItems=_applyGroupFilter(listItems,S.projectFilter);
+  // Sort: Internal first by last name, then External by last name
+  if(S.projectFilter){
+    listItems=listItems.slice().sort(function(a,b){
+      var roleA=(a._link&&(a._link.stakeholderRole||'External')==='Internal')?0:1;
+      var roleB=(b._link&&(b._link.stakeholderRole||'External')==='Internal')?0:1;
+      if(roleA!==roleB)return roleA-roleB;
+      return (a.lastName||'').toLowerCase().localeCompare((b.lastName||'').toLowerCase());
+    });
+  }
   const sel=S.selStakeholder;
   const selData=sel?allStakes.find(x=>x.id===sel):null;
   const selLink=sel&&S.projectFilter?ps.find(x=>x.projectId===S.projectFilter&&x.stakeholderId===sel):null;

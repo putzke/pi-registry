@@ -2567,7 +2567,7 @@ function renderStakeDetail(s,link){
           <span class="badge ${i.direction==='Incoming'?'b-sky':'b-green'}">${i.direction}</span>
           <span class="badge b-gray">${i.channel}</span>
           <span style="font-size:12px;color:var(--slate)">${i.loggedBy}</span>
-          ${(function(){if(link)return '';var _p=projs.find(function(x){return String(x.id)===String(i.projectId);});return _p?'<span class="badge b-dark" style="font-size:10px;color:var(--sky-lt);border-color:rgba(45,125,210,.3)">'+_p.pid+'</span>':'';}())}
+          ${(function(){if(link)return '';var _p=projs.find(function(x){return String(x.id)===String(i.projectId);});return _p?'<span class="badge b-dark" style="font-size:10px;color:var(--sky-lt);border-color:rgba(45,125,210,.3)">'+_p.name+'</span>':'';}())}
           <span class="log-date">${fmt(i.date)} <span style="color:var(--fog)">${ago(i.date)}</span></span>
         </div>
         <div class="log-sum">${i.summary}</div>

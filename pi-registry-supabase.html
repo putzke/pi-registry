@@ -2478,8 +2478,9 @@ function renderBubbleChart(projectId){
 
 
 function renderStakeDetail(s,link){
-  const ints=DB.get('interactions').filter(i=>String(i.stakeholderId)===String(s.id)&&(!S.projectFilter||i.projectId===S.projectFilter));
-  const allInts=DB.get('interactions').filter(i=>String(i.stakeholderId)===String(s.id)); // all projects for engagement history
+  // Use link (not S.projectFilter) to scope interactions — master view passes link=null so always shows all projects
+  const allInts=DB.get('interactions').filter(i=>String(i.stakeholderId)===String(s.id));
+  const ints=link?allInts.filter(i=>i.projectId===link.projectId):allInts;
   const ps=DB.get('project_stakeholders').filter(x=>String(x.stakeholderId)===String(s.id));
   const projs=DB.get('projects');
   const col=acol(s.firstName+s.lastName);

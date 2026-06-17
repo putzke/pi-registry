@@ -1116,7 +1116,7 @@ function initDashRows(){
     }
   });
 }
-function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;
+function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.showBulkAdd=false;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;
   S.view=v;S.selStakeholder=null;S.selInteraction=null;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const navId=v==='commitments'?'nav-commitments':('nav-'+v);
@@ -1698,6 +1698,298 @@ function filterMasterList(){
     }).join('');
 }
 
+// ── BULK ADD CONTACTS ─────────────────────────────────────────────
+const BULK_TYPES = ['Agency','Business','Business Group','Community Group','Contractor','Elected Official','Engineering','Media','Other','Property Owner','Resident','Road Traveler'];
+const BULK_TIERS = ['High','Medium','Low'];
+const BULK_ROWS = 10;
+
+function openBulkAdd() {
+  S.showBulkAdd = true;
+  renderStakeholders(document.getElementById('main'));
+}
+
+function closeBulkAdd() {
+  S.showBulkAdd = false;
+  renderStakeholders(document.getElementById('main'));
+}
+
+function _bulkGetRows() {
+  var rows = [];
+  for (var i = 0; i < BULK_ROWS; i++) {
+    var fn = (document.getElementById('bfn'+i)||{}).value||'';
+    var ln = (document.getElementById('bln'+i)||{}).value||'';
+    var org = (document.getElementById('borg'+i)||{}).value||'';
+    var ti = (document.getElementById('bti'+i)||{}).value||'';
+    var em = (document.getElementById('bem'+i)||{}).value||'';
+    var ph = (document.getElementById('bph'+i)||{}).value||'';
+    var ty = (document.getElementById('bty'+i)||{}).value||'';
+    var tr = (document.getElementById('btr'+i)||{}).value||'';
+    var ro = (document.getElementById('bro'+i)||{}).value||'External';
+    var ms = (document.getElementById('bms'+i)||{}).checked !== false;
+    rows.push({fn:fn.trim(),ln:ln.trim(),org:org.trim(),ti:ti.trim(),em:em.trim(),ph:ph.trim(),ty:ty,tr:tr,ro:ro,ms:ms,idx:i});
+  }
+  return rows;
+}
+
+function _bulkFilledRows() {
+  return _bulkGetRows().filter(function(r){ return r.fn||r.ln||r.org; });
+}
+
+function bulkCheckDup(idx) {
+  var em = (document.getElementById('bem'+idx)||{}).value||'';
+  var fn = (document.getElementById('bfn'+idx)||{}).value||'';
+  var ln = (document.getElementById('bln'+idx)||{}).value||'';
+  var warn = document.getElementById('bwarn'+idx);
+  if (!warn) return;
+  var existing = DB.get('stakeholders');
+  var norm = function(s){ return (s||'').trim().toLowerCase(); };
+  var dupe = null;
+  if (em) dupe = existing.find(function(e){ return e.email && norm(e.email)===norm(em); });
+  if (!dupe && fn && ln) dupe = existing.find(function(e){ return norm(e.firstName)===norm(fn) && norm(e.lastName)===norm(ln); });
+  if (dupe) {
+    var name = ((dupe.firstName||'')+' '+(dupe.lastName||'')).trim()||dupe.org||'?';
+    warn.innerHTML = '\u26a0 Matches &ldquo;'+name+'&rdquo; &mdash; will save as new contact unless you clear this row';
+    warn.style.display = 'block';
+  } else {
+    warn.innerHTML = '';
+    warn.style.display = 'none';
+  }
+  _bulkUpdateFooter();
+}
+
+function _bulkUpdateFooter() {
+  var ct = _bulkFilledRows().length;
+  var btn = document.getElementById('bulk-save-btn');
+  var info = document.getElementById('bulk-footer-info');
+  if (btn) btn.textContent = ct > 0 ? 'Save ' + ct + ' contact' + (ct!==1?'s':'') : 'Save contacts';
+  if (info) {
+    var warns = 0;
+    for (var i=0; i<BULK_ROWS; i++) {
+      var w = document.getElementById('bwarn'+i);
+      if (w && w.style.display !== 'none' && w.innerHTML) warns++;
+    }
+    info.textContent = ct + ' of ' + BULK_ROWS + ' rows filled' + (warns > 0 ? ' \u00b7 ' + warns + ' duplicate warning' + (warns!==1?'s':'') : '');
+  }
+}
+
+function bulkApplyDown(field, fromIdx) {
+  var src = document.getElementById(field+fromIdx);
+  if (!src) return;
+  var val = src.value;
+  for (var i = fromIdx+1; i < BULK_ROWS; i++) {
+    var el = document.getElementById(field+i);
+    if (el && !el.value) el.value = val;
+  }
+  _bulkUpdateFooter();
+}
+
+function bulkApplyRoleDown(fromIdx) {
+  var src = document.getElementById('bro'+fromIdx);
+  if (!src) return;
+  var val = src.value;
+  for (var i = fromIdx+1; i < BULK_ROWS; i++) {
+    var el = document.getElementById('bro'+i);
+    if (el) el.value = val;
+  }
+}
+
+function bulkTabNext(idx, field, event) {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    var next = document.getElementById('bfn'+(idx+1));
+    if (next) next.focus();
+  }
+}
+
+function _bulkOrgSuggestions() {
+  var orgs = {};
+  DB.get('stakeholders').forEach(function(s){ if(s.org) orgs[s.org.trim()] = true; });
+  return Object.keys(orgs).sort();
+}
+
+async function saveBulkContacts() {
+  var rows = _bulkFilledRows();
+  if (rows.length === 0) { alert('No contacts to save — fill in at least one row.'); return; }
+
+  var allStakes = DB.getActive('stakeholders');
+  var allPS = DB.get('project_stakeholders');
+  var saved = 0;
+  var norm = function(s){ return (s||'').trim().toLowerCase(); };
+
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    if (!r.fn && !r.ln && !r.org) continue;
+    var id = DB.uid();
+    var stake = {
+      id: id,
+      firstName: r.fn,
+      lastName: r.ln,
+      org: r.org,
+      title: r.ti,
+      email: r.em,
+      phone: r.ph ? formatPhone(cleanPhone(r.ph)) : '',
+      type: r.ty || 'Other',
+      influenceTier: r.tr || 'Medium',
+      isMaster: r.ms,
+      isAnonymous: false,
+      notes: '',
+      address: '',
+      parcelId: '',
+      isArchived: false
+    };
+    allStakes.push(stake);
+
+    if (S.projectFilter) {
+      if (!allPS.find(function(x){ return x.projectId===S.projectFilter && String(x.stakeholderId)===String(id); })) {
+        allPS.push({
+          id: DB.uid(),
+          projectId: S.projectFilter,
+          stakeholderId: id,
+          support: 'Neutral',
+          issueTags: '',
+          addedDate: localToday(),
+          notes: '',
+          distributionGroups: '',
+          stakeholderRole: r.ro || 'External'
+        });
+      }
+    }
+    saved++;
+  }
+
+  await DB.set('stakeholders', allStakes);
+  if (S.projectFilter) await DB.set('project_stakeholders', allPS);
+
+  S.showBulkAdd = false;
+  alert(saved + ' contact' + (saved!==1?'s':'') + ' saved successfully.');
+  renderStakeholders(document.getElementById('main'));
+}
+
+function renderBulkAdd(el) {
+  var proj = S.projectFilter ? DB.get('projects').find(function(p){ return p.id===S.projectFilter; }) : null;
+  var orgSugs = _bulkOrgSuggestions();
+  var datalistHtml = '<datalist id="bulk-org-list">'+orgSugs.map(function(o){ return '<option value="'+o.replace(/"/g,'&quot;')+'">'; }).join('')+'</datalist>';
+
+  var typeOpts = '<option value="">Type\u2026</option>'+BULK_TYPES.map(function(t){ return '<option>'+t+'</option>'; }).join('');
+  var tierOpts = '<option value="">Tier\u2026</option>'+BULK_TIERS.map(function(t){ return '<option>'+t+'</option>'; }).join('');
+  var roleOpts = '<option value="External">External</option><option value="Internal">Internal</option>';
+
+  var inpStyle = 'width:100%;font-size:11px;padding:4px 5px;height:28px;background:var(--navy-mid);border:1px solid var(--border);border-radius:4px;color:var(--white);box-sizing:border-box';
+  var selStyle = inpStyle+';padding:4px 2px';
+
+  var rows = '';
+  for (var i = 0; i < BULK_ROWS; i++) {
+    var isLate = i >= 5;
+    var rowOp = isLate ? 'opacity:.35;pointer-events:none;' : '';
+    rows += '<tr id="brow'+i+'" style="'+rowOp+'">'
+      + '<td style="text-align:center;font-size:11px;color:var(--fog);width:22px;padding:3px 2px">'+(i+1)+'</td>'
+      + '<td style="padding:3px 3px"><input id="bfn'+i+'" type="text" placeholder="First" style="'+inpStyle+'" oninput="bulkRowActivate('+i+');bulkCheckDup('+i+')" onkeydown="bulkTabNext('+i+',\'fn\',event)"></td>'
+      + '<td style="padding:3px 3px"><input id="bln'+i+'" type="text" placeholder="Last" style="'+inpStyle+'" oninput="bulkRowActivate('+i+');bulkCheckDup('+i+')"></td>'
+      + '<td style="padding:3px 3px"><div style="position:relative">'
+      +   '<input id="borg'+i+'" type="text" placeholder="Organization" list="bulk-org-list" style="'+inpStyle+';padding-right:20px" oninput="bulkRowActivate('+i+')">'
+      +   '<span onclick="bulkApplyDown(\'borg\','+i+')" title="Copy org down to empty rows" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:11px;color:var(--sky-lt)" aria-label="Copy org down">\u21e9</span>'
+      + '</div></td>'
+      + '<td style="padding:3px 3px"><input id="bti'+i+'" type="text" placeholder="Title / role" style="'+inpStyle+'" oninput="bulkRowActivate('+i+')"></td>'
+      + '<td style="padding:3px 3px"><input id="bem'+i+'" type="text" placeholder="Email" style="'+inpStyle+'" oninput="bulkRowActivate('+i+');bulkCheckDup('+i+')"></td>'
+      + '<td style="padding:3px 3px"><input id="bph'+i+'" type="text" placeholder="Phone" style="'+inpStyle+'" oninput="bulkRowActivate('+i+')"></td>'
+      + '<td style="padding:3px 3px"><div style="position:relative">'
+      +   '<select id="bty'+i+'" style="'+selStyle+';padding-right:14px" onchange="bulkRowActivate('+i+');_bulkUpdateFooter()">'+typeOpts+'</select>'
+      + '</div></td>'
+      + '<td style="padding:3px 3px"><select id="btr'+i+'" style="'+selStyle+'">'+tierOpts+'</select></td>'
+      + '<td style="padding:3px 3px"><div style="position:relative">'
+      +   '<select id="bro'+i+'" style="'+selStyle+';padding-right:14px">'+roleOpts+'</select>'
+      +   '<span onclick="bulkApplyRoleDown('+i+')" title="Copy role down to all rows" style="position:absolute;right:-14px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:11px;color:var(--sky-lt)" aria-label="Copy role down">\u21e9</span>'
+      + '</div></td>'
+      + '<td style="padding:3px 6px;text-align:center"><input id="bms'+i+'" type="checkbox" checked style="accent-color:var(--sky);width:14px;height:14px"></td>'
+      + '</tr>'
+      + '<tr id="bwarnrow'+i+'"><td></td><td colspan="10" style="padding:0 3px 4px"><div id="bwarn'+i+'" style="display:none;font-size:10px;color:var(--amber);padding:2px 0"></div></td></tr>';
+  }
+
+  el.innerHTML = '<div class="topbar">'
+    + '<div><div class="topbar-title">Bulk add contacts</div>'
+    + '<div class="topbar-sub">Empty rows are skipped &middot; Press Enter to advance rows</div></div>'
+    + '<div style="display:flex;align-items:center;gap:8px;margin-left:auto">'
+    +   '<button class="btn btn-ghost" onclick="closeBulkAdd()">\u2190 Back to contacts</button>'
+    + '</div></div>'
+    + '<div class="toolbar" style="gap:10px;flex-wrap:wrap">'
+    +   (proj ? '<span style="font-size:12px;color:var(--mist)">Project:</span><span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:4px;background:rgba(55,138,221,.2);color:#85b7eb">'+proj.pid+' \u2014 '+proj.name+'</span>' : '<span style="font-size:12px;color:var(--fog)">No project selected \u2014 contacts will be added to master list only</span>')
+    +   '<div style="flex:1"></div>'
+    +   '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mist);cursor:pointer"><input type="checkbox" id="bulk-master-all" checked onchange="bulkToggleAllMaster(this.checked)" style="accent-color:var(--sky)"> Add all to master list</label>'
+    + '</div>'
+    + datalistHtml
+    + '<div style="overflow-x:auto;padding:12px 20px">'
+    + '<table style="border-collapse:collapse;width:100%;min-width:900px">'
+    + '<colgroup>'
+    + '<col style="width:24px"><col style="width:88px"><col style="width:88px"><col style="width:130px">'
+    + '<col style="width:110px"><col style="width:145px"><col style="width:100px">'
+    + '<col style="width:90px"><col style="width:68px"><col style="width:82px"><col style="width:52px">'
+    + '</colgroup>'
+    + '<thead><tr style="border-bottom:1px solid var(--border)">'
+    + '<th style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--fog);padding:0 2px 6px;text-align:left"></th>'
+    + '<th style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--fog);padding:0 3px 6px;text-align:left">First name</th>'
+    + '<th style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--fog);padding:0 3px 6px;text-align:left">Last name</th>'
+    + '<th style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--fog);padding:0 3px 6px;text-align:left">Organization <span style="color:var(--sky-lt)" title="Copy org down">\u21e9</span></th>'
+    + '<th style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--fog);padding:0 3px 6px;text-align:left">Title / role</th>'
+    + '<th style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--fog);padding:0 3px 6px;text-align:left">Email</th>'
+    + '<th style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--fog);padding:0 3px 6px;text-align:left">Phone</th>'
+    + '<th style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--fog);padding:0 3px 6px;text-align:left">Type</th>'
+    + '<th style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--fog);padding:0 3px 6px;text-align:left">Tier</th>'
+    + '<th style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--fog);padding:0 3px 6px;text-align:left">Role <span style="color:var(--sky-lt)" title="Copy role down">\u21e9</span></th>'
+    + '<th style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--fog);padding:0 3px 6px;text-align:center">Master</th>'
+    + '</tr></thead>'
+    + '<tbody>'+rows+'</tbody>'
+    + '</table>'
+    + '<div style="font-size:11px;color:var(--fog);margin-top:8px;padding-left:24px">Rows 6\u201310 unlock as you fill rows above \u00b7 \u21e9 copies value down to empty cells below</div>'
+    + '</div>'
+    + '<div style="display:flex;align-items:center;gap:8px;padding:12px 20px;border-top:1px solid var(--border);background:var(--navy-mid)">'
+    +   '<button id="bulk-save-btn" class="btn btn-primary" onclick="saveBulkContacts()">Save contacts</button>'
+    +   '<button class="btn btn-ghost" onclick="bulkClearAll()">Clear all</button>'
+    +   '<div style="flex:1"></div>'
+    +   '<span id="bulk-footer-info" style="font-size:12px;color:var(--fog)">0 of '+BULK_ROWS+' rows filled</span>'
+    + '</div>';
+
+  // After render, activate row-unlocking logic
+  setTimeout(function(){ _bulkUpdateFooter(); }, 50);
+}
+
+function bulkRowActivate(idx) {
+  // Unlock next row when current row starts getting data
+  if (idx < BULK_ROWS - 1) {
+    var nextRow = document.getElementById('brow'+(idx+1));
+    if (nextRow) { nextRow.style.opacity='1'; nextRow.style.pointerEvents=''; }
+    var nextWarnRow = document.getElementById('bwarnrow'+(idx+1));
+    if (nextWarnRow) { nextWarnRow.style.opacity='1'; nextWarnRow.style.pointerEvents=''; }
+  }
+  _bulkUpdateFooter();
+}
+
+function bulkToggleAllMaster(checked) {
+  for (var i=0; i<BULK_ROWS; i++) {
+    var cb = document.getElementById('bms'+i);
+    if (cb) cb.checked = checked;
+  }
+}
+
+function bulkClearAll() {
+  if (!confirm('Clear all rows?')) return;
+  for (var i=0; i<BULK_ROWS; i++) {
+    ['bfn','bln','borg','bti','bem','bph'].forEach(function(f){
+      var el = document.getElementById(f+i); if(el) el.value='';
+    });
+    var ty = document.getElementById('bty'+i); if(ty) ty.selectedIndex=0;
+    var tr = document.getElementById('btr'+i); if(tr) tr.selectedIndex=0;
+    var ro = document.getElementById('bro'+i); if(ro) ro.value='External';
+    var ms = document.getElementById('bms'+i); if(ms) ms.checked=true;
+    var w = document.getElementById('bwarn'+i); if(w){w.innerHTML='';w.style.display='none';}
+    // Re-lock rows 5+
+    if (i >= 5) {
+      var row = document.getElementById('brow'+i); if(row){row.style.opacity='.35';row.style.pointerEvents='none';}
+    }
+  }
+  _bulkUpdateFooter();
+}
+
+
 // ── DUPLICATE DETECTION ───────────────────────────────────────────
 function normalizeDupName(s){ return (s||'').trim().toLowerCase().replace(/\s+/g,' '); }
 
@@ -2036,6 +2328,7 @@ function renderMaster(el){
 
 // ── PROJECT STAKEHOLDER VIEW ──────────────────
 function renderStakeholders(el){
+  if(S.showBulkAdd){renderBulkAdd(el);return;}
   const projs=DB.get('projects');
   const allStakes=DB.getActive('stakeholders');
   const ps=DB.get('project_stakeholders');
@@ -2078,6 +2371,7 @@ function renderStakeholders(el){
       ${S.projectFilter?`<button class="btn btn-ghost btn-sm" onclick="S.projectFilter=null;render()">✕ Clear filter</button>`:''}
       <button class="btn" onclick="importWithContext()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg>Import</button>
       <button class="btn btn-primary" onclick="openStakeModal()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v10M3 8h10"/></svg>New stakeholder</button>
+      ${S.projectFilter?`<button class="btn" onclick="openBulkAdd()" style="display:flex;align-items:center;gap:5px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:13px;height:13px"><path d="M8 3v10M3 8h10"/></svg><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:13px;height:13px"><path d="M8 3v10M3 8h10"/></svg>Bulk add</button>`:''}
       ${S.projectFilter?`<button class="btn" onclick="openLinkModal()">Link existing</button>`:''}
     </div>
   </div>

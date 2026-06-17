@@ -8203,7 +8203,7 @@ function openCommModal(id) {
         <div style="position:relative">
           <input id="f-cstake-search" autocomplete="off" placeholder="Search stakeholders…"
             style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:8px 12px"
-            oninput="_commStakeSearch(this.value)" onfocus="_commStakeSearch(this.value)">
+            oninput="_commStakeSearchInput(this.value)" onfocus="_commStakeSearch(this.value)">
           <input type="hidden" id="f-cstake" value="${c.stakeholderId||''}">
           <div id="f-cstake-list" style="display:none;position:absolute;z-index:999;width:100%;max-height:200px;overflow-y:auto;background:var(--navy-mid);border:1px solid var(--border);border-radius:7px;margin-top:3px"></div>
         </div>
@@ -8221,7 +8221,9 @@ function openCommModal(id) {
     </div>
     <div class="fgrid fg2f">
       <div class="fr"><label>Made to (free text — if not in registry)</label>
-        <input id="f-cmadeto" value="${c.madeTo||''}" placeholder="e.g. Riverdale Canyon residents, City Council">
+        <input id="f-cmadeto" value="${c.madeTo||''}" placeholder="e.g. Riverdale Canyon residents, City Council"
+          ${c.stakeholderId?'disabled style="opacity:.4;cursor:not-allowed"':''}
+          oninput="_commFreeTextChanged(this.value)">
       </div>
       <div class="fr"><label>Made by (staff)</label>
         <input id="f-cmadeby" value="${c.madeBy||''}" placeholder="Name responsible for fulfilling">
@@ -8304,6 +8306,16 @@ function _commProjChanged(projId, preselStakeId) {
   _commStakeSearch('');
 }
 
+function _commStakeSearchInput(q) {
+  if (!q.trim()) {
+    var hid = document.getElementById("f-cstake");
+    var ft  = document.getElementById("f-cmadeto");
+    if (hid) hid.value="";
+    if (ft)  { ft.disabled=false; ft.style.opacity="1"; ft.style.cursor=""; }
+  }
+  _commStakeSearch(q);
+}
+
 function _commStakeSearch(q) {
   const list = document.getElementById('f-cstake-list');
   const hid  = document.getElementById('f-cstake');
@@ -8333,9 +8345,22 @@ function _commStakePick(id, name) {
   const hid  = document.getElementById('f-cstake');
   const srch = document.getElementById('f-cstake-search');
   const list = document.getElementById('f-cstake-list');
+  const ft   = document.getElementById('f-cmadeto');
   if (hid)  hid.value  = id;
   if (srch) srch.value = name;
   if (list) list.style.display='none';
+  // Clear and disable free text when stakeholder selected
+  if (ft) { ft.value=''; ft.disabled=true; ft.style.opacity='.4'; ft.style.cursor='not-allowed'; }
+}
+
+function _commFreeTextChanged(val) {
+  // If user types in free text, clear stakeholder picker
+  if (val.trim()) {
+    const hid  = document.getElementById('f-cstake');
+    const srch = document.getElementById('f-cstake-search');
+    if (hid)  hid.value  = '';
+    if (srch) srch.value = '';
+  }
 }
 
 function saveCommitment() {

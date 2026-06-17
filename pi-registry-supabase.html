@@ -8221,7 +8221,7 @@ function openCommModal(id) {
     </div>
     <div class="fsec">Dates</div>
     <div class="fgrid fg2f">
-      <div class="fr"><label>Date made</label><input type="date" id="f-cdatemade" value="${c.dateMade||''}"></div>
+      <div class="fr"><label>Date made</label><input type="date" id="f-cdatemade" value="${c.dateMade||localToday()}"></div>
       <div class="fr"><label>Due date</label><input type="date" id="f-cduedate" value="${c.dueDate||''}"></div>
     </div>
     <div id="f-fulfilled-wrap" style="display:${(c.status==='Fulfilled'||c.status==='Overdue'&&c.fulfilledDate)?'block':'none'}">
@@ -8345,6 +8345,8 @@ function saveCommitment() {
   if (!comm.trim()) { alert('Commitment text is required.'); return; }
   const pid = v('f-cpid');
   if (!pid) { alert('Project is required.'); return; }
+  const dateMade = vDate('f-cdatemade');
+  if (!dateMade) { alert('Date made is required.'); return; }
 
   const data = {
     id: S.editId || DB.uid(),
@@ -8353,7 +8355,7 @@ function saveCommitment() {
     commitment: comm,
     madeTo: v('f-cmadeto'),
     madeBy: v('f-cmadeby'),
-    dateMade: vDate('f-cdatemade'),
+    dateMade: dateMade,
     dueDate: vDate('f-cduedate'),
     category: v('f-ccat'),
     status: (()=>{

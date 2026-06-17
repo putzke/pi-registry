@@ -3174,7 +3174,7 @@ function renderDelScope(pF){
             <td style="font-size:12px;color:var(--slate)">${_dueHTML}</td>
             <td>${_paceHTML}</td>
             <td style="font-size:12px;color:var(--mist);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.distList||'—'}</td>
-            <td><button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="openDelModal('${d.id}')">Edit</button></td>
+            <td style="white-space:nowrap"><button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="openDelModal('${d.id}')">Edit</button> <button class="btn btn-xs" style="background:rgba(220,60,60,.15);border-color:rgba(220,60,60,.4);color:#f87171" onclick="deleteDeliverable('${d.id}')">Delete</button></td>
           </tr>`;
         }).join('')}</tbody>
       </table></div>`}
@@ -3269,7 +3269,7 @@ function renderDelAll(pF){
             <td><div style="display:flex;align-items:center;gap:5px"><div class="del-pbar" style="width:60px"><div class="del-pbar-fill ${isOver?'amber':pct===100?'done':''}" style="width:${pct}%"></div></div><span style="font-size:12px;color:${isOver?'var(--amber)':'inherit'}">${isOver?rawPct+'%':pct+'%'}</span></div></td>
             <td><div style="display:flex;align-items:center;gap:4px"><span class="badge badge-btn ${d.status==='Complete'?'b-green':d.status==='In progress'?'b-sky':d.status==='On hold'?'b-amber':d.status==='Cancelled'?'b-red':'b-gray'}" style="font-size:11px">${d.status}</span>${isOver?'<span class="badge b-amber" style="font-size:10px">+'+overAmt+' over</span>':''}</div></td>
             <td style="font-size:12px;color:var(--slate)">${d.dueDate||'—'}</td>
-            <td><button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="openDelModal('${d.id}')">Edit</button></td>
+            <td style="white-space:nowrap"><button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="openDelModal('${d.id}')">Edit</button> <button class="btn btn-xs" style="background:rgba(220,60,60,.15);border-color:rgba(220,60,60,.4);color:#f87171" onclick="deleteDeliverable('${d.id}')">Delete</button></td>
           </tr>`;
         }).join('')}</tbody>
       </table></div>`;
@@ -3320,7 +3320,7 @@ function renderDelAll(pF){
             <td><div style="display:flex;align-items:center;gap:5px"><div class="del-pbar" style="width:70px"><div class="del-pbar-fill ${isOver?'amber':pct===100?'done':''}" style="width:${pct}%"></div></div><span style="font-size:12px;color:${isOver?'var(--amber)':'inherit'}">${isOver?rawPct+'%':pct+'%'}</span></div></td>
             <td><div style="display:flex;align-items:center;gap:4px"><span class="badge badge-btn ${d.status==='Complete'?'b-green':d.status==='In progress'?'b-sky':d.status==='On hold'?'b-amber':d.status==='Cancelled'?'b-red':'b-gray'}" style="font-size:11px">${d.status}</span>${isOver?'<span class="badge b-amber" style="font-size:10px">+'+overAmt+' over</span>':''}</div></td>
             <td style="font-size:12px;color:var(--slate)">${d.dueDate||'—'}</td>
-            <td><button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="openDelModal('${d.id}')">Edit</button></td>
+            <td style="white-space:nowrap"><button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="openDelModal('${d.id}')">Edit</button> <button class="btn btn-xs" style="background:rgba(220,60,60,.15);border-color:rgba(220,60,60,.4);color:#f87171" onclick="deleteDeliverable('${d.id}')">Delete</button></td>
           </tr>`;
         }).join('');
         return projHeader+rows;
@@ -4184,6 +4184,13 @@ function saveDel(){
   DB.set('deliverables',all);closeM();render();
 }
 
+
+async function deleteDeliverable(id){
+  if(!confirm('Delete this deliverable? This cannot be undone.')) return;
+  const all=(DB.get('deliverables')||[]).filter(x=>String(x.id)!==String(id));
+  await DB.set('deliverables',all);
+  render();
+}
 
 // TEMPLATE APPLY MODAL
 function openTplApply(projId,tplId){

@@ -3686,6 +3686,7 @@ function saveStake(){
   closeM();S.selStakeholder=data.id;refreshBadges();render();
 }
 function delStake(id){
+  if(!confirm('Delete this stakeholder? They will be removed from all projects and their interactions will remain. This cannot be undone.')) return;
   DB.set('stakeholders',DB.get('stakeholders').filter(x=>x.id!==id));
   DB.set('project_stakeholders',DB.get('project_stakeholders').filter(x=>x.stakeholderId!==id));
   closeM();S.selStakeholder=null;refreshBadges();render();
@@ -3992,6 +3993,7 @@ function saveInt(){
   closeM();refreshBadges();render();
 }
 function delInt(id){
+  if(!confirm('Delete this interaction? This cannot be undone.')) return;
   DB.set('interactions',DB.get('interactions').filter(x=>x.id!==id));
   closeM();refreshBadges();render();
 }
@@ -4132,8 +4134,12 @@ async function saveProj(){
   render();
 }
 function delProj(id){
+  if(!confirm('Delete this project? All associated stakeholder links will be removed. Interactions, commitments, and deliverables logged to this project will also be deleted. This cannot be undone.')) return;
   DB.set('projects',DB.get('projects').filter(x=>x.id!==id));
   DB.set('project_stakeholders',DB.get('project_stakeholders').filter(x=>x.projectId!==id));
+  DB.set('interactions',DB.get('interactions').filter(x=>x.projectId!==id));
+  DB.set('commitments',DB.get('commitments').filter(x=>x.projectId!==id));
+  DB.set('deliverables',DB.get('deliverables').filter(x=>x.projectId!==id));
   if(S.projectFilter===id)S.projectFilter=null;
   closeM();render();
 }
@@ -8144,6 +8150,7 @@ function renderCommitments(m) {
             ${c.status!=='Fulfilled'?`<button class="btn btn-success btn-xs" onclick="fulfillCommitment('${c.id}')">✓ Fulfill</button>`:''}
             ${c.status==='Fulfilled'?`<button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2)" onclick="reopenCommitment('${c.id}')">Reopen</button>`:''}
             <button class="btn btn-ghost btn-xs" onclick="openCommModal('${c.id}')">Edit</button>
+            <button class="btn btn-ghost btn-xs" style="color:var(--red)" onclick="delCommitment('${c.id}')">Delete</button>
           </div>
         </div>`;
       });
@@ -8237,6 +8244,7 @@ function openCommModal(id) {
     </div>`;
 
   const footer = `<button class="btn" onclick="closeM()">Cancel</button>
+    ${id ? `<button class="btn btn-danger" onclick="delCommitment('${id}')">Delete</button>` : ''}
     <button class="btn btn-primary" onclick="saveCommitment()">Save commitment</button>`;
 
   openM(id ? 'Edit commitment' : 'New commitment', body, footer, true);
@@ -8396,6 +8404,14 @@ function fulfillCommitment(id) {
     refreshBadges();
     renderCommitments(document.getElementById('main'));
   }
+}
+
+async function delCommitment(id) {
+  if(!confirm('Delete this commitment? This cannot be undone.')) return;
+  await DB.set('commitments', DB.get('commitments').filter(x=>String(x.id)!==String(id)));
+  closeM();
+  refreshBadges();
+  renderCommitments(document.getElementById('main'));
 }
 
 function reopenCommitment(id) {

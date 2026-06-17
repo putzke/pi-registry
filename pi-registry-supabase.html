@@ -8209,16 +8209,6 @@ function openCommModal(id) {
         </div>
       </div>
     </div>
-    <div id="f-cgroup-wrap" style="display:none">
-      <div class="fr"><label style="color:var(--slate);font-size:12px">Or — made to a group</label>
-        <div style="display:flex;gap:8px;align-items:center">
-          <select id="f-cgroup" style="flex:1" onchange="document.getElementById('f-cmadeto').value=this.options[this.selectedIndex].text==='— Select group —'?'':this.options[this.selectedIndex].text">
-            <option value="">— Select group —</option>
-          </select>
-          <span style="font-size:11px;color:var(--fog)">Saves to free-text field</span>
-        </div>
-      </div>
-    </div>
     <div class="fgrid fg2f">
       <div class="fr"><label>Made to (free text — if not in registry)</label>
         <input id="f-cmadeto" value="${c.madeTo||''}" placeholder="e.g. Riverdale Canyon residents, City Council"
@@ -8262,11 +8252,9 @@ function _commProjChanged(projId, preselStakeId) {
     const srch = document.getElementById('f-cstake-search');
     const hid  = document.getElementById('f-cstake');
     const list = document.getElementById('f-cstake-list');
-    const gw   = document.getElementById('f-cgroup-wrap');
     if (srch) { srch.value=''; srch.placeholder='Select a project first…'; }
     if (hid)  hid.value='';
     if (list) list.style.display='none';
-    if (gw)   gw.style.display='none';
     return;
   }
   const allStakes = DB.get('stakeholders');
@@ -8289,19 +8277,6 @@ function _commProjChanged(projId, preselStakeId) {
   if (preselStakeId) {
     const s = projStakes.find(x=>String(x.id)===String(preselStakeId));
     if (s && srch) srch.value=((s.firstName||'')+' '+(s.lastName||'')).trim()||s.org||'';
-  }
-  // Groups
-  const groups = (DB.get('groups')||[]).filter(g=>String(g.projectId)===String(projId)).sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0));
-  const groupWrap = document.getElementById('f-cgroup-wrap');
-  const groupSel  = document.getElementById('f-cgroup');
-  if (groupWrap && groupSel) {
-    if (groups.length > 0) {
-      groupWrap.style.display='block';
-      groupSel.innerHTML='<option value="">— Select group —</option>'+groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
-    } else {
-      groupWrap.style.display='none';
-      groupSel.innerHTML='<option value="">— Select group —</option>';
-    }
   }
   _commStakeSearch('');
 }

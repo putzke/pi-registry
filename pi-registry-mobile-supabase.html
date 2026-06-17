@@ -875,6 +875,7 @@ const SB_TO_INT = {
     title:'title', email:'email', phone:'phone', address:'address',
     parcelId:'parcel_id', type:'stakeholder_type', influenceTier:'influence_tier',
     prefContact:'pref_contact', isMaster:'is_master',
+    isArchived:'is_archived',
     notes:'notes'
   },
   pi_project_stakeholders: {
@@ -961,7 +962,7 @@ function fromSB(table, row) {
     result[intKey] = row[sbCol] !== undefined ? row[sbCol] : (intKey.startsWith('is') ? false : '');
   }
   // Normalize booleans
-  ['isMaster','followUp','followUpDone'].forEach(f => {
+  ['isMaster','followUp','followUpDone','isArchived'].forEach(f => {
     if (result[f] !== undefined) result[f] = result[f] === true || result[f] === 1;
   });
   return result;
@@ -1065,7 +1066,11 @@ const DB = {
       }
     }
   },
-  uid() { return 'tmp_' + Date.now().toString(36) + Math.random().toString(36).slice(2,5); }
+  uid() { return 'tmp_' + Date.now().toString(36) + Math.random().toString(36).slice(2,5); },
+  getActive(k) {
+    if (k !== 'stakeholders') return DB.get(k);
+    return DB.getActive('stakeholders').filter(s => !s.isArchived);
+  }
 };
 
 
@@ -1252,7 +1257,7 @@ function openIssueDetail(id){
   const iss=issues.find(x=>String(x.id)===String(id));
   if(!iss)return;
   const projs=DB.get('projects')||[];
-  const stakes=DB.get('stakeholders')||[];
+  const stakes=DB.getActive('stakeholders')||[];
   const ints=DB.get('interactions')||[];
   const iLinks=DB.get('issue_interactions')||[];
   const p=projs.find(x=>x.id===iss.projectId);
@@ -1307,7 +1312,7 @@ function refreshHome(){
   const pF=document.getElementById('home-proj').value;
   const projs=DB.get('projects');
   const ints=DB.get('interactions');
-  const stakes=DB.get('stakeholders');
+  const stakes=DB.getActive('stakeholders');
   const ps=DB.get('project_stakeholders');
 
   const projInts=pF?ints.filter(i=>i.projectId===pF):ints;
@@ -1354,7 +1359,7 @@ function refreshHome(){
 function renderContacts(){
   const pF=document.getElementById('contacts-proj').value;
   const search=(document.getElementById('contacts-search').value||'').toLowerCase();
-  const stakes=DB.get('stakeholders');
+  const stakes=DB.getActive('stakeholders');
   const ps=DB.get('project_stakeholders');
   const ints=DB.get('interactions');
 
@@ -1397,7 +1402,7 @@ function renderContacts(){
 
 // ── CONTACT DETAIL ─────────────────────────────────────────────────────
 function showContactDetail(id){
-  const stakes=DB.get('stakeholders');
+  const stakes=DB.getActive('stakeholders');
   const s=stakes.find(x=>x.id===id);
   if(!s)return;
 
@@ -1545,7 +1550,7 @@ function renderInteractionsList(){
   const pF=document.getElementById('ints-proj').value;
   const search=(document.getElementById('ints-search').value||'').toLowerCase();
   const ints=DB.get('interactions');
-  const stakes=DB.get('stakeholders');
+  const stakes=DB.getActive('stakeholders');
   const projs=DB.get('projects');
 
   let list=pF?ints.filter(i=>i.projectId===pF):ints;
@@ -1588,7 +1593,7 @@ function setFuTab(tab){
 }
 function renderFollowupsList(){
   const pF=document.getElementById('fu-proj').value;
-  const stakes=DB.get('stakeholders');
+  const stakes=DB.getActive('stakeholders');
   const projs=DB.get('projects');
   let ints=DB.get('interactions').filter(i=>i.followUp&&!i.followUpDone);
   if(pF) ints=ints.filter(i=>i.projectId===pF);
@@ -1656,7 +1661,7 @@ function prepLogSheet(){
   updateLogStakeholders();
   // Pre-select stakeholder if coming from detail view
   if(window._detailStakeId){
-    const stakes=DB.get('stakeholders');
+    const stakes=DB.getActive('stakeholders');
     const s=stakes.find(x=>String(x.id)===String(window._detailStakeId));
     if(s){
       const name=(s.firstName+' '+s.lastName).trim();
@@ -1673,7 +1678,7 @@ function updateLogStakeholders(){
 // ── STAKEHOLDER AUTOCOMPLETE PICKER ───────────────────────────────────
 function _getPickerList(){
   const pF=document.getElementById('log-proj').value;
-  const stakes=DB.get('stakeholders');
+  const stakes=DB.getActive('stakeholders');
   const ps=DB.get('project_stakeholders');
   let list;
   if(pF){
@@ -1813,7 +1818,7 @@ async function saveInteraction(){
         isMaster:false,
         notes:'Auto-created from interaction log'
       };
-      const allStakes=DB.get('stakeholders');
+      const allStakes=DB.getActive('stakeholders');
       allStakes.push(newS);
       await DB.set('stakeholders',allStakes);
       // Link to project
@@ -1930,7 +1935,7 @@ async function saveStakeholder(){
 
   try{
     showToast('Saving...','info');
-    const stakes=DB.get('stakeholders');
+    const stakes=DB.getActive('stakeholders');
     stakes.push(newS);
     await DB.set('stakeholders',stakes);
 
@@ -1965,7 +1970,7 @@ async function saveStakeholder(){
 
 // ── EDIT STAKEHOLDER ─────────────────────────────────────────────────
 function openEditStakeholder(id){
-  const s=(DB.get('stakeholders')||[]).find(x=>x.id===id);
+  const s=(DB.getActive('stakeholders')||[]).find(x=>String(x.id)===String(id));
   if(!s)return;
   window._editStakeId=id;
   // Pre-populate fields
@@ -2002,7 +2007,7 @@ async function updateStakeholder(){
   const emailErr2=validateEmail(email);
   if(emailErr2){showToast(emailErr2,'error');return;}
   const phone=rawPhone?formatPhone(cleanPhone(rawPhone)):'';
-  const stakes=DB.get('stakeholders')||[];
+  const stakes=DB.getActive('stakeholders')||[];
   const idx=stakes.findIndex(x=>x.id===id);
   if(idx<0){showToast('Stakeholder not found','error');return;}
   stakes[idx]={
@@ -2064,7 +2069,7 @@ function openLogEdit(id){
   setTimeout(()=>{
     // Restore stakeholder picker
     if(i.stakeholderId){
-      const s=DB.get('stakeholders').find(x=>String(x.id)===String(i.stakeholderId));
+      const s=DB.getActive('stakeholders').find(x=>String(x.id)===String(i.stakeholderId));
       if(s) selectStake(String(s.id),(s.firstName+' '+s.lastName).trim());
       else clearStakePicker();
     } else {

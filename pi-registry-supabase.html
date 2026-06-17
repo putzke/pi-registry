@@ -871,8 +871,15 @@ const DB = {
       if (!oldMap[item.id]) {
         const newId = await sbAdd(table, item);
         if (newId) {
+          const oldTmpId = item.id;
           const idx = _syncCache[table].findIndex(x => x.id === item.id);
           if (idx > -1) _syncCache[table][idx].id = newId;
+          // If this stakeholder is currently selected, update the selection ID
+          if (table === 'stakeholders' && String(S.selStakeholder) === String(oldTmpId)) {
+            S.selStakeholder = newId;
+            const mainEl = document.getElementById('main');
+            if (mainEl && (S.view === 'master' || S.view === 'stakeholders')) render();
+          }
         }
       } else if (JSON.stringify(oldMap[item.id]) !== JSON.stringify(item) && isNumeric) {
         await sbUpdate(table, item.id, item);
@@ -3751,20 +3758,7 @@ function saveStake(){
   closeM();
   S.selStakeholder = data.id;
   refreshBadges();
-  // Wait for Supabase sync to complete, then find the real numeric ID
-  const stakeAll = DB.get('stakeholders');
-  const isNew = !S.editId;
-  DB.set('stakeholders', stakeAll.find(x=>String(x.id)===String(data.id)) ? stakeAll : [...stakeAll, data]).then(() => {
-    if (isNew) {
-      const realStake = DB.get('stakeholders').find(x =>
-        x.firstName === data.firstName && x.lastName === data.lastName &&
-        (data.email ? x.email === data.email : true) &&
-        /^\d+$/.test(String(x.id))
-      );
-      if (realStake) S.selStakeholder = realStake.id;
-    }
-    render();
-  });
+  render();
 }
 // Returns the correct action button for the stakeholder edit modal
 function _stakeActionBtn(id) {

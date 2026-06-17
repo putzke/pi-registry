@@ -650,7 +650,8 @@ const SB_TABLES = {
   issue_interactions:   'pi_issue_interactions',
   commitments:          'pi_commitments',
   groups:               'pi_groups',
-  group_members:        'pi_group_members'
+  group_members:        'pi_group_members',
+  dismissed_pairs:      'pi_dismissed_pairs'
 };
 
 // Map our internal field names to Supabase column names
@@ -721,6 +722,9 @@ const SB_TO_INT = {
   },
   pi_group_members: {
     id:'id', groupId:'group_id', stakeholderId:'stakeholder_id', createdAt:'created_at'
+  },
+  pi_dismissed_pairs: {
+    id:'id', idA:'id_a', idB:'id_b'
   }
 };
 
@@ -850,7 +854,7 @@ function cacheClear(k) { delete _cache[k]; delete _cacheTime[k]; }
 const _syncCache = {};
 
 async function loadAllData() {
-  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members'];
+  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','dismissed_pairs'];
   await Promise.all(tables.map(async t => { _syncCache[t] = await sbGet(t); }));
 }
 
@@ -1112,7 +1116,7 @@ function initDashRows(){
     }
   });
 }
-function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;
+function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;
   S.view=v;S.selStakeholder=null;S.selInteraction=null;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const navId=v==='commitments'?'nav-commitments':('nav-'+v);
@@ -1693,6 +1697,162 @@ function filterMasterList(){
       '</div>';
     }).join('');
 }
+
+// ── DUPLICATE DETECTION ───────────────────────────────────────────
+function normalizeDupName(s){ return (s||'').trim().toLowerCase().replace(/\s+/g,' '); }
+
+function findDuplicatePairs(){
+  const stakes = DB.getActive('stakeholders');
+  const dismissed = DB.get('dismissed_pairs');
+  const pairs = [];
+  const seen = new Set();
+
+  function isDismissed(a, b){
+    const lo = Math.min(Number(a),Number(b)), hi = Math.max(Number(a),Number(b));
+    return dismissed.some(d => Number(d.idA)===lo && Number(d.idB)===hi);
+  }
+  function addPair(a, b, matchType){
+    const lo = Math.min(Number(a.id),Number(b.id)), hi = Math.max(Number(a.id),Number(b.id));
+    const key = lo+'_'+hi;
+    if(seen.has(key)) return;
+    seen.add(key);
+    if(isDismissed(a.id, b.id)) return;
+    const ints = DB.get('interactions');
+    const ctA = ints.filter(x=>String(x.stakeholderId)===String(a.id)).length;
+    const ctB = ints.filter(x=>String(x.stakeholderId)===String(b.id)).length;
+    const [primary, secondary] = ctA >= ctB ? [a, b] : [b, a];
+    pairs.push({ primary, secondary, matchType });
+  }
+
+  // Email match
+  const emailMap = {};
+  stakes.forEach(s => {
+    if(!s.email) return;
+    const key = normalizeDupName(s.email);
+    if(!emailMap[key]) emailMap[key] = [];
+    emailMap[key].push(s);
+  });
+  Object.values(emailMap).forEach(group => {
+    for(let i=0;i<group.length;i++) for(let j=i+1;j<group.length;j++) addPair(group[i],group[j],'email');
+  });
+
+  // First+last name match
+  const nameMap = {};
+  stakes.forEach(s => {
+    if(!s.firstName || !s.lastName) return;
+    const key = normalizeDupName(s.firstName)+'|'+normalizeDupName(s.lastName);
+    if(!nameMap[key]) nameMap[key] = [];
+    nameMap[key].push(s);
+  });
+  Object.values(nameMap).forEach(group => {
+    for(let i=0;i<group.length;i++) for(let j=i+1;j<group.length;j++) addPair(group[i],group[j],'name');
+  });
+
+  // Org + last name match
+  const orgLastMap = {};
+  stakes.forEach(s => {
+    if(!s.org || !s.lastName) return;
+    const key = normalizeDupName(s.org)+'|'+normalizeDupName(s.lastName);
+    if(!orgLastMap[key]) orgLastMap[key] = [];
+    orgLastMap[key].push(s);
+  });
+  Object.values(orgLastMap).forEach(group => {
+    for(let i=0;i<group.length;i++) for(let j=i+1;j<group.length;j++) addPair(group[i],group[j],'org');
+  });
+
+  return pairs;
+}
+
+function _dupBtn(){
+  const pairs = findDuplicatePairs();
+  if(!pairs.length) return '';
+  return '<button class="btn btn-xs" style="background:rgba(239,159,39,.2);border-color:rgba(239,159,39,.7);color:#f5c842;font-weight:600" onclick="S.showDuplicates=true;renderMaster(document.getElementById(\'main\'))">&#9873; Duplicates (' + pairs.length + ')</button>';
+}
+
+async function dismissPair(idA, idB){
+  const lo = Math.min(Number(idA),Number(idB)), hi = Math.max(Number(idA),Number(idB));
+  const all = DB.get('dismissed_pairs');
+  all.push({ id: DB.uid(), idA: lo, idB: hi });
+  await DB.set('dismissed_pairs', all);
+  renderDuplicates(document.getElementById('main'));
+}
+
+function dupStakeCol(s, otherEmail, otherPhone, isB){
+  const emailMatch = normalizeDupName(s.email||'') && normalizeDupName(s.email||'')===normalizeDupName(otherEmail||'');
+  const phoneMatch = s.phone && otherPhone && normalizeDupName(s.phone)===normalizeDupName(otherPhone);
+  const ints = DB.get('interactions');
+  const intCt = ints.filter(x=>String(x.stakeholderId)===String(s.id)).length;
+  const projIds = [...new Set(ints.filter(x=>String(x.stakeholderId)===String(s.id)).map(x=>x.projectId))];
+  const projCt = projIds.length;
+  const added = s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-US',{month:'short',year:'numeric'}) : '—';
+  const bg = isB ? 'background:rgba(255,255,255,.03);' : '';
+  return '<div style="flex:1;padding:14px 16px;'+bg+'">'
+    + '<div style="font-size:14px;font-weight:600;color:var(--white);margin-bottom:2px">'+([s.firstName,s.lastName].filter(Boolean).join(' ')||s.org||'—')+'</div>'
+    + '<div style="font-size:12px;color:var(--fog);margin-bottom:10px">'+(s.org||'<span style="opacity:.4">No org</span>')+'</div>'
+    + '<div style="font-size:12px;color:var(--slate);margin-bottom:4px">\u2709 <span style="color:'+(emailMatch?'#97c459':'#f87171')+'">'+(s.email||'&mdash;')+'</span></div>'
+    + '<div style="font-size:12px;color:var(--slate);margin-bottom:4px">\u{1F4DE} <span style="color:'+(phoneMatch?'#97c459':'var(--mist)')+'">'+(s.phone||'&mdash;')+'</span></div>'
+    + '<div style="font-size:12px;color:var(--slate);margin-bottom:4px">\uD83D\uDCC1 '+projCt+' project'+(projCt!==1?'s':'')+' &middot; '+intCt+' interaction'+(intCt!==1?'s':'')+'</div>'
+    + '<div style="font-size:11px;color:var(--fog)">Added '+added+'</div>'
+    + '</div>';
+}
+
+function renderDuplicates(el){
+  const pairs = findDuplicatePairs();
+  const dismissed = DB.get('dismissed_pairs');
+  const emailCt = pairs.filter(p=>p.matchType==='email').length;
+  const nameCt  = pairs.filter(p=>p.matchType==='name').length;
+  const orgCt   = pairs.filter(p=>p.matchType==='org').length;
+
+  let pairCards;
+  if(pairs.length===0){
+    pairCards = '<div style="text-align:center;padding:48px;color:var(--fog)">No duplicate pairs found.</div>';
+  } else {
+    pairCards = pairs.map(function(p,i){
+      const mLabel = p.matchType==='email' ? '\u2709 Email match'
+                   : p.matchType==='name'  ? '\uD83D\uDC64 Name match'
+                   :                         '\uD83C\uDFE2 Org + last name';
+      const mColor = p.matchType==='email'
+        ? 'background:rgba(55,138,221,.25);border-color:rgba(55,138,221,.6);color:#85b7eb'
+        : p.matchType==='name'
+        ? 'background:rgba(127,119,221,.25);border-color:rgba(127,119,221,.6);color:#afa9ec'
+        : 'background:rgba(99,153,34,.25);border-color:rgba(99,153,34,.6);color:#c0dd97';
+      return '<div style="background:var(--navy-mid);border:1px solid var(--border);border-radius:8px;margin-bottom:12px;overflow:hidden">'
+        + '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:rgba(255,255,255,.04);border-bottom:1px solid var(--border)">'
+        +   '<span style="font-size:12px;color:var(--mist)">Pair '+(i+1)+' of '+pairs.length+'</span>'
+        +   '<span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:4px;'+mColor+'">'+mLabel+'</span>'
+        + '</div>'
+        + '<div style="display:flex">'
+        +   dupStakeCol(p.primary, p.secondary.email, p.secondary.phone, false)
+        +   '<div style="width:1px;background:var(--border);flex-shrink:0"></div>'
+        +   dupStakeCol(p.secondary, p.primary.email, p.primary.phone, true)
+        + '</div>'
+        + '<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-top:1px solid var(--border);background:rgba(255,255,255,.02)">'
+        +   '<button class="btn btn-sm" style="opacity:.45;cursor:not-allowed" title="Coming in Phase 4">\u21C4 Merge</button>'
+        +   '<button class="btn btn-sm" onclick="dismissPair(\''+p.primary.id+'\',\''+p.secondary.id+'\')">\u2715 Not a duplicate</button>'
+        +   '<span style="font-size:11px;color:var(--fog);margin-left:4px">Dismissal remembered by record ID pair</span>'
+        + '</div>'
+        + '</div>';
+    }).join('');
+  }
+
+  el.innerHTML = '<div class="topbar">'
+    + '<div><div class="topbar-title">Duplicate contacts</div>'
+    + '<div class="topbar-sub">'+pairs.length+' pair'+(pairs.length!==1?'s':'')+' to review &middot; '+dismissed.length+' dismissed</div></div>'
+    + '<div style="display:flex;align-items:center;gap:8px;margin-left:auto">'
+    +   '<button class="btn btn-ghost" onclick="S.showDuplicates=false;renderMaster(document.getElementById(\'main\'))">\u2190 Back to contacts</button>'
+    + '</div></div>'
+    + '<div class="toolbar" style="gap:10px">'
+    +   '<span style="font-size:12px;color:var(--mist)">Match type:</span>'
+    +   '<span style="font-size:12px;padding:3px 9px;border-radius:4px;background:rgba(55,138,221,.15);color:#85b7eb">\u2709 Email ('+emailCt+')</span>'
+    +   '<span style="font-size:12px;padding:3px 9px;border-radius:4px;background:rgba(127,119,221,.15);color:#afa9ec">\uD83D\uDC64 Name ('+nameCt+')</span>'
+    +   '<span style="font-size:12px;padding:3px 9px;border-radius:4px;background:rgba(99,153,34,.15);color:#c0dd97">\uD83C\uDFE2 Org+last ('+orgCt+')</span>'
+    +   '<div style="flex:1"></div>'
+    +   '<button class="btn btn-xs" onclick="renderDuplicates(document.getElementById(\'main\'))" style="font-size:11px">\u21BB Re-scan</button>'
+    + '</div>'
+    + '<div style="padding:16px 20px;max-width:900px">'+pairCards+'</div>';
+}
+
+
 function _archivedBtn() {
   const archCt = DB.get('stakeholders').filter(s => s.isArchived).length;
   if (!archCt) return '';
@@ -1751,6 +1911,7 @@ function renderArchivedStakeholders(el) {
 function renderMaster(el){
   // Archived view — separate independently searchable view
   if (S.showArchived) { renderArchivedStakeholders(el); return; }
+  if (S.showDuplicates) { renderDuplicates(el); return; }
   let stakes=DB.getActive('stakeholders');
   const ps=DB.get('project_stakeholders');
   const projs=DB.get('projects');
@@ -1801,7 +1962,7 @@ function renderMaster(el){
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--slate);cursor:pointer">
       <input type="checkbox" id="master-only" ${S.masterOnly?'checked':''} onchange="S.masterOnly=this.checked;renderMaster(document.getElementById('main'))" style="accent-color:var(--sky)"> Frequently reused
     </label>
-    ${_archivedBtn()}
+    ${_dupBtn()} ${_archivedBtn()}
     <button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white);display:flex;align-items:center;gap:4px" onclick="S.masterSort=S.masterSort==='az'?'za':'az';renderMaster(document.getElementById('main'))">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px"><path d="M4 4v8M4 12l-2-2M4 12l2-2M12 12V4M12 4l-2 2M12 4l2 2"/></svg>
       ${(S.masterSort||'az')==='az'?'Last name A → Z':'Last name Z → A'}

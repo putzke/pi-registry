@@ -3566,7 +3566,7 @@ document.getElementById('modal-ov').addEventListener('click',e=>{if(e.target===e
 // STAKEHOLDER MODAL
 function openStakeModal(id){
   S.editId=id||null;
-  const s=id?(DB.getActive('stakeholders').find(x=>x.id===id)||{}):{};
+  const s=id?(DB.getActive('stakeholders').find(x=>String(x.id)===String(id))||{}):{};
   const projs=DB.get('projects');
   openM(id?'Edit stakeholder':'New stakeholder',
   `<div class="fsec">Contact information</div>

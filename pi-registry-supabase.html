@@ -8169,7 +8169,7 @@ function toggleFulfilledFields(){
 
 function openCommModal(id) {
   S.editId = id || null;
-  const c = id ? (DB.get('commitments').find(x=>x.id===id)||{}) : {};
+  const c = id ? (DB.get('commitments').find(x=>String(x.id)===String(id))||{}) : {};
   const allProjs = DB.get('projects').filter(p=>p.status==='Active'||p.status==='On hold');
   const projId = c.projectId || S.projectFilter || '';
   S._commEditProjId = projId;

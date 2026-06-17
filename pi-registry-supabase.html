@@ -665,6 +665,7 @@ const SB_TO_INT = {
     title:'title', email:'email', phone:'phone', address:'address',
     parcelId:'parcel_id', type:'stakeholder_type', influenceTier:'influence_tier',
     prefContact:'pref_contact', isMaster:'is_master',
+    isArchived:'is_archived',
     notes:'notes'
   },
   pi_project_stakeholders: {
@@ -773,7 +774,7 @@ function fromSB(table, row) {
     result[intKey] = row[sbCol] !== undefined ? row[sbCol] : (intKey.startsWith('is') ? false : '');
   }
   // Normalize booleans
-  ['isMaster','isAnonymous','followUp','followUpDone'].forEach(f => {
+  ['isMaster','isAnonymous','followUp','followUpDone','isArchived'].forEach(f => {
     if (result[f] !== undefined) result[f] = result[f] === true || result[f] === 1;
   });
   return result;
@@ -883,7 +884,12 @@ const DB = {
       }
     }
   },
-  uid() { return 'tmp_' + Date.now().toString(36) + Math.random().toString(36).slice(2,5); }
+  uid() { return 'tmp_' + Date.now().toString(36) + Math.random().toString(36).slice(2,5); },
+  // Returns only non-archived stakeholders — use for all normal UI queries
+  getActive(k) {
+    if (k !== 'stakeholders') return DB.get(k);
+    return DB.getActive('stakeholders').filter(s => !s.isArchived);
+  }
 };
 
 
@@ -1143,7 +1149,7 @@ const DEV_BYPASS = false;
 
 function filterByProject(pid){S.projectFilter=pid;S.selStakeholder=null;render()}
 function refreshBadges(){
-  const all=DB.get('stakeholders');
+  const all=DB.getActive('stakeholders');
   const ints=DB.get('interactions');
   const openFU=ints.filter(i=>i.followUp&&!i.followUpDone).length;
   document.getElementById('nb-master').textContent=all.length;
@@ -1212,7 +1218,7 @@ function render(){
 // ── DASHBOARD ─────────────────────────────────
 function renderDash(el){
   const projs=DB.get('projects');
-  const stakes=DB.get('stakeholders');
+  const stakes=DB.getActive('stakeholders');
   const ints=DB.get('interactions');
   const ps=DB.get('project_stakeholders');
   const openFUCt=ints.filter(i=>i.followUp&&!i.followUpDone).length;
@@ -1658,7 +1664,7 @@ function filterMasterList(){
   const typeF=document.getElementById('ms-type')?.value||'';
   const listEl=document.getElementById('ms-data-list');
   if(!listEl){renderMaster(document.getElementById('main'));return;}
-  let stakes=DB.get('stakeholders').filter(s=>s.isMaster||s.isMasterList);
+  let stakes=DB.getActive('stakeholders').filter(s=>s.isMaster||s.isMasterList);
   const ps=DB.get('projectStakeholders');
   const ints=DB.get('interactions');
   if(search)stakes=stakes.filter(s=>(s.firstName+' '+s.lastName+' '+(s.org||s.organization||'')).toLowerCase().includes(search));
@@ -1681,7 +1687,7 @@ function filterMasterList(){
     }).join('');
 }
 function renderMaster(el){
-  let stakes=DB.get('stakeholders');
+  let stakes=DB.getActive('stakeholders');
   const ps=DB.get('project_stakeholders');
   const projs=DB.get('projects');
   const ints=DB.get('interactions');
@@ -1699,7 +1705,7 @@ function renderMaster(el){
     return (S.masterSort||'az')==='az'?an.localeCompare(bn):bn.localeCompare(an);
   });
   const sel=S.selStakeholder;
-  const selData=sel?DB.get('stakeholders').find(x=>x.id===sel):null;
+  const selData=sel?DB.getActive('stakeholders').find(x=>x.id===sel):null;
   el.innerHTML=`
   <div class="topbar">
     <div><div class="topbar-title">Master stakeholder list</div><div class="topbar-sub">All contacts — global, unfiltered</div></div>
@@ -1730,6 +1736,9 @@ function renderMaster(el){
 
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--slate);cursor:pointer">
       <input type="checkbox" id="master-only" ${S.masterOnly?'checked':''} onchange="S.masterOnly=this.checked;renderMaster(document.getElementById('main'))" style="accent-color:var(--sky)"> Frequently reused
+    </label>
+    <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--slate);cursor:pointer">
+      <input type="checkbox" id="show-archived" ${S.showArchived?'checked':''} onchange="S.showArchived=this.checked;renderMaster(document.getElementById('main'))" style="accent-color:var(--red-lt)"> Show archived
     </label>
     <button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white);display:flex;align-items:center;gap:4px" onclick="S.masterSort=S.masterSort==='az'?'za':'az';renderMaster(document.getElementById('main'))">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px"><path d="M4 4v8M4 12l-2-2M4 12l2-2M12 12V4M12 4l-2 2M12 4l2 2"/></svg>
@@ -1790,6 +1799,22 @@ function renderMaster(el){
             </div>`;
           }).join('')}
         </div>
+        ${S.showArchived ? (()=>{
+          const archived = DB.get('stakeholders').filter(s => s.isArchived);
+          if (!archived.length) return '<div style="padding:12px 16px;font-size:12px;color:var(--fog)">No archived stakeholders.</div>';
+          return `<div style="padding:8px 12px 4px;font-size:11px;font-weight:600;color:var(--red-lt);letter-spacing:.05em;border-top:1px solid var(--border);margin-top:8px">ARCHIVED (${archived.length})</div>`
+            + archived.map(s => {
+              const col = acol(s.firstName+s.lastName);
+              return `<div class="lrow" style="opacity:.6" onclick="openStakeModal('${s.id}')">
+                <div class="avatar" style="background:${col}22;color:${col}">${ini(s.firstName,s.lastName)}</div>
+                <div class="lrow-body">
+                  <div class="lrow-name">${dispName(s)} <span style="font-size:10px;color:var(--red-lt);margin-left:4px">archived</span></div>
+                  <div class="lrow-sub">${s.org||s.type||'—'}</div>
+                </div>
+                <button class="btn btn-xs" style="color:var(--green);border-color:rgba(40,168,112,.4);flex-shrink:0" onclick="event.stopPropagation();restoreStake('${s.id}')">Restore</button>
+              </div>`;
+            }).join('');
+        })() : ''}
       </div>
       <div class="detail-pane" id="master-detail">
         ${selData?renderStakeDetail(selData,null):`<div class="pane-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="9" cy="7" r="4"/><path d="M2 20c0-3.314 3.134-6 7-6s7 2.686 7 6"/></svg><div class="pe-title">Select a stakeholder</div><div class="pe-sub">Full profile, project links, and interaction history.</div></div>`}
@@ -1805,7 +1830,7 @@ function renderMaster(el){
 // ── PROJECT STAKEHOLDER VIEW ──────────────────
 function renderStakeholders(el){
   const projs=DB.get('projects');
-  const allStakes=DB.get('stakeholders');
+  const allStakes=DB.getActive('stakeholders');
   const ps=DB.get('project_stakeholders');
   const ints=DB.get('interactions');
   let listItems=[];
@@ -2021,7 +2046,7 @@ function renderIssuesPanel(projectId){
     return;
   }
   S.selIssue=sel.id;
-  const stakes=DB.get('stakeholders')||[];
+  const stakes=DB.getActive('stakeholders')||[];
   const linked=iLinks.filter(l=>String(l.issueId)===String(sel.id));
   const linkedInts=linked.map(l=>ints.find(i=>String(i.id)===String(l.interactionId))).filter(Boolean);
   const sc2=STATUS_COLORS[sel.status]||'var(--slate)';
@@ -2072,7 +2097,7 @@ function openIssueModal(id, projectId){
   const iLinks=DB.get('issue_interactions')||[];
   const linkedIds=id?iLinks.filter(l=>String(l.issueId)===String(id)).map(l=>String(l.interactionId)):[];
   const projInts=ints.filter(i=>i.projectId===projectId);
-  const stakes=DB.get('stakeholders')||[];
+  const stakes=DB.getActive('stakeholders')||[];
 
   openM(id?'Edit issue':'New issue',`
   <div class="fgrid fg2f">
@@ -2206,7 +2231,7 @@ function toggleMasterBulkSelect(id) {
 }
 
 function toggleMasterSelectAll() {
-  const allStakes = DB.get('stakeholders').filter(s => s.isMaster || s.isMasterList);
+  const allStakes = DB.getActive('stakeholders').filter(s => s.isMaster || s.isMasterList);
   // Apply same filters as current view
   let filtered = allStakes;
   if (S.masterSearch) {
@@ -2237,7 +2262,7 @@ function applyMasterBulkUpdate() {
   if (type) parts.push('type → ' + type);
   if (!confirm(`Apply ${parts.join(', ')} to ${S.masterBulkSelected.length} stakeholder${S.masterBulkSelected.length!==1?'s':''}?`)) return;
 
-  const allStakes = DB.get('stakeholders');
+  const allStakes = DB.getActive('stakeholders');
   allStakes.forEach(s => {
     if (S.masterBulkSelected.includes(String(s.id))) {
       if (influence) s.influenceTier = influence;
@@ -2264,7 +2289,7 @@ function toggleBulkSelect(id) {
 function toggleSelectAll() {
   if (!S.projectFilter) return;
   const ps = DB.get('project_stakeholders').filter(x => String(x.projectId) === String(S.projectFilter));
-  const allStakes = DB.get('stakeholders');
+  const allStakes = DB.getActive('stakeholders');
   const listItems = ps.map(lk => allStakes.find(s => String(s.id) === String(lk.stakeholderId))).filter(Boolean);
   const allIds = listItems.map(s => String(s.id));
   if (!S.bulkSelected) S.bulkSelected = [];
@@ -2302,7 +2327,7 @@ function applyBulkUpdate() {
 
   // Update stakeholders master record for influence tier
   if (influence) {
-    const allStakes = DB.get('stakeholders');
+    const allStakes = DB.getActive('stakeholders');
     allStakes.forEach(s => {
       if (S.bulkSelected.includes(String(s.id))) {
         s.influenceTier = influence;
@@ -2339,7 +2364,7 @@ function renderBubbleChart(projectId){
     if(!mount)return;
 
     var ps=DB.get('project_stakeholders').filter(function(x){return x.projectId===projectId;});
-    var allStakes=DB.get('stakeholders');
+    var allStakes=DB.getActive('stakeholders');
     var ints=DB.get('interactions');
     var proj=(DB.get('projects')||[]).find(function(p){return p.id===projectId;})||{};
 
@@ -2722,7 +2747,7 @@ function setDelSort(col){
 }
 function renderFollowups(el){
   const projs=DB.get('projects');
-  const stakes=DB.get('stakeholders');
+  const stakes=DB.getActive('stakeholders');
   let ints=DB.get('interactions').filter(i=>i.followUp);
 
   const statusF=S.fuStatus||'open';
@@ -2740,7 +2765,7 @@ function renderFollowups(el){
   });
 
   // Sort by selected column (default: due date asc, overdue first)
-  const stakes_fu=DB.get('stakeholders');
+  const stakes_fu=DB.getActive('stakeholders');
   ints=sortFollowups(ints,stakes_fu);
 
   const allFU=DB.get('interactions').filter(i=>i.followUp&&(!projF||String(i.projectId)===String(projF)));
@@ -2901,7 +2926,7 @@ function setIntSort(col){
   renderInteractions(document.getElementById('main'));
 }
 function renderInteractions(el){
-  const projs=DB.get('projects'),stakes=DB.get('stakeholders');
+  const projs=DB.get('projects'),stakes=DB.getActive('stakeholders');
   let ints=DB.get('interactions');
   if(S.projectFilter)ints=ints.filter(i=>i.projectId===S.projectFilter);
   const search=(S.intSearch||'').toLowerCase();
@@ -3541,7 +3566,7 @@ document.getElementById('modal-ov').addEventListener('click',e=>{if(e.target===e
 // STAKEHOLDER MODAL
 function openStakeModal(id){
   S.editId=id||null;
-  const s=id?(DB.get('stakeholders').find(x=>x.id===id)||{}):{};
+  const s=id?(DB.getActive('stakeholders').find(x=>x.id===id)||{}):{};
   const projs=DB.get('projects');
   openM(id?'Edit stakeholder':'New stakeholder',
   `<div class="fsec">Contact information</div>
@@ -3566,7 +3591,8 @@ function openStakeModal(id){
     <div class="fr"><label>Support level</label><select id="f-ls">${['Neutral','Champion','Opponent'].map(t=>`<option>${t}</option>`).join('')}</select></div>
   </div>`:''}
   <div class="fr"><label>Notes</label><textarea id="f-no">${s.notes||''}</textarea></div>`,
-  `<button class="btn" onclick="closeM()">Cancel</button>
+  `${id ? _stakeActionBtn(id) : ''}
+  <button class="btn" onclick="closeM()">Cancel</button>
   <button class="btn btn-primary" onclick="saveStake()">Save stakeholder</button>`,true);
   // Wire Google Places autocomplete on address field after modal renders
   requestAnimationFrame(()=>{
@@ -3665,7 +3691,7 @@ function saveStake(){
     }
   }
 
-  const all=DB.get('stakeholders');
+  const all=DB.getActive('stakeholders');
   if(S.editId){const i=all.findIndex(x=>x.id===S.editId);if(i>-1)all[i]=data;}else all.push(data);
   DB.set('stakeholders',all);
   const lp=document.getElementById('f-lp')?.value;
@@ -3684,6 +3710,54 @@ function saveStake(){
   }
   closeM();S.selStakeholder=data.id;refreshBadges();render();
 }
+// Returns the correct action button for the stakeholder edit modal
+function _stakeActionBtn(id) {
+  const s = DB.get('stakeholders').find(x => String(x.id) === String(id));
+  if (!s) return '';
+  if (s.isArchived) {
+    return `<button class="btn" style="border-color:rgba(40,168,112,.5);color:var(--green)" onclick="restoreStake('${id}')">Restore</button>`;
+  }
+  // Check if stakeholder has any history
+  const hasInts = DB.get('interactions').some(x => String(x.stakeholderId) === String(id));
+  const hasFU = DB.get('interactions').some(x => String(x.stakeholderId) === String(id) && x.followUp && !x.followUpDone);
+  const hasComm = DB.get('commitments').some(x => String(x.stakeholderId) === String(id));
+  const hasIssues = (DB.get('issue_interactions') || []).some(x => String(x.stakeholderId) === String(id));
+  const hasLinks = DB.get('project_stakeholders').some(x => String(x.stakeholderId) === String(id));
+  const hasHistory = hasInts || hasFU || hasComm || hasIssues || hasLinks;
+  if (hasHistory) {
+    return `<button class="btn btn-danger" onclick="archiveStake('${id}')">Archive</button>`;
+  } else {
+    return `<button class="btn btn-danger" onclick="delStake('${id}')">Delete</button>`;
+  }
+}
+
+async function archiveStake(id) {
+  if (!confirm('Archive this stakeholder? They will be hidden from all active lists but their history will be preserved. You can restore them at any time.')) return;
+  const all = DB.get('stakeholders');
+  const idx = all.findIndex(x => String(x.id) === String(id));
+  if (idx < 0) return;
+  all[idx] = {...all[idx], isArchived: true};
+  await DB.set('stakeholders', all);
+  closeM();
+  S.selStakeholder = null;
+  refreshBadges();
+  render();
+  showToast('Stakeholder archived', 'info');
+}
+
+async function restoreStake(id) {
+  if (!confirm('Restore this stakeholder? They will reappear in all active lists.')) return;
+  const all = DB.get('stakeholders');
+  const idx = all.findIndex(x => String(x.id) === String(id));
+  if (idx < 0) return;
+  all[idx] = {...all[idx], isArchived: false};
+  await DB.set('stakeholders', all);
+  closeM();
+  refreshBadges();
+  render();
+  showToast('Stakeholder restored', 'success');
+}
+
 function delStake(id){
   if(!confirm('Delete this stakeholder? They will be removed from all projects and their interactions will remain. This cannot be undone.')) return;
   DB.set('stakeholders',DB.get('stakeholders').filter(x=>x.id!==id));
@@ -3693,7 +3767,7 @@ function delStake(id){
 
 // LINK MODAL
 function openAddToProjectModal(stakeId){
-  const s=DB.get('stakeholders').find(x=>x.id===stakeId);
+  const s=DB.getActive('stakeholders').find(x=>x.id===stakeId);
   if(!s)return;
   const linked=DB.get('project_stakeholders').filter(x=>x.stakeholderId===stakeId).map(x=>x.projectId);
   const projs=DB.get('projects').filter(p=>p.status==='Active'||p.status==='On hold');
@@ -3759,7 +3833,7 @@ function saveAddToProject(){
 }
 function openLinkModal(){
   const linked=DB.get('project_stakeholders').filter(x=>x.projectId===S.projectFilter).map(x=>x.stakeholderId);
-  const avail=DB.get('stakeholders').filter(s=>!linked.includes(s.id));
+  const avail=DB.getActive('stakeholders').filter(s=>!linked.includes(s.id));
   openM('Link stakeholder to project',
   `<div class="fr"><label>Select stakeholder</label><select id="f-ls2">${avail.length===0?'<option>All stakeholders already linked</option>':avail.map(s=>`<option value="${s.id}">${dispName(s)}${(s.firstName||s.lastName)&&s.org?' — '+s.org:''}</option>`).join('')}</select></div>
   <div class="fgrid fg2f">
@@ -3836,7 +3910,7 @@ function updateIntStakeholders(){
 
 function _getIntStakeList(){
   const projId=document.getElementById('f-ip')?.value;
-  const stakes=DB.get('stakeholders');
+  const stakes=DB.getActive('stakeholders');
   const ps=DB.get('project_stakeholders');
   let list;
   if(projId){
@@ -3882,7 +3956,7 @@ function selectIntStake(id, label){
 
 function openIntModal(preStake){
   S.editId=null;
-  const projs=DB.get('projects'),stakes=DB.get('stakeholders');
+  const projs=DB.get('projects'),stakes=DB.getActive('stakeholders');
   openM('Log interaction',
   `<div class="fgrid fg2f">
     <div class="fr"><label>Project *</label><select id="f-ip" onchange="updateIntStakeholders();updateIntIssues()"><option value="">— Select project —</option>${projs.map(p=>`<option value="${p.id}"${S.projectFilter===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
@@ -3923,7 +3997,7 @@ function openIntModal(preStake){
 function openEditIntModal(id){
   S.editId=id;
   const i=DB.get('interactions').find(x=>x.id===id)||{};
-  const projs=DB.get('projects'),stakes=DB.get('stakeholders');
+  const projs=DB.get('projects'),stakes=DB.getActive('stakeholders');
   openM('Edit interaction',
   `<div class="fgrid fg2f">
     <div class="fr"><label>Project</label><select id="f-ip">${projs.map(p=>`<option value="${p.id}"${i.projectId===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
@@ -4150,8 +4224,8 @@ function renderIssuesView(el){
   const projs=DB.get('projects')||[];
   const ints=DB.get('interactions')||[];
   const iLinks=DB.get('issue_interactions')||[];
-  const allStakes=DB.get('stakeholders')||[];
-  const stakes=DB.get('stakeholders')||[];
+  const allStakes=DB.getActive('stakeholders')||[];
+  const stakes=DB.getActive('stakeholders')||[];
 
   // Filters
   const projF=S.issViewProj||'';
@@ -4386,7 +4460,7 @@ function exportIssuesSummaryDocx(){
     var p=projs.find(function(x){return x.id===iss.projectId;});
     var linked=(iLinks.filter(function(l){return String(l.issueId)===String(iss.id);})||[]);
     var linkedInts=linked.map(function(l){return ints.find(function(i){return String(i.id)===String(l.interactionId);});}).filter(Boolean);
-    var stakes=DB.get('stakeholders')||[];
+    var stakes=DB.getActive('stakeholders')||[];
     xml+=H.spacer();
     // Issue title + badges
     xml+='<w:p><w:pPr><w:spacing w:before="120" w:after="60" w:line="240" w:lineRule="auto"/></w:pPr><w:r>'+H.boldRpr+'<w:t xml:space="preserve">'+escXml(iss.title||'Untitled')+'</w:t></w:r></w:p>';
@@ -4465,7 +4539,7 @@ function exportIssueSingleDocx(issueId){
   var projs=DB.get('projects')||[];
   var ints=DB.get('interactions')||[];
   var iLinks=DB.get('issue_interactions')||[];
-  var stakes=DB.get('stakeholders')||[];
+  var stakes=DB.getActive('stakeholders')||[];
   var p=projs.find(function(x){return x.id===iss.projectId;});
   var linked=(iLinks.filter(function(l){return String(l.issueId)===String(issueId);})||[]);
   var linkedInts=linked.map(function(l){return ints.find(function(i){return String(i.id)===String(l.interactionId);});}).filter(Boolean);
@@ -4625,7 +4699,7 @@ function exportIssuesPdf(){
   const projs=DB.get('projects')||[];
   const ints=DB.get('interactions')||[];
   const iLinks=DB.get('issue_interactions')||[];
-  const allStakes=DB.get('stakeholders')||[];
+  const allStakes=DB.getActive('stakeholders')||[];
   const projF=S.issViewProj||'';
   const statF=S.issViewStatus||'';
   const catF=S.issViewCat||'';
@@ -5011,7 +5085,7 @@ function generateReport(type){
   var projs=DB.get('projects');
   var proj=projs.find(function(p){return p.id===projF});
   if(!proj)return;
-  var allStakes=DB.get('stakeholders');
+  var allStakes=DB.getActive('stakeholders');
   var ps=DB.get('project_stakeholders').filter(function(x){return x.projectId===projF})
     .slice().sort(function(a,b){
       var sA=allStakes.find(function(x){return String(x.id)===String(a.stakeholderId);})||{};
@@ -5693,7 +5767,7 @@ function exportPIDocx(){
   if(!proj)return;
 
   var saved=JSON.parse(localStorage.getItem('pir4_pi_reports_'+projF)||'{}');
-  var allStakes=DB.get('stakeholders');
+  var allStakes=DB.getActive('stakeholders');
   var ps=DB.get('project_stakeholders').filter(function(x){return x.projectId===projF});
   var ints=DB.get('interactions').filter(function(i){return i.projectId===projF});
 
@@ -5897,7 +5971,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
 
   // Get project stakeholder data for auto sections
   var _psRaw=DB.get('project_stakeholders').filter(function(x){return x.projectId===proj.id});
-  var _allSk=DB.get('stakeholders');
+  var _allSk=DB.getActive('stakeholders');
   var ps=_psRaw.slice().sort(function(a,b){
     var sA=_allSk.find(function(x){return String(x.id)===String(a.stakeholderId);})||{};
     var sB=_allSk.find(function(x){return String(x.id)===String(b.stakeholderId);})||{};
@@ -6131,7 +6205,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
 
     } else if(sec.type==='auto-commitments'){
       var projComm=(DB.get('commitments')||[]).filter(function(c){return String(c.projectId)===String(proj.id)});
-      var allStakesC=DB.get('stakeholders');
+      var allStakesC=DB.getActive('stakeholders');
       var openComm=projComm.filter(function(c){return c.status!=='Fulfilled'});
       var fulfilledComm=projComm.filter(function(c){return c.status==='Fulfilled'});
       xml+=bullet('Open commitments: '+openComm.length+' | Fulfilled: '+fulfilledComm.length+' | Total: '+projComm.length);
@@ -6366,7 +6440,7 @@ function exportProject(projectId) {
   if (!proj) return;
 
   // Read from the app's in-memory sync cache (already loaded on app init)
-  const allStake  = DB.get('stakeholders')         || [];
+  const allStake  = DB.getActive('stakeholders')         || [];
   const projLinks = DB.get('project_stakeholders') || [];
   const ints      = DB.get('interactions')         || [];
   const dels      = DB.get('deliverables')         || [];
@@ -6600,7 +6674,7 @@ function _portfolioPrintWin(title, bodyHtml) {
 function generatePortfolioContactList() {
   var allProjs = (DB.get('projects')||[]).filter(p=>p.status==='Active'||p.status==='On hold');
   var allPS    = DB.get('project_stakeholders')||[];
-  var allStake = DB.get('stakeholders')||[];
+  var allStake = DB.getActive('stakeholders')||[];
 
   // Collect unique stakeholders with their project memberships
   var stakeMap = {};
@@ -6656,7 +6730,7 @@ function generatePortfolioContactList() {
 function generatePortfolioFollowups() {
   var allProjs = (DB.get('projects')||[]).filter(p=>p.status==='Active'||p.status==='On hold');
   var allInts  = DB.get('interactions')||[];
-  var allStake = DB.get('stakeholders')||[];
+  var allStake = DB.getActive('stakeholders')||[];
   var today    = localToday();
 
   var openFUs = allInts.filter(function(i){return i.followUp&&!i.followUpDone;});
@@ -6718,7 +6792,7 @@ function generatePortfolioFollowups() {
 function generatePortfolioCommitments() {
   var allProjs = (DB.get('projects')||[]).filter(p=>p.status==='Active'||p.status==='On hold');
   var allComm  = DB.get('commitments')||[];
-  var allStake = DB.get('stakeholders')||[];
+  var allStake = DB.getActive('stakeholders')||[];
   var today    = localToday();
 
   var open = allComm.filter(function(c){
@@ -6849,7 +6923,7 @@ function exportPortfolio() {
   showToast('Building portfolio export…');
 
   const wb = XLSX.utils.book_new();
-  const allStake  = DB.get('stakeholders')         || [];
+  const allStake  = DB.getActive('stakeholders')         || [];
   const allPS     = DB.get('project_stakeholders') || [];
   const allInts   = DB.get('interactions')         || [];
   const allDels   = DB.get('deliverables')         || [];
@@ -7012,7 +7086,7 @@ function renderMeetings(el){
         const statusColor=m.status==='Completed'?'b-green':m.status==='Planned'?'b-sky':m.status==='Cancelled'?'b-red':'b-gray';
         const actionItems=(DB.get('interactions')||[]).filter(i=>i.meetingId===m.id&&i.followUp&&!i.followUpDone).length;
         const mAttIds=Array.isArray(m.attendeeIds)?m.attendeeIds:[];
-        const allSt=DB.get('stakeholders')||[];
+        const allSt=DB.getActive('stakeholders')||[];
         const namedAtt=mAttIds.map(function(id){return allSt.find(function(x){return String(x.id)===String(id);});}).filter(Boolean);
         const attChips=namedAtt.slice(0,3).map(function(s){return '<span style="display:inline-block;padding:1px 6px;background:rgba(90,135,198,.15);border:1px solid rgba(90,135,198,.3);border-radius:10px;font-size:10px;color:var(--sky-lt);margin:1px">'+(s.firstName||'').charAt(0)+'. '+(s.lastName||'')+'</span>';}).join('');
         const extraChip=namedAtt.length>3?'<span style="font-size:10px;color:var(--fog);margin-left:2px">+' +(namedAtt.length-3)+' more</span>':'';
@@ -7052,7 +7126,7 @@ function rebuildMeetingAttendeePicker(projId) {
   }
   var ps = DB.get('project_stakeholders') || [];
   var linked = ps.filter(function(x){ return String(x.projectId) === String(projId); });
-  var stakes = DB.get('stakeholders') || [];
+  var stakes = DB.getActive('stakeholders') || [];
   // Preserve currently-checked IDs
   var checked = Array.from(wrap.querySelectorAll('input[type=checkbox]:checked')).map(function(cb){ return cb.value; });
   if (linked.length === 0) {
@@ -7117,7 +7191,7 @@ function openMeetingModal(id){
       var projId=v('f-mp')||pF;
       var ps=DB.get('project_stakeholders')||[];
       var linked=projId?ps.filter(function(x){return String(x.projectId)===String(projId);}):[];
-      var stakes=DB.get('stakeholders')||[];
+      var stakes=DB.getActive('stakeholders')||[];
       var existingIds=Array.isArray(m.attendeeIds)?m.attendeeIds.map(String):[];
       if(!projId||linked.length===0) return '<span style="font-size:12px;color:var(--fog);padding:4px 2px">Select a project above to pick linked stakeholders.</span>';
       return linked.map(function(lk){
@@ -7258,7 +7332,7 @@ function showStakeholderMap(projectId) {
   const projectName = projObj ? projObj.name : 'Project';
   // Get stakeholders with addresses for this project
   const ps = DB.get('project_stakeholders').filter(x => String(x.projectId) === String(projectId));
-  const allStakes = DB.get('stakeholders');
+  const allStakes = DB.getActive('stakeholders');
   const stakes = ps.map(x => allStakes.find(s => String(s.id) === String(x.stakeholderId))).filter(Boolean);
   const withAddr = stakes.filter(s => s.address && s.address.trim());
 
@@ -7511,7 +7585,7 @@ function showEngagementMatrix(projectId) {
 
   const psLinks = DB.get('project_stakeholders').filter(x => String(x.projectId) === String(projectId))
     .slice().sort(function(a,b){
-      var allSk=DB.get('stakeholders');
+      var allSk=DB.getActive('stakeholders');
       var sA=allSk.find(x=>String(x.id)===String(a.stakeholderId))||{};
       var sB=allSk.find(x=>String(x.id)===String(b.stakeholderId))||{};
       var rA=(a.stakeholderRole||'External')==='Internal'?0:1;
@@ -7519,7 +7593,7 @@ function showEngagementMatrix(projectId) {
       if(rA!==rB)return rA-rB;
       return(sA.lastName||'').toLowerCase().localeCompare((sB.lastName||'').toLowerCase());
     });
-  const allStakes = DB.get('stakeholders');
+  const allStakes = DB.getActive('stakeholders');
 
   const stakes = psLinks.map(lk => {
     const s = allStakes.find(x => String(x.id) === String(lk.stakeholderId));
@@ -7703,7 +7777,7 @@ function printEngagementMatrix(projectId) {
 
   const psLinks = DB.get('project_stakeholders').filter(x => String(x.projectId) === String(projectId))
     .slice().sort(function(a,b){
-      var allSk=DB.get('stakeholders');
+      var allSk=DB.getActive('stakeholders');
       var sA=allSk.find(x=>String(x.id)===String(a.stakeholderId))||{};
       var sB=allSk.find(x=>String(x.id)===String(b.stakeholderId))||{};
       var rA=(a.stakeholderRole||'External')==='Internal'?0:1;
@@ -7711,7 +7785,7 @@ function printEngagementMatrix(projectId) {
       if(rA!==rB)return rA-rB;
       return(sA.lastName||'').toLowerCase().localeCompare((sB.lastName||'').toLowerCase());
     });
-  const allStakes = DB.get('stakeholders');
+  const allStakes = DB.getActive('stakeholders');
   const stakes = psLinks.map(lk => {
     const s = allStakes.find(x => String(x.id) === String(lk.stakeholderId));
     if (!s) return null;
@@ -7912,7 +7986,7 @@ function generateMapReport() {
   if (!proj) return;
 
   var psLinks = DB.get('project_stakeholders').filter(function(x){ return String(x.projectId)===String(projF); });
-  var allStakes = DB.get('stakeholders');
+  var allStakes = DB.getActive('stakeholders');
   var withAddr = psLinks.map(function(lk){
     var s = allStakes.find(function(x){ return String(x.id)===String(lk.stakeholderId); });
     return s && s.address && s.address.trim() ? {s:s, lk:lk} : null;
@@ -8028,7 +8102,7 @@ function renderCommitments(m) {
   const today = localToday();
   const allComm = DB.get('commitments');
   const allProjs = DB.get('projects');
-  const allStakes = DB.get('stakeholders');
+  const allStakes = DB.getActive('stakeholders');
 
   // Auto-update overdue status
   allComm.forEach(c => {
@@ -8264,7 +8338,7 @@ function _commProjChanged(projId, preselStakeId) {
     if (list) list.style.display='none';
     return;
   }
-  const allStakes = DB.get('stakeholders');
+  const allStakes = DB.getActive('stakeholders');
   const ps = DB.get('project_stakeholders').filter(x=>String(x.projectId)===String(projId));
   const projStakes = ps.map(lk=>allStakes.find(s=>String(s.id)===String(lk.stakeholderId))).filter(Boolean)
     .sort((a,b)=>{
@@ -8468,7 +8542,7 @@ function renderSettings(m) {
         <div><span style="color:var(--fog)">Hosted</span> <span style="color:var(--white);margin-left:8px">GitHub Pages</span></div>
         <div><span style="color:var(--fog)">Backend</span> <span style="color:var(--white);margin-left:8px">Supabase</span></div>
         <div><span style="color:var(--fog)">Projects</span> <span style="color:var(--white);margin-left:8px">${DB.get('projects').length}</span></div>
-        <div><span style="color:var(--fog)">Stakeholders</span> <span style="color:var(--white);margin-left:8px">${DB.get('stakeholders').length}</span></div>
+        <div><span style="color:var(--fog)">Stakeholders</span> <span style="color:var(--white);margin-left:8px">${DB.getActive('stakeholders').length}</span></div>
         <div><span style="color:var(--fog)">Interactions</span> <span style="color:var(--white);margin-left:8px">${DB.get('interactions').length}</span></div>
       </div>
     </div>
@@ -8486,7 +8560,7 @@ function renderSettings(m) {
 function runIntegrityScan() {
   const ints = DB.get('interactions');
   const ps = DB.get('project_stakeholders');
-  const stakes = DB.get('stakeholders');
+  const stakes = DB.getActive('stakeholders');
   const projs = DB.get('projects');
 
   // Find stakeholder+project combos in interactions but not in project_stakeholders
@@ -8570,7 +8644,7 @@ function fixOrphans() {
 
 // ── DUPLICATE STAKEHOLDER DETECTOR ───────────────────────────────
 function runDuplicateScan() {
-  const stakes = DB.get('stakeholders').filter(s => s.isMaster || s.isMasterList);
+  const stakes = DB.getActive('stakeholders').filter(s => s.isMaster || s.isMasterList);
   const norm = s => (s||'').trim().toLowerCase();
   const byEmail = {}, byName = {};
   stakes.forEach(s => {
@@ -8657,7 +8731,7 @@ function _renderGroupsManager() {
   const groups = (DB.get('groups') || []).filter(g => String(g.projectId) === String(projectId))
     .sort((a,b) => (a.sortOrder||0) - (b.sortOrder||0));
   const members = DB.get('group_members') || [];
-  const stakes = DB.get('stakeholders');
+  const stakes = DB.getActive('stakeholders');
   const ps = DB.get('project_stakeholders').filter(x => String(x.projectId) === String(projectId));
 
   const groupRows = groups.length === 0
@@ -8788,7 +8862,7 @@ function _renderGroupMembersModal() {
   if (!g) return;
   const members = (DB.get('group_members')||[]).filter(m => String(m.groupId) === String(groupId));
   const memberIds = new Set(members.map(m => String(m.stakeholderId)));
-  const stakes = DB.get('stakeholders');
+  const stakes = DB.getActive('stakeholders');
   const ps = DB.get('project_stakeholders').filter(x => String(x.projectId) === String(g.projectId));
   const projStakes = ps.map(lk => stakes.find(s => String(s.id) === String(lk.stakeholderId))).filter(Boolean)
     .sort((a,b) => (a.lastName+a.firstName).localeCompare(b.lastName+b.firstName));

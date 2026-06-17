@@ -8171,12 +8171,8 @@ function openCommModal(id) {
   S.editId = id || null;
   const c = id ? (DB.get('commitments').find(x=>x.id===id)||{}) : {};
   const allProjs = DB.get('projects').filter(p=>p.status==='Active'||p.status==='On hold');
-  const allStakes = DB.get('stakeholders');
   const projId = c.projectId || S.projectFilter || '';
-
-  // Get stakeholders for selected project
-  const ps = DB.get('project_stakeholders').filter(x=>String(x.projectId)===String(projId));
-  const projStakes = ps.map(lk=>allStakes.find(s=>String(s.id)===String(lk.stakeholderId))).filter(Boolean);
+  S._commEditProjId = projId;
 
   const body = `
     <div class="fsec">Commitment details</div>
@@ -8198,16 +8194,29 @@ function openCommModal(id) {
     <div class="fsec">Parties</div>
     <div class="fgrid fg2f">
       <div class="fr"><label>Project *</label>
-        <select id="f-cpid" onchange="S.editCommProjId=this.value">
+        <select id="f-cpid" onchange="_commProjChanged(this.value)">
           <option value="">— Select project —</option>
           ${allProjs.map(p=>`<option value="${p.id}" ${String(p.id)===String(projId)?'selected':''}>${p.name} (${p.pid})</option>`).join('')}
         </select>
       </div>
       <div class="fr"><label>Made to (stakeholder)</label>
-        <select id="f-cstake">
-          <option value="">— Select stakeholder —</option>
-          ${projStakes.map(s=>`<option value="${s.id}" ${String(s.id)===String(c.stakeholderId||'')?'selected':''}>${((s.firstName||'')+' '+(s.lastName||'')).trim()||s.org}</option>`).join('')}
-        </select>
+        <div style="position:relative">
+          <input id="f-cstake-search" autocomplete="off" placeholder="Search stakeholders…"
+            style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:8px 12px"
+            oninput="_commStakeSearch(this.value)" onfocus="_commStakeSearch(this.value)">
+          <input type="hidden" id="f-cstake" value="${c.stakeholderId||''}">
+          <div id="f-cstake-list" style="display:none;position:absolute;z-index:999;width:100%;max-height:200px;overflow-y:auto;background:var(--navy-mid);border:1px solid var(--border);border-radius:7px;margin-top:3px"></div>
+        </div>
+      </div>
+    </div>
+    <div id="f-cgroup-wrap" style="display:none">
+      <div class="fr"><label style="color:var(--slate);font-size:12px">Or — made to a group</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="f-cgroup" style="flex:1" onchange="document.getElementById('f-cmadeto').value=this.options[this.selectedIndex].text==='— Select group —'?'':this.options[this.selectedIndex].text">
+            <option value="">— Select group —</option>
+          </select>
+          <span style="font-size:11px;color:var(--fog)">Saves to free-text field</span>
+        </div>
       </div>
     </div>
     <div class="fgrid fg2f">
@@ -8239,6 +8248,94 @@ function openCommModal(id) {
     <button class="btn btn-primary" onclick="saveCommitment()">Save commitment</button>`;
 
   openM(id ? 'Edit commitment' : 'New commitment', body, footer, true);
+
+  // Always initialise pickers — even empty projId clears stale S._commStakes
+  _commProjChanged(projId||'', c.stakeholderId||'');
+}
+
+function _commProjChanged(projId, preselStakeId) {
+  S._commEditProjId = projId;
+  if (!projId) {
+    S._commStakes = [];
+    const srch = document.getElementById('f-cstake-search');
+    const hid  = document.getElementById('f-cstake');
+    const list = document.getElementById('f-cstake-list');
+    const gw   = document.getElementById('f-cgroup-wrap');
+    if (srch) { srch.value=''; srch.placeholder='Select a project first…'; }
+    if (hid)  hid.value='';
+    if (list) list.style.display='none';
+    if (gw)   gw.style.display='none';
+    return;
+  }
+  const allStakes = DB.get('stakeholders');
+  const ps = DB.get('project_stakeholders').filter(x=>String(x.projectId)===String(projId));
+  const projStakes = ps.map(lk=>allStakes.find(s=>String(s.id)===String(lk.stakeholderId))).filter(Boolean)
+    .sort((a,b)=>{
+      var rA=(ps.find(x=>String(x.stakeholderId)===String(a.id))&&(ps.find(x=>String(x.stakeholderId)===String(a.id)).stakeholderRole||'External')==='Internal')?0:1;
+      var rB=(ps.find(x=>String(x.stakeholderId)===String(b.id))&&(ps.find(x=>String(x.stakeholderId)===String(b.id)).stakeholderRole||'External')==='Internal')?0:1;
+      if(rA!==rB)return rA-rB;
+      return(a.lastName||'').toLowerCase().localeCompare((b.lastName||'').toLowerCase());
+    });
+  // Store for search
+  S._commStakes = projStakes;
+  // Reset search field if project changed
+  const srch = document.getElementById('f-cstake-search');
+  const hid  = document.getElementById('f-cstake');
+  if (srch && !preselStakeId) { srch.value=''; srch.placeholder='Search stakeholders…'; }
+  if (hid  && !preselStakeId) { hid.value=''; }
+  // Pre-fill name if editing
+  if (preselStakeId) {
+    const s = projStakes.find(x=>String(x.id)===String(preselStakeId));
+    if (s && srch) srch.value=((s.firstName||'')+' '+(s.lastName||'')).trim()||s.org||'';
+  }
+  // Groups
+  const groups = (DB.get('groups')||[]).filter(g=>String(g.projectId)===String(projId)).sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0));
+  const groupWrap = document.getElementById('f-cgroup-wrap');
+  const groupSel  = document.getElementById('f-cgroup');
+  if (groupWrap && groupSel) {
+    if (groups.length > 0) {
+      groupWrap.style.display='block';
+      groupSel.innerHTML='<option value="">— Select group —</option>'+groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
+    } else {
+      groupWrap.style.display='none';
+      groupSel.innerHTML='<option value="">— Select group —</option>';
+    }
+  }
+  _commStakeSearch('');
+}
+
+function _commStakeSearch(q) {
+  const list = document.getElementById('f-cstake-list');
+  const hid  = document.getElementById('f-cstake');
+  if (!list) return;
+  const stakes = S._commStakes || [];
+  const filtered = q.trim()===''
+    ? stakes
+    : stakes.filter(s=>{
+        const full=((s.firstName||'')+' '+(s.lastName||'')+' '+(s.org||'')).toLowerCase();
+        return full.includes(q.toLowerCase());
+      });
+  if (filtered.length===0) { list.style.display='none'; return; }
+  list.innerHTML = filtered.map(s=>{
+    const name=((s.firstName||'')+' '+(s.lastName||'')).trim()||s.org||'Unknown';
+    const org=s.org||'';
+    return `<div style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px"
+      onmousedown="event.preventDefault();_commStakePick('${s.id}','${name.replace(/'/g,'\x27')}')"
+      onmouseover="this.style.background='rgba(255,255,255,.07)'" onmouseout="this.style.background=''">
+      <span style="color:var(--white)">${name}</span>
+      ${org?`<span style="color:var(--slate);font-size:11px;margin-left:6px">${org}</span>`:''}
+    </div>`;
+  }).join('');
+  list.style.display='block';
+}
+
+function _commStakePick(id, name) {
+  const hid  = document.getElementById('f-cstake');
+  const srch = document.getElementById('f-cstake-search');
+  const list = document.getElementById('f-cstake-list');
+  if (hid)  hid.value  = id;
+  if (srch) srch.value = name;
+  if (list) list.style.display='none';
 }
 
 function saveCommitment() {

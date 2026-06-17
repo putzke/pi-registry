@@ -1762,7 +1762,7 @@ function renderMaster(el){
     return (S.masterSort||'az')==='az'?an.localeCompare(bn):bn.localeCompare(an);
   });
   const sel=S.selStakeholder;
-  const selData=sel?DB.getActive('stakeholders').find(x=>String(x.id)===String(sel)):null;
+  const selData=sel?DB.get('stakeholders').find(x=>String(x.id)===String(sel)):null;
   el.innerHTML=`
   <div class="topbar">
     <div><div class="topbar-title">Master stakeholder list</div><div class="topbar-sub">All contacts — global, unfiltered</div></div>
@@ -3748,22 +3748,23 @@ function saveStake(){
       DB.set('project_stakeholders',ps);
     }
   }
-  const tmpId = data.id;
   closeM();
-  S.selStakeholder = tmpId;
+  S.selStakeholder = data.id;
   refreshBadges();
-  render();
-  // Once Supabase replaces tmp ID with real numeric ID, update selStakeholder
-  setTimeout(() => {
-    const realStake = DB.get('stakeholders').find(x =>
-      (x.firstName === data.firstName && x.lastName === data.lastName &&
-       x.email === data.email && /^\d+$/.test(String(x.id)))
-    );
-    if (realStake && String(realStake.id) !== String(tmpId)) {
-      S.selStakeholder = realStake.id;
-      render();
+  // Wait for Supabase sync to complete, then find the real numeric ID
+  const stakeAll = DB.get('stakeholders');
+  const isNew = !S.editId;
+  DB.set('stakeholders', stakeAll.find(x=>String(x.id)===String(data.id)) ? stakeAll : [...stakeAll, data]).then(() => {
+    if (isNew) {
+      const realStake = DB.get('stakeholders').find(x =>
+        x.firstName === data.firstName && x.lastName === data.lastName &&
+        (data.email ? x.email === data.email : true) &&
+        /^\d+$/.test(String(x.id))
+      );
+      if (realStake) S.selStakeholder = realStake.id;
     }
-  }, 1200);
+    render();
+  });
 }
 // Returns the correct action button for the stakeholder edit modal
 function _stakeActionBtn(id) {

@@ -2138,7 +2138,7 @@ function renderIssuesPanel(projectId){
 function openIssueModal(id, projectId){
   S.editId=id||null;
   const all=DB.get('issues')||[];
-  const iss=id?all.find(x=>x.id===id)||{}:{};
+  const iss=id?all.find(x=>String(x.id)===String(id))||{}:{};
   const ints=DB.get('interactions')||[];
   const iLinks=DB.get('issue_interactions')||[];
   const linkedIds=id?iLinks.filter(l=>String(l.issueId)===String(id)).map(l=>String(l.interactionId)):[];
@@ -4048,7 +4048,7 @@ function openIntModal(preStake){
 }
 function openEditIntModal(id){
   S.editId=id;
-  const i=DB.get('interactions').find(x=>x.id===id)||{};
+  const i=DB.get('interactions').find(x=>String(x.id)===String(id))||{};
   const projs=DB.get('projects'),stakes=DB.getActive('stakeholders');
   openM('Edit interaction',
   `<div class="fgrid fg2f">
@@ -4138,7 +4138,7 @@ function reopenFollowUp(id){
 // DELIVERABLE MODAL
 function openDelModal(id){
   S.editId=id||null;
-  const d=id?(DB.get('deliverables').find(x=>x.id===id)||{}):{scopeType:'fixed',status:'Not started'};
+  const d=id?(DB.get('deliverables').find(x=>String(x.id)===String(id))||{}):{scopeType:'fixed',status:'Not started'};
   const projs=DB.get('projects');
   openM(id?'Edit deliverable':'Add deliverable',
   `<div class="fr"><label>Project *</label><select id="f-dp">${projs.map(p=>`<option value="${p.id}"${(d.projectId||S.projectFilter||'')==p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
@@ -4208,7 +4208,7 @@ async function applyTpl(){
 // PROJECT MODAL
 function openProjModal(id){
   S.editId=id||null;
-  const p=id?(DB.get('projects').find(x=>x.id===id)||{}):{};
+  const p=id?(DB.get('projects').find(x=>String(x.id)===String(id))||{}):{};
   openM(id?'Edit project':'New project',
   `<div class="fsec">Project identification</div>
   <div class="fgrid fg2f">
@@ -7212,7 +7212,7 @@ function cycleMeetingStatus(id){
 function openMeetingModal(id){
   S.editId=id||null;
   const all=DB.get('meetings')||[];
-  const m=id?all.find(x=>x.id===id)||{}:{};
+  const m=id?all.find(x=>String(x.id)===String(id))||{}:{};
   const projs=DB.get('projects');
   const pF=S.projectFilter;
 

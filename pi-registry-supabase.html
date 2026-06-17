@@ -1811,6 +1811,26 @@ async function saveBulkContacts() {
   var rows = _bulkFilledRows();
   if (rows.length === 0) { alert('No contacts to save — fill in at least one row.'); return; }
 
+  // Pre-save email validation
+  var emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  var emailErrors = [];
+  rows.forEach(function(r) {
+    if (r.em && !emailRe.test(r.em)) {
+      emailErrors.push('Row ' + (r.idx+1) + ': "' + r.em + '" is not a valid email address');
+      var el = document.getElementById('bem'+r.idx);
+      if (el) el.style.borderColor = 'var(--red)';
+      var warn = document.getElementById('bwarn'+r.idx);
+      if (warn) { warn.innerHTML = '⚠ Invalid email format'; warn.style.display = 'block'; }
+    } else {
+      var el = document.getElementById('bem'+r.idx);
+      if (el) el.style.borderColor = '';
+    }
+  });
+  if (emailErrors.length > 0) {
+    alert('Please fix the following before saving:\n\n' + emailErrors.join('\n'));
+    return;
+  }
+
   var allStakes = DB.getActive('stakeholders');
   var allPS = DB.get('project_stakeholders');
   var saved = 0;

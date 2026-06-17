@@ -3566,8 +3566,7 @@ function openStakeModal(id){
     <div class="fr"><label>Support level</label><select id="f-ls">${['Neutral','Champion','Opponent'].map(t=>`<option>${t}</option>`).join('')}</select></div>
   </div>`:''}
   <div class="fr"><label>Notes</label><textarea id="f-no">${s.notes||''}</textarea></div>`,
-  `${id?`<button class="btn btn-danger btn-sm" onclick="delStake('${id}')">Delete</button>`:''}
-  <button class="btn" onclick="closeM()">Cancel</button>
+  `<button class="btn" onclick="closeM()">Cancel</button>
   <button class="btn btn-primary" onclick="saveStake()">Save stakeholder</button>`,true);
   // Wire Google Places autocomplete on address field after modal renders
   requestAnimationFrame(()=>{

@@ -1689,7 +1689,7 @@ function filterMasterList(){
 function _archivedBtn() {
   const archCt = DB.get('stakeholders').filter(s => s.isArchived).length;
   if (!archCt) return '';
-  return '<button class="btn btn-xs" style="border-color:rgba(192,57,43,.4);color:var(--red-lt)" onclick="S.showArchived=true;renderMaster(document.getElementById(\'main\'))">Archived (' + archCt + ')</button>';
+  return '<button class="btn btn-xs" style="background:rgba(192,57,43,.2);border-color:rgba(192,57,43,.7);color:#ff6b6b;font-weight:600" onclick="S.showArchived=true;renderMaster(document.getElementById(\'main\'))">⚑ Archived (' + archCt + ')</button>';
 }
 
 function renderArchivedStakeholders(el) {

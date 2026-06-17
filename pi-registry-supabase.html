@@ -888,7 +888,7 @@ const DB = {
   // Returns only non-archived stakeholders — use for all normal UI queries
   getActive(k) {
     if (k !== 'stakeholders') return DB.get(k);
-    return DB.getActive('stakeholders').filter(s => !s.isArchived);
+    return DB.get('stakeholders').filter(s => !s.isArchived);
   }
 };
 

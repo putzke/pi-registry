@@ -1677,7 +1677,7 @@ function filterMasterList(){
       const projCount=ps.filter(x=>String(x.stakeholderId)===String(s.id)).length;
       const intCount=ints.filter(i=>String(i.stakeholderId)===String(s.id)).length;
       const col=acol(s.firstName+s.lastName);
-      return'<div class="lrow'+(s.id===sel?' sel':'')+'" onclick="selectStake(\''+s.id+'\')">'+
+      return'<div class="lrow'+(String(s.id)===String(sel)?' sel':'')+'" onclick="selectStake(\''+s.id+'\')">'+
         '<div class="avatar" style="background:'+col+'22;color:'+col+'">'+ini(s.firstName,s.lastName)+'</div>'+
         '<div class="lrow-body">'+
           '<div class="lrow-name">'+dispName(s)+'</div>'+(s.org||s.organization?'<span class="lrow-org">'+(s.org||s.organization||'')+'</span>':'')+
@@ -1762,7 +1762,7 @@ function renderMaster(el){
     return (S.masterSort||'az')==='az'?an.localeCompare(bn):bn.localeCompare(an);
   });
   const sel=S.selStakeholder;
-  const selData=sel?DB.getActive('stakeholders').find(x=>x.id===sel):null;
+  const selData=sel?DB.getActive('stakeholders').find(x=>String(x.id)===String(sel)):null;
   el.innerHTML=`
   <div class="topbar">
     <div><div class="topbar-title">Master stakeholder list</div><div class="topbar-sub">All contacts — global, unfiltered</div></div>
@@ -3748,7 +3748,22 @@ function saveStake(){
       DB.set('project_stakeholders',ps);
     }
   }
-  closeM();S.selStakeholder=data.id;refreshBadges();render();
+  const tmpId = data.id;
+  closeM();
+  S.selStakeholder = tmpId;
+  refreshBadges();
+  render();
+  // Once Supabase replaces tmp ID with real numeric ID, update selStakeholder
+  setTimeout(() => {
+    const realStake = DB.get('stakeholders').find(x =>
+      (x.firstName === data.firstName && x.lastName === data.lastName &&
+       x.email === data.email && /^\d+$/.test(String(x.id)))
+    );
+    if (realStake && String(realStake.id) !== String(tmpId)) {
+      S.selStakeholder = realStake.id;
+      render();
+    }
+  }, 1200);
 }
 // Returns the correct action button for the stakeholder edit modal
 function _stakeActionBtn(id) {

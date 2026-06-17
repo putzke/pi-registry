@@ -1105,7 +1105,7 @@ function initDashRows(){
     }
   });
 }
-function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;
+function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;
   S.view=v;S.selStakeholder=null;S.selInteraction=null;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const navId=v==='commitments'?'nav-commitments':('nav-'+v);
@@ -1686,7 +1686,64 @@ function filterMasterList(){
       '</div>';
     }).join('');
 }
+function _archivedBtn() {
+  const archCt = DB.get('stakeholders').filter(s => s.isArchived).length;
+  if (!archCt) return '';
+  return '<button class="btn btn-xs" style="border-color:rgba(192,57,43,.4);color:var(--red-lt)" onclick="S.showArchived=true;renderMaster(document.getElementById(\'main\'))">Archived (' + archCt + ')</button>';
+}
+
+function renderArchivedStakeholders(el) {
+  const search = (S.archivedSearch || '').toLowerCase();
+  let archived = DB.get('stakeholders').filter(s => s.isArchived);
+  if (search) archived = archived.filter(s =>
+    (s.firstName+' '+s.lastName+' '+(s.org||'')).toLowerCase().includes(search));
+  archived = archived.slice().sort((a,b) =>
+    (a.lastName||'').toLowerCase().localeCompare((b.lastName||'').toLowerCase()));
+  el.innerHTML = `
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">Archived stakeholders</div>
+      <div class="topbar-sub">${DB.get('stakeholders').filter(s=>s.isArchived).length} archived — hidden from all active lists</div>
+    </div>
+    <div class="topbar-sp"></div>
+    <div class="topbar-acts">
+      <button class="btn btn-ghost" onclick="S.showArchived=false;S.archivedSearch='';renderMaster(document.getElementById('main'))">← Back to contacts</button>
+    </div>
+  </div>
+  <div class="toolbar">
+    <div class="srch"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4"/><path d="M10 10l3 3"/></svg>
+      <input id="arch-search" placeholder="Search archived…" value="${S.archivedSearch||''}" oninput="S.archivedSearch=this.value;renderArchivedStakeholders(document.getElementById('main'))"></div>
+    <div class="tb-sp"></div>
+    <span class="tb-info">${archived.length} result${archived.length!==1?'s':''}</span>
+  </div>
+  <div class="content">
+    <div class="data-list" style="max-width:700px;padding:8px">
+      ${archived.length === 0 ? `<div class="pane-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="9" cy="7" r="4"/><path d="M2 20c0-3.314 3.134-6 7-6s7 2.686 7 6"/></svg><div class="pe-title">${search ? 'No results' : 'No archived stakeholders'}</div></div>`
+      : archived.map(s => {
+          const col = acol(s.firstName+s.lastName);
+          const intCt = DB.get('interactions').filter(i=>String(i.stakeholderId)===String(s.id)).length;
+          const projCt = DB.get('project_stakeholders').filter(x=>String(x.stakeholderId)===String(s.id)).length;
+          return `<div class="lrow" style="opacity:.75;padding:10px 12px" onclick="openStakeModal('${s.id}')">
+            <div class="avatar" style="background:${col}22;color:${col}">${ini(s.firstName,s.lastName)}</div>
+            <div class="lrow-body">
+              <div class="lrow-name">${dispName(s)}</div>
+              <div class="lrow-sub">${s.org||s.type||'—'}${s.title?' · '+s.title:''}</div>
+              <div class="lrow-meta" style="font-size:11px;color:var(--slate);margin-top:2px">${projCt} proj · ${intCt} log${intCt!==1?'s':''}</div>
+            </div>
+            <button class="btn btn-sm" style="color:var(--green);border-color:rgba(40,168,112,.4);flex-shrink:0" onclick="event.stopPropagation();restoreStake('${s.id}')">Restore</button>
+          </div>`;
+        }).join('')}
+    </div>
+  </div>`;
+  requestAnimationFrame(() => {
+    const sr = document.getElementById('arch-search');
+    if (sr && S.archivedSearch) { sr.focus(); sr.setSelectionRange(sr.value.length, sr.value.length); }
+  });
+}
+
 function renderMaster(el){
+  // Archived view — separate independently searchable view
+  if (S.showArchived) { renderArchivedStakeholders(el); return; }
   let stakes=DB.getActive('stakeholders');
   const ps=DB.get('project_stakeholders');
   const projs=DB.get('projects');
@@ -1737,9 +1794,7 @@ function renderMaster(el){
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--slate);cursor:pointer">
       <input type="checkbox" id="master-only" ${S.masterOnly?'checked':''} onchange="S.masterOnly=this.checked;renderMaster(document.getElementById('main'))" style="accent-color:var(--sky)"> Frequently reused
     </label>
-    <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--slate);cursor:pointer">
-      <input type="checkbox" id="show-archived" ${S.showArchived?'checked':''} onchange="S.showArchived=this.checked;renderMaster(document.getElementById('main'))" style="accent-color:var(--red-lt)"> Show archived
-    </label>
+    ${_archivedBtn()}
     <button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white);display:flex;align-items:center;gap:4px" onclick="S.masterSort=S.masterSort==='az'?'za':'az';renderMaster(document.getElementById('main'))">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px"><path d="M4 4v8M4 12l-2-2M4 12l2-2M12 12V4M12 4l-2 2M12 4l2 2"/></svg>
       ${(S.masterSort||'az')==='az'?'Last name A → Z':'Last name Z → A'}
@@ -1799,22 +1854,6 @@ function renderMaster(el){
             </div>`;
           }).join('')}
         </div>
-        ${S.showArchived ? (()=>{
-          const archived = DB.get('stakeholders').filter(s => s.isArchived);
-          if (!archived.length) return '<div style="padding:12px 16px;font-size:12px;color:var(--fog)">No archived stakeholders.</div>';
-          return `<div style="padding:8px 12px 4px;font-size:11px;font-weight:600;color:var(--red-lt);letter-spacing:.05em;border-top:1px solid var(--border);margin-top:8px">ARCHIVED (${archived.length})</div>`
-            + archived.map(s => {
-              const col = acol(s.firstName+s.lastName);
-              return `<div class="lrow" style="opacity:.6" onclick="openStakeModal('${s.id}')">
-                <div class="avatar" style="background:${col}22;color:${col}">${ini(s.firstName,s.lastName)}</div>
-                <div class="lrow-body">
-                  <div class="lrow-name">${dispName(s)} <span style="font-size:10px;color:var(--red-lt);margin-left:4px">archived</span></div>
-                  <div class="lrow-sub">${s.org||s.type||'—'}</div>
-                </div>
-                <button class="btn btn-xs" style="color:var(--green);border-color:rgba(40,168,112,.4);flex-shrink:0" onclick="event.stopPropagation();restoreStake('${s.id}')">Restore</button>
-              </div>`;
-            }).join('');
-        })() : ''}
       </div>
       <div class="detail-pane" id="master-detail">
         ${selData?renderStakeDetail(selData,null):`<div class="pane-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="9" cy="7" r="4"/><path d="M2 20c0-3.314 3.134-6 7-6s7 2.686 7 6"/></svg><div class="pe-title">Select a stakeholder</div><div class="pe-sub">Full profile, project links, and interaction history.</div></div>`}
@@ -3754,6 +3793,8 @@ async function restoreStake(id) {
   await DB.set('stakeholders', all);
   closeM();
   refreshBadges();
+  S.showArchived = false;
+  S.archivedSearch = '';
   render();
   showToast('Stakeholder restored', 'success');
 }

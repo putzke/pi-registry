@@ -3958,7 +3958,7 @@ function openEditIntModal(id){
       <div id="fu-rdate" style="${i.followUpDone?'flex:1':'display:none'}"><label>Date resolved</label><input type="date" id="f-ifudr" value="${i.followUpResolved||localToday()}"></div>
     </div>
   </div></div>`,
-  `<button class="btn btn-danger btn-sm" onclick="delInt('${id}')">Delete</button>
+  `<button class="btn btn-danger" onclick="delInt('${id}')">Delete</button>
   <button class="btn" onclick="closeM()">Cancel</button>
   <button class="btn btn-primary" onclick="saveInt()">Save changes</button>`,true);
 }

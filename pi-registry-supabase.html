@@ -3103,7 +3103,7 @@ function renderStakeDetail(s,link){
     ${s.address?`<div style="margin-bottom:14px"><div class="fl">Address</div><div class="fv">${s.address}</div></div>`:''}
     ${s.parcelId?`<div style="margin-bottom:14px"><div class="fl">Parcel ID</div><div class="fv">${s.parcelId}</div></div>`:''}
     ${s.notes?`<div class="fl" style="margin-bottom:5px">Notes</div><div class="fnotes">${s.notes}</div>`:''}
-    ${link?`<hr class="div"><div class="sec-hd"><span class="sec-t">Project context — <span style="font-family:var(--mono);font-size:11px">${(projs.find(p=>p.id===S.projectFilter)||{}).pid||''}</span></span><button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="openEditLinkModal('${link.id}')">Edit</button></div>
+    ${link?`<hr class="div"><div class="sec-hd"><span class="sec-t">Project context — <span style="font-family:var(--mono);font-size:11px">${(projs.find(p=>p.id===S.projectFilter)||{}).pid||''}</span></span><button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="openEditLinkModal('${link.id}')">Edit</button> <button class="btn btn-xs" style="background:rgba(220,60,60,.15);border-color:rgba(220,60,60,.4);color:#f87171" onclick="unlinkFromProject('${link.id}')">Unlink</button></div>
     <div class="fg fg3" style="margin-bottom:10px">
       <div class="fi"><div class="fl">Role</div><div class="fv"><span class="badge ${(link.stakeholderRole||'External')==='Internal'?'b-sky':'b-teal'}">${link.stakeholderRole||'External'}</span></div></div>
       <div class="fi"><div class="fl">Support level</div><div class="fv">${supBadge(link.support)}</div></div>
@@ -4473,6 +4473,15 @@ function saveEditLink(lid){
     all[i].distributionGroups=[...document.querySelectorAll('.f-lkdg-cb:checked')].map(c=>c.value).join(',');
   }
   DB.set('project_stakeholders',all);closeM();render();
+}
+
+// UNLINK STAKEHOLDER FROM PROJECT
+async function unlinkFromProject(linkId){
+  if(!confirm('Remove this stakeholder from the project? The contact will remain in the master list. This cannot be undone.')) return;
+  const all = DB.get('project_stakeholders').filter(x=>String(x.id)!==String(linkId));
+  await DB.set('project_stakeholders', all);
+  S.selStakeholder = null;
+  renderStakeholders(document.getElementById('main'));
 }
 
 // INTERACTION MODAL

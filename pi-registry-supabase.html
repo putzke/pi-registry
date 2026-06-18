@@ -3115,7 +3115,7 @@ function renderStakeDetail(s,link){
     <div class="fi" style="margin-bottom:12px"><div class="fl">Distribution groups</div><div class="fv">${(link.distributionGroups||'').split(',').filter(Boolean).map(g=>`<span class="badge b-teal" style="margin:1px">${g.trim()}</span>`).join('')||'<span style="color:var(--fog)">None assigned</span>'}</div></div>
     ${link.notes?`<div class="fnotes">${link.notes}</div>`:''}`:''}
     ${ps.length>0?`<hr class="div"><div class="sec-t" style="margin-bottom:10px">Projects linked (${ps.length})</div>
-    ${ps.map(lk=>{const p=projs.find(x=>x.id===lk.projectId);return p?`<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid var(--border)"><span class="badge b-sky" style="font-family:var(--mono);font-size:11px">${p.pid}</span><span style="font-size:13px;color:var(--mist)">${p.name}</span><span style="margin-left:auto;display:flex;gap:5px"><span class="badge ${(lk.stakeholderRole||'External')==='Internal'?'b-sky':'b-teal'}" style="font-size:10px">${lk.stakeholderRole||'External'}</span>${supBadge(lk.support)}</span></div>`:'';}).join('')}`:''}
+    ${ps.map(lk=>{const p=projs.find(x=>x.id===lk.projectId);return p?`<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid var(--border)"><span class="badge b-sky" style="font-family:var(--mono);font-size:11px">${p.pid}</span><span style="font-size:13px;color:var(--mist)">${p.name}</span><span style="margin-left:auto;display:flex;gap:5px"><span class="badge ${(lk.stakeholderRole||'External')==='Internal'?'b-sky':'b-teal'}" style="font-size:10px">${lk.stakeholderRole||'External'}</span>${supBadge(lk.support)}<button class="btn btn-xs" style="background:rgba(220,60,60,.15);border-color:rgba(220,60,60,.4);color:#f87171;padding:2px 7px;font-size:10px" onclick="unlinkFromProjectMaster('${lk.id}','${s.id}')">Unlink</button></span></div>`:'';}).join('')}`:''}
   </div>`;
   // ── Engagement stats (merged into Interaction Log tab) ─────────────────────
   const allProjs = DB.get('projects');
@@ -4475,7 +4475,26 @@ function saveEditLink(lid){
   DB.set('project_stakeholders',all);closeM();render();
 }
 
-// UNLINK STAKEHOLDER FROM PROJECT
+// UNLINK FROM MASTER VIEW (projects linked section — keeps stakeholder selected)
+async function unlinkFromProjectMaster(linkId, stakeId){
+  const link = DB.get('project_stakeholders').find(x=>String(x.id)===String(linkId));
+  if(!link) return;
+  const intCount = DB.get('interactions').filter(i=>
+    String(i.stakeholderId)===String(link.stakeholderId) &&
+    String(i.projectId)===String(link.projectId)
+  ).length;
+  if(intCount > 0){
+    alert('Cannot unlink — this stakeholder has ' + intCount + ' interaction' + (intCount!==1?'s':'') + ' logged on this project. Delete the interactions first, then unlink.');
+    return;
+  }
+  if(!confirm('Remove this stakeholder from the project? The contact will remain in the master list. This cannot be undone.')) return;
+  const all = DB.get('project_stakeholders').filter(x=>String(x.id)!==String(linkId));
+  await DB.set('project_stakeholders', all);
+  // Stay on the stakeholder — just re-render
+  renderMaster(document.getElementById('main'));
+}
+
+// UNLINK FROM PROJECT CONTACTS VIEW (clears selection after)
 async function unlinkFromProject(linkId){
   const link = DB.get('project_stakeholders').find(x=>String(x.id)===String(linkId));
   if(!link) return;

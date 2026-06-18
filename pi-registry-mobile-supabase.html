@@ -1142,7 +1142,7 @@ function showScreen(id){
 // ── SHEET MANAGEMENT ───────────────────────────────────────────────────
 function openSheet(id){
   if(id==='sheet-log')prepLogSheet();
-  if(id==='sheet-add-stakeholder')prepAddStakeholderSheet();
+  if(id==='sheet-add-stakeholder' && !window._editStakeId)prepAddStakeholderSheet();
   document.getElementById(id).classList.add('open');
 }
 function closeSheet(id,e){
@@ -1153,6 +1153,9 @@ function closeSheet(id,e){
     window._editIntId=null;
     const title=document.getElementById('sheet-log').querySelector('.sheet-title');
     if(title)title.textContent='Log Interaction';
+  }
+  if(id==='sheet-add-stakeholder'){
+    window._editStakeId=null;
   }
 }
 

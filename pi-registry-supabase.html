@@ -1811,9 +1811,48 @@ async function saveBulkContacts() {
   var rows = _bulkFilledRows();
   if (rows.length === 0) { alert('No contacts to save — fill in at least one row.'); return; }
 
-  // Pre-save email validation
+  // Pre-save row validation — must match single-contact modal and importer rules
   var emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  var rowErrors = [];
   var emailErrors = [];
+  rows.forEach(function(r) {
+    var hasName = r.fn && r.ln;
+    var hasOrg  = !!r.org;
+    if (!hasName && !hasOrg) {
+      rowErrors.push('Row ' + (r.idx+1) + ': requires first + last name, or an organization name');
+      var fnEl = document.getElementById('bfn'+r.idx);
+      var lnEl = document.getElementById('bln'+r.idx);
+      var ogEl = document.getElementById('borg'+r.idx);
+      if (fnEl) fnEl.style.borderColor = 'var(--red)';
+      if (lnEl) lnEl.style.borderColor = 'var(--red)';
+      if (ogEl) ogEl.style.borderColor = 'var(--red)';
+    } else {
+      var fnEl2 = document.getElementById('bfn'+r.idx);
+      var lnEl2 = document.getElementById('bln'+r.idx);
+      var ogEl2 = document.getElementById('borg'+r.idx);
+      if (fnEl2) fnEl2.style.borderColor = '';
+      if (lnEl2) lnEl2.style.borderColor = '';
+      if (ogEl2) ogEl2.style.borderColor = '';
+    }
+    if (!r.em && !r.ph) {
+      rowErrors.push('Row ' + (r.idx+1) + ': requires at least an email or phone number');
+      var emEl = document.getElementById('bem'+r.idx);
+      var phEl = document.getElementById('bph'+r.idx);
+      if (emEl) emEl.style.borderColor = 'var(--red)';
+      if (phEl) phEl.style.borderColor = 'var(--red)';
+    } else {
+      var emEl2 = document.getElementById('bem'+r.idx);
+      var phEl2 = document.getElementById('bph'+r.idx);
+      if (emEl2) emEl2.style.borderColor = '';
+      if (phEl2) phEl2.style.borderColor = '';
+    }
+  });
+  if (rowErrors.length > 0) {
+    alert('Please fix the following before saving:\n\n' + rowErrors.join('\n'));
+    return;
+  }
+
+  // Email format validation
   rows.forEach(function(r) {
     if (r.em && !emailRe.test(r.em)) {
       emailErrors.push('Row ' + (r.idx+1) + ': "' + r.em + '" is not a valid email address');

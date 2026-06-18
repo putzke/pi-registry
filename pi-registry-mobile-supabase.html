@@ -1069,7 +1069,7 @@ const DB = {
   uid() { return 'tmp_' + Date.now().toString(36) + Math.random().toString(36).slice(2,5); },
   getActive(k) {
     if (k !== 'stakeholders') return DB.get(k);
-    return DB.getActive('stakeholders').filter(s => !s.isArchived);
+    return DB.get('stakeholders').filter(s => !s.isArchived);
   }
 };
 

@@ -1831,17 +1831,16 @@ async function saveBulkContacts() {
     return;
   }
 
-  var allStakes = DB.getActive('stakeholders');
-  var allPS = DB.get('project_stakeholders');
+  // Save each row individually via sbAdd to get real Supabase IDs before creating project links
   var saved = 0;
-  var norm = function(s){ return (s||'').trim().toLowerCase(); };
+  var errors = [];
 
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i];
     if (!r.fn && !r.ln && !r.org) continue;
-    var id = DB.uid();
+
     var stake = {
-      id: id,
+      id: DB.uid(),
       firstName: r.fn,
       lastName: r.ln,
       org: r.org,
@@ -1857,31 +1856,54 @@ async function saveBulkContacts() {
       parcelId: '',
       isArchived: false
     };
-    allStakes.push(stake);
 
+    // Insert and get real Supabase ID back
+    var realId = await sbAdd('stakeholders', stake);
+    if (!realId) { errors.push('Row ' + (r.idx+1) + ': failed to save stakeholder'); continue; }
+    stake.id = realId;
+
+    // Update local cache immediately with real ID
+    var allStakes = (_syncCache['stakeholders'] || []).slice();
+    allStakes.push(stake);
+    _syncCache['stakeholders'] = allStakes;
+
+    // Create project link using the real stakeholder ID
     if (S.projectFilter) {
-      if (!allPS.find(function(x){ return x.projectId===S.projectFilter && String(x.stakeholderId)===String(id); })) {
-        allPS.push({
-          id: DB.uid(),
-          projectId: S.projectFilter,
-          stakeholderId: id,
-          support: 'Neutral',
-          issueTags: '',
-          addedDate: localToday(),
-          notes: '',
-          distributionGroups: '',
-          stakeholderRole: r.ro || 'External'
-        });
+      var psLink = {
+        id: DB.uid(),
+        projectId: S.projectFilter,
+        stakeholderId: realId,
+        support: 'Neutral',
+        issueTags: '',
+        addedDate: localToday(),
+        notes: '',
+        distributionGroups: '',
+        stakeholderRole: r.ro || 'External'
+      };
+      var psId = await sbAdd('project_stakeholders', psLink);
+      if (psId) {
+        psLink.id = psId;
+        var allPS = (_syncCache['project_stakeholders'] || []).slice();
+        allPS.push(psLink);
+        _syncCache['project_stakeholders'] = allPS;
+      } else {
+        errors.push('Row ' + (r.idx+1) + ': stakeholder saved but project link failed');
       }
     }
     saved++;
   }
 
-  await DB.set('stakeholders', allStakes);
-  if (S.projectFilter) await DB.set('project_stakeholders', allPS);
+  // Force fresh load from Supabase so everything is in sync
+  cacheClear('stakeholders');
+  cacheClear('project_stakeholders');
+  await loadAllData();
 
   S.showBulkAdd = false;
-  alert(saved + ' contact' + (saved!==1?'s':'') + ' saved successfully.');
+  if (errors.length > 0) {
+    alert(saved + ' contact' + (saved!==1?'s':'') + ' saved.\n\nWarnings:\n' + errors.join('\n'));
+  } else {
+    alert(saved + ' contact' + (saved!==1?'s':'') + ' saved successfully.');
+  }
   renderStakeholders(document.getElementById('main'));
 }
 

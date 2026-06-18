@@ -3727,7 +3727,6 @@ function renderDelAll(pF){
   const stF=S.delStatus||'';
   if(stF)dels=dels.filter(d=>d.status===stF);
   dels=dels.map(d=>{const p=projs.find(x=>String(x.id)===String(d.projectId));return Object.assign({},d,{_projName:p?p.pid+' '+p.name:'zz',_proj:p||null});});
-  dels=sortDeliverables(dels);
 
   // Determine if we're in all-projects mode
   const isAllProjects=!pF;
@@ -3815,7 +3814,7 @@ function renderDelAll(pF){
     // All-projects: grouped by project, slim columns, no +/- controls
     if(dels.length===0)return`<div style="text-align:center;padding:32px;color:var(--fog)">No deliverables.</div>`;
 
-    // Group by project
+    // Group by project, then sort within each group
     const groups=[];
     const seen={};
     dels.forEach(d=>{
@@ -3823,6 +3822,7 @@ function renderDelAll(pF){
       if(!seen[key]){seen[key]=true;groups.push({projectId:key,proj:d._proj,rows:[]});}
       groups.find(g=>g.projectId===key).rows.push(d);
     });
+    groups.forEach(g=>{ g.rows=sortDeliverables(g.rows); });
 
     return`<div style="overflow-x:auto"><table class="dtable">
       <thead><tr>

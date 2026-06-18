@@ -1465,7 +1465,6 @@ function showContactDetail(id){
         return p?`<div class="list-item" style="cursor:default">
           <span class="proj-pill"><span class="proj-dot${p.status==='On hold'?' hold':''}"></span>${p.pid}</span>
           <div style="flex:1"><div style="font-size:14px">${p.name}</div><div style="font-size:12px;color:var(--text3)">${lk.stakeholderRole||'External'} · ${lk.support||'Neutral'}</div></div>
-          <button onclick="unlinkFromProjectMaster('${lk.id}','${s.id}')" style="font-size:11px;padding:4px 10px;background:rgba(220,60,60,.15);border:1px solid rgba(220,60,60,.4);color:#f87171;border-radius:6px;cursor:pointer">Unlink</button>
         </div>`:'';
       }).join('')}
     </div>`:''}
@@ -1905,42 +1904,6 @@ function prepAddStakeholderSheet(){
   const btn=document.getElementById('stake-sheet-btn');
   btn.textContent='Add stakeholder';
   btn.onclick=saveStakeholder;
-}
-
-// UNLINK STAKEHOLDER FROM PROJECT
-async function unlinkFromProjectMaster(linkId, stakeId){
-  const link = DB.get('project_stakeholders').find(x=>String(x.id)===String(linkId));
-  if(!link) return;
-  const intCount = DB.get('interactions').filter(i=>
-    String(i.stakeholderId)===String(link.stakeholderId) &&
-    String(i.projectId)===String(link.projectId)
-  ).length;
-  if(intCount > 0){
-    alert('Cannot unlink — this stakeholder has ' + intCount + ' interaction' + (intCount!==1?'s':'') + ' logged on this project. Delete the interactions first, then unlink.');
-    return;
-  }
-  if(!confirm('Remove this stakeholder from the project? The contact will remain in the master list. This cannot be undone.')) return;
-  const all = DB.get('project_stakeholders').filter(x=>String(x.id)!==String(linkId));
-  await DB.set('project_stakeholders', all);
-  showDetail(stakeId);
-}
-
-async function unlinkFromProject(linkId){
-  const link = DB.get('project_stakeholders').find(x=>String(x.id)===String(linkId));
-  if(!link) return;
-  const intCount = DB.get('interactions').filter(i=>
-    String(i.stakeholderId)===String(link.stakeholderId) &&
-    String(i.projectId)===String(link.projectId)
-  ).length;
-  if(intCount > 0){
-    alert('Cannot unlink — this stakeholder has ' + intCount + ' interaction' + (intCount!==1?'s':'') + ' logged on this project. Delete the interactions first, then unlink.');
-    return;
-  }
-  if(!confirm('Remove this stakeholder from the project? The contact will remain in the master list. This cannot be undone.')) return;
-  const all = DB.get('project_stakeholders').filter(x=>String(x.id)!==String(linkId));
-  await DB.set('project_stakeholders', all);
-  S.selStakeholder = null;
-  render();
 }
 
 async function saveStakeholder(){

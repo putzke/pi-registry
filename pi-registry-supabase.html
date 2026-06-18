@@ -4477,6 +4477,16 @@ function saveEditLink(lid){
 
 // UNLINK STAKEHOLDER FROM PROJECT
 async function unlinkFromProject(linkId){
+  const link = DB.get('project_stakeholders').find(x=>String(x.id)===String(linkId));
+  if(!link) return;
+  const intCount = DB.get('interactions').filter(i=>
+    String(i.stakeholderId)===String(link.stakeholderId) &&
+    String(i.projectId)===String(link.projectId)
+  ).length;
+  if(intCount > 0){
+    alert('Cannot unlink — this stakeholder has ' + intCount + ' interaction' + (intCount!==1?'s':'') + ' logged on this project. Delete the interactions first, then unlink.');
+    return;
+  }
   if(!confirm('Remove this stakeholder from the project? The contact will remain in the master list. This cannot be undone.')) return;
   const all = DB.get('project_stakeholders').filter(x=>String(x.id)!==String(linkId));
   await DB.set('project_stakeholders', all);

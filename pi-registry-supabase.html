@@ -3309,9 +3309,12 @@ function sortDeliverables(dels){
     if(col==='project'){av=a._projName||a.projectId||'';bv=b._projName||b.projectId||'';}
     else if(col==='type'){av=a.type||'';bv=b.type||'';}
     else if(col==='scope'){av=a.scopeType||'';bv=b.scopeType||'';}
-    else if(col==='contracted'){av=String(a.contractedQty||0);bv=String(b.contractedQty||0);}
-    else if(col==='delivered'){av=String(a.deliveredCount||0);bv=String(b.deliveredCount||0);}
-    else if(col==='progress'){av=String(a.progress||0);bv=String(b.progress||0);}
+    else if(col==='contracted'){av=a.contractedQty||0;bv=b.contractedQty||0;}
+    else if(col==='delivered'){av=a.deliveredCount||0;bv=b.deliveredCount||0;}
+    else if(col==='progress'){
+      av=String(a.contractedQty>0?Math.round((a.deliveredCount||0)/a.contractedQty*100):(a.progress||0));
+      bv=String(b.contractedQty>0?Math.round((b.deliveredCount||0)/b.contractedQty*100):(b.progress||0));
+    }
     else if(col==='status'){av=a.status||'';bv=b.status||'';}
     else if(col==='due'){av=a.dueDate||'9999';bv=b.dueDate||'9999';}
     else{av=a.type||'';bv=b.type||'';}

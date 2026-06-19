@@ -8937,7 +8937,7 @@ function openCommModal(id) {
         <div style="position:relative">
           <input id="f-cstake-search" autocomplete="off" placeholder="Search stakeholders…"
             style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:8px 12px"
-            oninput="_commStakeSearchInput(this.value)" onfocus="_commStakeSearch(this.value)">
+            oninput="_commStakeSearchInput(this.value)" onfocus="_commStakeSearch(this.value)" onblur="setTimeout(function(){var l=document.getElementById('f-cstake-list');if(l)l.style.display='none';},180)">
           <input type="hidden" id="f-cstake" value="${c.stakeholderId||''}">
           <div id="f-cstake-list" style="display:none;position:absolute;z-index:999;width:100%;max-height:200px;overflow-y:auto;background:var(--navy-mid);border:1px solid var(--border);border-radius:7px;margin-top:3px"></div>
         </div>

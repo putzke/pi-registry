@@ -1119,8 +1119,8 @@ function initDashRows(){
   ['row2','row3'].forEach(function(id){
     var stored=null;
     try{stored=sessionStorage.getItem('dash_'+id+'_open');}catch(e){}
-    // default open; only collapse if explicitly stored as '0'
-    if(stored==='0'){
+    // default closed; only open if explicitly stored as '1'
+    if(stored!=='1'){
       var body=document.getElementById(id+'-body');
       var chev=document.getElementById(id+'-chev');
       if(body)body.style.display='none';
@@ -1579,12 +1579,12 @@ function renderDash(el){
 
     <!-- ROW 2: Visual panels -->
     <div style="background:var(--navy-mid);border:1px solid rgba(255,255,255,.12);border-radius:var(--radius-lg);margin-bottom:12px;overflow:hidden">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 16px;cursor:pointer;user-select:none;border-bottom:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.02)" onclick="toggleDashRow('row2')" id="row2-hdr">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px;cursor:pointer;user-select:none;border-bottom:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.07)'" onmouseout="this.style.background='rgba(255,255,255,.04)'" onclick="toggleDashRow('row2')" id="row2-hdr">
         <div style="display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;color:var(--mist);text-transform:uppercase;letter-spacing:.8px">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--sky-lt)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
           Deliverables &amp; interactions
         </div>
-        <svg id="row2-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--slate)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition:transform .2s;transform:rotate(0deg)" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        <svg id="row2-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--sky-lt)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition:transform .2s;transform:rotate(0deg)" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
       </div>
       <div id="row2-body" style="padding:12px 14px 14px">
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
@@ -1628,12 +1628,12 @@ function renderDash(el){
 
     <!-- ROW 3: Swim lanes + Live feed -->
     <div style="background:var(--navy-mid);border:1px solid rgba(255,255,255,.12);border-radius:var(--radius-lg);margin-bottom:12px;overflow:hidden">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 16px;cursor:pointer;user-select:none;border-bottom:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.02)" onclick="toggleDashRow('row3')" id="row3-hdr">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px;cursor:pointer;user-select:none;border-bottom:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.07)'" onmouseout="this.style.background='rgba(255,255,255,.04)'" onclick="toggleDashRow('row3')" id="row3-hdr">
         <div style="display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;color:var(--mist);text-transform:uppercase;letter-spacing:.8px">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--sky-lt)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           Project activity &amp; recent interactions
         </div>
-        <svg id="row3-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--slate)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition:transform .2s;transform:rotate(0deg)" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        <svg id="row3-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--sky-lt)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition:transform .2s;transform:rotate(0deg)" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
       </div>
       <div id="row3-body" style="padding:12px 14px 14px">
       <div style="display:grid;grid-template-columns:2fr 2fr;gap:14px">

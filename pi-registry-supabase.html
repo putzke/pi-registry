@@ -9087,6 +9087,9 @@ function saveCommitment() {
   if (!pid) { alert('Project is required.'); return; }
   const dateMade = vDate('f-cdatemade');
   if (!dateMade) { alert('Date made is required.'); return; }
+  const stakeId = v('f-cstake');
+  const madeTo  = v('f-cmadeto');
+  if (!stakeId && !madeTo.trim()) { alert('Please select a stakeholder or enter a \'Made to\' name before saving.'); return; }
 
   const data = {
     id: S.editId || DB.uid(),

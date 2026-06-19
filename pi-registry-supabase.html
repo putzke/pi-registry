@@ -4671,6 +4671,7 @@ function saveInt(){
   const vDate=id=>{const val=document.getElementById(id)?.value||'';return val||null;};
   const projId=v('f-ip'),stakeId=v('f-is')||null;
   if(!projId){alert('Project required.');return}
+  if(!stakeId){alert('Stakeholder required — search and select a contact from the list.');return}
   if(!v('f-isu')){alert('Summary required.');return}
   const fuDone=document.getElementById('f-ifudo')?.checked||false;
   const fuResolved=fuDone?(vDate('f-ifudr')||localToday()):'';

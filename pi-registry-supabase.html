@@ -9078,7 +9078,7 @@ function _commFreeTextChanged(val) {
   }
 }
 
-function saveCommitment() {
+async function saveCommitment() {
   const v = id => document.getElementById(id)?.value||'';
   const vDate = id => { const val=document.getElementById(id)?.value||''; return val||null; };
   const comm = v('f-comm');
@@ -9124,18 +9124,18 @@ function saveCommitment() {
   } else {
     all.push(data);
   }
-  DB.set('commitments', all);
+  await DB.set('commitments', all);
   closeM(); refreshBadges(); renderCommitments(document.getElementById('main'));
 }
 
-function fulfillCommitment(id) {
+async function fulfillCommitment(id) {
   const today = localToday();
   const all = DB.get('commitments');
   const i = all.findIndex(x=>x.id===id);
   if (i>-1) {
     const note = prompt('Fulfillment notes (optional):', '') ?? '';
     all[i] = {...all[i], status:'Fulfilled', fulfilledDate:today, fulfilledNotes:note};
-    DB.set('commitments', all);
+    await DB.set('commitments', all);
     refreshBadges();
     renderCommitments(document.getElementById('main'));
   }
@@ -9149,12 +9149,12 @@ async function delCommitment(id) {
   renderCommitments(document.getElementById('main'));
 }
 
-function reopenCommitment(id) {
+async function reopenCommitment(id) {
   const all = DB.get('commitments');
   const i = all.findIndex(x=>x.id===id);
   if (i>-1) {
     all[i] = {...all[i], status:'Open', fulfilledDate:null, fulfilledNotes:''};
-    DB.set('commitments', all);
+    await DB.set('commitments', all);
     refreshBadges();
     renderCommitments(document.getElementById('main'));
   }

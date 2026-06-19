@@ -215,10 +215,10 @@ hr.div{border:none;border-top:1px solid var(--border);margin:14px 0}
 .stat-card.sc-purple::after{content:'';position:absolute;top:-40px;right:-20px;width:100px;height:100px;border-radius:50%;background:#b39ddb;opacity:.05;pointer-events:none}
 .stat-card.sc-red::before{background:linear-gradient(90deg,#8b1a1a,var(--red))}
 .stat-card.sc-red::after{content:'';position:absolute;top:-40px;right:-20px;width:100px;height:100px;border-radius:50%;background:var(--red);opacity:.05;pointer-events:none}
-.stat-lbl{font-size:11px;color:var(--slate);margin-bottom:6px;text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+.stat-lbl{font-size:13px;color:var(--slate);margin-bottom:6px;text-transform:uppercase;letter-spacing:.6px;font-weight:600}
 .stat-val{font-size:36px;font-weight:700;letter-spacing:-.5px}
 .sv-sky{color:var(--sky-lt)}.sv-green{color:var(--green)}.sv-amber{color:var(--amber)}.sv-red{color:var(--red)}
-.stat-sub{font-size:12px;color:var(--slate);margin-top:4px}
+.stat-sub{font-size:14px;color:var(--slate);margin-top:4px}
 
 /* PROGRESS */
 .pbar{height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;flex-shrink:0}
@@ -1594,9 +1594,9 @@ function renderDash(el){
           ${donut(delPct,delPct>=75?'#28A870':delPct>=40?'#5BA4CF':'#D9A544',110,'complete')}
           <div style="display:flex;flex-direction:column;gap:10px;flex:1">
             <div style="display:flex;gap:0;justify-content:space-around">
-              <div style="text-align:center"><div style="font-size:52px;font-weight:700;color:var(--green);line-height:1">${completeDels}</div><div style="font-size:11px;color:var(--fog);margin-top:4px">done</div></div>
-              <div style="text-align:center"><div style="font-size:52px;font-weight:700;color:var(--sky-lt);line-height:1">${inProgDels}</div><div style="font-size:11px;color:var(--fog);margin-top:4px">active</div></div>
-              <div style="text-align:center"><div style="font-size:52px;font-weight:700;color:var(--slate);line-height:1">${notStartedDels}</div><div style="font-size:11px;color:var(--fog);margin-top:4px">pending</div></div>
+              <div style="text-align:center"><div style="font-size:52px;font-weight:700;color:var(--green);line-height:1">${completeDels}</div><div style="font-size:13px;color:var(--fog);margin-top:4px">done</div></div>
+              <div style="text-align:center"><div style="font-size:52px;font-weight:700;color:var(--sky-lt);line-height:1">${inProgDels}</div><div style="font-size:13px;color:var(--fog);margin-top:4px">active</div></div>
+              <div style="text-align:center"><div style="font-size:52px;font-weight:700;color:var(--slate);line-height:1">${notStartedDels}</div><div style="font-size:13px;color:var(--fog);margin-top:4px">pending</div></div>
             </div>
           </div>
         </div>
@@ -1605,11 +1605,11 @@ function renderDash(el){
         <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:14px">External stakeholder sentiment</div>
         ${sentBar}
         <div style="display:flex;justify-content:space-around;margin-top:14px">
-          <div style="text-align:center"><div style="font-size:52px;font-weight:700;color:var(--green);line-height:1">${allChamp}</div><div style="font-size:11px;color:var(--fog);margin-top:4px"><span style="display:inline-block;width:7px;height:7px;background:var(--green);border-radius:50%;margin-right:3px"></span>Champions</div></div>
-          <div style="text-align:center"><div style="font-size:52px;font-weight:700;color:var(--slate);line-height:1">${allNeut}</div><div style="font-size:11px;color:var(--fog);margin-top:4px"><span style="display:inline-block;width:7px;height:7px;background:var(--slate);border-radius:50%;margin-right:3px"></span>Neutral</div></div>
-          <div style="text-align:center"><div style="font-size:52px;font-weight:700;color:var(--red);line-height:1">${allOpp}</div><div style="font-size:11px;color:var(--fog);margin-top:4px"><span style="display:inline-block;width:7px;height:7px;background:var(--red);border-radius:50%;margin-right:3px"></span>Opponents</div></div>
+          <div style="text-align:center"><div style="font-size:52px;font-weight:700;color:var(--green);line-height:1">${allChamp}</div><div style="font-size:13px;color:var(--fog);margin-top:4px"><span style="display:inline-block;width:7px;height:7px;background:var(--green);border-radius:50%;margin-right:3px"></span>Champions</div></div>
+          <div style="text-align:center"><div style="font-size:52px;font-weight:700;color:var(--slate);line-height:1">${allNeut}</div><div style="font-size:13px;color:var(--fog);margin-top:4px"><span style="display:inline-block;width:7px;height:7px;background:var(--slate);border-radius:50%;margin-right:3px"></span>Neutral</div></div>
+          <div style="text-align:center"><div style="font-size:52px;font-weight:700;color:var(--red);line-height:1">${allOpp}</div><div style="font-size:13px;color:var(--fog);margin-top:4px"><span style="display:inline-block;width:7px;height:7px;background:var(--red);border-radius:50%;margin-right:3px"></span>Opponents</div></div>
         </div>
-        <div style="margin-top:10px;font-size:11px;color:var(--fog);text-align:center">Across all active projects (External only)</div>
+        <div style="margin-top:10px;font-size:13px;color:var(--fog);text-align:center">Across all active projects (External only)</div>
       </div>
       <div class="dash-anim" style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:18px;animation-delay:360ms">
         <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:14px">Interaction channels</div>

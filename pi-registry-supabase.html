@@ -7847,7 +7847,7 @@ function openMeetingModal(id){
   <div class="fr"><label>Linked attendees <span style="font-weight:400;color:var(--fog)">(stakeholders from this project)</span></label>
     <div id="f-matt-wrap" style="display:flex;flex-wrap:wrap;gap:6px;padding:8px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:6px;max-height:150px;overflow-y:auto">
     ${(function(){
-      var projId=v('f-mp')||pF;
+      var projId=(document.getElementById('f-mp')||{}).value||pF;
       var ps=DB.get('project_stakeholders')||[];
       var linked=projId?ps.filter(function(x){return String(x.projectId)===String(projId);}):[];
       var stakes=DB.getActive('stakeholders')||[];

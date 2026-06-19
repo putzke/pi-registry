@@ -1076,6 +1076,16 @@ const S={
 const ACOLORS=['#2D7DD2','#28A870','#7C5CBF','#E8A020','#D94040','#1E8FA0'];
 function acol(s){let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))&0xffff;return ACOLORS[h%ACOLORS.length]}
 function ini(f,l){return((f||'')[0]||'')+((l||'')[0]||'')}
+function getAnonLabel(projectId, excludeId){
+  const anons = DB.get('interactions').filter(i =>
+    !i.stakeholderId &&
+    String(i.projectId) === String(projectId) &&
+    (!excludeId || String(i.id) !== String(excludeId))
+  );
+  const n = anons.length + 1;
+  return n === 1 ? 'Anonymous' : 'Anonymous ' + n;
+}
+
 function dispName(s){
   if(!s) return 'Unknown';
   if(s.firstName||s.lastName) return ((s.firstName||'')+' '+(s.lastName||'')).trim();
@@ -2705,7 +2715,7 @@ function openIssueModal(id, projectId){
   <div class="fr"><label>Link interactions <span style="font-weight:400;color:var(--fog)">(hold Ctrl/Cmd for multiple)</span></label>
     <select id="iss-int-links" multiple style="height:100px">${projInts.map(i=>{
       const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
-      const name=s?(s.firstName+' '+s.lastName).trim():'Anonymous';
+      const name=s?(s.firstName+' '+s.lastName).trim():(i.anonLabel||'Anonymous');
       const sel=linkedIds.includes(String(i.id))?' selected':'';
       return`<option value="${i.id}"${sel}>${i.date} — ${name} — ${(i.summary||'').slice(0,40)}</option>`;
     }).join('')}</select>
@@ -3455,7 +3465,7 @@ function renderFollowups(el){
                   </td>
                   <td style="font-weight:500;color:var(--white)">${i.followUpNote||'—'}</td>
                   <td style="white-space:nowrap">
-                    <div class="td-link" onclick="filterByProject('${projId}');selectStake('${i.stakeholderId}');setView('stakeholders')">${s?dispName(s):'Unknown'}</div>
+                    <div class="td-link" onclick="filterByProject('${projId}');selectStake('${i.stakeholderId}');setView('stakeholders')">${s?dispName(s):(i.anonLabel||'Anonymous')}</div>
                   </td>
 
                   <td style="min-width:180px"><div style="font-size:12px;color:var(--slate);white-space:normal;line-height:1.5">${i.summary}</div></td>
@@ -3576,7 +3586,7 @@ function renderInteractions(el){
             return`<tr style="page-break-inside:avoid">
               <td class="td-mono" style="white-space:nowrap">${fmt(i.date)}</td>
               <td><span class="badge b-dark td-mono">${p?p.pid:'?'}</span></td>
-              <td><div class="td-link" onclick="selectStake('${i.stakeholderId}');setView('stakeholders')">${s?dispName(s):'Unknown'}</div><div style="font-size:11px;color:var(--fog)">${s?s.org||s.type||'':''}</div></td>
+              <td><div class="td-link" onclick="selectStake('${i.stakeholderId}');setView('stakeholders')">${s?dispName(s):(i.anonLabel||'Anonymous')}</div><div style="font-size:11px;color:var(--fog)">${s?s.org||s.type||'':''}</div></td>
               <td><span class="badge ${chCls(i.channel)}">${i.channel}</span></td>
               <td><span class="badge ${i.direction==='Incoming'?'b-sky':'b-green'}">${i.direction}</span></td>
               <td style="font-size:12px;color:var(--mist)">${i.subject||'General'}</td>
@@ -4621,6 +4631,12 @@ function openIntModal(preStake){
   `<button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-primary" onclick="saveInt()">Save interaction</button>`,true);
   // If a project is already selected (via filter), populate stakeholders for that project
   if(S.projectFilter){ updateIntStakeholders(); updateIntIssues(); }
+  // Set placeholder to next anonymous label for this project
+  setTimeout(function(){
+    var isearch = document.getElementById('f-is-search');
+    var anonDefault = getAnonLabel(S.projectFilter||'');
+    if(isearch) isearch.placeholder = anonDefault + ' — search to select a specific contact';
+  }, 50);
   // Auto-populate Logged by from session
   (function(){var lb=getLoggedBy();var d=document.getElementById('f-il-display');var h=document.getElementById('f-il');if(d)d.textContent=lb||'—';if(h)h.value=lb;})();
 }
@@ -4671,11 +4687,11 @@ function saveInt(){
   const vDate=id=>{const val=document.getElementById(id)?.value||'';return val||null;};
   const projId=v('f-ip'),stakeId=v('f-is')||null;
   if(!projId){alert('Project required.');return}
-  if(!stakeId){alert('Stakeholder required — search and select a contact from the list.');return}
   if(!v('f-isu')){alert('Summary required.');return}
   const fuDone=document.getElementById('f-ifudo')?.checked||false;
   const fuResolved=fuDone?(vDate('f-ifudr')||localToday()):'';
-  const data={id:S.editId||DB.uid(),projectId:projId,stakeholderId:stakeId,date:vDate('f-id'),channel:v('f-ic'),direction:v('f-idr'),subject:v('f-isub')||'General',nature:v('f-inat')||'Inquiry',summary:v('f-isu'),loggedBy:v('f-il'),followUp:document.getElementById('f-ifu')?.checked||false,followUpNote:v('f-ifun'),followUpDue:vDate('f-ifud'),followUpDone:fuDone,followUpResolved:fuResolved};
+  const anonLbl = !stakeId ? getAnonLabel(projId, S.editId||null) : '';
+  const data={id:S.editId||DB.uid(),projectId:projId,stakeholderId:stakeId,anonLabel:anonLbl,date:vDate('f-id'),channel:v('f-ic'),direction:v('f-idr'),subject:v('f-isub')||'General',nature:v('f-inat')||'Inquiry',summary:v('f-isu'),loggedBy:v('f-il'),followUp:document.getElementById('f-ifu')?.checked||false,followUpNote:v('f-ifun'),followUpDue:vDate('f-ifud'),followUpDone:fuDone,followUpResolved:fuResolved};
   const psAll=DB.get('project_stakeholders');
   if(stakeId&&!psAll.find(x=>x.projectId===projId&&x.stakeholderId===stakeId)){
     psAll.push({id:DB.uid(),projectId:projId,stakeholderId:stakeId,support:'Neutral',issueTags:'',addedDate:data.date,notes:'Auto-linked via interaction log.',distributionGroups:'',stakeholderRole:'External'});
@@ -5881,7 +5897,7 @@ function generateReport(type){
       +'</tr></thead><tbody>';
     sorted.forEach(function(i){
       var s=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
-      var sName=s?dispName(s):'Unknown';
+      var sName=s?dispName(s):(i.anonLabel||'Anonymous');
       var sOrg=s?(s.org||''):'';
       body+='<tr style="page-break-inside:avoid">'
         +'<td style="padding:8px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:11px;white-space:nowrap">'+fmt(i.date)+'</td>'
@@ -5914,7 +5930,7 @@ function generateReport(type){
       body+='<tr style="'+(od?'background:rgba(217,64,64,.06)':'')+(i.followUpDone?'opacity:.65':'')+'">'
         +'<td style="font-weight:600;color:'+(od?'var(--red)':i.followUpDone?'var(--green)':'var(--amber)')+'">'+(i.followUpDue||'No date')+(od?' OVERDUE':'')+'</td>'
         +'<td style="font-weight:500;color:var(--white)">'+(i.followUpNote||'—')+'</td>'
-        +'<td>'+(s?dispName(s):'Unknown')+'</td>'
+        +'<td>'+(s?dispName(s):(i.anonLabel||'Anonymous'))+'</td>'
         +'<td>'+(i.followUpDone?'<span class="badge b-green">Resolved</span>'+(i.followUpResolved?'<div style="font-size:10px;color:var(--green);margin-top:2px">'+new Date(i.followUpResolved+'T00:00:00').toLocaleDateString('en-US',{month:"short",day:"numeric",year:"numeric"})+'</div>':''):'<span class="badge b-amber">Open</span>')+'</td>'
         +'<td class="td-mono">'+fmt(i.date)+'</td>'
         +'<td style="font-size:12px;color:var(--slate)">'+(i.loggedBy||'—')+'</td></tr>';
@@ -6028,7 +6044,7 @@ function generateReport(type){
       var s=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
       body+='<tr style="page-break-inside:avoid">'
         +'<td class="td-mono" style="white-space:nowrap;vertical-align:middle">'+fmt(i.date)+'</td>'
-        +'<td style="font-weight:600;color:var(--white);vertical-align:middle">'+(s?dispName(s):'Unknown')+'</td>'
+        +'<td style="font-weight:600;color:var(--white);vertical-align:middle">'+(s?dispName(s):(i.anonLabel||'Anonymous'))+'</td>'
         +'<td style="vertical-align:middle">'+(s?s.org||'&mdash;':'&mdash;')+'</td>'
         +'<td style="vertical-align:middle"><span class="badge '+chCls(i.channel)+'">'+i.channel+'</span></td>'
         +'<td style="vertical-align:middle">'+(i.followUpDone?'<span class="badge b-green">Responded</span>':'<span class="badge b-amber">Pending</span>')+'</td>'
@@ -6637,7 +6653,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
         periodInts.sort(function(a,b){return a.date.localeCompare(b.date)});
         periodInts.forEach(function(int){
           var sk=allStakes.find(function(x){return x.id===int.stakeholderId});
-          var name=sk?sk.firstName+' '+sk.lastName:'Unknown';
+          var name=sk?sk.firstName+' '+sk.lastName:(int.anonLabel||'Anonymous');
           var line=int.date+' \u2014 '+name+' ('+int.channel+'): '+int.summary;
           xml+=bullet(line);
         });
@@ -6716,7 +6732,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
       } else {
         sorted.forEach(function(int){
           var sk=allStakes.find(function(x){return x.id===int.stakeholderId});
-          var name=sk?sk.firstName+' '+sk.lastName:'Unknown';
+          var name=sk?sk.firstName+' '+sk.lastName:(int.anonLabel||'Anonymous');
           var line=int.date+' | '+name+' | '+int.channel+' | '+(int.subject||'General')+' | '+(int.nature||'Inquiry')+' | '+int.summary;
           if(int.followUp)line+=' [Follow-up: '+(int.followUpDone?'Resolved':'Open')+']';
           xml+=bullet(line);
@@ -6734,7 +6750,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
       fuItems.sort(function(a,b){if(!a.followUpDone&&b.followUpDone)return-1;if(a.followUpDone&&!b.followUpDone)return 1;return(a.followUpDue||'9999').localeCompare(b.followUpDue||'9999')});
       fuItems.forEach(function(i){
         var sk=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
-        var name=sk?sk.firstName+' '+sk.lastName:'Unknown';
+        var name=sk?sk.firstName+' '+sk.lastName:(i.anonLabel||'Anonymous');
         var status=i.followUpDone?'RESOLVED':'OPEN';
         var od=!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<now;
         if(od)status='OVERDUE';
@@ -6833,7 +6849,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
         xml+=spacer();
         comments.forEach(function(i){
           var sk=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
-          var name=sk?sk.firstName+' '+sk.lastName:'Unknown';
+          var name=sk?sk.firstName+' '+sk.lastName:(i.anonLabel||'Anonymous');
           var org=sk?sk.org||'':'';
           var status=i.followUpDone?'Responded':'Pending';
           var line=i.date+' | '+name+(org?' ('+org+')':'')+' | '+i.channel+' | '+i.summary+' | Response: '+status;
@@ -7135,7 +7151,7 @@ function exportProject(projectId) {
   const intRows = pInts.map(i => {
     const s = allStake.find(x => String(x.id) === String(i.stakeholderId));
     return [
-      i.date||'', s ? dispName(s) : 'Unknown', s ? s.org||'' : '',
+      i.date||'', s ? dispName(s) : (i.anonLabel||'Anonymous'), s ? s.org||'' : '',
       i.channel||'', i.direction||'', i.subject||'', i.summary||'',
       i.loggedBy||'', i.followUp ? 'Yes' : 'No',
       i.followUpNote||'', i.followUpDue||'',
@@ -7407,7 +7423,7 @@ function generatePortfolioFollowups() {
     body+='<table><thead><tr><th style="width:11%">Due date</th><th style="width:17%">Stakeholder</th><th style="width:13%">Channel</th><th style="width:39%">Interaction summary</th><th style="width:20%">Follow-up action</th></tr></thead><tbody>';
     items.forEach(function(i){
       var s=allStake.find(x=>String(x.id)===String(i.stakeholderId));
-      var sName=s?((s.firstName||'')+' '+(s.lastName||'')).trim():'Unknown';
+      var sName=s?((s.firstName||'')+' '+(s.lastName||'')).trim():(i.anonLabel||'Anonymous');
       var isOD=i.followUpDue&&i.followUpDue<today;
       var dueFmt=i.followUpDue?fmt(i.followUpDue):'—';
       body+='<tr>'
@@ -7611,7 +7627,7 @@ function exportPortfolio() {
     XLSX.utils.book_append_sheet(wb,ws1,`${pid}-Stakeholders`.substring(0,31));
 
     // Interactions
-    const intRows=pInts.map(i=>{const s=allStake.find(x=>String(x.id)===String(i.stakeholderId));return [fmt(i.date)||'',s?dispName(s):'Unknown',s?s.org||'':'',i.channel||'',i.summary||'',i.loggedBy||'',i.followUp?'Yes':'No',i.followUpNote||'',fmt(i.followUpDue)||'',i.followUpDone?'Yes':'No'];});
+    const intRows=pInts.map(i=>{const s=allStake.find(x=>String(x.id)===String(i.stakeholderId));return [fmt(i.date)||'',s?dispName(s):(i.anonLabel||'Anonymous'),s?s.org||'':'',i.channel||'',i.summary||'',i.loggedBy||'',i.followUp?'Yes':'No',i.followUpNote||'',fmt(i.followUpDue)||'',i.followUpDone?'Yes':'No'];});
     const ws2=XLSX.utils.aoa_to_sheet([['Date','Stakeholder','Organization','Channel','Summary','Logged By','Follow-Up','FU Action','FU Due','FU Done'],...intRows]);
     styleSheet(ws2,[11,22,24,12,55,12,10,30,11,10]);
     XLSX.utils.book_append_sheet(wb,ws2,`${pid}-Interactions`.substring(0,31));

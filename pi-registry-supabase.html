@@ -2043,6 +2043,27 @@ function bulkTabNext(idx, field, event) {
   }
 }
 
+function _bulkOrgInput(inp, idx) {
+  var q = (inp.value||'').trim().toLowerCase();
+  var orgs = _bulkOrgSuggestions();
+  var matches = q ? orgs.filter(function(o){ return o.toLowerCase().indexOf(q) !== -1; }) : orgs;
+  var dd = document.getElementById('bulk-org-dropdown');
+  if(!dd) return;
+  if(!matches.length){ dd.style.display='none'; return; }
+  var rect = inp.getBoundingClientRect();
+  dd.style.left = rect.left + 'px';
+  dd.style.top = (rect.bottom + window.scrollY + 2) + 'px';
+  dd.style.width = rect.width + 'px';
+  dd.style.display = 'block';
+  dd.innerHTML = matches.slice(0,30).map(function(o){
+    var safe = o.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    var jsVal = o.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    return '<div style="padding:6px 10px;font-size:12px;color:var(--mist);cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04)" '
+      + 'onmousedown="var el=document.getElementById(\'borg'+idx+'\');if(el){el.value=\'' + jsVal + '\';bulkRowActivate(' + idx + ');}document.getElementById(\'bulk-org-dropdown\').style.display=\'none\';">'
+      + safe + '</div>';
+  }).join('');
+}
+
 function _bulkOrgSuggestions() {
   var orgs = {};
   DB.get('stakeholders').forEach(function(s){ if(s.org) orgs[s.org.trim()] = true; });
@@ -2191,7 +2212,7 @@ async function saveBulkContacts() {
 function renderBulkAdd(el) {
   var proj = S.projectFilter ? DB.get('projects').find(function(p){ return p.id===S.projectFilter; }) : null;
   var orgSugs = _bulkOrgSuggestions();
-  var datalistHtml = '<datalist id="bulk-org-list">'+orgSugs.map(function(o){ return '<option value="'+o.replace(/"/g,'&quot;')+'">'; }).join('')+'</datalist>';
+  var datalistHtml = '<div id="bulk-org-dropdown" style="display:none;position:fixed;z-index:9999;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;max-height:200px;overflow-y:auto;min-width:200px;box-shadow:0 4px 16px rgba(0,0,0,.4)"></div>';
 
   var typeOpts = '<option value="">Type\u2026</option>'+BULK_TYPES.map(function(t){ return '<option>'+t+'</option>'; }).join('');
   var tierOpts = '<option value="">Tier\u2026</option>'+BULK_TIERS.map(function(t){ return '<option>'+t+'</option>'; }).join('');
@@ -2209,7 +2230,7 @@ function renderBulkAdd(el) {
       + '<td style="padding:3px 3px"><input id="bfn'+i+'" type="text" placeholder="First" style="'+inpStyle+'" oninput="bulkRowActivate('+i+');bulkCheckDup('+i+')" onkeydown="bulkTabNext('+i+',\'fn\',event)"></td>'
       + '<td style="padding:3px 3px"><input id="bln'+i+'" type="text" placeholder="Last" style="'+inpStyle+'" oninput="bulkRowActivate('+i+');bulkCheckDup('+i+')"></td>'
       + '<td style="padding:3px 3px"><div style="position:relative">'
-      +   '<input id="borg'+i+'" type="text" placeholder="Organization" list="bulk-org-list" style="'+inpStyle+';padding-right:20px" oninput="bulkRowActivate('+i+')">'
+      +   '<input id="borg'+i+'" type="text" placeholder="Organization" autocomplete="off" style="'+inpStyle+';padding-right:20px" oninput="bulkRowActivate('+i+');_bulkOrgInput(this,'+i+')" onfocus="_bulkOrgInput(this,'+i+')" onblur="setTimeout(function(){var d=document.getElementById(\'bulk-org-dropdown\');if(d)d.style.display=\'none\'},200)">'
       +   '<span onclick="bulkApplyDown(\'borg\','+i+')" title="Copy org down to empty rows" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:11px;color:var(--sky-lt)" aria-label="Copy org down">\u21e9</span>'
       + '</div></td>'
       + '<td style="padding:3px 3px"><input id="bti'+i+'" type="text" placeholder="Title / role" style="'+inpStyle+'" oninput="bulkRowActivate('+i+')"></td>'

@@ -2731,7 +2731,10 @@ function renderStakeholders(el){
       return s?{...s,_link:lk}:null;
     }).filter(Boolean);
   } else {
-    listItems=allStakes;
+    // No project filter — show only stakeholders linked to active or on-hold projects
+    const activeProjs=projs.filter(p=>p.status==='Active'||p.status==='On hold').map(p=>p.id);
+    const activeLinkedIds=new Set(ps.filter(x=>activeProjs.includes(x.projectId)).map(x=>String(x.stakeholderId)));
+    listItems=allStakes.filter(s=>activeLinkedIds.has(String(s.id)));
   }
   const projLabel=S.projectFilter?(projs.find(p=>p.id===S.projectFilter)||{}).name||'':'';
   const search=(S.stakeSearch||document.getElementById('sk-search')?.value||'').toLowerCase();
@@ -2755,7 +2758,7 @@ function renderStakeholders(el){
   el.innerHTML=`
   <div class="topbar">
     <div><div class="topbar-title">${S.projectFilter?'Project contacts':'All stakeholders'}</div>
-    ${projLabel?`<div class="topbar-sub">${projLabel}</div>`:''}
+    ${projLabel?`<div class="topbar-sub">${projLabel}</div>`:S.projectFilter?'':'<div class="topbar-sub" style="color:var(--sky-lt);font-size:11px">Showing contacts linked to active or on-hold projects · For all contacts visit the <span style="text-decoration:underline;cursor:pointer" onclick="setView(\'master\')" >Master stakeholder list</span></div>'}
     </div>
     <div class="topbar-sp"></div>
     <div class="topbar-acts">

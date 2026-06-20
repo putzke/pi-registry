@@ -6104,7 +6104,7 @@ function generateReport(type){
   });
 
   // Internal toggle
-  var includeInternal=!!(document.getElementById('rpt-include-internal')&&document.getElementById('rpt-include-internal').checked);
+  var includeInternal=!!(( document.getElementById('rpt-ed-include-internal')||document.getElementById('rpt-include-internal')||{}).checked);
 
   // External-only stakeholders (for interaction/sentiment/follow-up/comment reports)
   var externalPS=ps.filter(function(lk){return(lk.stakeholderRole||'External')==='External'});
@@ -7039,6 +7039,11 @@ function openPIReport(){
     +'<div style="font-size:12px;color:var(--fog);margin-bottom:10px">Internal stakeholders from the selected groups will appear on the distribution list in the exported report.</div>'
     +'<div style="display:flex;flex-wrap:wrap;gap:8px" id="rpt-ed-groups">'
     +DIST_GROUPS.map(function(g){return '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--mist)"><input type="checkbox" class="rpt-ed-grp" value="'+g+'"'+(g==='Project team'?' checked':'')+'" style="accent-color:var(--sky);width:14px;height:14px"> '+g+'</label>'}).join('')
+    +'</div>'
+    +'<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.07)">'
+    +'<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--mist)">'
+    +'<input type="checkbox" id="rpt-ed-include-internal" style="accent-color:var(--sky);width:14px;height:14px"'+(document.getElementById('rpt-include-internal')&&document.getElementById('rpt-include-internal').checked?' checked':'')+' onchange="var cb=document.getElementById(\'rpt-include-internal\');if(cb)cb.checked=this.checked;"> '
+    +'Include internal stakeholders in interaction log</label>'
     +'</div></div>'
     +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">'
     +'<div style="font-size:14px;font-weight:600;color:var(--white)">Report sections</div>'
@@ -7276,7 +7281,7 @@ function escXml(s){
 function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
   var xml='';
   // Read include-internal toggle (same checkbox used by generateReport)
-  var includeInternal=!!(document.getElementById('rpt-include-internal')&&document.getElementById('rpt-include-internal').checked);
+  var includeInternal=!!(( document.getElementById('rpt-ed-include-internal')||document.getElementById('rpt-include-internal')||{}).checked);
 
   // Common paragraph properties matching the template style
   var bodyRpr='<w:rPr><w:rFonts w:cstheme="minorHAnsi"/><w:color w:val="3B3838" w:themeColor="background2" w:themeShade="40"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>';

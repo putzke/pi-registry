@@ -2721,7 +2721,7 @@ function renderStakeholders(el){
   </div>` : `
   <div class="toolbar">
     <div class="srch"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4"/><path d="M10 10l3 3"/></svg>
-      <input id="sk-search" placeholder="Search name, org…" value="${S.stakeSearch||''}" oninput="S.stakeSearch=this.value;renderStakeholders(document.getElementById('main'))"></div>
+      <input id="sk-search" placeholder="Search name, org…" value="${S.stakeSearch||''}" oninput="S.stakeSearch=this.value;var _ss=this.selectionStart,_se=this.selectionEnd;renderStakeholders(document.getElementById('main'));var _si=document.getElementById('sk-search');if(_si){_si.focus();try{_si.setSelectionRange(_ss,_se);}catch(e){}}"></div>
     <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mist);cursor:pointer;white-space:nowrap"><input type="checkbox" id="sk-org-only" onchange="S.skOrgOnly=this.checked;renderStakeholders(document.getElementById('main'))" style="accent-color:var(--sky)"${S.skOrgOnly?' checked':''}> Org only</label>
     <select class="fsel" id="sk-type" onchange="S.stakeType=this.value;renderStakeholders(document.getElementById('main'))">
       <option value="">All types</option>

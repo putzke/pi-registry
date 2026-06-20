@@ -5215,7 +5215,6 @@ async function saveProj(){
   var _ed=new Date(data.endDate+'T00:00:00');
   if(_sd&&_ed<=_sd){alert('End date must be later than Start date.');return}
   if(_pd&&_ed<=_pd){alert('End date must be later than Precon date.');return}
-  if(_sd&&_pd&&_pd<_sd){alert('Precon date must be on or after Start date.');return}
   const isNew=!S.editId;
   const all=DB.get('projects');
   if(S.editId){const i=all.findIndex(x=>x.id===S.editId);if(i>-1)all[i]=data;}else all.push(data);

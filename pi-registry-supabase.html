@@ -2671,7 +2671,13 @@ function renderMaster(el){
     <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mist);cursor:pointer;white-space:nowrap"><input type="checkbox" id="ms-org-only" onchange="S.msOrgOnly=this.checked;renderMaster(document.getElementById('main'))" style="accent-color:var(--sky)"${S.msOrgOnly?' checked':''}> Org only</label>
     <select class="fsel" id="ms-type" onchange="S.masterType=this.value;renderMaster(document.getElementById('main'))">
       <option value="">All types</option>
+      <optgroup label="── By type ──">
       ${['Business','Business Group','Elected Official','Agency','Community Group','Contractor','Engineering','Media','Property Owner','Resident','Road Traveler','Other'].map(t=>`<option${(S.masterType||'')===''+t?' selected':''}>${t}</option>`).join('')}
+      </optgroup>
+      <optgroup label="── By role ──">
+        <option value="__internal"${(S.masterType||'')==='__internal'?' selected':''}>Internal only</option>
+        <option value="__external"${(S.masterType||'')==='__external'?' selected':''}>External only</option>
+      </optgroup>
     </select>
 
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--slate);cursor:pointer">
@@ -3167,7 +3173,25 @@ function toggleMasterSelectAll() {
     const q = S.masterSearch.toLowerCase();
     filtered = filtered.filter(s => (s.firstName+' '+s.lastName+' '+(s.org||'')).toLowerCase().includes(q));
   }
-  if (S.masterType) filtered = filtered.filter(s => s.type === S.masterType);
+  if (S.masterType === '__internal') {
+    const ps = DB.get('project_stakeholders');
+    const projF = S.projectFilter;
+    filtered = filtered.filter(s => ps.some(lk =>
+      String(lk.stakeholderId)===String(s.id) &&
+      (projF ? String(lk.projectId)===String(projF) : true) &&
+      (lk.stakeholderRole||'External')==='Internal'
+    ));
+  } else if (S.masterType === '__external') {
+    const ps = DB.get('project_stakeholders');
+    const projF = S.projectFilter;
+    filtered = filtered.filter(s => ps.some(lk =>
+      String(lk.stakeholderId)===String(s.id) &&
+      (projF ? String(lk.projectId)===String(projF) : true) &&
+      (lk.stakeholderRole||'External')==='External'
+    ));
+  } else if (S.masterType) {
+    filtered = filtered.filter(s => s.type === S.masterType);
+  }
   const allIds = filtered.map(s => String(s.id));
   if (!S.masterBulkSelected) S.masterBulkSelected = [];
   if (S.masterBulkSelected.length === allIds.length) {

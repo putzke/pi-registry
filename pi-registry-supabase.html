@@ -2115,6 +2115,28 @@ async function saveBulkContacts() {
     return;
   }
 
+  // Phone validation
+  var phoneErrors = [];
+  rows.forEach(function(r) {
+    if (r.ph) {
+      var digits = r.ph.replace(/\D/g,'');
+      if (digits.length !== 10) {
+        phoneErrors.push('Row ' + (r.idx+1) + ': "' + r.ph + '" is not a valid 10-digit phone number');
+        var phEl = document.getElementById('bph'+r.idx);
+        if (phEl) phEl.style.borderColor = 'var(--red)';
+        var warn = document.getElementById('bwarn'+r.idx);
+        if (warn) { warn.innerHTML = '⚠ Invalid phone — must be 10 digits'; warn.style.display = 'block'; }
+      } else {
+        var phEl2 = document.getElementById('bph'+r.idx);
+        if (phEl2) phEl2.style.borderColor = '';
+      }
+    }
+  });
+  if (phoneErrors.length > 0) {
+    alert('Please fix the following before saving:\n\n' + phoneErrors.join('\n'));
+    return;
+  }
+
   // Email format validation
   rows.forEach(function(r) {
     if (r.em && !emailRe.test(r.em)) {

@@ -6591,6 +6591,269 @@ function getSectionDesc(type){
   return descs[type]||'';
 }
 
+
+function generateSectionDraft(secType, textareaIdx) {
+  var ta = document.querySelector('.rpt-sec-summary[data-idx="'+textareaIdx+'"]');
+  if (!ta) return;
+  if (ta.value.trim()) {
+    if (!confirm('This section already has a summary. Replace it with a generated draft?')) return;
+  }
+  var draft = _buildSectionDraft(secType);
+  if (!draft) { showToast('Not enough data yet to generate a draft for this section.', 'warn'); return; }
+  ta.value = draft;
+}
+
+function generateOverallDraft() {
+  var ta = document.getElementById('rpt-overall-summary');
+  if (!ta) return;
+  if (ta.value.trim()) {
+    if (!confirm('The overall summary already has content. Replace it with a generated draft?')) return;
+  }
+  var draft = _buildOverallDraft();
+  if (!draft) { showToast('Not enough data yet to generate an overall summary.', 'warn'); return; }
+  ta.value = draft;
+}
+
+function _buildSectionDraft(secType) {
+  var projF = S.projectFilter;
+  if (!projF) return null;
+  var proj = DB.get('projects').find(function(p){ return p.id === projF; });
+  if (!proj) return null;
+
+  var saved = loadReportSections(projF);
+  var ps = DB.get('project_stakeholders').filter(function(x){ return String(x.projectId)===String(projF); });
+  var allStakes = DB.getActive('stakeholders');
+  var ints = DB.get('interactions').filter(function(i){ return String(i.projectId)===String(projF); });
+  var externalPS = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; });
+  var internalPS = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='Internal'; });
+  var externalIds = externalPS.map(function(lk){ return String(lk.stakeholderId); });
+  var periodInts = ints.filter(function(i){
+    if (externalIds.indexOf(String(i.stakeholderId)) < 0) return false;
+    if (saved.periodStart && i.date < saved.periodStart) return false;
+    if (saved.periodEnd && i.date > saved.periodEnd) return false;
+    return true;
+  });
+  var periodLabel = (saved.periodStart || saved.periodEnd)
+    ? ((saved.periodStart||'start') + ' to ' + (saved.periodEnd||'present'))
+    : 'the report period';
+
+  var dels = DB.get('deliverables').filter(function(d){ return String(d.projectId)===String(projF); });
+  var meetings = DB.get('meetings').filter(function(m){ return String(m.projectId)===String(projF); });
+  var issues = DB.get('issues').filter(function(i){ return String(i.projectId)===String(projF); });
+  var commitments = DB.get('commitments').filter(function(c){ return String(c.projectId)===String(projF); });
+  var stakes = externalPS.map(function(lk){
+    return allStakes.find(function(s){ return String(s.id)===String(lk.stakeholderId); });
+  }).filter(Boolean);
+
+  if (secType === 'auto-concerns') {
+    if (periodInts.length === 0) return null;
+    var needFU = periodInts.filter(function(i){ return i.followUpRequired && !i.followUpDone; }).length;
+    // Channel breakdown
+    var chanCount = {};
+    periodInts.forEach(function(i){ var c=i.channel||'Unknown'; chanCount[c]=(chanCount[c]||0)+1; });
+    var topChans = Object.keys(chanCount).sort(function(a,b){ return chanCount[b]-chanCount[a]; }).slice(0,3);
+    var chanStr = topChans.map(function(c){ return c+' ('+chanCount[c]+')'; }).join(', ');
+    var txt = 'During '+periodLabel+', the project team logged '+periodInts.length+' external stakeholder interaction'+(periodInts.length!==1?'s':'')+'.';
+    if (chanStr) txt += ' Primary contact channels included '+chanStr+'.';
+    if (needFU > 0) txt += ' '+needFU+' interaction'+(needFU!==1?' items require':' item requires')+' follow-up action.';
+    else txt += ' All interactions have been addressed or are pending no follow-up.';
+    return txt;
+  }
+
+  if (secType === 'auto-intlog') {
+    if (ints.length === 0) return null;
+    var chanCount2 = {};
+    ints.forEach(function(i){ var c=i.channel||'Unknown'; chanCount2[c]=(chanCount2[c]||0)+1; });
+    var topChan2 = Object.keys(chanCount2).sort(function(a,b){ return chanCount2[b]-chanCount2[a]; })[0];
+    var txt2 = ints.length+' stakeholder interaction'+(ints.length!==1?'s have':' has')+' been logged for this project to date.';
+    if (topChan2) txt2 += ' The most active contact channel is '+topChan2+' ('+chanCount2[topChan2]+' interaction'+(chanCount2[topChan2]!==1?'s':'')+').';
+    if (periodInts.length > 0 && periodInts.length !== ints.length) {
+      txt2 += ' '+periodInts.length+' interaction'+(periodInts.length!==1?'s were':' was')+' recorded during '+periodLabel+'.';
+    }
+    return txt2;
+  }
+
+  if (secType === 'auto-sentiment') {
+    if (stakes.length === 0) return null;
+    var champ = stakes.filter(function(s){ return s.sentiment==='Champion'; }).length;
+    var opp   = stakes.filter(function(s){ return s.sentiment==='Opponent'; }).length;
+    var neut  = stakes.length - champ - opp;
+    var hi    = stakes.filter(function(s){ return s.influence==='High'; }).length;
+    var txt3  = 'The project currently has '+stakes.length+' external stakeholder'+(stakes.length!==1?'s':'')+' on record';
+    txt3 += ', with '+champ+' Champion'+(champ!==1?'s':'')+', '+neut+' Neutral'+(neut!==1?'s':'')+', and '+opp+' Opponent'+(opp!==1?'s':'')+'.';
+    if (hi > 0) txt3 += ' '+hi+' stakeholder'+(hi!==1?'s are':' is')+' categorized as high influence.';
+    if (opp > 0) txt3 += ' Opponent concerns should be actively monitored and addressed.';
+    else if (champ > stakes.length * 0.5) txt3 += ' Overall stakeholder sentiment is predominantly supportive.';
+    return txt3;
+  }
+
+  if (secType === 'auto-del') {
+    if (dels.length === 0) return null;
+    var complete = dels.filter(function(d){ return d.status==='Complete'; }).length;
+    var inProg   = dels.filter(function(d){ return d.status==='In Progress'; }).length;
+    var pct      = dels.length > 0 ? Math.round(complete/dels.length*100) : 0;
+    var txt4 = complete+' of '+dels.length+' contracted deliverable'+(dels.length!==1?'s are':' is')+' complete ('+pct+'%).';
+    if (inProg > 0) txt4 += ' '+inProg+' item'+(inProg!==1?'s are':' is')+' currently in progress.';
+    var overdue = dels.filter(function(d){ return d.status!=='Complete' && d.dueDate && d.dueDate < new Date().toISOString().slice(0,10); }).length;
+    if (overdue > 0) txt4 += ' '+overdue+' deliverable'+(overdue!==1?'s are':' is')+' past the scheduled due date.';
+    return txt4;
+  }
+
+  if (secType === 'auto-followups') {
+    var fuItems = ints.filter(function(i){ return i.followUpRequired; });
+    if (fuItems.length === 0) return null;
+    var fuOpen     = fuItems.filter(function(i){ return !i.followUpDone; }).length;
+    var fuResolved = fuItems.filter(function(i){ return i.followUpDone; }).length;
+    var today      = new Date().toISOString().slice(0,10);
+    var fuOverdue  = fuItems.filter(function(i){ return !i.followUpDone && i.followUpDue && i.followUpDue < today; }).length;
+    var txt5 = fuItems.length+' follow-up item'+(fuItems.length!==1?'s have':' has')+' been recorded for this project.';
+    txt5 += ' '+fuOpen+' item'+(fuOpen!==1?'s are':' is')+' currently open';
+    if (fuOverdue > 0) txt5 += ', of which '+fuOverdue+' '+(fuOverdue!==1?'are':'is')+' overdue';
+    txt5 += '. '+fuResolved+' item'+(fuResolved!==1?'s have':' has')+' been resolved.';
+    return txt5;
+  }
+
+  if (secType === 'auto-commitments') {
+    if (commitments.length === 0) return null;
+    var open      = commitments.filter(function(c){ return c.status==='Open'; }).length;
+    var overdue2  = commitments.filter(function(c){ return c.status==='Overdue'; }).length;
+    var fulfilled = commitments.filter(function(c){ return c.status==='Fulfilled'; }).length;
+    var txt6 = commitments.length+' commitment'+(commitments.length!==1?'s have':' has')+' been recorded for this project.';
+    txt6 += ' '+fulfilled+' '+(fulfilled!==1?'have':'has')+' been fulfilled.';
+    if (overdue2 > 0) txt6 += ' '+overdue2+' commitment'+(overdue2!==1?'s are':' is')+' overdue and require immediate attention.';
+    else if (open > 0) txt6 += ' '+open+' remain'+(open!==1?'':'s')+' open.';
+    return txt6;
+  }
+
+  if (secType === 'auto-events') {
+    if (meetings.length === 0) return null;
+    var completed = meetings.filter(function(m){ return m.status==='Completed'; }).length;
+    var totalAtt  = meetings.reduce(function(sum,m){ return sum+(parseInt(m.attendanceCount)||0); }, 0);
+    var txt7 = meetings.length+' public event'+(meetings.length!==1?'s have':' has')+' been logged for this project.';
+    if (completed > 0) txt7 += ' '+completed+' event'+(completed!==1?'s have':' has')+' been completed.';
+    if (totalAtt > 0) txt7 += ' Total attendance across all events is estimated at '+totalAtt+' participant'+(totalAtt!==1?'s':'')+'.';
+    return txt7;
+  }
+
+  if (secType === 'auto-contacts') {
+    if (ps.length === 0) return null;
+    var txt8 = ps.length+' stakeholder'+(ps.length!==1?'s are':' is')+' linked to this project';
+    txt8 += ' ('+externalPS.length+' external, '+internalPS.length+' internal).';
+    var orgs = [];
+    externalPS.forEach(function(lk){
+      var s = allStakes.find(function(x){ return String(x.id)===String(lk.stakeholderId); });
+      if (s && s.org && orgs.indexOf(s.org) < 0) orgs.push(s.org);
+    });
+    if (orgs.length > 0) txt8 += ' External stakeholders represent '+orgs.length+' organization'+(orgs.length!==1?'s':'')+'.';
+    return txt8;
+  }
+
+  if (secType === 'auto-issues') {
+    if (issues.length === 0) return null;
+    var openIss     = issues.filter(function(i){ return i.status==='Open'||i.status==='In Progress'; }).length;
+    var resolvedIss = issues.filter(function(i){ return i.status==='Resolved'; }).length;
+    var highPri     = issues.filter(function(i){ return i.priority==='High'; }).length;
+    var txt9 = issues.length+' issue'+(issues.length!==1?'s have':' has')+' been tracked for this project.';
+    txt9 += ' '+openIss+' '+(openIss!==1?'are':'is')+' currently open or in progress, and '+resolvedIss+' '+(resolvedIss!==1?'have':'has')+' been resolved.';
+    if (highPri > 0) txt9 += ' '+highPri+' high-priority issue'+(highPri!==1?'s require':' requires')+' attention.';
+    return txt9;
+  }
+
+  if (secType === 'auto-comments') {
+    var commentChans = ['Comment card','Public meeting','Mail','In-person'];
+    var comments = ints.filter(function(i){ return commentChans.indexOf(i.channel) >= 0; });
+    if (comments.length === 0) return null;
+    var responded = comments.filter(function(i){ return i.followUpDone; }).length;
+    var txt10 = comments.length+' public comment'+(comments.length!==1?'s have':' has')+' been received.';
+    txt10 += ' '+responded+' '+(responded!==1?'have':'has')+' received a formal response.';
+    if (comments.length - responded > 0) txt10 += ' '+(comments.length-responded)+' remain'+(comments.length-responded!==1?'':'s')+' pending response.';
+    return txt10;
+  }
+
+  return null;
+}
+
+function _buildOverallDraft() {
+  var projF = S.projectFilter;
+  if (!projF) return null;
+  var proj = DB.get('projects').find(function(p){ return p.id === projF; });
+  if (!proj) return null;
+
+  var saved = loadReportSections(projF);
+  var ps = DB.get('project_stakeholders').filter(function(x){ return String(x.projectId)===String(projF); });
+  var allStakes = DB.getActive('stakeholders');
+  var ints = DB.get('interactions').filter(function(i){ return String(i.projectId)===String(projF); });
+  var externalPS = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; });
+  var externalIds = externalPS.map(function(lk){ return String(lk.stakeholderId); });
+  var periodInts = ints.filter(function(i){
+    if (externalIds.indexOf(String(i.stakeholderId)) < 0) return false;
+    if (saved.periodStart && i.date < saved.periodStart) return false;
+    if (saved.periodEnd && i.date > saved.periodEnd) return false;
+    return true;
+  });
+  var dels = DB.get('deliverables').filter(function(d){ return String(d.projectId)===String(projF); });
+  var meetings = DB.get('meetings').filter(function(m){ return String(m.projectId)===String(projF); });
+  var commitments = DB.get('commitments').filter(function(c){ return String(c.projectId)===String(projF); });
+  var issues = DB.get('issues').filter(function(i){ return String(i.projectId)===String(projF); });
+  var stakes = externalPS.map(function(lk){
+    return allStakes.find(function(s){ return String(s.id)===String(lk.stakeholderId); });
+  }).filter(Boolean);
+
+  if (periodInts.length === 0 && ints.length === 0 && ps.length === 0) return null;
+
+  var periodLabel = (saved.periodStart || saved.periodEnd)
+    ? (saved.periodStart||'start') + ' through ' + (saved.periodEnd||'present')
+    : 'the current report period';
+
+  var lines = [];
+
+  // Sentence 1: outreach activity
+  if (periodInts.length > 0) {
+    var needFU = periodInts.filter(function(i){ return i.followUpRequired && !i.followUpDone; }).length;
+    var s1 = 'During '+periodLabel+', the project team conducted '+periodInts.length+' external stakeholder interaction'+(periodInts.length!==1?'s':'');
+    if (meetings.length > 0) {
+      var compEvts = meetings.filter(function(m){ return m.status==='Completed'; }).length;
+      if (compEvts > 0) s1 += ' and '+compEvts+' public outreach event'+(compEvts!==1?'s':'');
+    }
+    s1 += '.';
+    if (needFU > 0) s1 += ' '+needFU+' item'+(needFU!==1?'s require':' requires')+' follow-up.';
+    lines.push(s1);
+  } else if (ints.length > 0) {
+    lines.push('A total of '+ints.length+' stakeholder interaction'+(ints.length!==1?'s have':' has')+' been logged for this project to date.');
+  }
+
+  // Sentence 2: stakeholder sentiment
+  if (stakes.length > 0) {
+    var champ = stakes.filter(function(s){ return s.sentiment==='Champion'; }).length;
+    var opp   = stakes.filter(function(s){ return s.sentiment==='Opponent'; }).length;
+    var s2 = 'The project engages '+stakes.length+' external stakeholder'+(stakes.length!==1?'s':'')+', with sentiment '+
+      (opp > champ ? 'trending mixed — ' : (champ > stakes.length*0.5 ? 'predominantly supportive — ' : 'varied — '))+
+      champ+' Champion'+(champ!==1?'s':'')+', '+(stakes.length-champ-opp)+' Neutral, and '+opp+' Opponent'+(opp!==1?'s':'')+'.';
+    lines.push(s2);
+  }
+
+  // Sentence 3: deliverables
+  if (dels.length > 0) {
+    var complete = dels.filter(function(d){ return d.status==='Complete'; }).length;
+    var pct = Math.round(complete/dels.length*100);
+    lines.push('Deliverable progress stands at '+complete+' of '+dels.length+' items complete ('+pct+'%).');
+  }
+
+  // Sentence 4: open issues / commitments flags
+  var flags = [];
+  var openIss = issues.filter(function(i){ return i.status==='Open'||i.status==='In Progress'; }).length;
+  var hiIss   = issues.filter(function(i){ return i.priority==='High' && (i.status==='Open'||i.status==='In Progress'); }).length;
+  var overdueComm = commitments.filter(function(c){ return c.status==='Overdue'; }).length;
+  var openComm    = commitments.filter(function(c){ return c.status==='Open'||c.status==='Overdue'; }).length;
+  if (hiIss > 0) flags.push(hiIss+' high-priority issue'+(hiIss!==1?'s':'')+' open');
+  else if (openIss > 0) flags.push(openIss+' open issue'+(openIss!==1?'s':''));
+  if (overdueComm > 0) flags.push(overdueComm+' overdue commitment'+(overdueComm!==1?'s':''));
+  else if (openComm > 0) flags.push(openComm+' open commitment'+(openComm!==1?'s':''));
+  if (flags.length > 0) lines.push('Items requiring attention include '+flags.join(' and ')+'.'); 
+
+  return lines.join(' ');
+}
+
 function openPIReport(){
   var projF=S.projectFilter;
   if(!projF){showToast('Please select a project from the dropdown first.','warn');return;}
@@ -6622,7 +6885,7 @@ function openPIReport(){
       +'</div>'
       +(isAuto?'<div style="font-size:12px;color:var(--fog);line-height:1.5;margin-left:62px">'+getSectionDesc(sec.type)+'</div>'
         :'<textarea class="rpt-sec-content" data-idx="'+idx+'" style="width:100%;min-height:100px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;color:var(--mist);font-family:var(--font);font-size:13px;padding:10px 12px;outline:none;resize:vertical;line-height:1.6" placeholder="Each line becomes a bullet. Indent with spaces for sub-bullets.">'+(sec.content||'')+'</textarea>')
-      +'<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.07)">'      +'<div style="font-size:11px;color:var(--slate);margin-bottom:5px;font-style:italic">Section summary <span style="color:var(--fog)">(optional — prints after section data in Word export)</span></div>'      +'<textarea class="rpt-sec-summary" data-idx="'+idx+'" style="width:100%;min-height:60px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;color:var(--mist);font-family:var(--font);font-size:12px;padding:8px 12px;outline:none;resize:vertical;line-height:1.6" placeholder="Optional narrative or summary for this section...">'+(sec.summary||'')+'</textarea>'      +'</div>'      +'</div>';
+      +'<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.07)">'      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">'      +'<div style="font-size:11px;color:var(--slate);font-style:italic">Section summary <span style="color:var(--fog)">(optional — prints after section data in Word export)</span></div>'      +(isAuto?'<button class="btn btn-xs" style="background:rgba(74,155,232,.15);border-color:rgba(74,155,232,.4);color:var(--sky-lt);font-size:10px;padding:2px 8px;white-space:nowrap" onclick="generateSectionDraft(\''+sec.type+'\','+idx+')">✦ Draft</button>':'')      +'</div>'      +'<textarea class="rpt-sec-summary" data-idx="'+idx+'" style="width:100%;min-height:60px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;color:var(--mist);font-family:var(--font);font-size:12px;padding:8px 12px;outline:none;resize:vertical;line-height:1.6" placeholder="Optional narrative or summary for this section...">'+(sec.summary||'')+'</textarea>'      +'</div>'      +'</div>';
   });
 
   var available=getAvailableSections();
@@ -6660,7 +6923,7 @@ function openPIReport(){
     +'<div class="fr"><label>Period start</label><input type="date" id="rpt-pstart" value="'+periodStart+'"></div>'
     +'<div class="fr"><label>Period end</label><input type="date" id="rpt-pend" value="'+periodEnd+'"></div>'
     +'</div>'
-    +'<div style="margin-top:12px;font-size:12px;color:var(--fog)">The report period controls which interactions appear in the auto-populated sections.</div>'    +'<div class="fr" style="margin-top:14px"><label>Overall summary <span style="font-weight:400;font-style:italic;color:var(--fog)">(optional — prints before first section)</span></label>'    +'<textarea id="rpt-overall-summary" rows="4" placeholder="Enter an overall project summary, narrative, or context to print before the first report section..." style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:10px 12px;resize:vertical;font-family:inherit;line-height:1.6;box-sizing:border-box">'+escHtml(saved.overallSummary||'')+'</textarea></div>'    +'</div>'
+    +'<div style="margin-top:12px;font-size:12px;color:var(--fog)">The report period controls which interactions appear in the auto-populated sections.</div>'    +'<div style="margin-top:14px">'    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'    +'<label style="margin:0">Overall summary <span style="font-weight:400;font-style:italic;color:var(--fog)">(optional — prints before first section)</span></label>'    +'<button class="btn btn-xs" style="background:rgba(74,155,232,.15);border-color:rgba(74,155,232,.4);color:var(--sky-lt);font-size:10px;padding:2px 8px;white-space:nowrap" onclick="generateOverallDraft()">✦ Generate Overall Summary</button>'    +'</div>'    +'<textarea id="rpt-overall-summary" rows="4" placeholder="Enter an overall project summary, narrative, or context to print before the first report section..." style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:10px 12px;resize:vertical;font-family:inherit;line-height:1.6;box-sizing:border-box">'+escHtml(saved.overallSummary||'')+'</textarea></div>'    +'</div>'
     +'<div style="margin-bottom:24px;background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:20px">'
     +'<div style="font-size:14px;font-weight:600;color:var(--white);margin-bottom:10px">Distribution</div>'
     +'<div style="font-size:12px;color:var(--fog);margin-bottom:10px">Internal stakeholders from the selected groups will appear on the distribution list in the exported report.</div>'

@@ -5336,7 +5336,7 @@ function _issXml_helpers(){
   function para(text,rpr){ rpr=rpr||bodyRpr; return'<w:p>'+bodyPpr+'<w:r>'+rpr+'<w:t xml:space="preserve">'+escXml(text)+'</w:t></w:r></w:p>'; }
   function spacer(){ return'<w:p>'+bodyPpr+'</w:p>'; }
   function heading(text){ return'<w:p><w:pPr><w:spacing w:before="240" w:after="120" w:line="240" w:lineRule="auto"/><w:pBdr><w:bottom w:val="single" w:sz="4" w:space="4" w:color="1F4E79"/></w:pBdr>'+headingRpr+'</w:pPr><w:r>'+headingRpr+'<w:t xml:space="preserve">'+escXml(text)+'</w:t></w:r></w:p>'; }
-  function bullet(text,level){ level=level||0; var ind=level===0?'<w:ind w:left="720" w:hanging="360"/>':'<w:ind w:left="1440" w:hanging="360"/>'; return'<w:p><w:pPr><w:pStyle w:val="ListParagraph"/><w:numPr><w:ilvl w:val="'+level+'"/><w:numId w:val="1"/></w:numPr><w:spacing w:after="40" w:line="240" w:lineRule="auto"/>'+ind+bodyRpr+'</w:pPr><w:r>'+bodyRpr+'<w:t xml:space="preserve">'+escXml(text)+'</w:t></w:r></w:p>'; }
+  function bullet(text,level){ level=level||0; var ind=level===0?'<w:ind w:left="720" w:hanging="360"/>':'<w:ind w:left="1440" w:hanging="360"/>'; return'<w:p><w:pPr><w:pStyle w:val="ListParagraph"/><w:numPr><w:ilvl w:val="'+level+'"/><w:numId w:val="1"/></w:numPr><w:spacing w:after="40" w:line="240" w:lineRule="auto"/>'+ind+bodyRpr+'</w:pPr><w:r>'+bodyRpr+'<w:t xml:space="preserve">'+escXml(text)+'</w:t></w:r></w:p>'; } function bulletRuns(runs,level){ level=level||0; var ind=level===0?'<w:ind w:left="720" w:hanging="360"/>':'<w:ind w:left="1440" w:hanging="360"/>'; var runsXml=runs.map(function(r){ return'<w:r>'+(r.bold?boldRpr:bodyRpr)+'<w:t xml:space="preserve">'+escXml(r.text)+'</w:t></w:r>'; }).join(''); return'<w:p><w:pPr><w:pStyle w:val="ListParagraph"/><w:numPr><w:ilvl w:val="'+level+'"/><w:numId w:val="1"/></w:numPr><w:spacing w:after="40" w:line="240" w:lineRule="auto"/>'+ind+bodyRpr+'</w:pPr>'+runsXml+'</w:p>'; }
   function kv(label,value){ return'<w:p>'+bodyPpr+'<w:r>'+boldRpr+'<w:t xml:space="preserve">'+escXml(label+': ')+'</w:t></w:r><w:r>'+bodyRpr+'<w:t xml:space="preserve">'+escXml(value||'\u2014')+'</w:t></w:r></w:p>'; }
   function sectionDivider(){ return'<w:p><w:pPr><w:spacing w:before="200" w:after="0" w:line="240" w:lineRule="auto"/><w:pBdr><w:top w:val="single" w:sz="4" w:space="4" w:color="CCCCCC"/></w:pBdr>'+italicGrayRpr+'</w:pPr><w:r>'+italicGrayRpr+'<w:t xml:space="preserve"> </w:t></w:r></w:p>'; }
 
@@ -7276,8 +7276,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
         periodInts.forEach(function(int){
           var sk=allStakes.find(function(x){return x.id===int.stakeholderId});
           var name=sk?sk.firstName+' '+sk.lastName:(int.anonLabel||'Anonymous');
-          var line=int.date+' \u2014 '+name+' ('+int.channel+'): '+int.summary;
-          xml+=bullet(line);
+          xml+=bulletRuns([{text:int.date+' \u2014 '+name,bold:true},{text:' ('+int.channel+'): '+int.summary,bold:false}]);
         });
       }
 
@@ -7355,9 +7354,9 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
         sorted.forEach(function(int){
           var sk=allStakes.find(function(x){return x.id===int.stakeholderId});
           var name=sk?sk.firstName+' '+sk.lastName:(int.anonLabel||'Anonymous');
-          var line=int.date+' | '+name+' | '+int.channel+' | '+(int.subject||'General')+' | '+(int.nature||'Inquiry')+' | '+int.summary;
-          if(int.followUp)line+=' [Follow-up: '+(int.followUpDone?'Resolved':'Open')+']';
-          xml+=bullet(line);
+          var intRest=' | '+int.channel+' | '+(int.subject||'General')+' | '+(int.nature||'Inquiry')+' | '+int.summary;
+          if(int.followUp)intRest+=' [Follow-up: '+(int.followUpDone?'Resolved':'Open')+']';
+          xml+=bulletRuns([{text:int.date+' | '+name,bold:true},{text:intRest,bold:false}]);
         });
       }
 
@@ -7376,8 +7375,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
         var status=i.followUpDone?'RESOLVED':'OPEN';
         var od=!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<now;
         if(od)status='OVERDUE';
-        var line='['+status+'] '+(i.followUpDue||'No date')+' \u2014 '+(i.followUpNote||'No description')+' ('+name+')';
-        xml+=bullet(line);
+        xml+=bulletRuns([{text:'['+status+'] '+(i.followUpDue||'No date')+' \u2014 '+name,bold:true},{text:': '+(i.followUpNote||'No description'),bold:false}]);
       });
       if(fuItems.length===0)xml+=bullet('No follow-up items.');
 
@@ -7474,8 +7472,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
           var name=sk?sk.firstName+' '+sk.lastName:(i.anonLabel||'Anonymous');
           var org=sk?sk.org||'':'';
           var status=i.followUpDone?'Responded':'Pending';
-          var line=i.date+' | '+name+(org?' ('+org+')':'')+' | '+i.channel+' | '+i.summary+' | Response: '+status;
-          xml+=bullet(line);
+          xml+=bulletRuns([{text:i.date+' — '+name+(org?' ('+org+')':''),bold:true},{text:' | '+i.channel+' | '+i.summary+' | Response: '+status,bold:false}]);
         });
       }
 
@@ -7488,11 +7485,11 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
         xml+=bullet(projEvts.length+' event'+(projEvts.length!==1?'s':'')+' logged:');
         xml+=spacer();
         projEvts.forEach(function(m){
-          var line=m.date+' | '+m.title+' | '+(m.type||'Other')+' | Status: '+(m.status||'Planned');
-          if(m.attendanceCount) line+=' | Attendance: '+m.attendanceCount;
-          if(m.commentCards) line+=' | Comment cards: '+m.commentCards;
-          if(m.notes) line+=' | Notes: '+m.notes.replace(/\n/g,' ');
-          xml+=bullet(line);
+          var evtRest=' | '+(m.type||'Other')+' | Status: '+(m.status||'Planned');
+          if(m.attendanceCount) evtRest+=' | Attendance: '+m.attendanceCount;
+          if(m.commentCards) evtRest+=' | Comment cards: '+m.commentCards;
+          if(m.notes) evtRest+=' | Notes: '+m.notes.replace(/\n/g,' ');
+          xml+=bulletRuns([{text:m.date+' | '+m.title,bold:true},{text:evtRest,bold:false}]);
         });
       }
 

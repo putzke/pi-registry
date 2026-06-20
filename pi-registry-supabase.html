@@ -5140,9 +5140,9 @@ function openProjModal(id){
     <div class="fr"><label>Project ID * <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--fog)">(3–5 digits)</span></label><input id="f-pid" value="${p.pid||''}" placeholder="e.g. 12345" inputmode="numeric" maxlength="5" style="font-family:var(--mono);letter-spacing:.12em" oninput="this.value=this.value.replace(/[^0-9]/g,\'\').slice(0,5)"></div>
     <div class="fr"><label>Project name * <span style="font-size:10px;color:var(--fog);font-weight:400">(60 chars max)</span></label><input id="f-pn" maxlength="60" value="${p.name||''}"></div>
     <div class="fr"><label>Client / agency</label><input id="f-pc2" value="${p.client||''}"></div>
-    <div class="fr"><label>Project type</label><select id="f-pty">${['Roadway','Bridge','Transit','Trail / Active transport','Drainage','Water','Wastewater','Utility','Other'].map(t=>`<option${p.type===t?' selected':''}>${t}</option>`).join('')}</select></div>
+    <div class="fr"><label>Project type</label><select id="f-pty">${['Roadway','Bridge','Transit','Trail / Active transport','Drainage','Water','Wastewater','Water Resource Planning','Utility','Municipal Development','Environmental Assessment','Master Plan','Other'].map(t=>`<option${p.type===t?' selected':''}>${t}</option>`).join('')}</select></div>
     <div class="fr"><label>County / region</label><input id="f-pco" value="${p.county||''}"></div>
-    <div class="fr"><label>Phase</label><select id="f-pph" onchange="var show=['Precon','Construction','Closeout'].indexOf(this.value)>=0;document.getElementById('precon-date-wrap').style.display=show?'':'none';if(!show)document.getElementById('f-ppd').value=''">${['Planning','NEPA / Environmental','Design','Precon','Construction','Closeout'].map(t=>`<option${p.phase===t?' selected':''}>${t}</option>`).join('')}</select></div>
+    <div class="fr"><label>Phase</label><select id="f-pph" onchange="var show=['Precon','Construction','Closeout'].indexOf(this.value)>=0;document.getElementById('precon-date-wrap').style.display=show?'':'none';if(!show)document.getElementById('f-ppd').value=''">${['Planning','NEPA / Environmental','Design','Precon','Construction','Closeout','Community Outreach','Survey / Data Collection','Analysis','Draft Plan / Public Comment','Final Adoption'].map(t=>`<option${p.phase===t?' selected':''}>${t}</option>`).join('')}</select></div>
     <div class="fr"><label>Status</label><select id="f-pst">${['Active','On hold','Complete','Cancelled'].map(t=>`<option${p.status===t?' selected':''}>${t}</option>`).join('')}</select></div>
   </div>
 
@@ -6852,16 +6852,36 @@ function _buildOverallDraft() {
   // ── Sentence 4: Top concern topics (keyword scan on period interactions) ──
   if (periodInts.length > 0) {
     var keywords = [
-      {label:'construction access',    terms:['access','driveway','entrance','ingress','egress']},
-      {label:'noise and vibration',    terms:['noise','vibration','loud','sound','decibel']},
-      {label:'traffic and detours',    terms:['traffic','detour','lane','closure','road','signal']},
-      {label:'construction schedule',  terms:['schedule','timeline','deadline','duration','phase','start date','completion']},
-      {label:'dust and air quality',   terms:['dust','air quality','particulate','smoke','odor']},
-      {label:'property impacts',       terms:['property','easement','right-of-way','ROW','fence','landscape']},
-      {label:'water and utilities',    terms:['water','utility','sewer','pipe','outage','service']},
-      {label:'public safety',          terms:['safety','pedestrian','school','children','emergency']},
-      {label:'project cost and funding',terms:['cost','budget','funding','taxpayer','fee','price']},
-      {label:'communication and notice',terms:['notification','notice','inform','communication','update','outreach']}
+      // ── Transportation / construction ──────────────────────────────────────
+      {label:'construction access',       terms:['access','driveway','entrance','ingress','egress']},
+      {label:'noise and vibration',       terms:['noise','vibration','loud','sound','decibel']},
+      {label:'traffic and detours',       terms:['traffic','detour','lane','closure','road','signal']},
+      {label:'construction schedule',     terms:['schedule','timeline','deadline','duration','phase','start date','completion']},
+      {label:'dust and air quality',      terms:['dust','air quality','particulate','smoke','odor']},
+      {label:'public safety',             terms:['safety','pedestrian','school','children','emergency']},
+      {label:'contractor operations',     terms:['contractor','construction crew','foreman','work hours','staging','equipment','haul route']},
+      // ── Property / ROW ────────────────────────────────────────────────────
+      {label:'property impacts',          terms:['property','fence','landscape','structure','building']},
+      {label:'right-of-way acquisition',  terms:['right-of-way','ROW','easement','acquisition','appraisal','relocation','displacement','condemnation','eminent domain']},
+      // ── Water resources / supply ──────────────────────────────────────────
+      {label:'water supply and allocation',terms:['water supply','water rights','allocation','secondary water','culinary water','drought','reservoir','aquifer','groundwater','depletion','shortage','water share','senior rights']},
+      {label:'water distribution',        terms:['pipeline','water line','connection','meter','hookup','service area','pressure','distribution','treatment','wastewater']},
+      {label:'irrigation and agriculture',terms:['irrigation','agriculture','farming','crop','livestock','canal','ditch','secondary system']},
+      {label:'water conservation',        terms:['conservation','efficiency','xeriscaping','metering','usage','reduction','reuse','recycled water']},
+      // ── Municipal development ─────────────────────────────────────────────
+      {label:'municipal development',     terms:['development','growth','subdivision','density','zoning','land use','annexation','population','housing','commercial']},
+      {label:'rates and fees',            terms:['rate increase','water rate','impact fee','assessment','bond','infrastructure cost','connection fee','cost','budget','funding','taxpayer','fee','price']},
+      {label:'governance and policy',     terms:['policy','regulation','state engineer','water court','adjudication','water district','municipality','interlocal','agreement']},
+      // ── Environmental / regulatory ────────────────────────────────────────
+      {label:'environmental concerns',    terms:['NEPA','Section 4(f)','environmental','mitigation','wetland','floodplain','habitat','wildlife','riparian','erosion','runoff']},
+      // ── Equity / community ────────────────────────────────────────────────
+      {label:'equity and access',         terms:['fairness','equity','priority','rural','urban','underserved','residential','community']},
+      {label:'community and quality of life',terms:['recreation','fishing','boating','swimming','park','green space','trail','aesthetics','visual','community character']},
+      // ── Public process ────────────────────────────────────────────────────
+      {label:'public process',            terms:['public hearing','open house','comment period','scoping','record of decision','FHWA','UDOT','approval']},
+      {label:'communication and outreach',terms:['notification','notice','inform','communication','update','outreach']},
+      // ── Utilities ─────────────────────────────────────────────────────────
+      {label:'utilities and service',     terms:['utility','sewer','pipe','outage','service','electric','gas','telecom']}
     ];
     var topicCounts = {};
     periodInts.forEach(function(i){

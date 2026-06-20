@@ -7620,7 +7620,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
             var sk=c.stakeholderId?allStakesC.find(function(s){return String(s.id)===String(c.stakeholderId)}):null;
             var madeTo=sk?((sk.firstName||'')+' '+(sk.lastName||'')).trim()||(sk.org||''):(c.madeTo||'');
             var due=c.dueDate?(' — Due: '+c.dueDate):'';
-            xml+=bullet((c.category?'['+c.category+'] ':'')+escXml(c.commitment||'')+(madeTo?' (to: '+escXml(madeTo)+')':'')+due);
+            xml+=bulletRuns([{text:(c.category?'['+c.category+'] ':'')+( c.commitment||''),bold:true},{text:(madeTo?' (to: '+madeTo+')':'')+due,bold:false}]);
             if(c.madeBy)xml+=bullet('Made by: '+escXml(c.madeBy),1);
             if(c.notes)xml+=bullet('Notes: '+escXml(c.notes),1);
           });
@@ -7632,7 +7632,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
           fulfilledComm.forEach(function(c){
             var sk=c.stakeholderId?allStakesC.find(function(s){return String(s.id)===String(c.stakeholderId)}):null;
             var madeTo=sk?((sk.firstName||'')+' '+(sk.lastName||'')).trim()||(sk.org||''):(c.madeTo||'');
-            xml+=bullet('✓ '+(c.category?'['+c.category+'] ':'')+escXml(c.commitment||'')+(madeTo?' (to: '+escXml(madeTo)+')':'')+(c.fulfilledDate?' — Fulfilled: '+c.fulfilledDate:''));
+            xml+=bulletRuns([{text:'✓ '+(c.category?'['+c.category+'] ':'')+( c.commitment||''),bold:true},{text:(madeTo?' (to: '+madeTo+')':'')+(c.fulfilledDate?' — Fulfilled: '+c.fulfilledDate:''),bold:false}]);
             if(c.fulfilledNotes)xml+=bullet(escXml(c.fulfilledNotes),1);
           });
         }
@@ -7703,7 +7703,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
             linkedInts2.forEach(function(i){
               var sk2=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId);});
               var nm=sk2?(sk2.firstName||'')+' '+(sk2.lastName||''):'';
-              xml+=bullet((i.date||'')+' — '+(i.channel||'')+': '+(i.summary||'')+(nm?' ('+nm+')':''),1);
+              xml+=bulletRuns([{text:(i.date||'')+' — '+nm,bold:true},{text:' ('+( i.channel||'')+')'+': '+(i.summary||''),bold:false}],1);
             });
           }
           xml+=spacer();

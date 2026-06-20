@@ -1128,7 +1128,7 @@ function initDashRows(){
     }
   });
 }
-function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.showBulkAdd=false;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;
+function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.showBulkAdd=false;S.showEmailPanel=false;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;
   S.view=v;S.selStakeholder=null;S.selInteraction=null;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const navId=v==='commitments'?'nav-commitments':('nav-'+v);
@@ -1708,6 +1708,237 @@ function filterMasterList(){
       '</div>';
     }).join('');
 }
+
+// ── EMAIL CONTACTS PANEL ──────────────────────────────────────────
+function openEmailPanel() {
+  S.showEmailPanel = true;
+  S._emailSelected = {};   // stakeholderId -> true
+  S._emailExtOnly = true;  // default: external only
+  S._emailCc = '';
+  renderStakeholders(document.getElementById('main'));
+}
+
+function closeEmailPanel() {
+  S.showEmailPanel = false;
+  renderStakeholders(document.getElementById('main'));
+}
+
+function _emailToggleGroup(groupId) {
+  var members = DB.get('group_members').filter(function(m){ return String(m.groupId)===String(groupId); });
+  var stakes = DB.getActive('stakeholders');
+  // Check if all members with email are already selected
+  var allSel = members.every(function(m){
+    var s = stakes.find(function(x){ return String(x.id)===String(m.stakeholderId); });
+    return !s || !s.email || S._emailSelected[String(m.stakeholderId)];
+  });
+  members.forEach(function(m){
+    var s = stakes.find(function(x){ return String(x.id)===String(m.stakeholderId); });
+    if(s && s.email){
+      if(allSel){ delete S._emailSelected[String(m.stakeholderId)]; }
+      else { S._emailSelected[String(m.stakeholderId)] = true; }
+    }
+  });
+  _emailRerender();
+}
+
+function _emailToggleContact(id, hasEmail) {
+  if(!hasEmail) return;
+  if(S._emailSelected[String(id)]){ delete S._emailSelected[String(id)]; }
+  else { S._emailSelected[String(id)] = true; }
+  _emailRerender();
+}
+
+function _emailToggleAll(checked) {
+  var contacts = _emailGetContacts();
+  if(checked){
+    contacts.forEach(function(c){ if(c.email) S._emailSelected[String(c.id)] = true; });
+  } else {
+    S._emailSelected = {};
+  }
+  _emailRerender();
+}
+
+function _emailGetContacts() {
+  var ps = DB.get('project_stakeholders').filter(function(x){ return String(x.projectId)===String(S.projectFilter); });
+  var stakes = DB.getActive('stakeholders');
+  var contacts = ps.map(function(lk){
+    var s = stakes.find(function(x){ return String(x.id)===String(lk.stakeholderId); });
+    return s ? Object.assign({}, s, { _role: lk.stakeholderRole||'External' }) : null;
+  }).filter(Boolean);
+  if(S._emailExtOnly) contacts = contacts.filter(function(c){ return c._role !== 'Internal'; });
+  return contacts;
+}
+
+function _emailGetAddresses() {
+  var contacts = _emailGetContacts();
+  var addrs = [];
+  Object.keys(S._emailSelected).forEach(function(id){
+    var c = contacts.find(function(x){ return String(x.id)===String(id); });
+    if(c && c.email) addrs.push(c.email.trim());
+  });
+  // Deduplicate
+  return addrs.filter(function(v,i,a){ return a.indexOf(v)===i; });
+}
+
+function _emailGetSkipped() {
+  var contacts = _emailGetContacts();
+  var skipped = [];
+  Object.keys(S._emailSelected).forEach(function(id){
+    var c = contacts.find(function(x){ return String(x.id)===String(id); });
+    if(c && !c.email) skipped.push(((c.firstName||'')+' '+(c.lastName||'')).trim()||c.org||'Unknown');
+  });
+  return skipped;
+}
+
+function _emailCopyAll() {
+  var addrs = _emailGetAddresses();
+  if(!addrs.length){ alert('No email addresses selected.'); return; }
+  var text = addrs.join('; ');
+  navigator.clipboard.writeText(text).then(function(){
+    var btn = document.getElementById('email-copy-btn');
+    if(btn){ btn.textContent = '✓ Copied!'; setTimeout(function(){ btn.textContent = '📋 Copy all emails'; }, 2000); }
+  }).catch(function(){
+    prompt('Copy this list:', text);
+  });
+}
+
+function _emailOpenOutlook() {
+  var addrs = _emailGetAddresses();
+  if(!addrs.length){ alert('No email addresses selected.'); return; }
+  var proj = DB.get('projects').find(function(p){ return p.id===S.projectFilter; });
+  var subject = proj ? (proj.pid + ' — ' + proj.name) : '';
+  var cc = (document.getElementById('email-cc-input')||{}).value||'';
+  var uri = 'mailto:' + addrs.join(';');
+  var params = [];
+  if(subject) params.push('subject=' + encodeURIComponent(subject));
+  if(cc.trim()) params.push('cc=' + encodeURIComponent(cc.trim()));
+  if(params.length) uri += '?' + params.join('&');
+  window.location.href = uri;
+}
+
+function _emailRerender() {
+  var el = document.getElementById('main');
+  if(el) renderEmailPanel(el);
+}
+
+function renderEmailPanel(el) {
+  var proj = S.projectFilter ? DB.get('projects').find(function(p){ return p.id===S.projectFilter; }) : null;
+  var groups = (DB.get('groups')||[]).filter(function(g){ return String(g.projectId)===String(S.projectFilter); });
+  var members = DB.get('group_members')||[];
+  var contacts = _emailGetContacts();
+  var addrs = _emailGetAddresses();
+  var skipped = _emailGetSkipped();
+  var overLimit = addrs.length > 10;
+  var allWithEmail = contacts.filter(function(c){ return c.email; });
+  var allSelected = allWithEmail.length > 0 && allWithEmail.every(function(c){ return S._emailSelected[String(c.id)]; });
+
+  // Groups HTML
+  var groupsHtml = '';
+  if(groups.length) {
+    groupsHtml = groups.map(function(g){
+      var gMembers = members.filter(function(m){ return String(m.groupId)===String(g.id); });
+      var withEmail = gMembers.filter(function(m){
+        var s = DB.getActive('stakeholders').find(function(x){ return String(x.id)===String(m.stakeholderId); });
+        return s && s.email;
+      });
+      var selCount = gMembers.filter(function(m){ return S._emailSelected[String(m.stakeholderId)]; }).length;
+      var allGSel = withEmail.length > 0 && withEmail.every(function(m){ return S._emailSelected[String(m.stakeholderId)]; });
+      var dot = g.color || '#4A9BE8';
+      return '<div style="display:flex;align-items:center;gap:8px;padding:7px 16px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04)" onclick="_emailToggleGroup(\''+g.id+'\')">'
+        + '<input type="checkbox" '+(allGSel?'checked':'')+' onclick="event.stopPropagation();_emailToggleGroup(\''+g.id+'\')" style="accent-color:var(--sky);width:14px;height:14px;flex-shrink:0">'
+        + '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+dot+';flex-shrink:0"></span>'
+        + '<span style="flex:1;font-size:13px;color:var(--mist)">'+g.name+'</span>'
+        + '<span style="font-size:11px;color:var(--fog)">'+gMembers.length+' contacts</span>'
+        + (selCount>0?'<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:rgba(74,155,232,.2);color:#85b7eb;border:1px solid rgba(74,155,232,.3)">'+selCount+' ✓</span>':'')
+        + '</div>';
+    }).join('');
+  } else {
+    groupsHtml = '<div style="padding:10px 16px;font-size:12px;color:var(--fog);font-style:italic">No groups defined for this project</div>';
+  }
+
+  // Contacts HTML
+  var contactsHtml = contacts.map(function(c){
+    var sel = !!S._emailSelected[String(c.id)];
+    var hasEmail = !!c.email;
+    var name = ((c.firstName||'')+' '+(c.lastName||'')).trim()||c.org||'—';
+    var groupTags = members.filter(function(m){ return String(m.stakeholderId)===String(c.id); }).map(function(m){
+      var g = groups.find(function(x){ return String(x.id)===String(m.groupId); });
+      return g ? '<span style="font-size:10px;padding:1px 5px;border-radius:4px;background:rgba(74,155,232,.15);color:#85b7eb;margin-left:4px">'+g.name+'</span>' : '';
+    }).join('');
+    if(!hasEmail){
+      return '<div style="display:flex;align-items:center;gap:8px;padding:7px 16px;border-bottom:1px solid rgba(255,255,255,.04);opacity:.4">'
+        + '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(217,64,64,.2);color:#f87171;border:1px solid rgba(217,64,64,.3);flex-shrink:0">no email</span>'
+        + '<div style="flex:1"><div style="font-size:13px;color:var(--mist)">'+name+groupTags+'</div><div style="font-size:11px;color:var(--fog)">'+( c.org||c.type||'')+'</div></div>'
+        + '</div>';
+    }
+    return '<div style="display:flex;align-items:center;gap:8px;padding:7px 16px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04)'+(sel?';background:rgba(74,155,232,.08)':'')+'" onclick="_emailToggleContact(\''+c.id+'\',true)">'
+      + '<input type="checkbox" '+(sel?'checked':'')+' onclick="event.stopPropagation();_emailToggleContact(\''+c.id+'\',true)" style="accent-color:var(--sky);width:14px;height:14px;flex-shrink:0">'
+      + '<div style="flex:1"><div style="font-size:13px;color:var(--white)">'+name+groupTags+'</div><div style="font-size:11px;color:var(--fog)">'+(c.org||c.type||'')+'</div></div>'
+      + '</div>';
+  }).join('');
+
+  // Compiled emails
+  var emailLines = addrs.length
+    ? addrs.map(function(a){ return '<div style="padding:1px 0;color:var(--mist)">'+a+'</div>'; }).join('')
+    : '<div style="color:var(--fog);font-style:italic">No contacts selected yet…</div>';
+
+  var countBadge = addrs.length === 0
+    ? '<span style="font-size:11px;color:var(--fog)">0 selected</span>'
+    : overLimit
+      ? '<span style="font-size:11px;padding:2px 8px;border-radius:8px;background:rgba(232,160,32,.2);color:#E8A020;border:1px solid rgba(232,160,32,.3)">'+addrs.length+' addresses · over 10</span>'
+      : '<span style="font-size:11px;padding:2px 8px;border-radius:8px;background:rgba(40,168,112,.2);color:#28A870;border:1px solid rgba(40,168,112,.3)">'+addrs.length+' addresses</span>';
+
+  var skippedNote = skipped.length
+    ? '<div style="margin-top:8px;font-size:10px;color:rgba(255,255,255,.3);font-style:italic">'+skipped.length+' contact'+(skipped.length!==1?'s':'')+' skipped — no email on file ('+skipped.join(', ')+')</div>'
+    : '';
+
+  var subj = proj ? (proj.pid + ' \u2014 ' + proj.name) : '';
+
+  el.innerHTML = '<div class="topbar">'
+    + '<div><div class="topbar-title">\u2709 Email contacts</div>'
+    + '<div class="topbar-sub">'+(proj?(proj.pid+' \u2014 '+proj.name):'All projects')+'</div></div>'
+    + '<div style="display:flex;align-items:center;gap:8px;margin-left:auto">'
+    +   '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mist);cursor:pointer">'
+    +     '<input type="checkbox" '+(S._emailExtOnly?'checked':'')+' onchange="S._emailExtOnly=this.checked;S._emailSelected={};_emailRerender()" style="accent-color:var(--sky)"> External only'
+    +   '</label>'
+    +   '<button class="btn btn-ghost" onclick="closeEmailPanel()">\u2190 Back to contacts</button>'
+    + '</div></div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;height:calc(100vh - 180px);overflow:hidden">'
+    // LEFT
+    + '<div style="display:flex;flex-direction:column;border-right:1px solid var(--border);overflow:hidden">'
+    +   '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--fog);padding:8px 16px;background:rgba(255,255,255,.02);border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0">Groups <span style="float:right;font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--sky-lt)">Check to select all members</span></div>'
+    +   '<div style="flex-shrink:0">'+groupsHtml+'</div>'
+    +   '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--fog);padding:8px 16px;background:rgba(255,255,255,.02);border-bottom:1px solid rgba(255,255,255,.06);border-top:1px solid rgba(255,255,255,.06);flex-shrink:0">Individual contacts</div>'
+    +   '<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0">'
+    +     '<input type="checkbox" '+(allSelected?'checked':'')+' onchange="_emailToggleAll(this.checked)" style="accent-color:var(--sky);width:14px;height:14px">'
+    +     '<span style="font-size:12px;color:var(--fog)">Select all</span>'
+    +   '</div>'
+    +   '<div style="overflow-y:auto;flex:1">'+contactsHtml+'</div>'
+    + '</div>'
+    // RIGHT
+    + '<div style="display:flex;flex-direction:column;overflow:hidden">'
+    +   '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--fog);padding:8px 16px;background:rgba(255,255,255,.02);border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">'
+    +     'Compiled email list '+countBadge
+    +   '</div>'
+    +   '<div style="flex:1;overflow-y:auto;padding:12px 16px;font-size:12px;line-height:1.8">'+emailLines+skippedNote+'</div>'
+    +   '<div style="padding:12px 16px;border-top:1px solid var(--border);background:rgba(255,255,255,.02);flex-shrink:0">'
+    +     '<div style="margin-bottom:8px"><label style="font-size:11px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;font-weight:600">Subject</label>'
+    +       '<input id="email-subj-input" type="text" value="'+subj.replace(/"/g,'&quot;')+'" style="width:100%;margin-top:4px;font-size:12px;padding:5px 8px;background:var(--navy-mid);border:1px solid var(--border);border-radius:4px;color:var(--white);box-sizing:border-box"></div>'
+    +     '<div style="margin-bottom:10px"><label style="font-size:11px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;font-weight:600">CC (optional)</label>'
+    +       '<input id="email-cc-input" type="text" placeholder="cc@example.com; cc2@example.com" style="width:100%;margin-top:4px;font-size:12px;padding:5px 8px;background:var(--navy-mid);border:1px solid var(--border);border-radius:4px;color:var(--white);box-sizing:border-box"></div>'
+    +     '<div style="display:flex;gap:8px;margin-bottom:10px">'
+    +       '<button id="email-copy-btn" class="btn btn-primary" onclick="_emailCopyAll()" '+(addrs.length===0?'disabled style="opacity:.4"':'')+'>📋 Copy all emails</button>'
+    +       '<button class="btn" onclick="_emailOpenOutlook()" '+(overLimit||addrs.length===0?'disabled style="opacity:.4;cursor:not-allowed" title="'+(overLimit?'Reduce to 10 or fewer addresses':'No addresses selected')+'"':'')+'>↗ Open in Outlook</button>'
+    +       '<button class="btn btn-ghost" onclick="S._emailSelected={};_emailRerender()">\u2715 Clear</button>'
+    +     '</div>'
+    +     '<div style="font-size:11px;color:var(--fog);padding:8px 10px;background:rgba(74,155,232,.06);border-left:3px solid var(--sky);border-radius:0 4px 4px 0;line-height:1.5">'
+    +       '<strong style="color:var(--mist)">Open in Outlook</strong> works best with <strong style="color:var(--mist)">10 or fewer addresses.</strong> For larger lists, use <strong style="color:var(--mist)">Copy all emails</strong> and paste into Outlook\'s TO field. Contacts without an email are skipped automatically.'
+    +     '</div>'
+    +   '</div>'
+    + '</div>'
+    + '</div>';
+}
+
 
 // ── BULK ADD CONTACTS ─────────────────────────────────────────────
 const BULK_TYPES = ['Agency','Business','Business Group','Community Group','Contractor','Elected Official','Engineering','Media','Other','Property Owner','Resident','Road Traveler'];
@@ -2421,6 +2652,7 @@ function renderMaster(el){
 // ── PROJECT STAKEHOLDER VIEW ──────────────────
 function renderStakeholders(el){
   if(S.showBulkAdd){renderBulkAdd(el);return;}
+  if(S.showEmailPanel){renderEmailPanel(el);return;}
   const projs=DB.get('projects');
   const allStakes=DB.getActive('stakeholders');
   const ps=DB.get('project_stakeholders');
@@ -2464,6 +2696,7 @@ function renderStakeholders(el){
       <button class="btn" onclick="importWithContext()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg>Import</button>
       <button class="btn btn-primary" onclick="openStakeModal()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v10M3 8h10"/></svg>New stakeholder</button>
       ${S.projectFilter?`<button class="btn" onclick="openBulkAdd()" style="display:flex;align-items:center;gap:5px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:13px;height:13px"><path d="M8 3v10M3 8h10"/></svg><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:13px;height:13px"><path d="M8 3v10M3 8h10"/></svg>Bulk add</button>`:''}
+      ${S.projectFilter?`<button class="btn" onclick="openEmailPanel()" style="display:flex;align-items:center;gap:5px">✉ Email contacts</button>`:''}
       ${S.projectFilter?`<button class="btn" onclick="openLinkModal()">Link existing</button>`:''}
     </div>
   </div>

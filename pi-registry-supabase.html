@@ -5826,7 +5826,9 @@ function renderReports(el){
     {id:'issues-report',name:'Issues tracker report',desc:'Open and resolved issues with linked interactions — export as PDF or Word',
       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><circle cx="12" cy="12" r="9"/><path d="M12 7v5"/><circle cx="12" cy="15.5" r=".8" fill="currentColor"/></svg>'},
     {id:'stakeholder-map',name:'Stakeholder map',desc:'Interactive map of stakeholder locations with sentiment color-coding — print to PDF',
-      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M12 2C8.686 2 6 4.686 6 8c0 5 6 12 6 12s6-7 6-12c0-3.314-2.686-6-6-6z"/><circle cx="12" cy="8" r="2"/></svg>'}
+      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M12 2C8.686 2 6 4.686 6 8c0 5 6 12 6 12s6-7 6-12c0-3.314-2.686-6-6-6z"/><circle cx="12" cy="8" r="2"/></svg>'},
+    {id:'events-log',name:'Events & outreach log',desc:'All logged public events and outreach activities with attendance and notes',
+      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>'}
   ];
   var cardsHTML='';
   rptCards.forEach(function(r){
@@ -6034,7 +6036,7 @@ function generateIssuesReport(){
 }
 
 function getReportTitle(type){
-  var titles={'contact-list':'Stakeholder contact list','interaction-log':'Interaction log','followup-status':'Follow-up status report','sentiment-summary':'Sentiment / support summary','deliverable-status':'Deliverable / scope status','comment-matrix':'Public comment matrix'};
+  var titles={'contact-list':'Stakeholder contact list','interaction-log':'Interaction log','followup-status':'Follow-up status report','sentiment-summary':'Sentiment / support summary','deliverable-status':'Deliverable / scope status','comment-matrix':'Public comment matrix','events-log':'Events & outreach log'};
   return titles[type]||type;
 }
 
@@ -6338,6 +6340,30 @@ function generateReport(type){
     });
     body+='</tbody></table>';
 
+  } else if(type==='events-log'){
+    var evts=(DB.get('meetings')||[]).filter(function(m){return String(m.projectId)===String(S.projectFilter);});
+    evts.sort(function(a,b){return b.date.localeCompare(a.date);});
+    body='<div style="margin-bottom:12px;font-size:13px;color:var(--slate)">'+evts.length+' event'+(evts.length!==1?'s':'')+' logged</div>'
+      +'<table class="dtable" style="font-size:13px;table-layout:fixed;width:100%">'
+      +'<colgroup><col style="width:11%"><col style="width:24%"><col style="width:16%"><col style="width:8%"><col style="width:8%"><col style="width:8%"><col style="width:25%"></colgroup>'
+      +'<thead><tr><th>Date</th><th>Event</th><th>Type</th><th>Status</th><th>Attend.</th><th>Comments</th><th>Notes</th></tr></thead><tbody>';
+    if(evts.length===0){
+      body+='<tr><td colspan="7" style="text-align:center;color:var(--fog);padding:20px">No events logged for this project.</td></tr>';
+    } else {
+      evts.forEach(function(m){
+        body+='<tr>'
+          +'<td class="td-mono" style="white-space:nowrap;vertical-align:top">'+fmt(m.date)+'</td>'
+          +'<td style="font-weight:600;color:var(--white);vertical-align:top">'+m.title+'<div style="font-size:11px;color:var(--fog);font-weight:400">'+( m.location||'')+'</div></td>'
+          +'<td style="vertical-align:top"><span class="badge b-sky" style="font-size:10px">'+( m.type||'Other')+'</span></td>'
+          +'<td style="vertical-align:top"><span class="badge '+(m.status==='Completed'?'b-green':m.status==='Cancelled'?'b-red':'b-amber')+'" style="font-size:10px">'+(m.status||'Planned')+'</span></td>'
+          +'<td style="text-align:center;vertical-align:top">'+(m.attendanceCount||'—')+'</td>'
+          +'<td style="text-align:center;vertical-align:top">'+(m.commentCards||'—')+'</td>'
+          +'<td style="font-size:11px;color:var(--slate);vertical-align:top">'+(m.notes||'—')+'</td>'
+          +'</tr>';
+      });
+    }
+    body+='</tbody></table>';
+
   } else if(type==='comment-matrix'){
     var comments=externalInts.filter(function(i){return['Comment card','Public meeting','Mail','In-person'].indexOf(i.channel)>=0});
     comments.sort(function(a,b){return b.date.localeCompare(a.date)});
@@ -6494,6 +6520,7 @@ function getAvailableSections(){
     {id:'sentiment',title:'Sentiment & engagement matrix',type:'auto-sentiment'},
     {id:'deliverables',title:'Deliverable / scope status',type:'auto-del'},
     {id:'comment-matrix',title:'Public comment matrix',type:'auto-comments'},
+    {id:'events-log',title:'Events & outreach log',type:'auto-events'},
     {id:'issues',title:'Issues tracker',type:'auto-issues'},
     {id:'commitments',title:'Commitments tracker',type:'auto-commitments'}
   ];
@@ -6539,6 +6566,7 @@ function getSectionDesc(type){
     'auto-sentiment':'Auto-populates a 3x3 stakeholder engagement matrix plus stakeholder positions grouped by Champion, Neutral, and Opponent.',
     'auto-del':'Auto-populates deliverable progress showing contracted vs delivered counts.',
     'auto-comments':'Auto-populates public comments received with response status for formal documentation.',
+    'auto-events':'Auto-populates all logged public events and outreach activities with attendance counts and notes.',
     'auto-issues':'Auto-populates open and resolved issues with priority, status, category, and linked interaction details.',
     'auto-commitments':'Auto-populates open and fulfilled commitments made to stakeholders, grouped by category and status.'
   };
@@ -7158,6 +7186,23 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
           var org=sk?sk.org||'':'';
           var status=i.followUpDone?'Responded':'Pending';
           var line=i.date+' | '+name+(org?' ('+org+')':'')+' | '+i.channel+' | '+i.summary+' | Response: '+status;
+          xml+=bullet(line);
+        });
+      }
+
+    } else if(sec.type==='auto-events'){
+      var projEvts=(DB.get('meetings')||[]).filter(function(m){return String(m.projectId)===String(proj.id);});
+      projEvts.sort(function(a,b){return b.date.localeCompare(a.date);});
+      if(projEvts.length===0){
+        xml+=bullet('No events logged for this project.');
+      } else {
+        xml+=bullet(projEvts.length+' event'+(projEvts.length!==1?'s':'')+' logged:');
+        xml+=spacer();
+        projEvts.forEach(function(m){
+          var line=m.date+' | '+m.title+' | '+(m.type||'Other')+' | Status: '+(m.status||'Planned');
+          if(m.attendanceCount) line+=' | Attendance: '+m.attendanceCount;
+          if(m.commentCards) line+=' | Comment cards: '+m.commentCards;
+          if(m.notes) line+=' | Notes: '+m.notes.replace(/\n/g,' ');
           xml+=bullet(line);
         });
       }

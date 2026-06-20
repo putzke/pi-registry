@@ -1829,8 +1829,23 @@ async function logEmailAsEvent() {
     type: 'Email distribution', status: 'Completed', format: 'Virtual', location: '',
     attendanceCount: addrs.length, commentCards: 0, handouts: '', attendeeIds: [],
     agenda: '', keyConcerns: '', actionItems: '',
-    notes: 'Bulk email distribution\nRecipients (' + addrs.length + '):\n' + addrs.join('\n') + (function(){ var sel=document.getElementById('email-issue-select'); if(!sel||!sel.value) return ''; var iss=(DB.get('issues')||[]).find(function(i){ return String(i.id)===String(sel.value); }); return iss ? '\n\nRelated issue: ['+iss.status+'] '+iss.title : ''; })(),
-    createdAt: new Date().toISOString()
+    notes: (function(){
+      var contacts = _emailGetContacts();
+      var nameLines = Object.keys(S._emailSelected).map(function(id){
+        var c = contacts.find(function(x){ return String(x.id)===String(id); });
+        if(!c) return null;
+        var name = ((c.firstName||'')+' '+(c.lastName||'')).trim() || c.org || 'Unknown';
+        var org = c.org ? ' (' + c.org + ')' : '';
+        return name + org;
+      }).filter(Boolean);
+      var sel = document.getElementById('email-issue-select');
+      var issNote = '';
+      if(sel && sel.value){
+        var iss = (DB.get('issues')||[]).find(function(i){ return String(i.id)===String(sel.value); });
+        if(iss) issNote = '\n\nRelated issue: [' + iss.status + '] ' + iss.title + (iss.category ? ' (' + iss.category + ')' : '');
+      }
+      return 'Bulk email distribution\nRecipients (' + nameLines.length + '):\n' + nameLines.join('\n') + issNote;
+    })(),    createdAt: new Date().toISOString()
   };
   var all = DB.get('meetings'); all.push(evt);
   await DB.set('meetings', all);

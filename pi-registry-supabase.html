@@ -1159,6 +1159,24 @@ async function initApp(){
 
 // ── STARTUP: check session before loading app ──────────────────────
 // ⚠️  DEV BYPASS — set to false before deploying to GitHub Pages
+// ── GLOBAL ERROR HANDLERS ─────────────────────────────────────────────────
+// Catch unhandled JS errors anywhere in the app and surface as a toast
+window.onerror = function(msg, src, line, col, err) {
+  console.error('Unhandled error:', msg, 'at line', line, err);
+  if (typeof showToast === 'function') {
+    showToast('An unexpected error occurred — check the browser console (F12) for details.', 'warn');
+  }
+  return false;
+};
+// Catch unhandled async/promise rejections (e.g. silent Supabase failures)
+window.addEventListener('unhandledrejection', function(e) {
+  console.error('Unhandled promise rejection:', e.reason);
+  if (typeof showToast === 'function') {
+    showToast('A background operation failed — check the browser console (F12) for details.', 'warn');
+  }
+});
+// ── END GLOBAL ERROR HANDLERS ──────────────────────────────────────────────
+
 const DEV_BYPASS = false;
 (function() {
   if (DEV_BYPASS) { initApp(); return; }

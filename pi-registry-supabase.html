@@ -6625,6 +6625,7 @@ function openPIReport(){
     +'<div class="topbar-sp"></div>'
     +'<div class="topbar-acts">'
     +'<button class="btn" onclick="savePIReportDraft()">Save draft</button>'
+    +'<button class="btn" style="color:var(--fog);border-color:rgba(255,255,255,.15)" onclick="resetPIReportDraft()" title="Clear saved draft and reset to default sections">Reset</button>'
     +'<label style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--slate);cursor:pointer;margin-right:6px"><input type="checkbox" id="docx-letterhead-cb" checked style="accent-color:var(--sky-lt);width:13px;height:13px"> Letterhead</label>'
     +'<button class="btn btn-primary" onclick="exportPIDocx()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:14px;height:14px"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg> Export .docx</button>'
     +'<button class="btn btn-ghost" onclick="renderReports(document.getElementById(\'main\'))">Back to reports</button>'
@@ -6742,6 +6743,13 @@ function savePIReportDraft(){
   var saved=captureFormState();if(!saved)return;
   localStorage.setItem('pir4_pi_reports_'+S.projectFilter,JSON.stringify(saved));
   showToast('Draft saved');
+}
+
+
+function resetPIReportDraft(){
+  if(!confirm('Reset the report editor? This will clear all saved content including section summaries, the overall summary, and restore default sections. This cannot be undone.')) return;
+  localStorage.removeItem('pir4_pi_reports_'+S.projectFilter);
+  openPIReport();
 }
 
 

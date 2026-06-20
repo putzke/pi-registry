@@ -6784,6 +6784,7 @@ function _buildOverallDraft() {
   var allStakes = DB.getActive('stakeholders');
   var ints = DB.get('interactions').filter(function(i){ return String(i.projectId)===String(projF); });
   var externalPS = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; });
+  var internalPS = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='Internal'; });
   var externalIds = externalPS.map(function(lk){ return String(lk.stakeholderId); });
   var periodInts = ints.filter(function(i){
     if (externalIds.indexOf(String(i.stakeholderId)) < 0) return false;
@@ -6807,49 +6808,137 @@ function _buildOverallDraft() {
 
   var lines = [];
 
-  // Sentence 1: outreach activity
+  // ── Sentence 1: Project context opener ───────────────────────────────────
+  var opener = proj.name;
+  if (proj.client) opener += ' ('+proj.client+')';
+  if (proj.phase) opener += ' is currently in the '+proj.phase+' phase.';
+  else opener += ' public involvement activities are summarized below.';
+  lines.push(opener);
+
+  // ── Sentence 2: Period outreach activity ─────────────────────────────────
   if (periodInts.length > 0) {
+    var compEvts = meetings.filter(function(m){ return m.status==='Completed'; }).length;
     var needFU = periodInts.filter(function(i){ return i.followUpRequired && !i.followUpDone; }).length;
-    var s1 = 'During '+periodLabel+', the project team conducted '+periodInts.length+' external stakeholder interaction'+(periodInts.length!==1?'s':'');
-    if (meetings.length > 0) {
-      var compEvts = meetings.filter(function(m){ return m.status==='Completed'; }).length;
-      if (compEvts > 0) s1 += ' and '+compEvts+' public outreach event'+(compEvts!==1?'s':'');
-    }
-    s1 += '.';
-    if (needFU > 0) s1 += ' '+needFU+' item'+(needFU!==1?'s require':' requires')+' follow-up.';
-    lines.push(s1);
+    var s2 = 'During '+periodLabel+', the project team conducted '+periodInts.length
+      +' external stakeholder interaction'+(periodInts.length!==1?'s':'');
+    if (compEvts > 0) s2 += ' and '+compEvts+' public outreach event'+(compEvts!==1?'s':'');
+    s2 += '.';
+    if (needFU > 0) s2 += ' '+needFU+' interaction'+(needFU!==1?'s require':' requires')+' follow-up.';
+    lines.push(s2);
   } else if (ints.length > 0) {
     lines.push('A total of '+ints.length+' stakeholder interaction'+(ints.length!==1?'s have':' has')+' been logged for this project to date.');
   }
 
-  // Sentence 2: stakeholder sentiment
+  // ── Sentence 3: Most active stakeholder ──────────────────────────────────
+  if (periodInts.length > 1) {
+    var intCounts = {};
+    periodInts.forEach(function(i){
+      var id = String(i.stakeholderId);
+      intCounts[id] = (intCounts[id]||0) + 1;
+    });
+    var topId = Object.keys(intCounts).sort(function(a,b){ return intCounts[b]-intCounts[a]; })[0];
+    var topCount = intCounts[topId];
+    if (topCount > 1) {
+      var topSk = allStakes.find(function(s){ return String(s.id)===String(topId); });
+      if (topSk) {
+        var topName = ((topSk.firstName||'')+' '+(topSk.lastName||'')).trim();
+        var topOrg  = topSk.org ? ' ('+topSk.org+')' : '';
+        lines.push('The most engaged stakeholder during this period is '+topName+topOrg
+          +', with '+topCount+' logged interaction'+(topCount!==1?'s':'')+'.');
+      }
+    }
+  }
+
+  // ── Sentence 4: Top concern topics (keyword scan on period interactions) ──
+  if (periodInts.length > 0) {
+    var keywords = [
+      {label:'construction access',    terms:['access','driveway','entrance','ingress','egress']},
+      {label:'noise and vibration',    terms:['noise','vibration','loud','sound','decibel']},
+      {label:'traffic and detours',    terms:['traffic','detour','lane','closure','road','signal']},
+      {label:'construction schedule',  terms:['schedule','timeline','deadline','duration','phase','start date','completion']},
+      {label:'dust and air quality',   terms:['dust','air quality','particulate','smoke','odor']},
+      {label:'property impacts',       terms:['property','easement','right-of-way','ROW','fence','landscape']},
+      {label:'water and utilities',    terms:['water','utility','sewer','pipe','outage','service']},
+      {label:'public safety',          terms:['safety','pedestrian','school','children','emergency']},
+      {label:'project cost and funding',terms:['cost','budget','funding','taxpayer','fee','price']},
+      {label:'communication and notice',terms:['notification','notice','inform','communication','update','outreach']}
+    ];
+    var topicCounts = {};
+    periodInts.forEach(function(i){
+      var text = ((i.summary||'')+' '+(i.notes||'')).toLowerCase();
+      keywords.forEach(function(kw){
+        kw.terms.forEach(function(t){
+          if (text.indexOf(t) >= 0) {
+            topicCounts[kw.label] = (topicCounts[kw.label]||0) + 1;
+          }
+        });
+      });
+    });
+    var topTopics = Object.keys(topicCounts)
+      .sort(function(a,b){ return topicCounts[b]-topicCounts[a]; })
+      .slice(0,3);
+    if (topTopics.length > 0) {
+      var topicStr = topTopics.length === 1 ? topTopics[0]
+        : topTopics.slice(0,-1).join(', ')+' and '+topTopics[topTopics.length-1];
+      lines.push('The most frequently raised topics during this period include '+topicStr+'.');
+    }
+  }
+
+  // ── Sentence 5: Stakeholder sentiment ────────────────────────────────────
   if (stakes.length > 0) {
     var champ = stakes.filter(function(s){ return s.sentiment==='Champion'; }).length;
     var opp   = stakes.filter(function(s){ return s.sentiment==='Opponent'; }).length;
-    var s2 = 'The project engages '+stakes.length+' external stakeholder'+(stakes.length!==1?'s':'')+', with sentiment '+
-      (opp > champ ? 'trending mixed — ' : (champ > stakes.length*0.5 ? 'predominantly supportive — ' : 'varied — '))+
-      champ+' Champion'+(champ!==1?'s':'')+', '+(stakes.length-champ-opp)+' Neutral, and '+opp+' Opponent'+(opp!==1?'s':'')+'.';
-    lines.push(s2);
+    var neut  = stakes.length - champ - opp;
+    var hi    = stakes.filter(function(s){ return s.influence==='High'; }).length;
+    var sentTrend = opp > champ ? 'mixed' : (champ > stakes.length*0.5 ? 'predominantly supportive' : 'varied');
+    var s5 = 'Overall stakeholder sentiment is '+sentTrend+' — '+champ+' Champion'+(champ!==1?'s':'')+', '
+      +neut+' Neutral, and '+opp+' Opponent'+(opp!==1?'s':'')+' across '+stakes.length+' external contact'+(stakes.length!==1?'s':'')+'';
+    if (hi > 0) s5 += ', with '+hi+' classified as high influence';
+    s5 += '.';
+    lines.push(s5);
   }
 
-  // Sentence 3: deliverables
+  // ── Sentence 6: Deliverable progress ─────────────────────────────────────
   if (dels.length > 0) {
     var complete = dels.filter(function(d){ return d.status==='Complete'; }).length;
-    var pct = Math.round(complete/dels.length*100);
-    lines.push('Deliverable progress stands at '+complete+' of '+dels.length+' items complete ('+pct+'%).');
+    var inProg   = dels.filter(function(d){ return d.status==='In Progress'; }).length;
+    var pct      = Math.round(complete/dels.length*100);
+    var today    = new Date().toISOString().slice(0,10);
+    var overdueDels = dels.filter(function(d){
+      return d.status !== 'Complete' && d.dueDate && d.dueDate < today;
+    });
+    var s6 = 'Deliverable progress stands at '+complete+' of '+dels.length+' items complete ('+pct+'%)';
+    if (inProg > 0) s6 += ', with '+inProg+' in progress';
+    if (overdueDels.length > 0) s6 += '; '+overdueDels.length+' item'+(overdueDels.length!==1?'s are':' is')+' past due';
+    s6 += '.';
+    lines.push(s6);
   }
 
-  // Sentence 4: open issues / commitments flags
-  var flags = [];
-  var openIss = issues.filter(function(i){ return i.status==='Open'||i.status==='In Progress'; }).length;
-  var hiIss   = issues.filter(function(i){ return i.priority==='High' && (i.status==='Open'||i.status==='In Progress'); }).length;
-  var overdueComm = commitments.filter(function(c){ return c.status==='Overdue'; }).length;
-  var openComm    = commitments.filter(function(c){ return c.status==='Open'||c.status==='Overdue'; }).length;
-  if (hiIss > 0) flags.push(hiIss+' high-priority issue'+(hiIss!==1?'s':'')+' open');
-  else if (openIss > 0) flags.push(openIss+' open issue'+(openIss!==1?'s':''));
-  if (overdueComm > 0) flags.push(overdueComm+' overdue commitment'+(overdueComm!==1?'s':''));
-  else if (openComm > 0) flags.push(openComm+' open commitment'+(openComm!==1?'s':''));
-  if (flags.length > 0) lines.push('Items requiring attention include '+flags.join(' and ')+'.'); 
+  // ── Sentence 7: Specific overdue flags ───────────────────────────────────
+  var alerts = [];
+  var today2 = new Date().toISOString().slice(0,10);
+
+  // High-priority open issues by name
+  var hiOpenIss = issues.filter(function(i){
+    return i.priority==='High' && (i.status==='Open'||i.status==='In Progress');
+  });
+  if (hiOpenIss.length > 0) {
+    var issNames = hiOpenIss.slice(0,2).map(function(i){ return '“'+i.title+'”'; });
+    if (hiOpenIss.length > 2) issNames.push('and '+(hiOpenIss.length-2)+' more');
+    alerts.push(hiOpenIss.length+' high-priority issue'+(hiOpenIss.length!==1?'s':'')+': '+issNames.join(', '));
+  }
+
+  // Overdue commitments by name
+  var overdueComms = commitments.filter(function(c){ return c.status==='Overdue'; });
+  if (overdueComms.length > 0) {
+    var commNames = overdueComms.slice(0,2).map(function(c){ return '“'+(c.commitment||'Untitled').slice(0,40)+'”'; });
+    if (overdueComms.length > 2) commNames.push('and '+(overdueComms.length-2)+' more');
+    alerts.push(overdueComms.length+' overdue commitment'+(overdueComms.length!==1?'s':'')+': '+commNames.join(', '));
+  }
+
+  if (alerts.length > 0) {
+    lines.push('Items requiring immediate attention: '+alerts.join('; ')+'.');
+  }
 
   return lines.join(' ');
 }

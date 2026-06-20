@@ -6904,21 +6904,23 @@ function _buildOverallDraft() {
     }
   }
 
-  // ── Sentence 5: Stakeholder sentiment ────────────────────────────────────
+  // ── Snapshot clause: sentences 5, 6, 7 joined under one qualifier ──────────
+  var snapshotParts = [];
+
+  // Part 1: Stakeholder sentiment
   if (stakes.length > 0) {
     var champ = stakes.filter(function(s){ return s.sentiment==='Champion'; }).length;
     var opp   = stakes.filter(function(s){ return s.sentiment==='Opponent'; }).length;
     var neut  = stakes.length - champ - opp;
     var hi    = stakes.filter(function(s){ return s.influence==='High'; }).length;
     var sentTrend = opp > champ ? 'mixed' : (champ > stakes.length*0.5 ? 'predominantly supportive' : 'varied');
-    var s5 = 'At the time this report was created, overall stakeholder sentiment is '+sentTrend+' — '+champ+' Champion'+(champ!==1?'s':'')+', '
-      +neut+' Neutral, and '+opp+' Opponent'+(opp!==1?'s':'')+' across '+stakes.length+' external contact'+(stakes.length!==1?'s':'')+'';
+    var s5 = 'overall stakeholder sentiment is '+sentTrend+' — '+champ+' Champion'+(champ!==1?'s':'')+', '
+      +neut+' Neutral, and '+opp+' Opponent'+(opp!==1?'s':'')+' across '+stakes.length+' external contact'+(stakes.length!==1?'s':'');
     if (hi > 0) s5 += ', with '+hi+' classified as high influence';
-    s5 += '.';
-    lines.push(s5);
+    snapshotParts.push(s5);
   }
 
-  // ── Sentence 6: Deliverable progress ─────────────────────────────────────
+  // Part 2: Deliverable progress
   if (dels.length > 0) {
     var complete = dels.filter(function(d){ return d.status==='Complete'; }).length;
     var inProg   = dels.filter(function(d){ return d.status==='In Progress'; }).length;
@@ -6927,18 +6929,15 @@ function _buildOverallDraft() {
     var overdueDels = dels.filter(function(d){
       return d.status !== 'Complete' && d.dueDate && d.dueDate < today;
     });
-    var s6 = 'At the time this report was created, deliverable progress stands at '+complete+' of '+dels.length+' items complete ('+pct+'%)';
+    var s6 = 'deliverable progress stands at '+complete+' of '+dels.length+' items complete ('+pct+'%)';
     if (inProg > 0) s6 += ', with '+inProg+' in progress';
-    if (overdueDels.length > 0) s6 += '; '+overdueDels.length+' item'+(overdueDels.length!==1?'s are':' is')+' past due';
-    s6 += '.';
-    lines.push(s6);
+    if (overdueDels.length > 0) s6 += ', '+overdueDels.length+' item'+(overdueDels.length!==1?'s':'')+' past due';
+    snapshotParts.push(s6);
   }
 
-  // ── Sentence 7: Specific overdue flags ───────────────────────────────────
+  // Part 3: Specific overdue flags
   var alerts = [];
   var today2 = new Date().toISOString().slice(0,10);
-
-  // High-priority open issues by name
   var hiOpenIss = issues.filter(function(i){
     return i.priority==='High' && (i.status==='Open'||i.status==='In Progress');
   });
@@ -6947,17 +6946,19 @@ function _buildOverallDraft() {
     if (hiOpenIss.length > 2) issNames.push('and '+(hiOpenIss.length-2)+' more');
     alerts.push(hiOpenIss.length+' high-priority issue'+(hiOpenIss.length!==1?'s':'')+': '+issNames.join(', '));
   }
-
-  // Overdue commitments by name
   var overdueComms = commitments.filter(function(c){ return c.status==='Overdue'; });
   if (overdueComms.length > 0) {
     var commNames = overdueComms.slice(0,2).map(function(c){ return '“'+(c.commitment||'Untitled').slice(0,40)+'”'; });
     if (overdueComms.length > 2) commNames.push('and '+(overdueComms.length-2)+' more');
     alerts.push(overdueComms.length+' overdue commitment'+(overdueComms.length!==1?'s':'')+': '+commNames.join(', '));
   }
-
   if (alerts.length > 0) {
-    lines.push('At the time this report was created, the following items require immediate attention: '+alerts.join('; ')+'.');
+    snapshotParts.push('items requiring attention: '+alerts.join('; '));
+  }
+
+  // Emit snapshot clause once with qualifier as lead-in
+  if (snapshotParts.length > 0) {
+    lines.push('At the time this report was created: '+snapshotParts.join('; ')+'.');
   }
 
   return lines.join(' ');

@@ -1715,6 +1715,8 @@ function openEmailPanel() {
   S._emailSelected = {};   // stakeholderId -> true
   S._emailExtOnly = true;  // default: external only
   S._emailCc = '';
+  S._emailSent = false;
+  S._emailLogged = false;
   renderStakeholders(document.getElementById('main'));
 }
 
@@ -1814,6 +1816,25 @@ function _emailOpenOutlook() {
   if(cc.trim()) params.push('cc=' + encodeURIComponent(cc.trim()));
   if(params.length) uri += '?' + params.join('&');
   window.location.href = uri;
+}
+
+async function logEmailAsEvent() {
+  var proj = S.projectFilter ? DB.get('projects').find(function(p){ return p.id===S.projectFilter; }) : null;
+  if(!proj){ alert('No project selected.'); return; }
+  var addrs = _emailGetAddresses();
+  if(!addrs.length){ alert('No email addresses to log.'); return; }
+  var subj = (document.getElementById('email-subj-input')||{}).value || (proj.pid+' — '+proj.name);
+  var evt = {
+    id: DB.uid(), projectId: S.projectFilter, title: subj, date: localToday(),
+    type: 'Email distribution', status: 'Completed', format: 'Virtual', location: '',
+    attendanceCount: addrs.length, commentCards: 0, handouts: '', attendeeIds: [],
+    agenda: '', keyConcerns: '', actionItems: '',
+    notes: 'Bulk email distribution\nRecipients (' + addrs.length + '):\n' + addrs.join('\n'),
+    createdAt: new Date().toISOString()
+  };
+  var all = DB.get('meetings'); all.push(evt);
+  await DB.set('meetings', all);
+  S._emailLogged = true; _emailRerender();
 }
 
 function _emailRerender() {
@@ -1926,10 +1947,12 @@ function renderEmailPanel(el) {
     +       '<input id="email-subj-input" type="text" value="'+subj.replace(/"/g,'&quot;')+'" style="width:100%;margin-top:4px;font-size:12px;padding:5px 8px;background:var(--navy-mid);border:1px solid var(--border);border-radius:4px;color:var(--white);box-sizing:border-box"></div>'
     +     '<div style="margin-bottom:10px"><label style="font-size:11px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;font-weight:600">CC (optional)</label>'
     +       '<input id="email-cc-input" type="text" placeholder="cc@example.com; cc2@example.com" style="width:100%;margin-top:4px;font-size:12px;padding:5px 8px;background:var(--navy-mid);border:1px solid var(--border);border-radius:4px;color:var(--white);box-sizing:border-box"></div>'
-    +     '<div style="display:flex;gap:8px;margin-bottom:10px">'
-    +       '<button id="email-copy-btn" class="btn btn-primary" onclick="_emailCopyAll()" '+(addrs.length===0?'disabled style="opacity:.4"':'')+'>📋 Copy all emails</button>'
-    +       '<button class="btn" onclick="_emailOpenOutlook()" '+(overLimit||addrs.length===0?'disabled style="opacity:.4;cursor:not-allowed" title="'+(overLimit?'Reduce to 10 or fewer addresses':'No addresses selected')+'"':'')+'>↗ Open in Outlook</button>'
-    +       '<button class="btn btn-ghost" onclick="S._emailSelected={};_emailRerender()">\u2715 Clear</button>'
+    +     '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">'
+    +       '<button id="email-copy-btn" class="btn btn-primary" onclick="_emailCopyAll();S._emailSent=true;setTimeout(_emailRerender,100)" '+(addrs.length===0?'disabled style="opacity:.4"':'')+'>📋 Copy all emails</button>'
+    +       '<button class="btn" onclick="_emailOpenOutlook();S._emailSent=true;setTimeout(_emailRerender,100)" '+(overLimit||addrs.length===0?'disabled style="opacity:.4;cursor:not-allowed" title="'+(overLimit?'Reduce to 10 or fewer addresses':'No addresses selected')+'"':'')+'>↗ Open in Outlook</button>'
+    +       '<button class="btn btn-ghost" onclick="S._emailSelected={};S._emailSent=false;S._emailLogged=false;_emailRerender()">\u2715 Clear</button>'
+    +       (S._emailSent && !S._emailLogged ? '<button class="btn" style="background:rgba(40,168,112,.2);border-color:rgba(40,168,112,.5);color:#28A870" onclick="logEmailAsEvent()">&#10003; Log as event</button>' : '')
+    +       (S._emailLogged ? '<span style="font-size:12px;color:#28A870;padding:4px 8px">&#10003; Event logged</span>' : '')
     +     '</div>'
     +     '<div style="font-size:11px;color:var(--fog);padding:8px 10px;background:rgba(74,155,232,.06);border-left:3px solid var(--sky);border-radius:0 4px 4px 0;line-height:1.5">'
     +       '<strong style="color:var(--mist)">Open in Outlook</strong> works best with <strong style="color:var(--mist)">10 or fewer addresses.</strong> For larger lists, use <strong style="color:var(--mist)">Copy all emails</strong> and paste into Outlook\'s TO field. Contacts without an email are skipped automatically.'
@@ -7954,7 +7977,7 @@ refreshBadges();render();
 
 
 // ── MEETINGS VIEW ──────────────────────────────────────────────────────────
-const MEETING_TYPES=['Public open house','Public hearing','Scoping meeting','Agency coordination meeting','Elected official briefing','Partnering meeting','Property owner / ROW discussion','Pre-construction meeting','Progress meeting','Community advisory committee','Media briefing / press conference','Pop-up / information booth','School or business outreach','Site visit','Webinar / virtual meeting','Other'];
+const MEETING_TYPES=['Public open house','Public hearing','Scoping meeting','Agency coordination meeting','Elected official briefing','Partnering meeting','Property owner / ROW discussion','Pre-construction meeting','Progress meeting','Community advisory committee','Media briefing / press conference','Pop-up / information booth','School or business outreach','Site visit','Webinar / virtual meeting','Email distribution','Other'];
 
 function renderMeetings(el){
   const pF=S.projectFilter;

@@ -6911,7 +6911,7 @@ function _buildOverallDraft() {
     var neut  = stakes.length - champ - opp;
     var hi    = stakes.filter(function(s){ return s.influence==='High'; }).length;
     var sentTrend = opp > champ ? 'mixed' : (champ > stakes.length*0.5 ? 'predominantly supportive' : 'varied');
-    var s5 = 'Overall stakeholder sentiment is '+sentTrend+' — '+champ+' Champion'+(champ!==1?'s':'')+', '
+    var s5 = 'At the time this report was created, overall stakeholder sentiment is '+sentTrend+' — '+champ+' Champion'+(champ!==1?'s':'')+', '
       +neut+' Neutral, and '+opp+' Opponent'+(opp!==1?'s':'')+' across '+stakes.length+' external contact'+(stakes.length!==1?'s':'')+'';
     if (hi > 0) s5 += ', with '+hi+' classified as high influence';
     s5 += '.';
@@ -6927,7 +6927,7 @@ function _buildOverallDraft() {
     var overdueDels = dels.filter(function(d){
       return d.status !== 'Complete' && d.dueDate && d.dueDate < today;
     });
-    var s6 = 'Deliverable progress stands at '+complete+' of '+dels.length+' items complete ('+pct+'%)';
+    var s6 = 'At the time this report was created, deliverable progress stands at '+complete+' of '+dels.length+' items complete ('+pct+'%)';
     if (inProg > 0) s6 += ', with '+inProg+' in progress';
     if (overdueDels.length > 0) s6 += '; '+overdueDels.length+' item'+(overdueDels.length!==1?'s are':' is')+' past due';
     s6 += '.';
@@ -6957,7 +6957,7 @@ function _buildOverallDraft() {
   }
 
   if (alerts.length > 0) {
-    lines.push('Items requiring immediate attention: '+alerts.join('; ')+'.');
+    lines.push('At the time this report was created, the following items require immediate attention: '+alerts.join('; ')+'.');
   }
 
   return lines.join(' ');

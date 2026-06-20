@@ -5832,11 +5832,20 @@ function renderReports(el){
   });
 
   // Build distribution group checkboxes
+  // Preserve current checked state across re-renders; default all checked on first render
+  var existingGrpCbs=document.querySelectorAll('.rpt-grp-cb');
+  var checkedGroups={};
+  if(existingGrpCbs.length>0){
+    existingGrpCbs.forEach(function(cb){ checkedGroups[cb.value]=cb.checked; });
+  } else {
+    DIST_GROUPS.forEach(function(g){ checkedGroups[g]=true; });
+  }
   var grpHTML='';
   DIST_GROUPS.forEach(function(g){
     var ct=projPS.filter(function(x){return(x.distributionGroups||'').split(',').map(function(s){return s.trim()}).indexOf(g)>=0}).length;
+    var isChecked=checkedGroups[g]!==undefined?checkedGroups[g]:true;
     grpHTML+='<label style="display:flex;align-items:center;gap:7px;cursor:pointer;background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:8px 14px">'
-      +'<input type="checkbox" class="rpt-grp-cb" value="'+g+'" checked style="accent-color:var(--sky);width:15px;height:15px">'
+      +'<input type="checkbox" class="rpt-grp-cb" value="'+g+'"'+(isChecked?' checked':'')+' style="accent-color:var(--sky);width:15px;height:15px">'
       +'<span style="font-size:13px;color:var(--mist)">'+g+'</span>'
       +'<span class="badge b-dark" style="font-size:10px;margin-left:4px">'+ct+'</span></label>';
   });

@@ -250,6 +250,7 @@ body{padding:0}
     <div class="card">
       <div class="card-title">Upload your stakeholder file</div>
       <div class="card-sub">Accepts CSV or Excel (.xlsx). First row must be column headers. All other formatting is handled automatically — capitalization and blank cells are fine. Phone numbers must be 10 digits; invalid numbers are flagged in the review step and stored as-is for manual correction.</div>
+      <div id="no-project-warn" style="display:none;background:rgba(232,160,32,.1);border:1px solid rgba(232,160,32,.3);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--amber);margin-top:10px"><strong>⚠ No project selected</strong> — contacts will be added to the master list only and will not be linked to any project. Select a project above if this import is project-specific.</div>
 
       <div class="fi-row" style="margin-bottom:16px">
         <div class="fi-lbl">Import context</div>
@@ -324,8 +325,9 @@ body{padding:0}
             <th style="width:24px">#</th>
             <th>Imported contact</th>
             <th style="width:100px">Match type</th>
+            <th style="width:120px">List scope</th>
             <th>Existing record / differences</th>
-            <th style="width:130px">Action</th>
+            <th style="width:170px">Action</th>
           </tr></thead>
           <tbody id="review-tbody"></tbody>
         </table>
@@ -334,11 +336,23 @@ body{padding:0}
 
       <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:16px">
         <span id="import-count-label" style="font-size:12px;color:var(--slate)"></span>
-        <button class="btn btn-primary" id="btn-import" onclick="runImport()">
+        <button class="btn btn-primary" id="btn-import" onclick="confirmImport()">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg>
           Import selected
         </button>
       </div>
+  </div>
+
+  <!-- CONFIRM IMPORT MODAL -->
+  <div id="confirm-import-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:999;align-items:center;justify-content:center">
+    <div style="background:var(--navy-mid);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:420px;width:90%;margin:auto">
+      <div style="font-size:15px;font-weight:600;color:var(--white);margin-bottom:8px">Confirm import</div>
+      <div id="confirm-import-msg" style="font-size:13px;color:var(--slate);line-height:1.6;margin-bottom:20px"></div>
+      <div style="display:flex;justify-content:flex-end;gap:10px">
+        <button class="btn" onclick="document.getElementById('confirm-import-modal').style.display='none'">Cancel</button>
+        <button class="btn btn-primary" onclick="document.getElementById('confirm-import-modal').style.display='none';runImport()">Yes, import</button>
+      </div>
+    </div>
   </div>
 
   <!-- STEP 4: COMPLETE -->
@@ -928,6 +942,7 @@ function downloadTemplate() {
 // ── PROJECT POPULATION ────────────────────────────────────────
 async function populateProjectSelect() {
   const projs = await cacheLoad('projects');
+  window.DB_PROJECTS = projs;
   // Check if the main app signalled a project pre-selection via BroadcastChannel or URL param
   const params = new URLSearchParams(window.location.search);
   const preselect = params.get('project') || '';
@@ -937,12 +952,18 @@ async function populateProjectSelect() {
   if (preselect) {
     state.importContext = preselect;
     state.selectedProject = preselect;
+  } else {
+    // No project pre-selected — show warning
+    const warn = document.getElementById('no-project-warn');
+    if (warn) warn.style.display = 'block';
   }
 }
 function updateContext() {
   const val = document.getElementById('import-context').value;
   state.importContext = val === 'master' ? 'master' : val;
   state.selectedProject = val === 'master' ? null : val;
+  const warn = document.getElementById('no-project-warn');
+  if (warn) warn.style.display = state.selectedProject ? 'none' : 'block';
 }
 // ── STARTUP: check auth before making any Supabase calls ──────────────
 (function initImporter() {
@@ -1202,7 +1223,7 @@ function buildReview() {
         matchType = 'fuzzy'; matchId = best.id; diffs = getDiffs(row, best);
       }
     }
-    return { row, matchType, matchId, action: matchType === 'new' ? 'add' : matchType === 'exact' ? (state.selectedProject ? 'link' : 'skip') : (state.selectedProject ? 'link' : 'review'), diffs };
+    return { row, matchType, matchId, action: matchType === 'new' ? 'add' : matchType === 'exact' ? (state.selectedProject ? 'link' : 'skip') : 'skip', diffs };
   });
   renderReviewTable();
   updateImportCount();
@@ -1264,10 +1285,17 @@ function renderReviewTable() {
           <button class="action-btn ${action==='add'?'sel-add':''}" onclick="setAction(${realIdx},'add')">Add new &amp; link</button>
         </div>`;
 
+    const isMaster = row.isMaster !== undefined ? row.isMaster : (state.selectedProject ? false : true);
+    const hasProject = !!state.selectedProject;
+    let scopeChip;
+    if (isMaster && hasProject)  scopeChip = '<span style="font-size:11px;padding:2px 7px;border-radius:3px;background:rgba(74,155,232,.15);color:var(--sky-lt);white-space:nowrap">Master + Project</span>';
+    else if (!isMaster && hasProject) scopeChip = '<span style="font-size:11px;padding:2px 7px;border-radius:3px;background:rgba(39,174,96,.15);color:#4ec97b;white-space:nowrap">Project only</span>';
+    else scopeChip = '<span style="font-size:11px;padding:2px 7px;border-radius:3px;background:rgba(232,160,32,.15);color:var(--amber);white-space:nowrap">Master only</span>';
     return `<tr class="${rowClass}" id="rrow-${realIdx}">
       <td style="color:var(--fog);font-size:11px">${realIdx+1}</td>
       <td>${contactHTML}</td>
       <td>${matchBadge}</td>
+      <td>${scopeChip}</td>
       <td>${existingHTML}</td>
       <td>${actions}</td>
     </tr>`;
@@ -1304,12 +1332,27 @@ function updateReviewSummary() {
   const linkCt = r.filter(x=>x.action==='link').length;
   const skipCt = r.filter(x=>x.action==='skip').length;
   document.getElementById('review-summary').innerHTML = `
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-      <span class="badge b-green">${newCt} new contacts</span>
-      <span class="badge b-amber">${exactCt} exact duplicates</span>
-      <span class="badge b-red">${fuzzyCt} fuzzy matches</span>
-      <span style="margin-left:auto;font-size:12px;color:var(--slate)">Actions: ${addCt} add · ${updateCt} update · ${linkCt} link · ${skipCt} skip</span>
-    </div>${state.rejected && state.rejected.length > 0 ?
+    ${(()=>{
+      const proj = state.selectedProject ? (DB_PROJECTS||[]).find(p=>p.id===state.selectedProject) : null;
+      const projLabel = proj ? `<strong>${proj.pid} — ${proj.name}</strong>` : 'the master list only';
+      const total = addCt + updateCt + linkCt;
+      const parts = [];
+      if (addCt)    parts.push(`${addCt} added`);
+      if (updateCt) parts.push(`${updateCt} updated`);
+      if (linkCt)   parts.push(`${linkCt} linked`);
+      if (skipCt)   parts.push(`${skipCt} skipped`);
+      return `<div style="background:rgba(39,174,96,.08);border:1px solid rgba(39,174,96,.25);border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:13px;color:var(--mist)">
+        <strong>${total} stakeholder${total!==1?'s':''}</strong> will be imported into ${projLabel}${skipCt>0?` · ${skipCt} will be skipped`:''}.
+        ${fuzzyCt>0?`<span style="color:var(--amber)"> ⚠ ${fuzzyCt} fuzzy match${fuzzyCt!==1?'es':''} defaulted to Skip — review manually in the app.</span>`:''}
+        <span style="color:var(--fog);font-size:11px;display:block;margin-top:3px">This action cannot be automatically undone.</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <span class="badge b-green">${newCt} new</span>
+        <span class="badge b-amber">${exactCt} exact dupes</span>
+        <span class="badge b-red">${fuzzyCt} fuzzy matches</span>
+        <span style="margin-left:auto;font-size:12px;color:var(--slate)">${parts.join(' · ')}</span>
+      </div>`;
+    })()}${state.rejected && state.rejected.length > 0 ?
       `<div class="alert alert-warn">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v4M8 11v1"/></svg>
         <div><strong>${state.rejected.length} row${state.rejected.length>1?'s':''} skipped</strong> — these rows could not be imported due to missing or invalid data:
@@ -1327,6 +1370,26 @@ function updateImportCount() {
 }
 
 // ── RUN IMPORT ────────────────────────────────────────────────
+function confirmImport() {
+  const r = state.reviewed;
+  const addCt   = r.filter(x=>x.action==='add').length;
+  const updateCt = r.filter(x=>x.action==='update').length;
+  const linkCt   = r.filter(x=>x.action==='link').length;
+  const skipCt   = r.filter(x=>x.action==='skip').length;
+  const total    = addCt + updateCt + linkCt;
+  if (total === 0) { showToast('No contacts selected to import.','warn'); return; }
+  const proj = state.selectedProject ? (DB_PROJECTS||[]).find(p=>p.id===state.selectedProject) : null;
+  const projLabel = proj ? `PIN ${proj.pid} — ${proj.name}` : 'the master list only';
+  const parts = [];
+  if (addCt)    parts.push(`${addCt} added`);
+  if (updateCt) parts.push(`${updateCt} updated`);
+  if (linkCt)   parts.push(`${linkCt} linked`);
+  if (skipCt)   parts.push(`${skipCt} skipped`);
+  document.getElementById('confirm-import-msg').innerHTML =
+    `You are about to import <strong style="color:var(--white)">${total} stakeholder${total!==1?'s':''}</strong> into <strong style="color:var(--white)">${projLabel}</strong> (${parts.join(', ')}). This cannot be automatically undone. Continue?`;
+  document.getElementById('confirm-import-modal').style.display = 'flex';
+}
+
 async function runImport() {
   const btn = document.getElementById('btn-import');
   btn.disabled = true;

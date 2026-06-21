@@ -5176,14 +5176,17 @@ async function applyTpl(){
 function openProjModal(id){
   S.editId=id||null;
   const p=id?(DB.get('projects').find(x=>String(x.id)===String(id))||{}):{};
+  const _projs = DB.get('projects')||[];
+  const clientOpts = [...new Set(_projs.map(x=>x.client||'').filter(Boolean))].sort().map(v=>'<option value="'+v+'">').join('');
+  const countyOpts = [...new Set(_projs.map(x=>x.county||'').filter(Boolean))].sort().map(v=>'<option value="'+v+'">').join('');
   openM(id?'Edit project':'New project',
   `<div class="fsec">Project identification</div>
   <div class="fgrid fg2f">
     <div class="fr"><label>Project ID * <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--fog)">(3–5 digits)</span></label><input id="f-pid" value="${p.pid||''}" placeholder="e.g. 12345" inputmode="numeric" maxlength="5" style="font-family:var(--mono);letter-spacing:.12em" oninput="this.value=this.value.replace(/[^0-9]/g,\'\').slice(0,5)"></div>
     <div class="fr"><label>Project name * <span style="font-size:10px;color:var(--fog);font-weight:400">(60 chars max)</span></label><input id="f-pn" maxlength="60" value="${p.name||''}"></div>
-    <div class="fr"><label>Client / agency</label><input id="f-pc2" value="${p.client||''}"></div>
+    <div class="fr"><label>Client / agency</label><input id="f-pc2" value="${p.client||''}" list="dl-clients" autocomplete="off"><datalist id="dl-clients">${clientOpts}</datalist></div>
     <div class="fr"><label>Project type</label><select id="f-pty">${['Roadway','Bridge','Transit','Trail / Active transport','Drainage','Water','Wastewater','Water Resource Planning','Utility','Municipal Development','Environmental Assessment','Master Plan','Other'].map(t=>`<option${p.type===t?' selected':''}>${t}</option>`).join('')}</select></div>
-    <div class="fr"><label>County / region</label><input id="f-pco" value="${p.county||''}"></div>
+    <div class="fr"><label>County / region</label><input id="f-pco" value="${p.county||''}" list="dl-counties" autocomplete="off"><datalist id="dl-counties">${countyOpts}</datalist></div>
     <div class="fr"><label>Phase</label><select id="f-pph" onchange="var show=['Precon','Construction','Closeout'].indexOf(this.value)>=0;document.getElementById('precon-date-wrap').style.display=show?'':'none';if(!show)document.getElementById('f-ppd').value=''">${['Planning','NEPA / Environmental','Design','Precon','Construction','Closeout','Community Outreach','Survey / Data Collection','Analysis','Draft Plan / Public Comment','Final Adoption'].map(t=>`<option${p.phase===t?' selected':''}>${t}</option>`).join('')}</select></div>
     <div class="fr"><label>Status</label><select id="f-pst">${['Active','On hold','Complete','Cancelled'].map(t=>`<option${p.status===t?' selected':''}>${t}</option>`).join('')}</select></div>
   </div>

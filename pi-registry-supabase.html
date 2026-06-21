@@ -3599,7 +3599,7 @@ function renderStakeDetail(s,link){
         <div class="det-badges">
           <span class="badge b-gray">${s.type||'—'}</span>
           ${link?supBadge(link.support):''}
-          <span class="badge b-purple">Master list</span>
+          ${s.isMaster?'<span class="badge b-purple">Master list</span>':''}
         </div>
       </div>
       <div class="det-acts">

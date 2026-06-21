@@ -1409,12 +1409,7 @@ async function runImport() {
     let stakeholderId;
 
     if (action === 'add') {
-      const _isMasterRaw = row.isMaster;
-      const _isMasterCalc = _isMasterRaw !== undefined ? _isMasterRaw : (state.selectedProject ? false : true);
-      console.log('[IMPORT DEBUG] row.isMaster=', _isMasterRaw,
-        '| state.selectedProject=', state.selectedProject,
-        '| calculated isMaster=', _isMasterCalc,
-        '| contact=', (row.firstName||'') + ' ' + (row.lastName||row.org||''));
+      const _isMasterCalc = row.isMaster !== undefined ? row.isMaster : (state.selectedProject ? false : true);
       const newS = {
         id: DB.uid(),
         firstName: row.firstName || '',
@@ -1430,7 +1425,6 @@ async function runImport() {
         isMaster:  _isMasterCalc,
         notes:     row.notes     || '',
       };
-      console.log('[IMPORT DEBUG] newS.isMaster=', newS.isMaster, '| toSB result=', JSON.stringify(toSB('stakeholders', newS)));
       const newId = await sbAdd('stakeholders', newS);
       stakeholderId = newId || newS.id;
       if (newId) added++;

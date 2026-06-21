@@ -21,7 +21,7 @@
   --font:'IBM Plex Sans',sans-serif;--mono:'IBM Plex Mono',monospace;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{min-height:100%;background:#F5F7FA;color:var(--white);font-family:var(--font);font-size:13px}
+html,body{min-height:100%;background:#F5F7FA;color:var(--white);font-family:var(--font);font-size:13px;overflow-y:auto}
 body{padding:0}
 
 /* LAYOUT */
@@ -31,7 +31,7 @@ body{padding:0}
 .hdr-title{font-size:16px;font-weight:600;letter-spacing:-.2px}
 .hdr-sub{font-size:11px;color:var(--fog);margin-top:1px}
 .hdr-sp{flex:1}
-.page{max-width:1100px;margin:0 auto;padding:28px 32px}
+.page{max-width:1100px;margin:0 auto;padding:28px 32px;overflow-y:auto}
 
 /* STEPS */
 .steps{display:flex;align-items:center;gap:0;margin-bottom:28px}
@@ -138,10 +138,10 @@ body{padding:0}
 .fi-sel:focus{border-color:var(--sky)}
 
 /* SCROLLABLE AREA */
-.review-wrap{max-height:calc(100vh - 320px);min-height:300px;overflow-y:scroll;border:1px solid var(--border);border-radius:var(--radius-lg)}
-::-webkit-scrollbar{width:4px;height:4px}
-::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:2px}
+.review-wrap{max-height:calc(100vh - 280px);min-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-lg)}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:rgba(255,255,255,.04);border-radius:4px}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.28);border-radius:4px}
 ::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.18)}
 
 /* ALERT */
@@ -279,7 +279,7 @@ body{padding:0}
 
       <div id="auto-mapped-notice" class="hidden"></div>
 
-      <div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-lg)">
+      <div style="overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 340px);border:1px solid var(--border);border-radius:var(--radius-lg)">
         <div class="mapper-grid" id="mapper-grid">
           <div class="mapper-hdr"><div class="mhdr">Your column</div><div class="mhdr" style="text-align:center">→</div><div class="mhdr">App field</div></div>
         </div>
@@ -1358,7 +1358,7 @@ async function runImport() {
         type:      row.type      || 'Other',
         influenceTier: row.influenceTier || 'Medium',
         prefContact:   row.prefContact   || 'Email',
-        isMaster:  row.isMaster !== undefined ? row.isMaster : true,
+        isMaster:  row.isMaster !== undefined ? row.isMaster : (state.projectId ? false : true),
         notes:     row.notes     || '',
       };
       const newId = await sbAdd('stakeholders', newS);

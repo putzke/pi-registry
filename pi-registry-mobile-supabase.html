@@ -300,9 +300,10 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
     </div>
     <div class="proj-selector">
       <span class="proj-selector-label">Project</span>
-      <select id="contacts-proj" onchange="renderContacts()">
-        <option value="">All / Master list</option>
+      <select id="contacts-proj" onchange="renderContacts();updateContactsCaption()">
+        <option value="">Master list only</option>
       </select>
+      <div id="contacts-caption" style="font-size:11px;color:#888;margin-top:4px;padding:0 2px">Showing master stakeholder list only — select a project to see all project contacts</div>
     </div>
     <div class="content no-pad" style="overflow-y:auto">
       <div style="padding:10px 16px 4px">
@@ -1363,6 +1364,19 @@ function refreshHome(){
 }
 
 // ── CONTACTS SCREEN ────────────────────────────────────────────────────
+function updateContactsCaption(){
+  const pF=document.getElementById('contacts-proj').value;
+  const cap=document.getElementById('contacts-caption');
+  if(!cap) return;
+  if(pF){
+    const projs=DB.get('projects')||[];
+    const proj=projs.find(p=>p.id===pF);
+    cap.textContent=proj?'Showing all contacts linked to '+proj.name:'Showing project contacts';
+  } else {
+    cap.textContent='Showing master stakeholder list only — select a project to see all project contacts';
+  }
+}
+
 function renderContacts(){
   const pF=document.getElementById('contacts-proj').value;
   const search=(document.getElementById('contacts-search').value||'').toLowerCase();

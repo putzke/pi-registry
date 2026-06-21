@@ -4548,7 +4548,7 @@ function openStakeModal(id){
     <div class="fr"><label>Project</label><select id="f-lp"><option value="">— None —</option>${projs.map(p=>`<option value="${p.id}"${S.projectFilter===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
     <div class="fr"><label>Support level</label><select id="f-ls">${['Neutral','Champion','Opponent'].map(t=>`<option>${t}</option>`).join('')}</select></div>
   </div>`:''}
-  <div class="fr"><label>Notes</label><textarea id="f-no">${s.notes||''}</textarea></div>`,
+  <div class="fr"><label>Notes</label><textarea id="f-no">${s.notes||''}</textarea></div>  <div class="fr" style="margin-top:8px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400"><input type="checkbox" id="f-smaster" ${s.isMaster!==false?'checked':''} style="accent-color:var(--sky);width:15px;height:15px"><span>Add to master stakeholder list</span><span style="font-size:11px;color:var(--fog);margin-left:4px">(uncheck to keep this contact project-only)</span></label></div>`,
   `${id ? _stakeActionBtn(id) : ''}
   <button class="btn" onclick="closeM()">Cancel</button>
   <button class="btn btn-primary" onclick="saveStake()">Save stakeholder</button>`,true);
@@ -4622,7 +4622,7 @@ function saveStake(){
   if(phoneErr){alert(phoneErr);return;}
   const emailErr=validateEmail(v('f-em'));
   if(emailErr){alert(emailErr);return;}
-  const data={id:S.editId||DB.uid(),firstName:document.getElementById('f-fn')?.value||'',lastName:document.getElementById('f-ln')?.value||'',org:v('f-org'),title:v('f-ti'),email:v('f-em'),phone:rawPhone.trim()?formatPhone(cleanPhone(rawPhone)):'',address:v('f-ad'),parcelId:v('f-parc'),type:v('f-st'),isMaster:true,notes:v('f-no'),isAnonymous:false};
+  const data={id:S.editId||DB.uid(),firstName:document.getElementById('f-fn')?.value||'',lastName:document.getElementById('f-ln')?.value||'',org:v('f-org'),title:v('f-ti'),email:v('f-em'),phone:rawPhone.trim()?formatPhone(cleanPhone(rawPhone)):'',address:v('f-ad'),parcelId:v('f-parc'),type:v('f-st'),isMaster:!!(document.getElementById('f-smaster')?.checked),notes:v('f-no'),isAnonymous:false};
   if(!data.firstName&&!data.lastName&&!data.org){alert('First and last name, or Organization name required.');return}
 
   // ── Duplicate detection (new contacts only) ───────────────────

@@ -4856,6 +4856,53 @@ function saveEditLink(lid){
 }
 
 // UNLINK FROM MASTER VIEW (projects linked section — keeps stakeholder selected)
+// ── ORPHAN PROTECTION ────────────────────────────────────────────────────────
+async function _checkOrphanBeforeUnlink(stakeholderId, linkIdToRemove) {
+  const stake = DB.getActive('stakeholders').find(s => String(s.id) === String(stakeholderId));
+  if (!stake || stake.isMaster) return true;
+  const allLinks = DB.get('project_stakeholders').filter(x => String(x.stakeholderId) === String(stakeholderId));
+  const remainingLinks = allLinks.filter(x => String(x.id) !== String(linkIdToRemove));
+  if (remainingLinks.length > 0) return true;
+  const name = ((stake.firstName||'')+' '+(stake.lastName||'')).trim() || stake.org || 'This contact';
+  const sid = String(stakeholderId);
+  return new Promise(resolve => {
+    const mid = 'orphan-warn-modal';
+    let el = document.getElementById(mid);
+    if (!el) { el = document.createElement('div'); el.id = mid; document.body.appendChild(el); }
+    el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center';
+    el.innerHTML = '<div style="background:var(--navy-mid);border:1px solid rgba(220,60,60,.4);border-radius:12px;padding:24px;max-width:440px;width:90%">'
+      + '<div style="font-size:15px;font-weight:600;color:var(--white);margin-bottom:8px">⚠️ Project-only contact</div>'
+      + '<div style="font-size:13px;color:var(--slate);line-height:1.6;margin-bottom:20px">'
+      + '<strong style="color:var(--white)">' + name + '</strong> is not in the master stakeholder list and has no other project links. '
+      + 'Unlinking will make this contact permanently unreachable.<br><br>What would you like to do?</div>'
+      + '<div style="display:flex;flex-direction:column;gap:8px">'
+      + '<button class="btn btn-sm" style="background:rgba(74,155,232,.15);border-color:rgba(74,155,232,.4);color:var(--sky-lt);justify-content:center" id="ow-promote">Add to master list, then unlink</button>'
+      + '<button class="btn btn-sm" style="background:rgba(220,60,60,.15);border-color:rgba(220,60,60,.4);color:#f87171;justify-content:center" id="ow-delete">Delete contact entirely</button>'
+      + '<button class="btn btn-sm" style="justify-content:center" id="ow-cancel">Cancel</button>'
+      + '</div></div>';
+    function closeModal(){ document.getElementById(mid).style.display='none'; }
+    document.getElementById('ow-promote').onclick = async function(){
+      closeModal();
+      const all = DB.get('stakeholders');
+      const i = all.findIndex(x => String(x.id) === sid);
+      if (i >= 0) { all[i].isMaster = true; await DB.set('stakeholders', all); }
+      resolve(true);
+    };
+    document.getElementById('ow-delete').onclick = async function(){
+      if (!confirm('Permanently delete ' + name + '? This cannot be undone.')) return;
+      closeModal();
+      const sAll = DB.get('stakeholders').filter(x => String(x.id) !== sid);
+      await DB.set('stakeholders', sAll);
+      const psAll = DB.get('project_stakeholders').filter(x => String(x.stakeholderId) !== sid);
+      await DB.set('project_stakeholders', psAll);
+      S.selStakeholder = null;
+      renderStakeholders(document.getElementById('main'));
+      resolve(false);
+    };
+    document.getElementById('ow-cancel').onclick = function(){ closeModal(); resolve(false); };
+  });
+}
+
 async function unlinkFromProjectMaster(linkId, stakeId){
   const link = DB.get('project_stakeholders').find(x=>String(x.id)===String(linkId));
   if(!link) return;
@@ -4867,6 +4914,7 @@ async function unlinkFromProjectMaster(linkId, stakeId){
     alert('Cannot unlink — this stakeholder has ' + intCount + ' interaction' + (intCount!==1?'s':'') + ' logged on this project. Delete the interactions first, then unlink.');
     return;
   }
+  if (!(await _checkOrphanBeforeUnlink(link.stakeholderId, linkId))) return;
   if(!confirm('Remove this stakeholder from the project? The contact will remain in the master list. This cannot be undone.')) return;
   const all = DB.get('project_stakeholders').filter(x=>String(x.id)!==String(linkId));
   await DB.set('project_stakeholders', all);
@@ -4886,6 +4934,7 @@ async function unlinkFromProject(linkId){
     alert('Cannot unlink — this stakeholder has ' + intCount + ' interaction' + (intCount!==1?'s':'') + ' logged on this project. Delete the interactions first, then unlink.');
     return;
   }
+  if (!(await _checkOrphanBeforeUnlink(link.stakeholderId, linkId))) return;
   if(!confirm('Remove this stakeholder from the project? The contact will remain in the master list. This cannot be undone.')) return;
   const all = DB.get('project_stakeholders').filter(x=>String(x.id)!==String(linkId));
   await DB.set('project_stakeholders', all);

@@ -1421,7 +1421,7 @@ async function runImport() {
         type:      row.type      || 'Other',
         influenceTier: row.influenceTier || 'Medium',
         prefContact:   row.prefContact   || 'Email',
-        isMaster:  row.isMaster !== undefined ? row.isMaster : (state.projectId ? false : true),
+        isMaster:  row.isMaster !== undefined ? row.isMaster : (state.selectedProject ? false : true),
         notes:     row.notes     || '',
       };
       const newId = await sbAdd('stakeholders', newS);

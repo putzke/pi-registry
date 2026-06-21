@@ -5304,14 +5304,7 @@ function delProj(id){
       return s ? (((s.firstName||'')+' '+(s.lastName||'')).trim() || s.org) : 'Unknown';
     });
     const extra = orphans.length > 3 ? ' and ' + (orphans.length - 3) + ' more' : '';
-    if (!confirm('Warning: ' + orphans.length + ' project-only contact' + (orphans.length!==1?'s':'') +
-      ' will become unreachable if this project is deleted: ' + names.join(', ') + extra +
-      '.
-
-These contacts are not in the master list and have no other project links. ' +
-      'They will be deleted along with the project.
-
-Continue?')) return;
+    if (!confirm('Warning: ' + orphans.length + ' project-only contact' + (orphans.length!==1?'s':'') + ' will become unreachable if this project is deleted: ' + names.join(', ') + extra + '. These contacts are not in the master list and have no other project links. They will be deleted along with the project. Continue?')) return;
     // Delete orphaned contacts entirely
     const orphanIds = orphans.map(lk => String(lk.stakeholderId));
     DB.set('stakeholders', allStakes.filter(x => !orphanIds.includes(String(x.id))));

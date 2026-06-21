@@ -1191,9 +1191,10 @@ const DEV_BYPASS = false;
 function filterByProject(pid){S.projectFilter=pid;S.selStakeholder=null;render()}
 function refreshBadges(){
   const all=DB.getActive('stakeholders');
+  const masterCount=all.filter(s=>s.isMaster).length;
   const ints=DB.get('interactions');
   const openFU=ints.filter(i=>i.followUp&&!i.followUpDone).length;
-  document.getElementById('nb-master').textContent=all.length;
+  document.getElementById('nb-master').textContent=masterCount;
   const fuEl=document.getElementById('nb-fu');
   fuEl.textContent=openFU;
   fuEl.classList.toggle('hide',openFU===0);
@@ -2627,7 +2628,7 @@ function renderMaster(el){
   // Archived view — separate independently searchable view
   if (S.showArchived) { renderArchivedStakeholders(el); return; }
   if (S.showDuplicates) { renderDuplicates(el); return; }
-  let stakes=DB.getActive('stakeholders');
+  let stakes=DB.getActive('stakeholders').filter(s=>s.isMaster);
   const ps=DB.get('project_stakeholders');
   const projs=DB.get('projects');
   const ints=DB.get('interactions');

@@ -4698,6 +4698,14 @@ function _stakeActionBtn(id) {
 }
 
 async function archiveStake(id) {
+  // Orphan check — project-only contact with no other links becomes invisible if archived
+  const stake = DB.getActive('stakeholders').find(s => String(s.id) === String(id));
+  if (stake && !stake.isMaster) {
+    const links = DB.get('project_stakeholders').filter(x => String(x.stakeholderId) === String(id));
+    if (links.length === 0) {
+      if (!confirm('This contact is project-only and has no project links. Archiving will make them unreachable. Archive anyway?')) return;
+    }
+  }
   if (!confirm('Archive this stakeholder? They will be hidden from all active lists but their history will be preserved. You can restore them at any time.')) return;
   const all = DB.get('stakeholders');
   const idx = all.findIndex(x => String(x.id) === String(id));
@@ -5278,6 +5286,36 @@ async function saveProj(){
   render();
 }
 function delProj(id){
+  // Identify project-only contacts that will become orphans
+  const projLinks = DB.get('project_stakeholders').filter(x => String(x.projectId) === String(id));
+  const allStakes = DB.get('stakeholders');
+  const orphans = projLinks.filter(lk => {
+    const s = allStakes.find(x => String(x.id) === String(lk.stakeholderId));
+    if (!s || s.isMaster) return false; // master list — safe
+    const otherLinks = DB.get('project_stakeholders').filter(x =>
+      String(x.stakeholderId) === String(lk.stakeholderId) &&
+      String(x.projectId) !== String(id)
+    );
+    return otherLinks.length === 0; // no other project links — will be orphaned
+  });
+  if (orphans.length > 0) {
+    const names = orphans.slice(0,3).map(lk => {
+      const s = allStakes.find(x => String(x.id) === String(lk.stakeholderId));
+      return s ? (((s.firstName||'')+' '+(s.lastName||'')).trim() || s.org) : 'Unknown';
+    });
+    const extra = orphans.length > 3 ? ' and ' + (orphans.length - 3) + ' more' : '';
+    if (!confirm('Warning: ' + orphans.length + ' project-only contact' + (orphans.length!==1?'s':'') +
+      ' will become unreachable if this project is deleted: ' + names.join(', ') + extra +
+      '.
+
+These contacts are not in the master list and have no other project links. ' +
+      'They will be deleted along with the project.
+
+Continue?')) return;
+    // Delete orphaned contacts entirely
+    const orphanIds = orphans.map(lk => String(lk.stakeholderId));
+    DB.set('stakeholders', allStakes.filter(x => !orphanIds.includes(String(x.id))));
+  }
   if(!confirm('Delete this project? All associated stakeholder links will be removed. Interactions, commitments, and deliverables logged to this project will also be deleted. This cannot be undone.')) return;
   DB.set('projects',DB.get('projects').filter(x=>x.id!==id));
   DB.set('project_stakeholders',DB.get('project_stakeholders').filter(x=>x.projectId!==id));

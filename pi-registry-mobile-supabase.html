@@ -212,7 +212,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 
 /* ── PROJECT SELECTOR ── */
 .proj-selector{padding:12px 16px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
-.proj-selector select{flex:1;border:1.5px solid var(--border2);border-radius:var(--radius-sm);padding:8px 32px 8px 10px;font-size:14px;font-family:var(--font);color:var(--text);background-color:var(--surface);appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238896A7' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;outline:none}
+.proj-selector select{flex:1;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1.5px solid var(--border2);border-radius:var(--radius-sm);padding:8px 32px 8px 10px;font-size:14px;font-family:var(--font);color:var(--text);background-color:var(--surface);appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238896A7' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;outline:none}
 .proj-selector-label{font-size:12px;font-weight:600;color:var(--text3);white-space:nowrap}
 </style>
 </head>
@@ -301,7 +301,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
     <div style="padding:10px 16px 6px;background:var(--surface);border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:10px">
         <span class="proj-selector-label">Project</span>
-        <select id="contacts-proj" onchange="renderContacts();updateContactsCaption()" style="flex:1;border:1.5px solid var(--border2);border-radius:var(--radius-sm);padding:7px 10px;font-size:14px;font-family:var(--font)">
+        <select id="contacts-proj" onchange="renderContacts();updateContactsCaption()" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1.5px solid var(--border2);border-radius:var(--radius-sm);padding:7px 10px;font-size:14px;font-family:var(--font)">
           <option value="">Master list only</option>
         </select>
       </div>

@@ -1698,6 +1698,15 @@ function renderDash(el){
 
 // ── MASTER STAKEHOLDER LIST ───────────────────
 
+function renderMasterDetail(){
+  // Update only the detail pane — preserves list-pane scroll position
+  const detPane=document.getElementById('master-detail');
+  if(!detPane){renderMaster(document.getElementById('main'));return;}
+  const sel=S.selStakeholder;
+  const selData=sel?DB.getActive('stakeholders').find(x=>x.id===sel):null;
+  detPane.innerHTML=selData?renderStakeDetail(selData,null):'<div class="pane-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="9" cy="7" r="4"/><path d="M2 20c0-3.314 3.134-6 7-6s7 2.686 7 6"/></svg><div class="pe-title">Select a stakeholder</div><div class="pe-sub">Full profile, project links, and interaction history.</div></div>';
+}
+
 function filterMasterList(){
   const search=(document.getElementById('ms-search')?.value||'').toLowerCase();
   const typeF=document.getElementById('ms-type')?.value||'';
@@ -2849,7 +2858,7 @@ function renderStakeholders(el){
   </div>` : `
   <div class="content">
     <div class="split">
-      <div class="list-pane">
+      <div class="list-pane" id="sk-list-pane">
         ${S.projectFilter?_buildGroupFilterBar(S.projectFilter):''}
         ${S.projectFilter&&listItems.length>0?`
         <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px 4px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02)">
@@ -2919,6 +2928,14 @@ function renderStakeholders(el){
   // Render issues view after DOM is set
   if(S.skView==='issues'&&S.projectFilter){
     requestAnimationFrame(()=>renderIssuesPanel(S.projectFilter));
+  }
+  // Restore list-pane scroll if preserved by selectStake
+  if(typeof window._pendingListScroll!=='undefined'&&window._pendingListScroll>0){
+    requestAnimationFrame(()=>{
+      const lp=document.getElementById('sk-list-pane')||document.querySelector('.list-pane');
+      if(lp)lp.scrollTop=window._pendingListScroll;
+      window._pendingListScroll=0;
+    });
   }
 }
 
@@ -3297,15 +3314,34 @@ function applyBulkUpdate() {
 function selectStake(id){
   const msVal=document.getElementById('ms-search')?.value||'';
   const skVal=document.getElementById('sk-search')?.value||'';
+  // Preserve list scroll position across re-render
+  const _listEl=document.getElementById('ms-data-list')||document.getElementById('sk-list-pane')||document.querySelector('.list-pane');
+  const _savedScroll=_listEl?_listEl.scrollTop:0;
+  window._pendingListScroll=_savedScroll;
   S.selStakeholder=id;S.stakeTab='info';
   if(S.view==='master'){
-    renderMaster(document.getElementById('main'));
-    const el=document.getElementById('ms-search');
-    if(el&&msVal){el.value=msVal;filterMasterList();}
+    // Master: use targeted update (filterMasterList only updates list innerHTML,
+    // not the full panel) to avoid scroll reset; fall back to full render if needed
+    const existingList=document.getElementById('ms-data-list');
+    if(existingList){
+      filterMasterList();
+      renderMasterDetail();
+    } else {
+      renderMaster(document.getElementById('main'));
+      const el=document.getElementById('ms-search');
+      if(el&&msVal){el.value=msVal;filterMasterList();}
+    }
   } else {
     renderStakeholders(document.getElementById('main'));
     const el=document.getElementById('sk-search');
     if(el&&skVal)el.value=skVal;
+  }
+  // Master detail: also restore ms-data-list scroll
+  if(S.view==='master'){
+    requestAnimationFrame(()=>{
+      const ml=document.getElementById('ms-data-list');
+      if(ml&&_savedScroll)ml.scrollTop=_savedScroll;
+    });
   }
 }
 

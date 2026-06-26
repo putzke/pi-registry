@@ -854,8 +854,11 @@ function cacheClear(k) { delete _cache[k]; delete _cacheTime[k]; }
 const _syncCache = {};
 
 async function loadAllData() {
-  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','dismissed_pairs'];
+  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members'];
   await Promise.all(tables.map(async t => { _syncCache[t] = await sbGet(t); }));
+  // Load dismissed_pairs separately so a 403 doesn't block everything else
+  try { _syncCache['dismissed_pairs'] = await sbGet('dismissed_pairs'); }
+  catch(e) { console.warn('dismissed_pairs unavailable:', e.message); _syncCache['dismissed_pairs'] = []; }
 }
 
 // ── DB SHIM ────────────────────────────────────────────────────────

@@ -2991,7 +2991,7 @@ function renderIssuesPanel(projectId){
       const sc=STATUS_COLORS[iss.status]||'var(--slate)';
       const pc=PRIORITY_COLORS[iss.priority]||'var(--slate)';
       const isSel=S.selIssue===iss.id;
-      return'<div class="lrow'+(isSel?' sel':'')+'" onclick="S.selIssue=\''+(iss.id)+'\';renderIssuesPanel(\''+(projectId)+'\')" style="cursor:pointer">'+
+      return'<div class="lrow'+(isSel?' sel':'')+'" onclick="_selectIssue(\''+(iss.id)+'\',\''+(projectId)+'\')" style="cursor:pointer">'+
         '<div style="flex:1;min-width:0">'+
         '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">'+
         '<span style="font-size:11px;font-weight:700;color:'+(sc)+';background:'+(sc)+'22;padding:1px 7px;border-radius:10px">'+(iss.status||'Open')+'</span>'+
@@ -3517,6 +3517,54 @@ function selectStake(id){
 }
 
 // ── INFLUENCE-SENTIMENT BUBBLE CHART ───────────────────────────────
+
+// Targeted issue selection — updates sel class + detail pane without rebuilding list
+function _selectIssue(id, projectId) {
+  const listPane = document.getElementById('issues-list-pane');
+  const detPane  = document.getElementById('issues-detail-pane');
+  if (!listPane || !detPane) { S.selIssue=id; renderIssuesPanel(projectId); return; }
+  // Update sel highlight on rows
+  listPane.querySelectorAll('.lrow').forEach(row => {
+    const onclick = row.getAttribute('onclick')||'';
+    row.classList.toggle('sel', onclick.includes("'"+id+"'"));
+  });
+  // Update state and re-render detail pane only
+  S.selIssue = id;
+  const issues = (DB.get('issues')||[]).filter(x=>x.projectId===projectId);
+  const sel = issues.find(x=>x.id===id);
+  if (!sel) return;
+  const ints   = DB.get('interactions')||[];
+  const iLinks = DB.get('issue_interactions')||[];
+  const stakes = DB.getActive('stakeholders')||[];
+  const linked = iLinks.filter(l=>String(l.issueId)===String(sel.id));
+  const linkedInts = linked.map(l=>ints.find(i=>String(i.id)===String(l.interactionId))).filter(Boolean);
+  const sc = STATUS_COLORS[sel.status]||'var(--slate)';
+  const pc = PRIORITY_COLORS[sel.priority]||'var(--slate)';
+  // Rebuild just the detail pane (reuse existing renderIssuesPanel detail logic)
+  renderIssuesPanel(projectId);
+}
+
+// Targeted issue-view selection (cross-project issues sidebar)
+function _selectIssueView(id) {
+  const listPane = document.querySelector('#issues-view-detail')?.closest('.split')?.querySelector('.list-pane');
+  const detPane  = document.getElementById('issues-view-detail');
+  if (!listPane || !detPane) { S.selIssueView=id; renderIssuesView(document.getElementById('main')); return; }
+  // Update sel highlight
+  listPane.querySelectorAll('.lrow').forEach(row => {
+    const onclick = row.getAttribute('onclick')||'';
+    row.classList.toggle('sel', onclick.includes("'"+id+"'"));
+  });
+  S.selIssueView = id;
+  // Re-render just the detail pane via full renderIssuesView (detail only changes)
+  // Save list scroll first
+  const _saved = listPane.scrollTop;
+  renderIssuesView(document.getElementById('main'));
+  if (_saved > 0) requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    const lp2 = document.querySelector('#issues-view-detail')?.closest('.split')?.querySelector('.list-pane');
+    if (lp2) lp2.scrollTop = _saved;
+  }));
+}
+
 function renderBubbleChart(projectId){
   try{
     var mount=document.getElementById('bubble-chart-mount');
@@ -5589,7 +5637,7 @@ function renderIssuesView(el){
           const sc=STATUS_COLORS[iss.status]||'var(--slate)';
           const pc=PRIORITY_COLORS[iss.priority]||'var(--slate)';
           const linkCount=(iLinks.filter(l=>String(l.issueId)===String(iss.id))||[]).length;
-          return`<div class="lrow${iss.id===S.selIssueView?' sel':''}" onclick="S.selIssueView='${iss.id}';renderIssuesView(document.getElementById('main'))" style="cursor:pointer">
+          return`<div class="lrow${iss.id===S.selIssueView?' sel':''}" onclick="_selectIssueView('${iss.id}')" style="cursor:pointer">
             <div style="flex:1;min-width:0">
               <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
                 <span style="font-size:11px;font-weight:700;color:${sc};background:${sc}22;padding:1px 7px;border-radius:10px">${iss.status}</span>

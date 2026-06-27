@@ -2712,7 +2712,7 @@ function renderMaster(el){
     <div class="split">
       <div class="list-pane">
         ${stakes.length>0?`
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px 4px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02)">
+        <div id="sk-bulk-toolbar" style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px 4px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02)">
           <div onclick="toggleMasterSelectAll()" style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:11px;color:var(--slate);user-select:none">
             <div style="width:14px;height:14px;border-radius:3px;border:2px solid ${(S.masterBulkSelected||[]).length===stakes.length&&stakes.length>0?'var(--sky-lt)':'rgba(255,255,255,.25)'};background:${(S.masterBulkSelected||[]).length===stakes.length&&stakes.length>0?'var(--sky-lt)':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
               ${(S.masterBulkSelected||[]).length===stakes.length&&stakes.length>0?'<svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="white" stroke-width="2"><path d="M1.5 5l2.5 2.5 4.5-4.5"/></svg>':''}
@@ -3264,16 +3264,62 @@ function toggleBulkSelect(id) {
   const idx = S.bulkSelected.indexOf(String(id));
   if (idx > -1) S.bulkSelected.splice(idx, 1);
   else S.bulkSelected.push(String(id));
-  // Targeted update: save scroll, full re-render, restore
-  const _lp = document.getElementById('sk-list-pane')||document.querySelector('.list-pane');
-  const _saved = _lp ? _lp.scrollTop : 0;
-  renderStakeholders(document.getElementById('main'));
-  if(_saved>0){
-    requestAnimationFrame(()=>requestAnimationFrame(()=>{
-      const lp2=document.getElementById('sk-list-pane')||document.querySelector('.list-pane');
-      if(lp2)lp2.scrollTop=_saved;
-    }));
+  // DOM-only update — no re-render, no scroll reset
+  const sid = String(id);
+  const row = document.querySelector('.lrow[onclick*="selectStake(\''+sid+'\')"]') ||
+              Array.from(document.querySelectorAll('.lrow')).find(r=>(r.getAttribute('onclick')||'').includes("'"+sid+"'"));
+  if(row){
+    const checked = S.bulkSelected.includes(sid);
+    row.classList.toggle('bulk-checked', checked);
+    row.style.background = checked ? 'rgba(90,135,198,.15)' : '';
+    row.style.borderLeft = checked ? '3px solid var(--sky-lt)' : '';
+    const box = row.querySelector('div[onclick*="toggleBulkSelect"]');
+    if(box){
+      const inner = box.querySelector('div');
+      if(inner){
+        inner.style.borderColor = checked ? 'var(--sky-lt)' : 'rgba(255,255,255,.25)';
+        inner.style.background  = checked ? 'var(--sky-lt)' : 'transparent';
+        inner.innerHTML = checked ? '<svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="white" stroke-width="2"><path d="M1.5 5l2.5 2.5 4.5-4.5"/></svg>' : '';
+      }
+    }
   }
+  // Update bulk toolbar DOM directly (no re-render)
+  _skBulkToolbarUpdate();
+}
+
+function _skBulkToolbarUpdate() {
+  const toolbar = document.getElementById('sk-bulk-toolbar');
+  if (!toolbar) return;
+  const ct = (S.bulkSelected||[]).length;
+  const ps = DB.get('project_stakeholders').filter(x=>String(x.projectId)===String(S.projectFilter));
+  const allStakes = DB.getActive('stakeholders');
+  const listItems = ps.map(lk=>allStakes.find(s=>String(s.id)===String(lk.stakeholderId))).filter(Boolean);
+  const total = listItems.length;
+  const allChecked = ct>0 && ct===total;
+  toolbar.innerHTML = `
+    <div onclick="toggleSelectAll()" style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:11px;color:var(--slate);user-select:none">
+      <div style="width:14px;height:14px;border-radius:3px;border:2px solid ${allChecked?'var(--sky-lt)':'rgba(255,255,255,.25)'};background:${allChecked?'var(--sky-lt)':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        ${allChecked?'<svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="white" stroke-width="2"><path d="M1.5 5l2.5 2.5 4.5-4.5"/></svg>':''}
+      </div>
+      ${ct>0?`<span style="color:var(--sky-lt);font-weight:600">${ct} selected</span>`:'Select all'}
+    </div>
+    ${ct>0?`<div style="display:flex;align-items:center;gap:6px">
+      <select id="bulk-sentiment-sel" style="font-size:11px;padding:3px 7px;background:var(--navy-mid);border:1px solid var(--border);border-radius:5px;color:var(--white)">
+        <option value="">— Sentiment —</option>
+        <option value="Champion">Champion</option>
+        <option value="Neutral">Neutral</option>
+        <option value="Opponent">Opponent</option>
+      </select>
+      <select id="bulk-influence-sel" style="font-size:11px;padding:3px 7px;background:var(--navy-mid);border:1px solid var(--border);border-radius:5px;color:var(--white)">
+        <option value="">— Influence —</option>
+        <option value="High">High</option>
+        <option value="Medium">Medium</option>
+        <option value="Low">Low</option>
+      </select>
+      <button class="btn btn-sm btn-primary" style="font-size:11px;padding:4px 10px" onclick="applyBulkUpdate()">Apply to ${ct}</button>
+      <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 8px" onclick="S.bulkSelected=[];renderStakeholders(document.getElementById('main'))">✕</button>
+    </div>`:''}
+  `;
 }
 
 function toggleSelectAll() {
@@ -3288,9 +3334,27 @@ function toggleSelectAll() {
   } else {
     S.bulkSelected = allIds.slice();
   }
-  const _lp = document.getElementById('sk-list-pane')||document.querySelector('.list-pane');
-  window._pendingListScroll = _lp ? _lp.scrollTop : 0;
-  renderStakeholders(document.getElementById('main'));
+  // DOM-only: update every row checkbox appearance
+  document.querySelectorAll('#sk-list-pane .lrow').forEach(row => {
+    const onclick = row.getAttribute('onclick')||'';
+    const m = onclick.match(/selectStake\('([^']+)'\)/);
+    if (!m) return;
+    const sid = m[1];
+    const checked = S.bulkSelected.includes(sid);
+    row.classList.toggle('bulk-checked', checked);
+    row.style.background = checked ? 'rgba(90,135,198,.15)' : '';
+    row.style.borderLeft = checked ? '3px solid var(--sky-lt)' : '';
+    const box = row.querySelector('div[onclick*="toggleBulkSelect"]');
+    if (box) {
+      const inner = box.querySelector('div');
+      if (inner) {
+        inner.style.borderColor = checked ? 'var(--sky-lt)' : 'rgba(255,255,255,.25)';
+        inner.style.background  = checked ? 'var(--sky-lt)' : 'transparent';
+        inner.innerHTML = checked ? '<svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="white" stroke-width="2"><path d="M1.5 5l2.5 2.5 4.5-4.5"/></svg>' : '';
+      }
+    }
+  });
+  _skBulkToolbarUpdate();
 }
 
 function applyBulkUpdate() {

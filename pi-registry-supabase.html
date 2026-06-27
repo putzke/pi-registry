@@ -2500,6 +2500,11 @@ async function dismissPair(idA, idB){
   const all = DB.get('dismissed_pairs');
   all.push({ id: DB.uid(), idA: lo, idB: hi });
   await DB.set('dismissed_pairs', all);
+  // Force reload from Supabase so real numeric ID replaces tmp_ id in cache
+  try {
+    cacheClear('dismissed_pairs');
+    _syncCache['dismissed_pairs'] = await sbGet('dismissed_pairs');
+  } catch(e) { console.warn('dismissed_pairs reload failed:', e.message); }
   renderDuplicates(document.getElementById('main'));
 }
 

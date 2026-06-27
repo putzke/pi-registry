@@ -7422,8 +7422,8 @@ function openPIReport(){
     +'</div>'
     +'<div style="margin-top:12px;font-size:12px;color:var(--fog)">The report period controls which interactions appear in the auto-populated sections.</div>'    +'<div style="margin-top:14px">'    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'    +'<label style="margin:0">Overall summary <span style="font-weight:400;font-style:italic;color:var(--fog)">(optional — prints before first section)</span></label>'    +'<button class="btn btn-xs" style="background:rgba(74,155,232,.15);border-color:rgba(74,155,232,.4);color:var(--sky-lt);font-size:10px;padding:2px 8px;white-space:nowrap" onclick="generateOverallDraft()">✦ Generate Overall Summary</button>'    +'</div>'    +'<textarea id="rpt-overall-summary" rows="4" placeholder="Enter an overall project summary, narrative, or context to print before the first report section..." style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:10px 12px;resize:vertical;font-family:inherit;line-height:1.6;box-sizing:border-box">'+escHtml(saved.overallSummary||'')+'</textarea></div>'    +'</div>'
     +'<div style="margin-bottom:24px;background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:20px">'
-    +'<div style="font-size:14px;font-weight:600;color:var(--white);margin-bottom:10px">Distribution</div>'
-    +'<div style="font-size:12px;color:var(--fog);margin-bottom:10px">Internal stakeholders from the selected groups will appear on the distribution list in the exported report.</div>'
+    +'<div style="font-size:14px;font-weight:600;color:var(--white);margin-bottom:10px">Report Distribution</div>'
+    +'<div style="font-size:12px;color:var(--fog);margin-bottom:10px">Stakeholders tagged to the selected groups will appear in the \'Distributed To\' header of the exported report, grouped by category. Stakeholders with no group assigned are excluded.</div>'
     +'<div style="display:flex;flex-wrap:wrap;gap:8px" id="rpt-ed-groups">'
     +DIST_GROUPS.map(function(g){return '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--mist)"><input type="checkbox" class="rpt-ed-grp" value="'+g+'"'+(g==='Project team'?' checked':'')+'" style="accent-color:var(--sky);width:14px;height:14px"> '+g+'</label>'}).join('')
     +'</div>'
@@ -7559,32 +7559,39 @@ function exportPIDocx(){
     return true;
   });
 
-  // Build distribution list from Internal stakeholders
+  // Build distribution list grouped by category (Internal + External, empty = excluded)
   var selGroups=[];
   var gcbs=document.querySelectorAll('.rpt-ed-grp:checked');
   for(var gi=0;gi<gcbs.length;gi++)selGroups.push(gcbs[gi].value);
-  var recipients=[];
+  var recipientsByGroup={};
   ps.forEach(function(lk){
-    if((lk.stakeholderRole||'External')!=='Internal')return;
-    var groups=(lk.distributionGroups||'').split(',').map(function(s){return s.trim()});
-    var match=false;
-    for(var g=0;g<groups.length;g++){if(selGroups.indexOf(groups[g])>=0){match=true;break;}}
-    if(match){
-      var s=allStakes.find(function(x){return String(x.id)===String(lk.stakeholderId)});
-      if(s)recipients.push(s.firstName+' '+s.lastName+(s.org?' ('+s.org+')':''));
-    }
+    var stakeGroups=(lk.distributionGroups||'').split(',').map(function(s){return s.trim()}).filter(Boolean);
+    if(stakeGroups.length===0)return; // empty = excluded
+    var s=allStakes.find(function(x){return String(x.id)===String(lk.stakeholderId)});
+    if(!s)return;
+    var nameStr=s.firstName+' '+s.lastName+(s.org?' ('+s.org+')':'');
+    stakeGroups.forEach(function(g){
+      if(selGroups.indexOf(g)<0)return; // group not selected in report
+      if(!recipientsByGroup[g])recipientsByGroup[g]=[];
+      if(recipientsByGroup[g].indexOf(nameStr)<0)recipientsByGroup[g].push(nameStr);
+    });
+  });
+  // Flat list for backward compat
+  var recipients=[];
+  DIST_GROUPS.forEach(function(g){
+    if(recipientsByGroup[g])recipientsByGroup[g].forEach(function(n){recipients.push(n);});
   });
 
   // Get deliverables for this project
   var dels=DB.get('deliverables').filter(function(d){return d.projectId===projF});
 
   var withLH=!document.getElementById('docx-letterhead-cb')||document.getElementById('docx-letterhead-cb').checked;
-  buildDocx(proj,saved,periodInts,recipients,allStakes,dels,withLH);
+  buildDocx(proj,saved,periodInts,recipients,allStakes,dels,withLH,recipientsByGroup);
 }
 
 // ── TEMPLATE-BASED DOCX EXPORT ────────────────────
-function buildDocx(proj,saved,periodInts,recipients,allStakes,dels,withLH){
-  _buildDocxWithTemplate(proj,saved,periodInts,recipients,allStakes,dels,withLH!==false);
+function buildDocx(proj,saved,periodInts,recipients,allStakes,dels,withLH,recipientsByGroup){
+  _buildDocxWithTemplate(proj,saved,periodInts,recipients,allStakes,dels,withLH!==false,recipientsByGroup||{});
 }
 
 function _stripLetterheadFromZip(zip,docXmlStr){
@@ -7614,7 +7621,7 @@ function _stripLetterheadFromZip(zip,docXmlStr){
   return zip;
 }
 
-function _buildDocxWithTemplate(proj,saved,periodInts,recipients,allStakes,dels,withLH){
+function _buildDocxWithTemplate(proj,saved,periodInts,recipients,allStakes,dels,withLH,recipientsByGroup){
   if(withLH===undefined)withLH=true;
   var templateB64=window._piDocxTemplate;
   if(!templateB64){alert('Document template not loaded.');return;}
@@ -7624,7 +7631,7 @@ function _buildDocxWithTemplate(proj,saved,periodInts,recipients,allStakes,dels,
   for(var i=0;i<templateBin.length;i++)templateArr[i]=templateBin.charCodeAt(i);
 
   JSZip.loadAsync(templateArr).then(function(zip){
-    var contentXML=buildReportXML(proj,saved,periodInts,recipients,allStakes,dels);
+    var contentXML=buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipientsByGroup||{});
 
     // Read existing document.xml
     return zip.file('word/document.xml').async('string').then(function(docXml){
@@ -7665,7 +7672,7 @@ function escXml(s){
   return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
+function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipientsByGroup){
   var xml='';
   // Read include-internal toggle (same checkbox used by generateReport)
   var includeInternal=!!(( document.getElementById('rpt-ed-include-internal')||document.getElementById('rpt-include-internal')||{}).checked);
@@ -7731,10 +7738,16 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels){
   var dateStr=new Date().toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'2-digit'});
   xml+=para(dateStr,grayRpr);
 
-  // Distribution
-  if(recipients.length>0){
+  // Distribution — grouped by category, only groups with recipients shown
+  var distGroups=DIST_GROUPS.filter(function(g){return recipientsByGroup&&recipientsByGroup[g]&&recipientsByGroup[g].length>0;});
+  if(distGroups.length>0){
     xml+=spacer();
-    xml+='<w:p>'+bodyPpr+'<w:r>'+boldRpr+'<w:t xml:space="preserve">Distribution: </w:t></w:r><w:r>'+bodyRpr+'<w:t xml:space="preserve">'+escXml(recipients.join(', '))+'</w:t></w:r></w:p>';
+    xml+='<w:p>'+bodyPpr+'<w:r>'+boldRpr+'<w:t xml:space="preserve">Distributed To:</w:t></w:r></w:p>';
+    distGroups.forEach(function(g){
+      var names=recipientsByGroup[g].join(', ');
+      xml+='<w:p>'+bodyPpr+'<w:r>'+boldRpr+'<w:t xml:space="preserve">'+escXml(g)+': </w:t></w:r>'
+          +'<w:r>'+bodyRpr+'<w:t xml:space="preserve">'+escXml(names)+'</w:t></w:r></w:p>';
+    });
   }
 
   xml+=spacer();

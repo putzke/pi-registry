@@ -2940,10 +2940,13 @@ function renderStakeholders(el){
   }
   // Restore list-pane scroll if preserved by selectStake
   if(typeof window._pendingListScroll!=='undefined'&&window._pendingListScroll>0){
+    const _scrollTarget=window._pendingListScroll;
+    window._pendingListScroll=0;
     requestAnimationFrame(()=>{
-      const lp=document.getElementById('sk-list-pane')||document.querySelector('.list-pane');
-      if(lp)lp.scrollTop=window._pendingListScroll;
-      window._pendingListScroll=0;
+      requestAnimationFrame(()=>{
+        const lp=document.getElementById('sk-list-pane')||document.querySelector('.list-pane');
+        if(lp)lp.scrollTop=_scrollTarget;
+      });
     });
   }
 }
@@ -3261,7 +3264,7 @@ function toggleBulkSelect(id) {
   const idx = S.bulkSelected.indexOf(String(id));
   if (idx > -1) S.bulkSelected.splice(idx, 1);
   else S.bulkSelected.push(String(id));
-  const _lp = document.getElementById('list-pane');
+  const _lp = document.getElementById('sk-list-pane')||document.querySelector('.list-pane');
   window._pendingListScroll = _lp ? _lp.scrollTop : 0;
   renderStakeholders(document.getElementById('main'));
 }
@@ -3278,7 +3281,7 @@ function toggleSelectAll() {
   } else {
     S.bulkSelected = allIds.slice();
   }
-  const _lp = document.getElementById('list-pane');
+  const _lp = document.getElementById('sk-list-pane')||document.querySelector('.list-pane');
   window._pendingListScroll = _lp ? _lp.scrollTop : 0;
   renderStakeholders(document.getElementById('main'));
 }

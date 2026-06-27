@@ -5275,7 +5275,7 @@ function openIntModal(preStake){
   const projs=DB.get('projects'),stakes=DB.getActive('stakeholders');
   openM('Log interaction',
   `<div class="fgrid fg2f">
-    <div class="fr"><label>Project *</label><select id="f-ip" onchange="updateIntStakeholders();updateIntIssues()"><option value="">— Select project —</option>${projs.map(p=>`<option value="${p.id}"${S.projectFilter===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
+    <div class="fr"><label>Project *</label><select id="f-ip" onchange="updateIntStakeholders();updateIntIssues();updateIntNepaStage()"><option value="">— Select project —</option>${projs.map(p=>`<option value="${p.id}"${S.projectFilter===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
     <div class="fr" style="position:relative"><label>Stakeholder</label>
       <input id="f-is-search" autocomplete="off" placeholder="Search by name or org..." oninput="filterIntStakeList()" onfocus="filterIntStakeList()" style="width:100%;box-sizing:border-box">
       <input type="hidden" id="f-is" value="${preStake||''}">
@@ -5296,6 +5296,7 @@ function openIntModal(preStake){
       <select id="f-iissue" style="flex:1"><option value="">— None —</option>${(DB.get('issues')||[]).filter(x=>!S.projectFilter||x.projectId===S.projectFilter).map(iss=>`<option value="${iss.id}">[${iss.status}] ${iss.title}</option>`).join('')}</select>
     </div>
   </div>
+  <input type="hidden" id="f-inepastage">
   <div class="fsec">Follow-up</div>
   <div class="fr"><div class="fcheck"><input type="checkbox" id="f-ifu" onchange="document.getElementById('fu-f').style.display=this.checked?'':'none'"><label for="f-ifu">This interaction requires a follow-up action</label></div></div>
   <div id="fu-f" style="display:none"><div class="fgrid fg2f">
@@ -5315,6 +5316,15 @@ function openIntModal(preStake){
   }, 50);
   // Auto-populate Logged by from session
   (function(){var lb=getLoggedBy();var d=document.getElementById('f-il-display');var h=document.getElementById('f-il');if(d)d.textContent=lb||'—';if(h)h.value=lb;})();
+  // Auto-populate NEPA stage from selected project
+  updateIntNepaStage();
+}
+function updateIntNepaStage(){
+  const projId=document.getElementById('f-ip')?.value||'';
+  const h=document.getElementById('f-inepastage');
+  if(!h) return;
+  const proj=(DB.get('projects')||[]).find(x=>x.id===projId);
+  h.value=(proj&&proj.nepaStage)||'';
 }
 function openEditIntModal(id){
   S.editId=id;
@@ -5367,7 +5377,9 @@ function saveInt(){
   const fuDone=document.getElementById('f-ifudo')?.checked||false;
   const fuResolved=fuDone?(vDate('f-ifudr')||localToday()):'';
   const anonLbl = !stakeId ? getAnonLabel(projId, S.editId||null) : '';
-  const data={id:S.editId||DB.uid(),projectId:projId,stakeholderId:stakeId,anonLabel:anonLbl,date:vDate('f-id'),channel:v('f-ic'),direction:v('f-idr'),subject:v('f-isub')||'General',nature:v('f-inat')||'Inquiry',summary:v('f-isu'),loggedBy:v('f-il'),followUp:document.getElementById('f-ifu')?.checked||false,followUpNote:v('f-ifun'),followUpDue:vDate('f-ifud'),followUpDone:fuDone,followUpResolved:fuResolved};
+  const _existingInt=S.editId?(DB.get('interactions')||[]).find(x=>x.id===S.editId):null;
+  const _nepaStageVal=S.editId?(_existingInt?.nepaStage||''):v('f-inepastage');
+  const data={id:S.editId||DB.uid(),projectId:projId,stakeholderId:stakeId,anonLabel:anonLbl,date:vDate('f-id'),channel:v('f-ic'),direction:v('f-idr'),subject:v('f-isub')||'General',nature:v('f-inat')||'Inquiry',summary:v('f-isu'),loggedBy:v('f-il'),nepaStage:_nepaStageVal,followUp:document.getElementById('f-ifu')?.checked||false,followUpNote:v('f-ifun'),followUpDue:vDate('f-ifud'),followUpDone:fuDone,followUpResolved:fuResolved};
   const psAll=DB.get('project_stakeholders');
   if(stakeId&&!psAll.find(x=>x.projectId===projId&&x.stakeholderId===stakeId)){
     psAll.push({id:DB.uid(),projectId:projId,stakeholderId:stakeId,support:'Neutral',issueTags:'',addedDate:data.date,notes:'Auto-linked via interaction log.',distributionGroups:'',stakeholderRole:'External'});
@@ -5498,7 +5510,7 @@ function openProjModal(id){
     <div class="fr"><label>Client / agency</label><input id="f-pc2" value="${p.client||''}" list="dl-clients" autocomplete="off"><datalist id="dl-clients">${clientOpts}</datalist></div>
     <div class="fr"><label>Project type</label><select id="f-pty">${['Roadway','Bridge','Transit','Trail / Active transport','Drainage','Water','Wastewater','Water Resource Planning','Utility','Municipal Development','Environmental Assessment','Master Plan','Other'].map(t=>`<option${p.type===t?' selected':''}>${t}</option>`).join('')}</select></div>
     <div class="fr"><label>County / region</label><input id="f-pco" value="${p.county||''}" list="dl-counties" autocomplete="off"><datalist id="dl-counties">${countyOpts}</datalist></div>
-    <div class="fr"><label>Phase</label><select id="f-pph" onchange="var show=['Precon','Construction','Closeout'].indexOf(this.value)>=0;document.getElementById('precon-date-wrap').style.display=show?'':'none';if(!show)document.getElementById('f-ppd').value=''">${['Planning','NEPA / Environmental','Design','Precon','Construction','Closeout','Community Outreach','Survey / Data Collection','Analysis','Draft Plan / Public Comment','Final Adoption'].map(t=>`<option${p.phase===t?' selected':''}>${t}</option>`).join('')}</select></div>
+    <div class="fr"><label>Phase</label><select id="f-pph" onchange="var show=['Precon','Construction','Closeout'].indexOf(this.value)>=0;document.getElementById('precon-date-wrap').style.display=show?'':'none';if(!show)document.getElementById('f-ppd').value=''">${['Planning','CatEx / CE','NEPA / Environmental','Design','Precon','Construction','Closeout','Community Outreach','Survey / Data Collection','Analysis','Draft Plan / Public Comment','Final Adoption'].map(t=>`<option${p.phase===t?' selected':''}>${t}</option>`).join('')}</select></div>
     <div class="fr"><label>Status</label><select id="f-pst">${['Active','On hold','Complete','Cancelled'].map(t=>`<option${p.status===t?' selected':''}>${t}</option>`).join('')}</select></div>
   </div>
 
@@ -5507,6 +5519,13 @@ function openProjModal(id){
     <div class="fr"><label>Start date</label><input type="date" id="f-psd" value="${p.startDate||''}"></div>
     <div class="fr"><label>End date</label><input type="date" id="f-ped" value="${p.endDate||''}"></div>
     <div id="precon-date-wrap" style="${['Precon','Construction','Closeout'].indexOf(p.phase||'')>=0?'':'display:none'}"><div class="fr"><label>Precon date</label><input type="date" id="f-ppd" value="${['Precon','Construction','Closeout'].indexOf(p.phase||'')>=0?(p.preconDate||''):''}"></div></div>
+  </div>
+  <div class="fsec" style="cursor:pointer;user-select:none" onclick="var b=document.getElementById('nepa-section');var a=document.getElementById('nepa-arrow');b.style.display=b.style.display==='none'?'':'none';a.textContent=b.style.display===''?'▾':'▸'"><span id="nepa-arrow">${(p.nepaClassification&&p.nepaClassification!=='N/A')?'▾':'▸'}</span> NEPA / Compliance <span style="font-weight:400;font-size:11px;color:var(--fog);text-transform:none;letter-spacing:0">(optional)</span></div>
+  <div id="nepa-section" style="${(p.nepaClassification&&p.nepaClassification!=='N/A')?'':'display:none'}">
+    <div class="fgrid fg2f">
+      <div class="fr"><label>NEPA Classification</label><select id="f-pnc" onchange="document.getElementById('nepa-stage-wrap').style.display=this.value&&this.value!=='N/A'?'':'none'">${['N/A','CE','EA','EIS'].map(t=>`<option${(p.nepaClassification||'N/A')===t?' selected':''}>${t}</option>`).join('')}</select></div>
+      <div class="fr" id="nepa-stage-wrap" style="${(p.nepaClassification&&p.nepaClassification!=='N/A')?'':'display:none'}"><label>Current NEPA Stage</label><select id="f-pns">${['Pre-NEPA','CE','EA - Scoping','EA - Draft','EA - Final / FONSI','EIS - Scoping','EIS - DEIS','EIS - FEIS','EIS - ROD','Post-NEPA / Construction','N/A'].map(t=>`<option${(p.nepaStage||'Pre-NEPA')===t?' selected':''}>${t}</option>`).join('')}</select></div>
+    </div>
   </div>
   <div class="fr"><label>Notes</label><textarea id="f-pno">${p.notes||''}</textarea></div>
 `,
@@ -5519,7 +5538,23 @@ async function saveProj(){
   const vDate=id=>{const val=document.getElementById(id)?.value||'';return val||null;};
   const _phase=v('f-pph');
   const _preconPhases=['Precon','Construction','Closeout'];
-  const data={id:S.editId||DB.uid(),pid:v('f-pid'),name:v('f-pn'),client:v('f-pc2'),type:v('f-pty'),county:v('f-pco'),phase:_phase,status:v('f-pst'),startDate:vDate('f-psd'),endDate:vDate('f-ped'),preconDate:_preconPhases.indexOf(_phase)>=0?vDate('f-ppd'):null,notes:v('f-pno')};
+  const _nepaClass=v('f-pnc')||'N/A';
+  const _nepaStage=(_nepaClass&&_nepaClass!=='N/A')?v('f-pns')||'Pre-NEPA':'';
+  const _by=getLoggedBy()||'';
+  const _today=localToday();
+  const all=DB.get('projects');
+  const _existing=S.editId?all.find(x=>x.id===S.editId):null;
+  // Build phase history
+  const _phaseHistory=[...(_existing?.phaseHistory||[])];
+  if(_existing&&_existing.phase&&_existing.phase!==_phase){
+    _phaseHistory.push({from:_existing.phase,to:_phase,date:_today,by:_by});
+  }
+  // Build NEPA stage history
+  const _nepaHistory=[...(_existing?.nepaStageHistory||[])];
+  if(_existing&&(_existing.nepaStage||'')!==_nepaStage&&_nepaStage){
+    _nepaHistory.push({from:_existing.nepaStage||'',to:_nepaStage,date:_today,by:_by});
+  }
+  const data={id:S.editId||DB.uid(),pid:v('f-pid'),name:v('f-pn'),client:v('f-pc2'),type:v('f-pty'),county:v('f-pco'),phase:_phase,status:v('f-pst'),startDate:vDate('f-psd'),endDate:vDate('f-ped'),preconDate:_preconPhases.indexOf(_phase)>=0?vDate('f-ppd'):null,notes:v('f-pno'),nepaClassification:_nepaClass,nepaStage:_nepaStage,phaseHistory:_phaseHistory,nepaStageHistory:_nepaHistory};
   if(!data.pid||!/^\d{3,5}$/.test(data.pid)){alert('Project ID must be 3 to 5 digits.');return}
   if(!data.name){alert('Project name is required.');return}
   if(!data.startDate&&!data.preconDate){alert('Please enter at least a Start date or Precon date — this is required for deliverable scheduling.');return}
@@ -5530,7 +5565,6 @@ async function saveProj(){
   if(_sd&&_ed<=_sd){alert('End date must be later than Start date.');return}
   if(_pd&&_ed<=_pd){alert('End date must be later than Precon date.');return}
   const isNew=!S.editId;
-  const all=DB.get('projects');
   if(S.editId){const i=all.findIndex(x=>x.id===S.editId);if(i>-1)all[i]=data;}else all.push(data);
   closeM();
   await DB.set('projects',all);

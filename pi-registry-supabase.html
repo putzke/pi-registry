@@ -1033,6 +1033,57 @@ const DEL_GROUPS=[
   {group:'Other',types:['Other']}
 ];
 const DEL_TYPES=DEL_GROUPS.reduce(function(a,g){return a.concat(g.types)},[]);
+const NEPA_CHECKLISTS={
+  'CE':[
+    'CE determination documented in project file',
+    'Environmental screening / reevaluation completed',
+    'Section 4(f) applicability reviewed and documented',
+    'Section 106 / historic properties review completed or determined not applicable',
+    'Section 7 / endangered species consultation completed or determined not applicable',
+    'Noise analysis documented (if applicable)',
+    'Public notice issued (if required by UDOT or local agency)',
+    'Agency coordination completed and documented',
+    'CE approval obtained from FHWA / UDOT',
+    'PI activities documented in project file',
+    'CE package submitted to UDOT Environmental'
+  ],
+  'EA':[
+    'Notice of Intent to prepare EA issued',
+    'Scoping process initiated and documented',
+    'Public scoping meeting held and documented',
+    'Alternatives analysis documented',
+    'Draft EA prepared',
+    'Draft EA circulated to agencies and public',
+    'Public comment period open — minimum 30 days (23 CFR 771.123)',
+    'Public hearing held (if requested or required)',
+    'Comment-response matrix completed',
+    'Section 4(f) evaluation completed (if applicable)',
+    'Section 106 consultation completed',
+    'Section 7 / endangered species consultation completed',
+    'FONSI prepared',
+    'FONSI public notice issued',
+    'FONSI approved by FHWA',
+    'PI documentation assembled for administrative record'
+  ],
+  'EIS':[
+    'Notice of Intent (NOI) published in Federal Register (23 CFR 771.123)',
+    'Scoping meetings held and documented',
+    'Purpose and Need statement approved',
+    'Alternatives carried forward documented',
+    'Draft EIS (DEIS) prepared',
+    'DEIS circulated to agencies and public',
+    'DEIS public comment period open — minimum 45 days (23 CFR 771.123)',
+    'Public hearings on DEIS held and documented',
+    'Section 4(f) evaluation completed (if applicable)',
+    'Section 106 consultation completed',
+    'Section 7 / endangered species consultation completed',
+    'Comment-response matrix for DEIS completed',
+    'Final EIS (FEIS) prepared',
+    'FEIS filed with EPA — minimum 30-day waiting period before ROD',
+    'Record of Decision (ROD) issued',
+    'PI documentation assembled for administrative record'
+  ]
+};
 function delGroupIcon(type){
   var icons={
     'Community Outreach':'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" style="width:16px;height:16px"><circle cx="7" cy="6" r="3"/><path d="M1 16c0-2.8 2.7-5 6-5s6 2.2 6 5"/><circle cx="15" cy="6" r="2"/><path d="M19 16c0-2.2-1.8-4-4-4"/></svg>',
@@ -4343,10 +4394,51 @@ function renderDelScope(pF){
         }).join('')}</tbody>
       </table></div>`}
       <div style="margin-top:10px;display:flex;gap:7px"><button class="btn btn-sm" onclick="openTplApply('${proj.id}')">+ Template</button><button class="btn btn-sm btn-primary" onclick="S.projectFilter='${proj.id}';openDelModal()">+ Add item</button></div>
+      ${(()=>{
+        const nc=proj.nepaClassification;
+        if(!nc||nc==='N/A')return'';
+        const cl=proj.nepaChecklist||[];
+        const total=cl.length,done=cl.filter(x=>x.checked).length;
+        const pctN=total>0?Math.round(done/total*100):0;
+        return`<div style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div style="font-weight:600;font-size:13px;color:var(--sky-lt)">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" style="width:14px;height:14px;vertical-align:-2px;margin-right:5px"><path d="M13 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z"/><path d="M5 8l2 2 4-4"/></svg>
+              NEPA Compliance Checklist — ${nc}
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:12px;color:${pctN===100?'var(--green)':'var(--slate)'};font-weight:500">${done}/${total} complete</span>
+              <div class="pbar" style="width:80px"><div class="pfill ${pctN===100?'green':''}" style="width:${pctN}%"></div></div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px">
+            ${cl.map((item,idx)=>`
+              <div style="display:flex;align-items:flex-start;gap:10px;padding:6px 8px;border-radius:5px;background:${item.checked?'rgba(34,197,94,.07)':'rgba(255,255,255,.03)'};cursor:pointer" onclick="toggleNepaCheck('${proj.id}',${idx})">
+                <div style="flex-shrink:0;margin-top:1px;width:16px;height:16px;border-radius:3px;border:1.5px solid ${item.checked?'var(--green)':'rgba(255,255,255,.25)'};background:${item.checked?'var(--green)':'transparent'};display:flex;align-items:center;justify-content:center">
+                  ${item.checked?'<svg viewBox="0 0 10 10" fill="none" stroke="white" stroke-width="2" style="width:9px;height:9px"><path d="M2 5l2.5 2.5L8 3"/></svg>':''}
+                </div>
+                <div style="flex:1;font-size:13px;color:${item.checked?'var(--slate)':'var(--mist)'}${item.checked?';text-decoration:line-through':''}">${item.label}</div>
+                ${item.checked?`<div style="font-size:11px;color:var(--fog);white-space:nowrap;flex-shrink:0">${item.checkedDate?fmt(item.checkedDate):''} ${item.checkedBy?'· '+item.checkedBy:''}</div>`:''}
+              </div>`).join('')}
+          </div>
+          ${pctN===100?`<div style="margin-top:10px;padding:8px 12px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:6px;font-size:12px;color:var(--green);font-weight:500">✓ All NEPA PI compliance items complete for this ${nc} project.</div>`:''}
+        </div>`;
+      })()}
     </div>`;
   }).join('')+'</div>';
 }
 
+function toggleNepaCheck(projId,idx){
+  const all=DB.get('projects');
+  const proj=all.find(x=>x.id===projId);
+  if(!proj||!proj.nepaChecklist||!proj.nepaChecklist[idx])return;
+  const item=proj.nepaChecklist[idx];
+  item.checked=!item.checked;
+  item.checkedDate=item.checked?localToday():'';
+  item.checkedBy=item.checked?(getLoggedBy()||''):'';
+  DB.set('projects',all);
+  renderDeliverables(document.getElementById('main'));
+}
 function renderDelAll(pF){
   let dels=DB.get('deliverables');
   if(pF)dels=dels.filter(d=>d.projectId===pF);
@@ -5554,7 +5646,23 @@ async function saveProj(){
   if(_existing&&(_existing.nepaStage||'')!==_nepaStage&&_nepaStage){
     _nepaHistory.push({from:_existing.nepaStage||'',to:_nepaStage,date:_today,by:_by});
   }
-  const data={id:S.editId||DB.uid(),pid:v('f-pid'),name:v('f-pn'),client:v('f-pc2'),type:v('f-pty'),county:v('f-pco'),phase:_phase,status:v('f-pst'),startDate:vDate('f-psd'),endDate:vDate('f-ped'),preconDate:_preconPhases.indexOf(_phase)>=0?vDate('f-ppd'):null,notes:v('f-pno'),nepaClassification:_nepaClass,nepaStage:_nepaStage,phaseHistory:_phaseHistory,nepaStageHistory:_nepaHistory};
+  // Build NEPA checklist — preserve checked items, add new ones for changed classification
+  const _defaultItems=(NEPA_CHECKLISTS[_nepaClass]||[]).map(label=>({label,checked:false,checkedDate:'',checkedBy:''}));
+  let _nepaChecklist=_existing?.nepaChecklist||[];
+  if(_nepaClass&&_nepaClass!=='N/A'){
+    if(_existing?.nepaClassification!==_nepaClass){
+      // Classification changed or newly set — start fresh but keep any matching checked items
+      const _oldChecked=Object.fromEntries((_existing?.nepaChecklist||[]).filter(x=>x.checked).map(x=>[x.label,x]));
+      _nepaChecklist=_defaultItems.map(item=>_oldChecked[item.label]||item);
+    } else {
+      // Same classification — preserve existing checklist, add any new items from template
+      const _existingLabels=new Set(_nepaChecklist.map(x=>x.label));
+      _defaultItems.forEach(item=>{if(!_existingLabels.has(item.label))_nepaChecklist.push(item);});
+    }
+  } else {
+    _nepaChecklist=[];
+  }
+  const data={id:S.editId||DB.uid(),pid:v('f-pid'),name:v('f-pn'),client:v('f-pc2'),type:v('f-pty'),county:v('f-pco'),phase:_phase,status:v('f-pst'),startDate:vDate('f-psd'),endDate:vDate('f-ped'),preconDate:_preconPhases.indexOf(_phase)>=0?vDate('f-ppd'):null,notes:v('f-pno'),nepaClassification:_nepaClass,nepaStage:_nepaStage,phaseHistory:_phaseHistory,nepaStageHistory:_nepaHistory,nepaChecklist:_nepaChecklist};
   if(!data.pid||!/^\d{3,5}$/.test(data.pid)){alert('Project ID must be 3 to 5 digits.');return}
   if(!data.name){alert('Project name is required.');return}
   if(!data.startDate&&!data.preconDate){alert('Please enter at least a Start date or Precon date — this is required for deliverable scheduling.');return}

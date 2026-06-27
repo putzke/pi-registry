@@ -2497,21 +2497,14 @@ function _dupBtn(){
 
 async function dismissPair(idA, idB){
   const lo = Math.min(Number(idA),Number(idB)), hi = Math.max(Number(idA),Number(idB));
-  // Write directly to Supabase, bypassing DB.set to avoid tmp-id cache confusion
-  try {
-    const r = await fetch(SUPA_REST + '/pi_dismissed_pairs', {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ id_a: lo, id_b: hi })
-    });
-    if (!r.ok) { const e = await r.text(); console.error('dismissPair error:', r.status, e); }
-  } catch(e) { console.error('dismissPair fetch failed:', e); }
-  // Reload dismissed_pairs cache fresh from Supabase
-  try {
-    delete _syncCache['dismissed_pairs'];
-    cacheClear('dismissed_pairs');
-    _syncCache['dismissed_pairs'] = await sbGet('dismissed_pairs');
-  } catch(e) { console.warn('dismissed_pairs reload failed:', e.message); }
+  const all = DB.get('dismissed_pairs');
+  all.push({ id: DB.uid(), idA: lo, idB: hi });
+  await DB.set('dismissed_pairs', all);
+  // After DB.set writes to Supabase, reload cache with real IDs so isDismissed works on next render
+  delete _syncCache['dismissed_pairs'];
+  cacheClear('dismissed_pairs');
+  const fresh = await sbGet('dismissed_pairs');
+  _syncCache['dismissed_pairs'] = fresh;
   renderDuplicates(document.getElementById('main'));
 }
 

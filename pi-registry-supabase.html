@@ -932,17 +932,17 @@ function seed(){
   const ps1=DB.uid(),ps2=DB.uid(),ps3=DB.uid(),ps4=DB.uid(),ps5=DB.uid(),ps6=DB.uid(),ps7=DB.uid(),ps8=DB.uid(),ps9=DB.uid(),ps10=DB.uid(),ps11=DB.uid(),ps12=DB.uid();
   DB.set('project_stakeholders',[
     {id:ps1,projectId:p1,stakeholderId:s1,support:'Neutral',issueTags:'Access,Business impact',addedDate:'2024-02-01',notes:'Wants monthly business impact updates.',distributionGroups:'Community/Public',stakeholderRole:'External'},
-    {id:ps2,projectId:p1,stakeholderId:s2,support:'Champion',issueTags:'Timeline,Noise',addedDate:'2024-02-01',notes:'Supportive as long as project stays on schedule.',distributionGroups:'Government/Agency contacts',stakeholderRole:'Internal'},
+    {id:ps2,projectId:p1,stakeholderId:s2,support:'Champion',issueTags:'Timeline,Noise',addedDate:'2024-02-01',notes:'Supportive as long as project stays on schedule.',distributionGroups:'Agency contacts',stakeholderRole:'Internal'},
     {id:ps3,projectId:p1,stakeholderId:s3,support:'Neutral',issueTags:'Access',addedDate:'2024-02-15',notes:'',distributionGroups:'Community/Public',stakeholderRole:'External'},
     {id:ps4,projectId:p1,stakeholderId:s4,support:'Opponent',issueTags:'Noise,Night work',addedDate:'2024-02-15',notes:'Filed formal written comment re overnight hours.',distributionGroups:'Community/Public',stakeholderRole:'External'},
-    {id:ps5,projectId:p1,stakeholderId:s5,support:'Champion',issueTags:'Traffic,Detour',addedDate:'2024-01-20',notes:'Coordinate lane closure windows.',distributionGroups:'Government/Agency contacts',stakeholderRole:'Internal'},
+    {id:ps5,projectId:p1,stakeholderId:s5,support:'Champion',issueTags:'Traffic,Detour',addedDate:'2024-01-20',notes:'Coordinate lane closure windows.',distributionGroups:'Agency contacts',stakeholderRole:'Internal'},
     {id:ps6,projectId:p2,stakeholderId:s1,support:'Neutral',issueTags:'Business impact',addedDate:'2024-06-15',notes:'',distributionGroups:'Community/Public',stakeholderRole:'External'},
-    {id:ps7,projectId:p3,stakeholderId:s2,support:'Champion',issueTags:'EJ,Community outreach',addedDate:'2023-09-15',notes:'Sits on the interagency steering committee. Receives all draft NEPA documents for review.',distributionGroups:'Government/Agency contacts',stakeholderRole:'Internal'},
+    {id:ps7,projectId:p3,stakeholderId:s2,support:'Champion',issueTags:'EJ,Community outreach',addedDate:'2023-09-15',notes:'Sits on the interagency steering committee. Receives all draft NEPA documents for review.',distributionGroups:'Agency contacts',stakeholderRole:'Internal'},
     {id:ps8,projectId:p3,stakeholderId:s8,support:'Champion',issueTags:'NEPA,Environmental',addedDate:'2023-09-10',notes:'Lead agency reviewer. All environmental clearances route through his office.',distributionGroups:'Project team',stakeholderRole:'Internal'},
     {id:ps9,projectId:p3,stakeholderId:s7,support:'Neutral',issueTags:'EJ,Displacement,Language access',addedDate:'2023-10-01',notes:'Wants all outreach materials in Spanish. Has mobilized 40+ residents to public scoping meetings.',distributionGroups:'Community/Public',stakeholderRole:'External'},
     {id:ps10,projectId:p3,stakeholderId:s9,support:'Opponent',issueTags:'Parking,Access,Property value',addedDate:'2023-11-12',notes:'Formal letter of opposition submitted. Concerned about permanent loss of 30 parking spaces adjacent to her building.',distributionGroups:'Community/Public',stakeholderRole:'External'},
     {id:ps11,projectId:p3,stakeholderId:s4,support:'Neutral',issueTags:'Noise,Community impact',addedDate:'2024-01-08',notes:'Cross-community involvement. Connected to Eastside residents through regional advocacy network.',distributionGroups:'Community/Public',stakeholderRole:'External'},
-    {id:ps12,projectId:p1,stakeholderId:s8,support:'Neutral',issueTags:'Interagency',addedDate:'2024-03-01',notes:'Participates in SR-12 interagency coordination meetings as OCTA representative.',distributionGroups:'Government/Agency contacts',stakeholderRole:'External'}
+    {id:ps12,projectId:p1,stakeholderId:s8,support:'Neutral',issueTags:'Interagency',addedDate:'2024-03-01',notes:'Participates in SR-12 interagency coordination meetings as OCTA representative.',distributionGroups:'Agency contacts',stakeholderRole:'External'}
   ]);
   const i1=DB.uid(),i2=DB.uid(),i3=DB.uid(),i4=DB.uid(),i5=DB.uid(),i6=DB.uid(),i7=DB.uid(),i8=DB.uid(),i9=DB.uid();
   DB.set('interactions',[
@@ -1051,7 +1051,7 @@ function delGroupIcon(type){
 }
 const MILESTONES=['NTP (Notice to Proceed)','Precon meeting','30% design','60% design','90% design','Start of construction','MOT shift 1','MOT shift 2','MOT shift 3','End of construction','Project closeout','Other'];
 const FREQS=['Weekly','Bi-weekly','Monthly','Quarterly','Per phase','As needed'];
-const DIST_GROUPS=['Project team','Government/Agency contacts','Community/Public','Media','Other'];
+const DIST_GROUPS=['Project team','Agency contacts','Media','Other'];
 
 // ── STATE ─────────────────────────────────────
 const S={
@@ -3737,7 +3737,7 @@ function renderStakeDetail(s,link){
     <div class="fg fg3" style="margin-bottom:10px">
       <div class="fi"><div class="fl">Issue tags</div><div class="fv">${(link.issueTags||'').split(',').filter(Boolean).map(t=>`<span class="badge b-dark" style="margin:1px">${t.trim()}</span>`).join('')||'—'}</div></div>
     </div>
-    <div class="fi" style="margin-bottom:12px"><div class="fl">Distribution groups</div><div class="fv">${(link.distributionGroups||'').split(',').filter(Boolean).map(g=>`<span class="badge b-teal" style="margin:1px">${g.trim()}</span>`).join('')||'<span style="color:var(--fog)">None assigned</span>'}</div></div>
+    <div class="fi" style="margin-bottom:12px"><div class="fl">Report distribution</div><div class="fv">${(link.distributionGroups||'').split(',').filter(Boolean).map(g=>`<span class="badge b-teal" style="margin:1px">${g.trim()}</span>`).join('')||'<span style="color:var(--fog)">None assigned</span>'}</div></div>
     ${link.notes?`<div class="fnotes">${link.notes}</div>`:''}`:''}
     ${ps.length>0?`<hr class="div"><div class="sec-t" style="margin-bottom:10px">Projects linked (${ps.length})</div>
     ${ps.map(lk=>{const p=projs.find(x=>x.id===lk.projectId);return p?`<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid var(--border)"><span class="badge b-sky" style="font-family:var(--mono);font-size:11px">${p.pid}</span><span style="font-size:13px;color:var(--mist)">${p.name}</span><span style="margin-left:auto;display:flex;gap:5px"><span class="badge ${(lk.stakeholderRole||'External')==='Internal'?'b-sky':'b-teal'}" style="font-size:10px">${lk.stakeholderRole||'External'}</span>${supBadge(lk.support)}<button class="btn btn-xs" style="background:rgba(220,60,60,.15);border-color:rgba(220,60,60,.4);color:#f87171;padding:2px 7px;font-size:10px" onclick="unlinkFromProjectMaster('${lk.id}','${s.id}')">Unlink</button></span></div>`:'';}).join('')}`:''}
@@ -5026,7 +5026,7 @@ function openAddToProjectModal(stakeId){
   <div class="fr"><label>Issue tags <span style="color:var(--fog);font-weight:400">(comma-separated)</span></label>
     <input id="f-atp-tags" placeholder="Noise, Access, ROW…">
   </div>
-  <div class="fr"><label>Distribution groups</label>
+  <div class="fr"><label>Report distribution</label>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">
       ${DIST_GROUPS.map(g=>`<label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--mist);cursor:pointer"><input type="checkbox" class="f-atp-dg" value="${g}" style="accent-color:var(--sky);width:14px;height:14px"> ${g}</label>`).join('')}
     </div>
@@ -5072,7 +5072,7 @@ function openLinkModal(){
   <div class="fgrid fg2f">
     <div class="fr"><label>Issue tags (comma-separated)</label><input id="f-ltg" placeholder="Noise, Access"></div>
   </div>
-  <div class="fr"><label>Distribution groups</label>
+  <div class="fr"><label>Report distribution</label>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">${DIST_GROUPS.map(g=>`<label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--mist);cursor:pointer"><input type="checkbox" class="f-ldg-cb" value="${g}" style="accent-color:var(--sky);width:14px;height:14px"> ${g}</label>`).join('')}</div>
   </div>
   <div class="fr"><label>Project-specific notes</label><textarea id="f-lno"></textarea></div>`,
@@ -5091,7 +5091,7 @@ function openEditLinkModal(lid){
   `<div class="fgrid fg2f"><div class="fr"><label>Stakeholder role</label><select id="f-lksr"><option value="External"${(lk.stakeholderRole||'External')==='External'?' selected':''}>External</option><option value="Internal"${(lk.stakeholderRole||'External')==='Internal'?' selected':''}>Internal</option></select></div>
   <div class="fr"><label>Support level</label><select id="f-lksu">${['Champion','Neutral','Opponent'].map(t=>`<option${lk.support===t?' selected':''}>${t}</option>`).join('')}</select></div></div>
   <div class="fgrid fg2f"><div class="fr"><label>Issue tags</label><input id="f-lktg" value="${lk.issueTags||''}"></div></div>
-  <div class="fr"><label>Distribution groups</label>
+  <div class="fr"><label>Report distribution</label>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">${DIST_GROUPS.map(g=>`<label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--mist);cursor:pointer"><input type="checkbox" class="f-lkdg-cb" value="${g}" ${(lk.distributionGroups||'').split(',').map(x=>x.trim()).includes(g)?'checked':''} style="accent-color:var(--sky);width:14px;height:14px"> ${g}</label>`).join('')}</div>
   </div>
   <div class="fr"><label>Project-specific notes</label><textarea id="f-lkno">${lk.notes||''}</textarea></div>`,
@@ -5105,7 +5105,7 @@ function saveEditLink(lid){
     const oldRole=all[i].stakeholderRole||'External';
     const hasGroups=[...document.querySelectorAll('.f-lkdg-cb:checked')].length>0;
     if(newRole==='Internal'&&oldRole==='External'&&hasGroups){
-      showToast('Note: This stakeholder has distribution groups assigned. They will be ignored while marked as Internal, but remain saved if you switch back to External.','info',6000);
+      
     }
     all[i].stakeholderRole=newRole;
     all[i].support=document.getElementById('f-lksu')?.value;
@@ -6216,7 +6216,7 @@ function renderReports(el){
 
   // Report type cards data
   var rptCards=[
-    {id:'contact-list',name:'Stakeholder contact list',desc:'Formatted roster with contact info, support levels, and distribution groups',
+    {id:'contact-list',name:'Stakeholder contact list',desc:'Formatted roster with contact info, support levels, and report distribution',
       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><circle cx="9" cy="7" r="4"/><path d="M2 20c0-3.314 3.134-6 7-6s7 2.686 7 6"/><path d="M19 8v6M22 11h-6"/></svg>'},
     {id:'interaction-log',name:'Interaction log',desc:'Full chronological record of all stakeholder communications',
       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'},
@@ -6401,7 +6401,7 @@ el.innerHTML=topbar
     +'</div></div>';
 
   var groupPanel='<div style="margin-bottom:24px;background:#0E1E30;border:1px solid rgba(255,255,255,.13);border-radius:12px;padding:16px 20px">'
-    +'<div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:10px">Distribution groups — select who receives this report</div>'
+    +'<div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:10px">Report distribution — select recipients for this report</div>'
     +'<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">'+grpHTML+internalToggle+'</div>'
     +'<div style="margin-top:10px;font-size:12px;color:var(--fog)">'+projPS.length+' stakeholders across all groups</div></div>';
 
@@ -6464,7 +6464,7 @@ function generateReport(type){
   var ints=DB.get('interactions').filter(function(i){return i.projectId===projF});
   var dels=DB.get('deliverables').filter(function(d){return d.projectId===projF});
 
-  // Get selected distribution groups
+  // Get selected report distribution groups
   var selGroups=[];
   var cbs=document.querySelectorAll('.rpt-grp-cb:checked');
   for(var ci=0;ci<cbs.length;ci++)selGroups.push(cbs[ci].value);
@@ -6503,7 +6503,7 @@ function generateReport(type){
   // External-only filtered stakes for sentiment report
   var externalFilteredPS=filteredPS.filter(function(lk){return(lk.stakeholderRole||'External')==='External'});
 
-  // Internal recipients filtered by selected distribution groups
+  // Internal recipients filtered by selected report distribution
   var internalRecipients=ps.filter(function(lk){
     if((lk.stakeholderRole||'External')!=='Internal')return false;
     if(!lk.distributionGroups)return false;
@@ -6594,7 +6594,7 @@ function generateReport(type){
         +'<td style="padding:9px 10px;border-bottom:1px solid #e0e0e0;vertical-align:top">'+(s.type||'—')+'</td></tr>';
     });
     body+='</tbody></table>';
-    if(sortedStakes.length===0)body='<div style="padding:32px;text-align:center;color:var(--fog)">No stakeholders match the selected distribution groups.</div>';
+    if(sortedStakes.length===0)body='<div style="padding:32px;text-align:center;color:var(--fog)">No stakeholders match the selected report distribution.</div>';
 
   } else if(type==='interaction-log'){
     var sorted=logInts.slice().sort(function(a,b){return b.date.localeCompare(a.date)});
@@ -6965,7 +6965,7 @@ function getSectionBadge(type){
 function getSectionDesc(type){
   var descs={
     'auto-concerns':'Auto-populates from External stakeholder interactions logged during the report period.',
-    'auto-contacts':'Auto-populates a formatted stakeholder roster filtered by selected distribution groups.',
+    'auto-contacts':'Auto-populates a formatted stakeholder roster filtered by selected report distribution.',
     'auto-intlog':'Auto-populates a chronological log of stakeholder interactions (External by default; toggle above to include Internal).',
     'auto-followups':'Auto-populates all open and resolved follow-up action items with due dates.',
     'auto-sentiment':'Auto-populates a 3x3 stakeholder engagement matrix plus stakeholder positions grouped by Champion, Neutral, and Opponent.',
@@ -8271,7 +8271,7 @@ function exportProject(projectId) {
     'First Name','Last Name','Organization','Title / Role',
     'Email','Phone','Stakeholder Type','Influence Tier',
     'Preferred Contact','Project Role','Support Level',
-    'Distribution Groups','Issue Tags','Address','Parcel ID',
+    'Report Distribution','Issue Tags','Address','Parcel ID',
     'Master List','Anonymous','Project Notes'
   ];
   const stakeRows = ps.map(lk => {
@@ -8770,7 +8770,7 @@ function exportPortfolio() {
       if(!s)return null;
       return [s.firstName||'',s.lastName||'',s.org||'',s.title||'',s.email||'',s.phone||'',s.type||'',lk.stakeholderRole||'External',lk.support||'',lk.distributionGroups||'',lk.notes||''];
     }).filter(Boolean);
-    const ws1=XLSX.utils.aoa_to_sheet([['First Name','Last Name','Organization','Title','Email','Phone','Type','Role','Support','Distribution Groups','Notes'],...stakeRows]);
+    const ws1=XLSX.utils.aoa_to_sheet([['First Name','Last Name','Organization','Title','Email','Phone','Type','Role','Support','Report Distribution','Notes'],...stakeRows]);
     styleSheet(ws1,[12,14,26,20,28,14,14,10,10,22,30]);
     XLSX.utils.book_append_sheet(wb,ws1,`${pid}-Stakeholders`.substring(0,31));
 

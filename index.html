@@ -7675,8 +7675,45 @@ function getSectionDesc(type){
 
 
 // ── Claude AI narrative helper ──────────────────────────────────────────────
+// Key is XOR-obfuscated before storage so it doesn't sit as plain text.
+// This is not encryption — it just prevents casual clipboard/DevTools reads.
+var _CK_SEED = 'cmpss-pi-2024';
+function _obfuscate(str) {
+  var out = '';
+  for (var i = 0; i < str.length; i++) {
+    out += String.fromCharCode(str.charCodeAt(i) ^ _CK_SEED.charCodeAt(i % _CK_SEED.length));
+  }
+  return btoa(out);
+}
+function _deobfuscate(b64) {
+  try {
+    var str = atob(b64);
+    var out = '';
+    for (var i = 0; i < str.length; i++) {
+      out += String.fromCharCode(str.charCodeAt(i) ^ _CK_SEED.charCodeAt(i % _CK_SEED.length));
+    }
+    return out;
+  } catch(e) { return ''; }
+}
 function _getClaudeKey() {
-  return localStorage.getItem('compass_claude_api_key') || '';
+  var raw = localStorage.getItem('compass_claude_api_key_v2');
+  if (raw) return _deobfuscate(raw);
+  // Migrate plain-text key from old storage key if present
+  var legacy = localStorage.getItem('compass_claude_api_key');
+  if (legacy) {
+    localStorage.setItem('compass_claude_api_key_v2', _obfuscate(legacy));
+    localStorage.removeItem('compass_claude_api_key');
+    return legacy;
+  }
+  return '';
+}
+function _setClaudeKey(key) {
+  if (key) {
+    localStorage.setItem('compass_claude_api_key_v2', _obfuscate(key));
+  } else {
+    localStorage.removeItem('compass_claude_api_key_v2');
+  }
+  localStorage.removeItem('compass_claude_api_key'); // remove any legacy plain-text copy
 }
 
 async function _claudeNarrative(systemPrompt, userContent) {
@@ -7808,6 +7845,11 @@ async function generateAllSectionDrafts() {
   var doOverall = true;
   var total = autoSections.length + (doOverall ? 1 : 0);
   if (total === 0) { showToast('No auto-generated sections to draft', 'info', 2000); return; }
+
+  if (!confirm('This will send ' + total + ' API call' + (total !== 1 ? 's' : '') + ' to Claude (Anthropic). '
+    + 'Each call costs approximately $0.002–0.005. '
+    + 'Total estimated cost: ~$' + (total * 0.005).toFixed(2) + ' or less.\n\n'
+    + 'Make sure you have a spend cap set at console.anthropic.com.\n\nProceed?')) return;
 
   if (allBtn) { allBtn.disabled = true; allBtn.textContent = 'Drafting…'; }
   if (bar) bar.style.display = 'flex';
@@ -12546,20 +12588,20 @@ function renderSettings(m) {
     <div style="background:var(--navy-mid);border:1px solid rgba(74,155,232,.25);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
         <div style="font-size:15px;font-weight:700;color:var(--white)">Claude AI Narrative Generation</div>
-        <span id="claude-key-status" style="font-size:11px;padding:2px 8px;border-radius:10px;background:${localStorage.getItem('compass_claude_api_key')?'rgba(40,168,112,.2)':'rgba(255,255,255,.07)'};color:${localStorage.getItem('compass_claude_api_key')?'var(--green)':'var(--fog)'};">${localStorage.getItem('compass_claude_api_key')?'Key saved':'No key'}</span>
+        <span id="claude-key-status" style="font-size:11px;padding:2px 8px;border-radius:10px;background:${_getClaudeKey()?'rgba(40,168,112,.2)':'rgba(255,255,255,.07)'};color:${_getClaudeKey()?'var(--green)':'var(--fog)'};">${_getClaudeKey()?'Key saved (obfuscated)':'No key'}</span>
       </div>
-      <div style="font-size:12px;color:var(--fog);margin-bottom:14px">Enter your Anthropic API key to enable AI-generated narrative summaries in the PI Report Editor. The key is stored only in your browser's local storage — it is never sent to Supabase or any server other than the Anthropic API.</div>
+      <div style="font-size:12px;color:var(--fog);margin-bottom:14px">Enter your Anthropic API key to enable AI-generated narrative summaries in the PI Report Editor. The key is obfuscated before being stored in your browser — it will not appear as plain text in DevTools or localStorage. It is never sent to Supabase or any server other than the Anthropic API. Recommended: set a monthly spend cap at console.anthropic.com.</div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-        <input id="claude-api-key-input" type="password" placeholder="sk-ant-…" value="${localStorage.getItem('compass_claude_api_key')||''}"
+        <input id="claude-api-key-input" type="password" placeholder="sk-ant-…"
           style="flex:1;min-width:260px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);border-radius:6px;color:var(--white);font-size:13px;padding:8px 12px;font-family:var(--mono);box-sizing:border-box;outline:none">
         <button class="btn btn-primary" onclick="
           var k=document.getElementById('claude-api-key-input').value.trim();
-          if(k){localStorage.setItem('compass_claude_api_key',k);showToast('API key saved','info',2000);}
-          else{localStorage.removeItem('compass_claude_api_key');showToast('API key removed','info',2000);}
+          if(k){_setClaudeKey(k);showToast('API key saved (obfuscated)','info',2000);}
+          else{_setClaudeKey('');showToast('API key removed','info',2000);}
           renderSettings(document.getElementById('main'));
         ">Save key</button>
         <button class="btn" style="color:var(--fog);border-color:rgba(255,255,255,.15)" onclick="
-          if(confirm('Remove saved Claude API key?')){localStorage.removeItem('compass_claude_api_key');document.getElementById('claude-api-key-input').value='';renderSettings(document.getElementById('main'));showToast('Key removed','info',2000);}
+          if(confirm('Remove saved Claude API key?')){_setClaudeKey('');renderSettings(document.getElementById('main'));showToast('Key removed','info',2000);}
         ">Remove</button>
       </div>
       <div style="margin-top:12px;font-size:11px;color:var(--fog)">Model: <span style="color:var(--slate)">claude-sonnet-4-6</span> · Max tokens per call: <span style="color:var(--slate)">400</span> · Typical cost: ~$0.002–0.005 per narrative</div>

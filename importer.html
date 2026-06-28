@@ -689,6 +689,7 @@ const SB_TO_INT = {
     title:'title', email:'email', phone:'phone', address:'address',
     parcelId:'parcel_id', type:'stakeholder_type', influenceTier:'influence_tier',
     prefContact:'pref_contact', isMaster:'is_master',
+    lep:'lep', underserved:'underserved',
     notes:'notes'
   },
   pi_project_stakeholders: {
@@ -729,7 +730,7 @@ function fromSB(table, row) {
     if (intKey === 'id') { result.id = String(row.id || ''); continue; }
     result[intKey] = row[sbCol] !== undefined ? row[sbCol] : (intKey.startsWith('is') ? false : '');
   }
-  ['isMaster','isAnonymous'].forEach(f => {
+  ['isMaster','isAnonymous','lep','underserved'].forEach(f => {
     if (result[f] !== undefined) result[f] = result[f] === true || result[f] === 1;
   });
   return result;
@@ -800,6 +801,8 @@ const APP_FIELDS = [
   {key:'prefContact',       label:'Preferred contact'},
   {key:'isMaster',          label:'Master list (yes/no)'},
   {key:'isAnonymous',       label:'Anonymous (yes/no)'},
+  {key:'lep',               label:'LEP — Limited English Proficiency (yes/no)'},
+  {key:'underserved',       label:'EJ / Underserved population (yes/no)'},
   {key:'stakeholderRole',   label:'Role on project (Internal/External)'},
   {key:'support',           label:'Support level (project)'},
   {key:'distributionGroups',label:'Distribution groups (project)'},
@@ -859,6 +862,11 @@ const AUTO_MAP = {
   'master':     'isMaster',
   'preferred':  'prefContact',
   'pref':       'prefContact',
+  'lep':        'lep',
+  'limited english': 'lep',
+  'underserved':'underserved',
+  'ej':         'underserved',
+  'environmental justice': 'underserved',
 };
 
 // ── STATE ─────────────────────────────────────────────────────
@@ -1161,8 +1169,8 @@ function buildParsed() {
         obj.influenceTier = normalizeTier(val);
       } else if (field === 'type') {
         obj.type = normalizeType(val);
-      } else if (field === 'isMaster') {
-        obj.isMaster = /^(yes|true|1|y)$/i.test(val);
+      } else if (field === 'isMaster' || field === 'lep' || field === 'underserved') {
+        obj[field] = /^(yes|true|1|y)$/i.test(val);
       } else {
         obj[field] = val;
       }

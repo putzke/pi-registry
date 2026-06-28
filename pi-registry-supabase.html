@@ -860,7 +860,7 @@ function cacheClear(k) { delete _cache[k]; delete _cacheTime[k]; }
 const _syncCache = {};
 
 async function loadAllData() {
-  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments'];
+  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments','comment_periods'];
   await Promise.all(tables.map(async t => { _syncCache[t] = await sbGet(t); }));
   // Load dismissed_pairs separately so a 403 doesn't block everything else
   try { _syncCache['dismissed_pairs'] = await sbGet('dismissed_pairs'); }
@@ -1280,7 +1280,7 @@ function initDashRows(){
     }
   });
 }
-function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.showBulkAdd=false;S.showEmailPanel=false;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;S.cmtSearch='';S.cmtProj='';S.cmtStatus='';S.cmtPeriod='';
+function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.showBulkAdd=false;S.showEmailPanel=false;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;S.cmtSearch='';S.cmtProj='';S.cmtStatus='';S.cmtPeriod='';S.cmtPeriodId='';S.cmtTab='comments';
   S.view=v;S.selStakeholder=null;S.selInteraction=null;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const navId=v==='commitments'?'nav-commitments':v==='comments'?'nav-comments':('nav-'+v);
@@ -10199,19 +10199,153 @@ const CMT_TOPICS=['Noise','Traffic / access','Environmental / natural resources'
 const CMT_STATUSES=['Pending','In progress','Responded','No response needed'];
 const CMT_PERIOD_TYPES=['Scoping','CE','EA — 30-day comment period','DEIS — 45-day comment period','FEIS','Other'];
 
+const PERIOD_STATUSES=['Open','Closed','Under review'];
+
 function renderComments(m){
-  const allComments=DB.get('public_comments')||[];
+  const tab=S.cmtTab||'comments';
   const allProjs=DB.get('projects');
   const projF=S.projectFilter||'';
+  const projFilt=S.cmtProj||projF;
+  const projLabel=projFilt?(allProjs.find(p=>String(p.id)===String(projFilt))||{}).name||'':'';
+  const allComments=DB.get('public_comments')||[];
+  const allPeriods=DB.get('comment_periods')||[];
+
+  const totalPending=allComments.filter(c=>c.responseStatus==='Pending'&&(!projFilt||String(c.projectId)===String(projFilt))).length;
+  const openPeriods=allPeriods.filter(p=>p.status==='Open'&&(!projFilt||String(p.projectId)===String(projFilt))).length;
+
+  let html=`<div class="topbar">
+    <div>
+      <div class="topbar-title">Public comments</div>
+      ${projLabel?`<div class="topbar-sub">${projLabel}</div>`:''}
+    </div>
+    <div class="topbar-sp"></div>
+    <div class="topbar-acts">
+      ${tab==='periods'
+        ?`<button class="btn btn-primary" onclick="openPeriodModal()">+ New period</button>`
+        :`<button class="btn btn-primary" onclick="openCommentModal()">+ Log comment</button>`}
+    </div>
+  </div>
+  <div class="vtabs">
+    <button class="vtab${tab==='comments'?' active':''}" onclick="S.cmtTab='comments';renderComments(document.getElementById('main'))">
+      Comments <span class="vtab-ct">${allComments.filter(c=>!projFilt||String(c.projectId)===String(projFilt)).length}</span>
+      ${totalPending>0?`<span class="badge b-amber" style="margin-left:4px;font-size:10px">${totalPending} pending</span>`:''}
+    </button>
+    <button class="vtab${tab==='periods'?' active':''}" onclick="S.cmtTab='periods';renderComments(document.getElementById('main'))">
+      Comment periods <span class="vtab-ct">${allPeriods.filter(p=>!projFilt||String(p.projectId)===String(projFilt)).length}</span>
+      ${openPeriods>0?`<span class="badge b-green" style="margin-left:4px;font-size:10px">${openPeriods} open</span>`:''}
+    </button>
+  </div>
+  <div class="content" style="overflow-y:auto"><div style="padding:20px;max-width:960px;margin:0 auto">`;
+
+  if(tab==='periods'){
+    html+=_renderCommentPeriods(allPeriods,allComments,allProjs,projFilt);
+  } else {
+    html+=_renderCommentList(allComments,allPeriods,allProjs,projFilt);
+  }
+
+  html+='</div></div>';
+  m.innerHTML=html;
+}
+
+function _renderCommentPeriods(allPeriods,allComments,allProjs,projFilt){
+  const periods=allPeriods
+    .filter(p=>!projFilt||String(p.projectId)===String(projFilt))
+    .sort((a,b)=>(b.startDate||'').localeCompare(a.startDate||''));
+
+  const projSel=`<select style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)" onchange="S.cmtProj=this.value;renderComments(document.getElementById('main'))">
+    <option value="">All projects</option>
+    ${allProjs.map(p=>`<option value="${p.id}" ${String(p.id)===String(projFilt)?'selected':''}>${p.name}</option>`).join('')}
+  </select>`;
+
+  if(periods.length===0){
+    return projSel+`<div style="text-align:center;padding:60px 20px;color:var(--fog);font-size:13px">No comment periods yet. Create one to track a formal public comment period.</div>`;
+  }
+
+  const dateFmt=d=>d?new Date(d+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
+  let html=`<div style="margin-bottom:14px">${projSel}</div>`;
+
+  periods.forEach(p=>{
+    const proj=allProjs.find(x=>String(x.id)===String(p.projectId));
+    const projName=proj?proj.name:'—';
+    const comments=allComments.filter(c=>String(c.commentPeriodId)===String(p.id));
+    const total=comments.length;
+    const pending=comments.filter(c=>c.responseStatus==='Pending').length;
+    const responded=comments.filter(c=>c.responseStatus==='Responded').length;
+    const pct=total>0?Math.round(responded/total*100):0;
+    const statusColor=p.status==='Open'?'var(--green)':p.status==='Under review'?'var(--amber)':'var(--fog)';
+    const statusBg=p.status==='Open'?'rgba(40,168,112,.12)':p.status==='Under review'?'rgba(232,160,32,.12)':'rgba(255,255,255,.06)';
+
+    // Days remaining or overdue
+    let daysNote='';
+    if(p.status==='Open'&&p.endDate){
+      const daysLeft=Math.ceil((new Date(p.endDate+'T00:00:00')-new Date())/86400000);
+      if(daysLeft<0) daysNote=`<span style="color:var(--red);font-size:11px">Ended ${Math.abs(daysLeft)}d ago</span>`;
+      else if(daysLeft===0) daysNote=`<span style="color:var(--amber);font-size:11px">Closes today</span>`;
+      else daysNote=`<span style="color:var(--amber);font-size:11px">${daysLeft}d remaining</span>`;
+    }
+
+    html+=`<div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+            <span style="font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;background:${statusBg};color:${statusColor}">${p.status}</span>
+            ${p.periodType?`<span style="font-size:11px;color:var(--fog);background:rgba(255,255,255,.06);padding:2px 7px;border-radius:4px">${p.periodType}</span>`:''}
+            ${daysNote}
+          </div>
+          <div style="font-size:15px;font-weight:600;color:var(--white);margin-bottom:3px">${p.name||'Unnamed period'}</div>
+          <div style="font-size:12px;color:var(--slate)">${projName}${p.startDate?` · ${dateFmt(p.startDate)} – ${dateFmt(p.endDate)}`:''}  </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">
+          <button class="btn btn-ghost btn-xs" onclick="openPeriodModal('${p.id}')">Edit</button>
+          <button class="btn btn-ghost btn-xs" onclick="S.cmtTab='comments';S.cmtPeriodId='${p.id}';renderComments(document.getElementById('main'))">View comments</button>
+          <button class="btn btn-ghost btn-xs" style="color:var(--red)" onclick="delPeriod('${p.id}')">Delete</button>
+        </div>
+      </div>
+      <!-- Stats row -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">
+        <div style="background:rgba(255,255,255,.04);border-radius:8px;padding:10px 12px;text-align:center">
+          <div style="font-size:22px;font-weight:700;color:var(--white)">${total}</div>
+          <div style="font-size:10px;color:var(--fog);margin-top:2px">Total</div>
+        </div>
+        <div style="background:rgba(232,160,32,.08);border-radius:8px;padding:10px 12px;text-align:center">
+          <div style="font-size:22px;font-weight:700;color:var(--amber)">${pending}</div>
+          <div style="font-size:10px;color:var(--fog);margin-top:2px">Pending</div>
+        </div>
+        <div style="background:rgba(40,168,112,.08);border-radius:8px;padding:10px 12px;text-align:center">
+          <div style="font-size:22px;font-weight:700;color:var(--green)">${responded}</div>
+          <div style="font-size:10px;color:var(--fog);margin-top:2px">Responded</div>
+        </div>
+        <div style="background:rgba(255,255,255,.04);border-radius:8px;padding:10px 12px;text-align:center">
+          <div style="font-size:22px;font-weight:700;color:${pct===100?'var(--green)':pct>0?'var(--sky-lt)':'var(--fog)'}">${pct}%</div>
+          <div style="font-size:10px;color:var(--fog);margin-top:2px">Complete</div>
+        </div>
+      </div>
+      <!-- Progress bar -->
+      ${total>0?`<div>
+        <div style="background:rgba(255,255,255,.08);border-radius:4px;height:5px;overflow:hidden">
+          <div style="background:${pct===100?'var(--green)':'var(--sky-lt)'};width:${pct}%;height:100%;border-radius:4px;transition:width .3s"></div>
+        </div>
+      </div>`:''}
+      ${p.notes?`<div style="margin-top:10px;font-size:12px;color:var(--fog);font-style:italic">${p.notes}</div>`:''}
+    </div>`;
+  });
+  return html;
+}
+
+function _renderCommentList(allComments,allPeriods,allProjs,projFilt){
   const srch=(S.cmtSearch||'').toLowerCase();
   const statusF=S.cmtStatus||'';
-  const periodF=S.cmtPeriod||'';
-  const projFilt=S.cmtProj||projF;
+  const periodTypeF=S.cmtPeriod||'';
+  const periodIdF=S.cmtPeriodId||'';
+
+  // Active period name for header
+  const activePeriod=periodIdF?allPeriods.find(p=>String(p.id)===String(periodIdF)):null;
 
   let filtered=allComments.filter(c=>{
     if(projFilt&&String(c.projectId)!==String(projFilt))return false;
     if(statusF&&c.responseStatus!==statusF)return false;
-    if(periodF&&c.commentPeriodType!==periodF)return false;
+    if(periodTypeF&&c.commentPeriodType!==periodTypeF)return false;
+    if(periodIdF&&String(c.commentPeriodId)!==String(periodIdF))return false;
     if(srch){
       const hay=(c.commenterName||'')+(c.commenterOrg||'')+(c.commentText||'')+(c.topic||'');
       if(!hay.toLowerCase().includes(srch))return false;
@@ -10220,66 +10354,64 @@ function renderComments(m){
   });
   filtered.sort((a,b)=>(b.submittedDate||'').localeCompare(a.submittedDate||''));
 
-  const pendingCt=allComments.filter(c=>c.responseStatus==='Pending'&&(!projFilt||String(c.projectId)===String(projFilt))).length;
-  const inProgCt=allComments.filter(c=>c.responseStatus==='In progress'&&(!projFilt||String(c.projectId)===String(projFilt))).length;
-  const respondedCt=allComments.filter(c=>c.responseStatus==='Responded'&&(!projFilt||String(c.projectId)===String(projFilt))).length;
+  const pendingCt=filtered.filter(c=>c.responseStatus==='Pending').length;
+  const inProgCt=filtered.filter(c=>c.responseStatus==='In progress').length;
+  const respondedCt=filtered.filter(c=>c.responseStatus==='Responded').length;
 
-  const projLabel=projFilt?(allProjs.find(p=>String(p.id)===String(projFilt))||{}).name||'':'';
+  let html='';
 
-  let html=`<div class="topbar">
-    <div>
-      <div class="topbar-title">Public comment log</div>
-      ${projLabel?`<div class="topbar-sub">${projLabel}</div>`:''}
-    </div>
-    <div class="topbar-sp"></div>
-    <div class="topbar-acts">
-      <button class="btn btn-primary" onclick="openCommentModal()">+ Log comment</button>
-    </div>
-  </div>
-  <div class="content" style="overflow-y:auto"><div style="padding:20px;max-width:960px;margin:0 auto">`;
+  // Period context banner
+  if(activePeriod){
+    html+=`<div style="background:rgba(90,135,198,.1);border:1px solid rgba(90,135,198,.3);border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px">
+      <div style="flex:1;font-size:13px;color:var(--sky-lt)">Showing comments for: <strong>${activePeriod.name}</strong></div>
+      <button class="btn btn-ghost btn-xs" onclick="S.cmtPeriodId='';renderComments(document.getElementById('main'))">Clear filter</button>
+    </div>`;
+  }
 
   // Summary cards
   html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px">
-    <div style="background:rgba(232,160,32,.08);border:1px solid rgba(232,160,32,.25);border-radius:10px;padding:14px 16px;cursor:pointer" onclick="S.cmtStatus='Pending';renderComments(document.getElementById('main'))">
+    <div style="background:rgba(232,160,32,.08);border:1px solid rgba(232,160,32,.25);border-radius:10px;padding:14px 16px;cursor:pointer" onclick="S.cmtStatus=S.cmtStatus==='Pending'?'':'Pending';renderComments(document.getElementById('main'))">
       <div style="font-size:28px;font-weight:700;color:var(--amber)">${pendingCt}</div>
       <div style="font-size:11px;color:var(--fog);margin-top:2px">Pending response</div>
     </div>
-    <div style="background:rgba(90,135,198,.08);border:1px solid rgba(90,135,198,.25);border-radius:10px;padding:14px 16px;cursor:pointer" onclick="S.cmtStatus='In progress';renderComments(document.getElementById('main'))">
+    <div style="background:rgba(90,135,198,.08);border:1px solid rgba(90,135,198,.25);border-radius:10px;padding:14px 16px;cursor:pointer" onclick="S.cmtStatus=S.cmtStatus==='In progress'?'':'In progress';renderComments(document.getElementById('main'))">
       <div style="font-size:28px;font-weight:700;color:var(--sky-lt)">${inProgCt}</div>
       <div style="font-size:11px;color:var(--fog);margin-top:2px">In progress</div>
     </div>
-    <div style="background:rgba(40,168,112,.08);border:1px solid rgba(40,168,112,.25);border-radius:10px;padding:14px 16px;cursor:pointer" onclick="S.cmtStatus='Responded';renderComments(document.getElementById('main'))">
+    <div style="background:rgba(40,168,112,.08);border:1px solid rgba(40,168,112,.25);border-radius:10px;padding:14px 16px;cursor:pointer" onclick="S.cmtStatus=S.cmtStatus==='Responded'?'':'Responded';renderComments(document.getElementById('main'))">
       <div style="font-size:28px;font-weight:700;color:var(--green)">${respondedCt}</div>
       <div style="font-size:11px;color:var(--fog);margin-top:2px">Responded</div>
     </div>
   </div>`;
 
   // Filter bar
+  const periodsForProj=allPeriods.filter(p=>!projFilt||String(p.projectId)===String(projFilt));
   html+=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
     <input placeholder="Search comments…" value="${S.cmtSearch||''}" oninput="S.cmtSearch=this.value;renderComments(document.getElementById('main'))"
-      style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white);width:200px">
-    <select style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)" onchange="S.cmtProj=this.value;renderComments(document.getElementById('main'))">
+      style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white);width:180px">
+    <select style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)" onchange="S.cmtProj=this.value;S.cmtPeriodId='';renderComments(document.getElementById('main'))">
       <option value="">All projects</option>
       ${allProjs.map(p=>`<option value="${p.id}" ${String(p.id)===String(projFilt)?'selected':''}>${p.name}</option>`).join('')}
     </select>
+    ${periodsForProj.length>0?`<select style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)" onchange="S.cmtPeriodId=this.value;renderComments(document.getElementById('main'))">
+      <option value="">All periods</option>
+      ${periodsForProj.map(p=>`<option value="${p.id}" ${String(p.id)===String(periodIdF)?'selected':''}>${p.name}</option>`).join('')}
+    </select>`:''}
     <select style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)" onchange="S.cmtStatus=this.value;renderComments(document.getElementById('main'))">
       <option value="">All statuses</option>
       ${CMT_STATUSES.map(s=>`<option value="${s}" ${statusF===s?'selected':''}>${s}</option>`).join('')}
     </select>
-    <select style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)" onchange="S.cmtPeriod=this.value;renderComments(document.getElementById('main'))">
-      <option value="">All comment periods</option>
-      ${CMT_PERIOD_TYPES.map(t=>`<option value="${t}" ${periodF===t?'selected':''}>${t}</option>`).join('')}
-    </select>
-    ${srch||statusF||periodF||projFilt?`<button class="btn btn-ghost btn-sm" onclick="S.cmtSearch='';S.cmtStatus='';S.cmtPeriod='';S.cmtProj='';renderComments(document.getElementById('main'))">Clear</button>`:''}
+    ${srch||statusF||periodTypeF||periodIdF||projFilt?`<button class="btn btn-ghost btn-sm" onclick="S.cmtSearch='';S.cmtStatus='';S.cmtPeriod='';S.cmtPeriodId='';S.cmtProj='';renderComments(document.getElementById('main'))">Clear</button>`:''}
     <span style="margin-left:auto;font-size:12px;color:var(--fog)">${filtered.length} comment${filtered.length!==1?'s':''}</span>
   </div>`;
 
   if(filtered.length===0){
-    html+=`<div style="text-align:center;padding:60px 20px;color:var(--fog);font-size:13px">${allComments.length===0?'No public comments logged yet. Use the button above to log your first comment.':'No comments match the current filters.'}</div>`;
+    html+=`<div style="text-align:center;padding:60px 20px;color:var(--fog);font-size:13px">${allComments.length===0?'No public comments logged yet.':'No comments match the current filters.'}</div>`;
   } else {
     filtered.forEach(c=>{
       const proj=allProjs.find(p=>String(p.id)===String(c.projectId));
       const projName=proj?proj.name:'Unknown project';
+      const period=c.commentPeriodId?allPeriods.find(p=>String(p.id)===String(c.commentPeriodId)):null;
       const sColor=c.responseStatus==='Responded'?'var(--green)':c.responseStatus==='In progress'?'var(--sky-lt)':c.responseStatus==='No response needed'?'var(--fog)':'var(--amber)';
       const sBg=c.responseStatus==='Responded'?'rgba(40,168,112,.12)':c.responseStatus==='In progress'?'rgba(90,135,198,.12)':c.responseStatus==='No response needed'?'rgba(255,255,255,.06)':'rgba(232,160,32,.12)';
       const dateFmt=d=>d?new Date(d+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
@@ -10288,7 +10420,8 @@ function renderComments(m){
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
               <span style="font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;background:${sBg};color:${sColor}">${c.responseStatus||'Pending'}</span>
-              ${c.commentPeriodType?`<span style="font-size:11px;color:var(--fog);background:rgba(255,255,255,.06);padding:2px 7px;border-radius:4px">${c.commentPeriodType}</span>`:''}
+              ${period?`<span style="font-size:11px;color:var(--sky-lt);background:rgba(90,135,198,.1);padding:2px 7px;border-radius:4px;cursor:pointer" onclick="S.cmtPeriodId='${period.id}';renderComments(document.getElementById('main'))">${period.name}</span>`:''}
+              ${c.commentPeriodType&&!period?`<span style="font-size:11px;color:var(--fog);background:rgba(255,255,255,.06);padding:2px 7px;border-radius:4px">${c.commentPeriodType}</span>`:''}
               ${c.topic?`<span style="font-size:11px;color:var(--slate);background:rgba(255,255,255,.04);padding:2px 7px;border-radius:4px">${c.topic}</span>`:''}
               ${c.commentMethod?`<span style="font-size:11px;color:var(--slate)">${c.commentMethod}</span>`:''}
               <span style="font-size:11px;color:var(--fog);margin-left:auto">${dateFmt(c.submittedDate)}</span>
@@ -10313,9 +10446,90 @@ function renderComments(m){
       </div>`;
     });
   }
+  return html;
+}
 
-  html+='</div></div>';
-  m.innerHTML=html;
+function openPeriodModal(id){
+  S.editPeriodId=id||null;
+  const p=id?(DB.get('comment_periods')||[]).find(x=>String(x.id)===String(id))||{}:{};
+  const allProjs=DB.get('projects').filter(x=>x.status==='Active'||x.status==='On hold');
+  const projId=p.projectId||S.projectFilter||S.cmtProj||'';
+  openM(id?'Edit comment period':'New comment period',`
+    <div class="fgrid fg2f">
+      <div class="fr"><label>Period name *</label><input id="f-pname" value="${p.name||''}" placeholder="e.g. EA — 30-Day Public Review"></div>
+      <div class="fr"><label>Type</label>
+        <select id="f-ptype">
+          <option value="">— Select type —</option>
+          ${CMT_PERIOD_TYPES.map(t=>`<option value="${t}" ${p.type===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="fr"><label>Project *</label>
+      <select id="f-pproj">
+        <option value="">— Select project —</option>
+        ${allProjs.map(x=>`<option value="${x.id}" ${String(x.id)===String(projId)?'selected':''}>${x.name} (${x.pid})</option>`).join('')}
+      </select>
+    </div>
+    <div class="fgrid fg2f">
+      <div class="fr"><label>Start date</label><input type="date" id="f-pstart" value="${p.startDate||''}"></div>
+      <div class="fr"><label>End date</label><input type="date" id="f-pend" value="${p.endDate||''}"></div>
+    </div>
+    <div class="fgrid fg2f">
+      <div class="fr"><label>Status</label>
+        <select id="f-pstatus">
+          ${PERIOD_STATUSES.map(s=>`<option value="${s}" ${(p.status||'Open')===s?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fr"><label>Location / venue</label><input id="f-pvenue" value="${p.venue||''}" placeholder="Hearing location or online link"></div>
+    </div>
+    <div class="fr"><label>Description / notes</label>
+      <textarea id="f-pdesc" rows="3" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:10px 12px;resize:vertical;font-family:inherit;line-height:1.6">${p.description||''}</textarea>
+    </div>
+  `,`<button class="btn btn-ghost" onclick="closeM()">Cancel</button>
+     <button class="btn btn-primary" onclick="savePeriod()">Save period</button>`,true);
+}
+
+function savePeriod(){
+  const v=id=>document.getElementById(id)?.value||'';
+  const name=v('f-pname').trim();
+  if(!name){alert('Period name is required.');return;}
+  const projId=v('f-pproj');
+  if(!projId){alert('Please select a project.');return;}
+  const data={
+    id:S.editPeriodId||DB.uid(),
+    name,type:v('f-ptype'),
+    projectId:projId,
+    startDate:v('f-pstart'),
+    endDate:v('f-pend'),
+    status:v('f-pstatus')||'Open',
+    venue:v('f-pvenue'),
+    description:v('f-pdesc')
+  };
+  const all=DB.get('comment_periods')||[];
+  const idx=all.findIndex(x=>String(x.id)===String(data.id));
+  if(idx>=0)all[idx]=data;else all.push(data);
+  DB.set('comment_periods',all);
+  S.editPeriodId=null;
+  closeM();
+  renderComments(document.getElementById('main'));
+}
+
+function delPeriod(id){
+  if(!confirm('Delete this comment period? Comments linked to it will not be deleted.'))return;
+  DB.set('comment_periods',(DB.get('comment_periods')||[]).filter(x=>String(x.id)!==String(id)));
+  if(S.cmtPeriodId===String(id))S.cmtPeriodId='';
+  renderComments(document.getElementById('main'));
+}
+
+function _cmtProjChange(pid){
+  const sel=document.getElementById('f-cmtperiodid');
+  if(!sel)return;
+  const ps=(DB.get('comment_periods')||[]).filter(p=>String(p.projectId)===String(pid));
+  if(!ps.length){sel.style.display='none';return;}
+  sel.style.display='';
+  sel.innerHTML='<option value="">— None —</option>'+ps.map(p=>'<option value="'+p.id+'">'+p.name+'</option>').join('');
+  const wrap=sel.closest('.fr');
+  if(wrap)wrap.style.display='';
 }
 
 function openCommentModal(id){
@@ -10323,6 +10537,14 @@ function openCommentModal(id){
   const c=id?(DB.get('public_comments')||[]).find(x=>String(x.id)===String(id))||{}:{};
   const allProjs=DB.get('projects').filter(p=>p.status==='Active'||p.status==='On hold');
   const projId=c.projectId||S.projectFilter||S.cmtProj||'';
+  const allPeriods=DB.get('comment_periods')||[];
+  const projPeriods=allPeriods.filter(p=>String(p.projectId)===String(projId));
+  const selPeriodId=c.commentPeriodId||S.cmtPeriodId||'';
+  const periodDropHtml=projPeriods.length?
+    '<div class="fr"><label>Link to comment period</label><select id="f-cmtperiodid"><option value="">— None —</option>'+
+    projPeriods.map(p=>'<option value="'+p.id+'"'+(String(p.id)===String(selPeriodId)?' selected':'')+'>'+p.name+'</option>').join('')+
+    '</select></div>':
+    '<select id="f-cmtperiodid" style="display:none"></select>';
 
   openM(id?'Edit comment':'Log public comment',`
     <div class="fsec">Comment details</div>
@@ -10354,12 +10576,13 @@ function openCommentModal(id){
         <input type="date" id="f-cmtdate" value="${c.submittedDate||''}">
       </div>
       <div class="fr"><label>Project *</label>
-        <select id="f-cmtproj">
+        <select id="f-cmtproj" onchange="_cmtProjChange(this.value)">
           <option value="">— Select project —</option>
           ${allProjs.map(p=>`<option value="${p.id}" ${String(p.id)===String(projId)?'selected':''}>${p.name} (${p.pid})</option>`).join('')}
         </select>
       </div>
     </div>
+    ${periodDropHtml}
     <div class="fsec">Commenter information</div>
     <div class="fgrid fg3f">
       <div class="fr"><label>Name</label><input id="f-cmtname" value="${c.commenterName||''}" placeholder="Full name"></div>
@@ -10396,6 +10619,7 @@ function saveComment(){
     id:S.editId||DB.uid(),
     projectId:projId,
     commentText:text,
+    commentPeriodId:v('f-cmtperiodid')||'',
     commentPeriodType:v('f-cmtperiodtype'),
     topic:v('f-cmttopic'),
     commentMethod:v('f-cmtmethod'),

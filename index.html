@@ -8819,30 +8819,136 @@ function _buildArchiveHTML(projF) {
     .sort(function(a,b){ return (b.archivedAt||'').localeCompare(a.archivedAt||''); });
 
   if (!archives.length) {
-    return '<div style="font-size:12px;color:var(--fog);font-style:italic">No archived reports yet. Reports are archived automatically each time you export.</div>';
+    return '<div style="padding:24px 0;text-align:center">'
+      +'<div style="font-size:13px;color:var(--fog)">No archived reports yet.</div>'
+      +'<div style="font-size:12px;color:var(--slate);margin-top:4px">Reports are archived automatically each time you export from the PI Report Editor.</div>'
+      +'</div>';
   }
 
   var limit = ARCHIVE_LIMIT;
   var countColor = archives.length >= limit ? 'var(--red)' : archives.length >= limit-10 ? 'var(--amber)' : 'var(--fog)';
+  var hasKey = !!_getClaudeKey();
 
-  var html = '<div style="font-size:11px;color:'+countColor+';margin-bottom:10px">'+archives.length+' of '+limit+' archived reports</div>';
-  html += '<div style="display:flex;flex-direction:column;gap:6px">';
+  var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
+    +'<span style="font-size:11px;color:'+countColor+'">'+archives.length+' of '+limit+' archived</span>'
+    +(hasKey && archives.length >= 2
+      ? '<button class="btn btn-sm" id="trend-btn" onclick="generateTrendSummary()" style="background:linear-gradient(135deg,#1e3a5f,#0f4c75);border-color:var(--sky-lt);color:var(--sky-lt);gap:6px">'
+        +'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px"><path d="M2 12 L5 8 L8 10 L11 5 L14 3"/></svg>'
+        +'✦ AI: Summarize PI trend</button>'
+      : (archives.length >= 2 && !hasKey ? '<span style="font-size:11px;color:var(--fog)">Add Claude API key in Settings to enable trend analysis</span>' : ''))
+    +'</div>'
+    +'<div id="trend-result"></div>'
+    +'<div style="display:flex;flex-direction:column;gap:6px">';
+
   archives.forEach(function(r) {
     var date = r.archivedAt ? new Date(r.archivedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
     var period = (r.periodStart||r.periodEnd) ? ((r.periodStart?fmt(r.periodStart):'?')+' – '+(r.periodEnd?fmt(r.periodEnd):'?')) : 'No period set';
-    html += '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:8px">'
+    var secCount = (r.sections||[]).length;
+    html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:8px">'
       +'<div style="flex:1;min-width:0">'
-      +'<div style="font-size:12px;font-weight:600;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+      +'<div style="font-size:12px;font-weight:600;color:var(--white);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
       +(r.reportTitle||'Untitled')+(r.reportNum?' <span style="color:var(--fog);font-weight:400">#'+r.reportNum+'</span>':'')
       +'</div>'
-      +'<div style="font-size:11px;color:var(--fog);margin-top:2px">'+period+' &nbsp;·&nbsp; Archived '+date+'</div>'
+      +'<div style="font-size:11px;color:var(--fog);margin-top:2px">'
+      +period+' &nbsp;·&nbsp; '+secCount+' section'+(secCount!==1?'s':'')+' &nbsp;·&nbsp; Archived '+date
+      +'</div>'
+      +(r.overallSummary?'<div style="font-size:11px;color:var(--slate);margin-top:4px;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:480px">'+r.overallSummary+'</div>':'')
       +'</div>'
       +'<button class="btn btn-xs" style="color:var(--red);border-color:rgba(220,80,80,.3);background:rgba(220,80,80,.08);flex-shrink:0" '
       +'onclick="deleteArchivedReport(\''+r.id+'\')">Delete</button>'
       +'</div>';
   });
+
   html += '</div>';
   return html;
+}
+
+async function generateTrendSummary() {
+  var projF = S.projectFilter;
+  if (!projF) return;
+  var key = _getClaudeKey();
+  if (!key) { showToast('No Claude API key set — add it in Settings', 'warn'); return; }
+
+  var archives = (_syncCache['report_archive']||[])
+    .filter(function(r){ return String(r.projectId)===String(projF); })
+    .sort(function(a,b){ return (a.archivedAt||'').localeCompare(b.archivedAt||''); });
+
+  if (archives.length < 2) { showToast('Need at least 2 archived reports for trend analysis', 'warn'); return; }
+
+  var btn = document.getElementById('trend-btn');
+  var resultEl = document.getElementById('trend-result');
+  if (btn) { btn.disabled = true; btn.textContent = '✦ Analyzing…'; }
+  if (resultEl) resultEl.innerHTML = '';
+
+  // Build a compact digest of each archived report for the prompt
+  var digest = archives.map(function(r, i) {
+    var period = (r.periodStart && r.periodEnd) ? (fmt(r.periodStart)+' to '+fmt(r.periodEnd)) : 'period unknown';
+    var secs = (r.sections||[]).map(function(s){
+      var parts = [s.title];
+      if (s.summary) parts.push(s.summary);
+      return parts.join(': ');
+    }).join(' | ');
+    return 'Report '+(i+1)+' (#'+(r.reportNum||'?')+', '+period+'): '
+      +(r.overallSummary||'')
+      +(secs?' Sections — '+secs:'');
+  }).join('\n\n');
+
+  var proj = (DB.get('projects')||[]).find(function(p){return p.id===projF;});
+  var projName = proj ? proj.name : 'this project';
+
+  var systemPrompt = 'You are a senior public involvement coordinator at a transportation engineering firm. '
+    +'Analyze multiple PI progress report snapshots for a single project and write a 3-5 sentence trend summary. '
+    +'Focus on: changes in stakeholder engagement, sentiment shifts, comment response progress, key issues evolving over time, and overall PI health trajectory. '
+    +'Use plain, professional language. No bullet points or markdown. Write in third person.';
+
+  var userContent = 'Project: '+projName+'\n\nArchived PI report summaries in chronological order:\n\n'+digest
+    +'\n\nWrite a trend analysis narrative covering how PI engagement has evolved across these reporting periods.';
+
+  var total = archives.length;
+  var estCost = (total * 0.003).toFixed(2);
+  if (!confirm('This will send 1 API call to Claude analyzing '+total+' archived reports.\n'
+    +'Estimated cost: ~$'+estCost+' or less.\n\nProceed?')) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px"><path d="M2 12 L5 8 L8 10 L11 5 L14 3"/></svg> ✦ AI: Summarize PI trend'; }
+    return;
+  }
+
+  try {
+    var resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 600,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userContent }]
+      })
+    });
+    if (!resp.ok) {
+      var err = await resp.json().catch(function(){return {};});
+      throw new Error((err.error && err.error.message) || ('API error '+resp.status));
+    }
+    var data = await resp.json();
+    var text = (data.content && data.content[0] && data.content[0].text) || '';
+    if (resultEl && text) {
+      resultEl.innerHTML = '<div style="margin-bottom:14px;padding:16px 18px;background:linear-gradient(135deg,rgba(45,125,210,.12),rgba(14,30,48,.8));border:1px solid rgba(45,125,210,.35);border-radius:10px">'
+        +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
+        +'<svg viewBox="0 0 16 16" fill="none" stroke="var(--sky-lt)" stroke-width="1.8" style="width:14px;height:14px"><path d="M2 12 L5 8 L8 10 L11 5 L14 3"/></svg>'
+        +'<span style="font-size:12px;font-weight:700;color:var(--sky-lt);text-transform:uppercase;letter-spacing:.5px">AI Trend Analysis</span>'
+        +'<span style="font-size:10px;color:var(--fog);margin-left:auto">Across '+total+' reports · '+new Date().toLocaleDateString()+'</span>'
+        +'</div>'
+        +'<div style="font-size:13px;color:var(--mist);line-height:1.7">'+text.replace(/\n/g,'<br>')+'</div>'
+        +'</div>';
+    }
+  } catch(e) {
+    showToast('Claude API error: '+e.message, 'error', 5000);
+  }
+
+  if (btn) { btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px"><path d="M2 12 L5 8 L8 10 L11 5 L14 3"/></svg> ✦ AI: Re-analyze trend'; }
 }
 
 async function exportPIDocx(){

@@ -2943,6 +2943,8 @@ function renderStakeholders(el){
   if(search)listItems=listItems.filter(s=>(s.firstName+' '+s.lastName+' '+(s.org||'')).toLowerCase().includes(search));
   if(typeF)listItems=listItems.filter(s=>s.type===typeF);
   if(S.skOrgOnly)listItems=listItems.filter(s=>isOrgContact(s));
+  if(S.skLEP)listItems=listItems.filter(s=>s.lep);
+  if(S.skEJ)listItems=listItems.filter(s=>s.underserved);
   if(S.projectFilter)listItems=_applyGroupFilter(listItems,S.projectFilter);
   // Sort: Internal first by last name, then External by last name
   if(S.projectFilter){
@@ -2998,6 +3000,8 @@ function renderStakeholders(el){
       <option value="">All types</option>
       ${['Business','Business Group','Elected Official','Agency','Community Group','Contractor','Engineering','Media','Property Owner','Resident','Road Traveler','Other'].map(t=>`<option${(S.stakeType||'')===''+t?' selected':''}>${t}</option>`).join('')}
     </select>
+    <button class="btn btn-sm${S.skLEP?' btn-primary':''}" style="${S.skLEP?'background:rgba(232,160,32,.25);border-color:#e8a020;color:#e8a020':'background:rgba(232,160,32,.08);border-color:rgba(232,160,32,.3);color:rgba(232,160,32,.7)'}" onclick="S.skLEP=!S.skLEP;renderStakeholders(document.getElementById('main'))">LEP</button>
+    <button class="btn btn-sm${S.skEJ?' btn-primary':''}" style="${S.skEJ?'background:rgba(124,92,191,.25);border-color:#a98de8;color:#a98de8':'background:rgba(124,92,191,.08);border-color:rgba(124,92,191,.3);color:rgba(124,92,191,.7)'}" onclick="S.skEJ=!S.skEJ;renderStakeholders(document.getElementById('main'))">EJ</button>
     <div class="tb-sp"></div><span class="tb-info">${listItems.length} contact${listItems.length!==1?'s':''}</span>
   </div>`}
   ${S.skView==='issues'&&S.projectFilter ? `
@@ -3943,6 +3947,7 @@ function renderStakeDetail(s,link){
         <div class="log-hdr">
           <span class="badge ${i.direction==='Incoming'?'b-sky':'b-green'}">${i.direction}</span>
           <span class="badge b-gray">${i.channel}</span>
+          ${i.equityFormSubmitted?'<span class="badge" style="font-size:10px;background:rgba(40,168,112,.15);color:var(--green);border:1px solid rgba(40,168,112,.3)">✓ Equity form</span>':''}
           <span style="font-size:12px;color:var(--slate)">${i.loggedBy}</span>
           ${(function(){if(link)return '';var _p=projs.find(function(x){return String(x.id)===String(i.projectId);});return _p?'<span class="badge b-dark" style="font-size:10px;color:var(--sky-lt);border-color:rgba(45,125,210,.3)">'+_p.name+'</span>':'';}())}
           <span class="log-date">${fmt(i.date)} <span style="color:var(--fog)">${ago(i.date)}</span></span>
@@ -4346,7 +4351,7 @@ function renderInteractions(el){
               <td class="td-mono" style="white-space:nowrap">${fmt(i.date)}</td>
               <td><span class="badge b-dark td-mono">${p?p.pid:'?'}</span></td>
               <td><div class="td-link" onclick="selectStake('${i.stakeholderId}');setView('stakeholders')">${s?dispName(s):(i.anonLabel||'Anonymous')}</div><div style="font-size:11px;color:var(--fog)">${s?s.org||s.type||'':''}</div></td>
-              <td><span class="badge ${chCls(i.channel)}">${i.channel}</span></td>
+              <td><span class="badge ${chCls(i.channel)}">${i.channel}</span>${i.equityFormSubmitted?'<span class="badge" style="font-size:9px;margin-left:3px;background:rgba(40,168,112,.15);color:var(--green);border:1px solid rgba(40,168,112,.3)">✓ EQ</span>':''}</td>
               <td><span class="badge ${i.direction==='Incoming'?'b-sky':'b-green'}">${i.direction}</span></td>
               <td style="font-size:12px;color:var(--mist)">${i.subject||'General'}</td>
               <td><span class="badge ${(i.nature||'Inquiry')==='Complaint'?'b-red':(i.nature||'Inquiry')==='Compliment'?'b-green':'b-sky'}" style="font-size:11px">${i.nature||'Inquiry'}</span></td>

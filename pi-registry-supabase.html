@@ -1035,16 +1035,36 @@ const DEL_GROUPS=[
 const DEL_TYPES=DEL_GROUPS.reduce(function(a,g){return a.concat(g.types)},[]);
 const NEPA_CHECKLISTS={
   'CE':[
+    // ── Public Meeting Requirement ──────────────────────────────────────────
     'Public meeting requirement assessed and documented (required if project adds through travel lanes, substantially changes facility layout, or results in substantial adverse impacts)',
-    'If public meeting / hearing held: location selected in project area, ADA-accessible, adequate size',
-    'If public meeting / hearing held: advertised per FHWA and Utah regulations',
-    'If public meeting / hearing held: comments and responses summarized and included in CE document',
-    'If public meeting / hearing held: public hearing transcript and certification attached to CE document',
+    // ── If Public Meeting / Hearing Held ───────────────────────────────────
+    'If public meeting held: advertised on UDOT website under Public Meetings and Events',
+    'If public meeting held: UDOT Title VI Specialist invited to meeting',
+    'If public meeting held: location selected in project area — ADA-accessible, adequate size, accessible elevator if multi-floor',
+    'If public meeting held: signage is readable; accessibility accommodations confirmed',
+    'If public meeting held: community demographics reviewed — translators arranged if needed',
+    'If public meeting held: Title VI-approved sign-in sheet used (includes race, sex, disability options)',
+    'If public meeting held: meeting materials / flyers translated for non-English-speaking demographics; interpretation services advertised',
+    'If public meeting held: comment collection method provided',
+    'If public meeting held: scanned sign-in sheets and copies of comments sent to Title VI Specialist',
+    'If public meeting held: advertised per FHWA and Utah regulations (first ad ≥15 days prior)',
+    'If public meeting held: comments and responses summarized and included in CE document',
+    'If public meeting held: public hearing transcript and certification attached to CE document',
+    // ── Noise Barrier Ballot (if applicable) ───────────────────────────────
+    'If noise impacts identified: noise barrier eligibility and reasonableness determination documented',
+    'If noise ballot required: affected property owners and tenants notified by mail',
+    'If noise ballot required: ballot mailed with return deadline of at least 30 days',
+    'If noise ballot required: 75% favorable return rate achieved before barrier is included in project',
+    'If noise ballot required: ballot results documented and retained in project file',
+    // ── Title VI / Non-Discrimination ──────────────────────────────────────
+    'Non-discrimination compliance confirmed — race, color, national origin, sex, age, disability, religion, income status, gender identity, sexual orientation',
+    // ── General Documentation ───────────────────────────────────────────────
     'All other public involvement activities documented with supporting information in project file',
     'Environmental Commitments Signature Page signed and included in CE document',
     'Mitigation commitments entered in ePM and included in project file'
   ],
   'EA':[
+    // ── PI Planning (Tasks 01E / 05E) ───────────────────────────────────────
     'Public information from project sponsor reviewed by PI team (Task 01E)',
     'Project stakeholders identified in coordination with Project Manager, RCM, and Communications Office',
     'PI strategy meeting held with project team — PI goals and evaluation criteria established',
@@ -1052,27 +1072,41 @@ const NEPA_CHECKLISTS={
     'Media plan developed with RCM and Communications Office',
     'Project Public Involvement (PI) Plan prepared (Task 05E)',
     'PI Plan reviewed and approved by Environmental Program Manager and RCM before distribution',
+    // ── PI Plan Implementation (Task 07E) ──────────────────────────────────
     'PI Plan implemented throughout planning and design process (Task 07E)',
+    // ── Scoping (Task 13E) ─────────────────────────────────────────────────
     'NEPA scoping letters sent to agencies, tribes, and known interested parties (Task 13E)',
     'NEPA scoping meeting(s) held — public and agency input solicited',
     'NEPA scoping report prepared',
+    // ── Draft EA Circulation (Task 35E) ────────────────────────────────────
     'Draft EA circulated to agencies and public for review (Task 35E)',
-    'Public hearing location selected: in project area, ADA-accessible, adequate size (Task 39E)',
+    // ── Public Hearing (Tasks 39E / 41E) ───────────────────────────────────
+    'Public hearing location selected: in project area, ADA-accessible, adequate size, accessible elevator if multi-floor (Task 39E)',
     'Public hearing approval obtained from Environmental Program Manager',
+    'Public hearing advertised on UDOT website under Public Meetings and Events',
+    'UDOT Title VI Specialist invited to public hearing',
     'Public hearing advertised: first ad ≥15 days prior, second ad 7–10 days prior',
+    'Community demographics reviewed — translators arranged if needed; interpretation services advertised on flyers',
+    'Title VI-approved sign-in sheet used at public hearing (race, sex, disability options)',
+    'Comment collection method provided at public hearing',
     'Court recorder obtained for public hearing',
-    'Public hearing held — compliant with UDOT Title VI Program',
+    'Public hearing held — compliant with UDOT Title VI Program (non-discrimination: race, color, national origin, sex, age, disability, income status)',
+    'Scanned sign-in sheets and copies of comments sent to Title VI Specialist after hearing',
     'Public hearing transcript prepared',
     'EA public comment period completed — minimum 30 days (Task 39E)',
+    // ── Comment Resolution (Task 41E) ──────────────────────────────────────
     'All public and agency comments compiled into comment resolution form (Task 41E)',
     'Written response prepared for each comment',
     'Public hearing certification package assembled (Task 41E)',
     'Public hearing summary and analysis report prepared and QC reviewed',
     'Environmental document revised per comment responses',
+    // ── Decision Document (Task 51E) ───────────────────────────────────────
     'FONSI / EA decision document prepared and submitted (Task 51E)',
+    // ── Project File (Task 55E) ────────────────────────────────────────────
     'Project PI file assembled and maintained (Task 55E)'
   ],
   'EIS':[
+    // ── PI Planning (Tasks 01E / 05E) ───────────────────────────────────────
     'Public information from project sponsor reviewed by PI team (Task 01E)',
     'Project stakeholders identified in coordination with Project Manager, RCM, and Communications Office',
     'PI strategy meeting held with project team — PI goals and evaluation criteria established',
@@ -1080,32 +1114,47 @@ const NEPA_CHECKLISTS={
     'Media plan developed with RCM and Communications Office',
     'Project Public Involvement (PI) Plan prepared (Task 05E)',
     'PI Plan reviewed and approved by Environmental Program Manager and RCM before distribution',
+    // ── Notice of Intent (Task 09E) ────────────────────────────────────────
     'Notice of Intent (NOI) prepared and circulated for legal review (Task 09E)',
     'NOI published in Federal Register — date and copy retained in project file',
+    // ── Agency and Tribal Coordination (Task 13E) ──────────────────────────
     'Participating and cooperating agencies identified and invited — invitation letters sent (Task 13E)',
     'SAFETEA-LU Coordination Plan prepared (Task 13E)',
     'Scoping Environmental Review Checklist completed (Task 13E)',
     'NEPA scoping letters sent to agencies, tribes, and known interested parties',
     'NEPA scoping meeting(s) held — public and agency input solicited',
     'NEPA scoping report prepared',
+    // ── PI Plan Implementation (Task 07E) ──────────────────────────────────
     'PI Plan implemented throughout planning and design process (Task 07E)',
+    // ── Draft EIS Circulation (Task 35E) ───────────────────────────────────
     'Draft EIS (DEIS) reviewed and approved for circulation (Task 35E)',
     'DEIS circulated to agencies and public',
-    'Public hearing location selected: in project area, ADA-accessible, adequate size (Task 39E)',
+    // ── Public Hearing (Tasks 39E / 41E) ───────────────────────────────────
+    'Public hearing location selected: in project area, ADA-accessible, adequate size, accessible elevator if multi-floor (Task 39E)',
     'Public hearing approval obtained from Environmental Program Manager',
+    'Public hearing advertised on UDOT website under Public Meetings and Events',
+    'UDOT Title VI Specialist invited to public hearing',
     'Public hearing advertised: first ad ≥15 days prior, second ad 7–10 days prior',
+    'Community demographics reviewed — translators arranged if needed; interpretation services advertised on flyers',
+    'Title VI-approved sign-in sheet used at public hearing (race, sex, disability options)',
+    'Comment collection method provided at public hearing',
     'Court recorder obtained for public hearing',
-    'Public hearing held — compliant with UDOT Title VI Program',
+    'Public hearing held — compliant with UDOT Title VI Program (non-discrimination: race, color, national origin, sex, age, disability, income status)',
+    'Scanned sign-in sheets and copies of comments sent to Title VI Specialist after hearing',
     'Public hearing transcript prepared',
     'DEIS public comment period completed — minimum 45 days (Task 39E)',
+    // ── Comment Resolution (Task 41E) ──────────────────────────────────────
     'All public and agency comments compiled into comment resolution form (Task 41E)',
     'Written response prepared for each comment',
     'Public hearing certification package assembled (Task 41E)',
     'Public hearing summary and analysis report prepared and QC reviewed',
+    // ── Final EIS (Tasks 43E / 47E / 49E) ─────────────────────────────────
     'Final EIS (FEIS) prepared (Task 43E)',
     'FEIS reviewed — legal sufficiency review completed (Task 47E)',
     'FEIS released and circulated — minimum 30-day waiting period before ROD (Task 49E)',
+    // ── Record of Decision (Task 53E) ──────────────────────────────────────
     'Record of Decision (ROD) prepared and submitted (Task 53E)',
+    // ── Project File (Task 55E) ────────────────────────────────────────────
     'Project PI file assembled and maintained (Task 55E)'
   ]
 };

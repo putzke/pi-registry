@@ -7639,7 +7639,7 @@ async function _claudeNarrative(systemPrompt, userContent) {
         'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: 'claude-sonnet-4-6',
         max_tokens: 400,
         system: systemPrompt,
         messages: [{ role: 'user', content: userContent }]
@@ -7734,6 +7734,77 @@ async function generateOverallDraft() {
   if (btn) { btn.textContent = '✦ Generate Overall Summary'; btn.disabled = false; }
   ta.value = narrative || templateDraft;
   if (narrative) showToast('AI narrative generated', 'info', 2000);
+}
+
+async function generateAllSectionDrafts() {
+  var allBtn = document.getElementById('all-drafts-btn');
+  var bar = document.getElementById('all-drafts-progress');
+  var barInner = document.getElementById('all-drafts-bar-inner');
+  var barLabel = document.getElementById('all-drafts-bar-label');
+
+  // Collect all auto sections visible in editor
+  var autoSections = [];
+  document.querySelectorAll('.rpt-sec-summary').forEach(function(ta) {
+    var idx = ta.getAttribute('data-idx');
+    var secType = ta.getAttribute('data-sectype');
+    if (idx !== null && secType && secType.startsWith('auto-')) {
+      autoSections.push({ ta: ta, idx: idx, secType: secType });
+    }
+  });
+  // Also queue overall summary
+  var doOverall = true;
+  var total = autoSections.length + (doOverall ? 1 : 0);
+  if (total === 0) { showToast('No auto-generated sections to draft', 'info', 2000); return; }
+
+  if (allBtn) { allBtn.disabled = true; allBtn.textContent = 'Drafting…'; }
+  if (bar) bar.style.display = 'flex';
+  var done = 0;
+  function progress() {
+    done++;
+    var pct = Math.round((done / total) * 100);
+    if (barInner) barInner.style.width = pct + '%';
+    if (barLabel) barLabel.textContent = done + ' of ' + total + ' sections drafted';
+  }
+
+  // Fire all section drafts in parallel
+  var sectionPromises = autoSections.map(function(s) {
+    var templateDraft = _buildSectionDraft(s.secType) || '';
+    var userContent = 'Write a narrative summary for the "'
+      + s.secType.replace('auto-','').replace(/-/g,' ')
+      + '" section of a PI progress report. Facts: ' + templateDraft;
+    return _claudeNarrative(_claudeSystemPrompt(), userContent).then(function(narrative) {
+      if (narrative) s.ta.value = narrative;
+      else if (templateDraft) s.ta.value = templateDraft;
+      progress();
+    }).catch(function() { progress(); });
+  });
+
+  // Overall summary draft
+  var overallPromise = (function() {
+    var ta2 = document.getElementById('rpt-overall-summary');
+    if (!ta2) { progress(); return Promise.resolve(); }
+    var projF = S.projectFilter;
+    var proj = projF && DB.get('projects').find(function(p){ return p.id===projF; });
+    var templateDraft = proj
+      ? 'Project: ' + proj.name + ' (' + proj.pid + '). '
+        + 'Status: ' + (proj.status||'Active') + '. '
+        + 'Stakeholders: ' + DB.get('stakeholders').filter(function(s){return s.projectId===projF;}).length + '. '
+        + 'Interactions: ' + DB.get('interactions').filter(function(i){return i.projectId===projF;}).length + '.'
+      : '';
+    var userContent = 'Write a 3-4 sentence executive summary for the overall section of a public involvement progress report for FHWA/NEPA compliance. '
+      + 'Synthesize the following facts into a cohesive narrative: ' + templateDraft;
+    return _claudeNarrative(_claudeSystemPrompt(), userContent).then(function(narrative) {
+      if (narrative) ta2.value = narrative;
+      else if (templateDraft) ta2.value = templateDraft;
+      progress();
+    }).catch(function() { progress(); });
+  })();
+
+  await Promise.all(sectionPromises.concat([overallPromise]));
+
+  if (allBtn) { allBtn.disabled = false; allBtn.textContent = '✦ AI: Draft all sections'; }
+  showToast('All section drafts generated', 'success', 3000);
+  setTimeout(function() { if (bar) bar.style.display = 'none'; }, 4000);
 }
 
 function _buildSectionDraft(secType) {
@@ -8141,7 +8212,7 @@ function openPIReport(){
       +'</div>'
       +(isAuto?'<div style="font-size:12px;color:var(--fog);line-height:1.5;margin-left:62px">'+getSectionDesc(sec.type)+'</div>'
         :'<textarea class="rpt-sec-content" data-idx="'+idx+'" style="width:100%;min-height:100px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;color:var(--mist);font-family:var(--font);font-size:13px;padding:10px 12px;outline:none;resize:vertical;line-height:1.6" placeholder="Each line becomes a bullet. Indent with spaces for sub-bullets.">'+(sec.content||'')+'</textarea>')
-      +'<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.07)">'      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">'      +'<div style="font-size:11px;color:var(--slate);font-style:italic">Section summary <span style="color:var(--fog)">(optional — prints after section data in Word export)</span></div>'      +(isAuto?'<button id="sec-draft-btn-'+idx+'" class="btn btn-xs" style="background:rgba(74,155,232,.15);border-color:rgba(74,155,232,.4);color:var(--sky-lt);font-size:10px;padding:2px 8px;white-space:nowrap" onclick="generateSectionDraft(\''+sec.type+'\','+idx+')">'+(_getClaudeKey()?'✦ AI Draft':'✦ Draft')+'</button>':'')      +'</div>'      +'<textarea class="rpt-sec-summary" data-idx="'+idx+'" style="width:100%;min-height:60px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;color:var(--mist);font-family:var(--font);font-size:12px;padding:8px 12px;outline:none;resize:vertical;line-height:1.6" placeholder="Optional narrative or summary for this section...">'+(sec.summary||'')+'</textarea>'      +'</div>'      +'</div>';
+      +'<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.07)">'      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">'      +'<div style="font-size:11px;color:var(--slate);font-style:italic">Section summary <span style="color:var(--fog)">(optional — prints after section data in Word export)</span></div>'      +(isAuto?'<button id="sec-draft-btn-'+idx+'" class="btn btn-xs" style="background:rgba(74,155,232,.15);border-color:rgba(74,155,232,.4);color:var(--sky-lt);font-size:10px;padding:2px 8px;white-space:nowrap" onclick="generateSectionDraft(\''+sec.type+'\','+idx+')">'+(_getClaudeKey()?'✦ AI Draft':'✦ Draft')+'</button>':'')      +'</div>'      +'<textarea class="rpt-sec-summary" data-idx="'+idx+'" data-sectype="'+sec.type+'" style="width:100%;min-height:60px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;color:var(--mist);font-family:var(--font);font-size:12px;padding:8px 12px;outline:none;resize:vertical;line-height:1.6" placeholder="Optional narrative or summary for this section...">'+(sec.summary||'')+'</textarea>'      +'</div>'      +'</div>';
   });
 
   var available=getAvailableSections();
@@ -8161,12 +8232,17 @@ function openPIReport(){
     +'<div class="topbar-sub">'+proj.name+' ('+proj.pid+')</div></div>'
     +'<div class="topbar-sp"></div>'
     +'<div class="topbar-acts">'
+    +(_getClaudeKey()?'<button class="btn" id="all-drafts-btn" onclick="generateAllSectionDrafts()" style="background:linear-gradient(135deg,#1e3a5f,#0f4c75);border-color:var(--sky-lt);color:var(--sky-lt)">✦ AI: Draft all sections</button>':'')
     +'<button class="btn" onclick="savePIReportDraft()">Save draft</button>'
     +'<button class="btn" style="color:var(--fog);border-color:rgba(255,255,255,.15)" onclick="resetPIReportDraft()" title="Clear saved draft and reset to default sections">Reset</button>'
     +'<label style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--slate);cursor:pointer;margin-right:6px"><input type="checkbox" id="docx-letterhead-cb" checked style="accent-color:var(--sky-lt);width:13px;height:13px"> Letterhead</label>'
     +'<button class="btn btn-primary" onclick="exportPIDocx()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:14px;height:14px"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg> Export .docx</button>'
     +'<button class="btn btn-ghost" onclick="renderReports(document.getElementById(\'main\'))">Back to reports</button>'
     +'</div></div>'
+    +(_getClaudeKey()?'<div id="all-drafts-progress" style="display:none;align-items:center;gap:10px;padding:8px 22px;background:#0d1f33;border-bottom:1px solid var(--border)">'
+      +'<div style="flex:1;height:6px;background:rgba(255,255,255,.08);border-radius:3px"><div id="all-drafts-bar-inner" style="height:100%;width:0%;background:var(--sky-lt);border-radius:3px;transition:width .3s"></div></div>'
+      +'<span id="all-drafts-bar-label" style="font-size:11px;color:var(--slate);white-space:nowrap">0 of 0 sections drafted</span>'
+      +'</div>':'')
     +'<div class="content" style="overflow-y:auto"><div style="padding:24px;max-width:900px">'
     +'<div style="margin-bottom:24px;background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:20px">'
     +'<div style="font-size:14px;font-weight:600;color:var(--white);margin-bottom:14px">Report header</div>'
@@ -12433,7 +12509,7 @@ function renderSettings(m) {
           if(confirm('Remove saved Claude API key?')){localStorage.removeItem('compass_claude_api_key');document.getElementById('claude-api-key-input').value='';renderSettings(document.getElementById('main'));showToast('Key removed','info',2000);}
         ">Remove</button>
       </div>
-      <div style="margin-top:12px;font-size:11px;color:var(--fog)">Model: <span style="color:var(--slate)">claude-haiku-4-5</span> · Max tokens per call: <span style="color:var(--slate)">400</span> · Typical cost: &lt;$0.001 per narrative</div>
+      <div style="margin-top:12px;font-size:11px;color:var(--fog)">Model: <span style="color:var(--slate)">claude-sonnet-4-6</span> · Max tokens per call: <span style="color:var(--slate)">400</span> · Typical cost: ~$0.002–0.005 per narrative</div>
     </div>
 
     <!-- Data Integrity -->

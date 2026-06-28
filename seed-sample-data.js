@@ -327,23 +327,24 @@
   console.log('Seeding deliverables...');
   DB.set('deliverables', (DB.get('deliverables') || []).concat(newDeliverables));
 
-  // Push to Supabase if online
-  if (typeof supabase !== 'undefined') {
+  // Push to Supabase using the app's own REST helper
+  if (typeof sbAdd === 'function') {
     console.log('Syncing to Supabase...');
     try {
-      await Promise.all([
-        supabase.from('compass_data').upsert(newProjects.map(r => ({ table_name: 'projects', record_id: r.id, data: r }))),
-        supabase.from('compass_data').upsert(newStakeholders.map(r => ({ table_name: 'stakeholders', record_id: r.id, data: r }))),
-        supabase.from('compass_data').upsert(newPS.map(r => ({ table_name: 'project_stakeholders', record_id: r.id, data: r }))),
-        supabase.from('compass_data').upsert(newInteractions.map(r => ({ table_name: 'interactions', record_id: r.id, data: r }))),
-        supabase.from('compass_data').upsert(newMeetings.map(r => ({ table_name: 'meetings', record_id: r.id, data: r }))),
-        supabase.from('compass_data').upsert(newPeriods.map(r => ({ table_name: 'comment_periods', record_id: r.id, data: r }))),
-        supabase.from('compass_data').upsert(newComments.map(r => ({ table_name: 'public_comments', record_id: r.id, data: r }))),
-        supabase.from('compass_data').upsert(newDeliverables.map(r => ({ table_name: 'deliverables', record_id: r.id, data: r }))),
-      ]);
+      const allWrites = [
+        ...newProjects.map(r => sbAdd('projects', r)),
+        ...newStakeholders.map(r => sbAdd('stakeholders', r)),
+        ...newPS.map(r => sbAdd('project_stakeholders', r)),
+        ...newInteractions.map(r => sbAdd('interactions', r)),
+        ...newMeetings.map(r => sbAdd('meetings', r)),
+        ...newPeriods.map(r => sbAdd('comment_periods', r)),
+        ...newComments.map(r => sbAdd('public_comments', r)),
+        ...newDeliverables.map(r => sbAdd('deliverables', r)),
+      ];
+      await Promise.all(allWrites);
       console.log('✅ Supabase sync complete.');
     } catch (e) {
-      console.warn('Supabase sync skipped or partial:', e.message);
+      console.warn('Supabase sync error:', e.message);
     }
   }
 

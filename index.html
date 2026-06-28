@@ -751,8 +751,11 @@ const SB_TO_INT = {
     id:'id', idA:'id_a', idB:'id_b'
   },
   pi_comment_periods: {
-    id:'id', projectId:'project_id', title:'title', description:'description',
-    startDate:'start_date', endDate:'end_date', status:'status', createdAt:'created_at'
+    id:'id', projectId:'project_id', name:'title', periodType:'period_type',
+    description:'description', startDate:'start_date', endDate:'end_date',
+    status:'status', venue:'venue', hearingDate:'hearing_date',
+    firstAdDate:'first_ad_date', secondAdDate:'second_ad_date',
+    federalRegisterDate:'federal_register_date', createdAt:'created_at'
   },
   pi_public_comments: {
     id:'id', projectId:'project_id', periodId:'period_id', commentDate:'comment_date',
@@ -1115,43 +1118,50 @@ const DEL_GROUPS=[
 const DEL_TYPES=DEL_GROUPS.reduce(function(a,g){return a.concat(g.types)},[]);
 const NEPA_CHECKLISTS={
   'CE':[
-    // ── Public Meeting Requirement ──────────────────────────────────────────
-    'Public meeting requirement assessed and documented (required if project adds through travel lanes, substantially changes facility layout, or results in substantial adverse impacts)',
-    // ── If Public Meeting / Hearing Held ───────────────────────────────────
-    'If public meeting held: advertised on UDOT website under Public Meetings and Events',
-    'If public meeting held: UDOT Title VI Specialist invited to meeting',
-    'If public meeting held: location selected in project area — ADA-accessible, adequate size, accessible elevator if multi-floor',
-    'If public meeting held: signage is readable; accessibility accommodations confirmed',
-    'If public meeting held: community demographics reviewed — translators arranged if needed',
-    'If public meeting held: meeting collateral includes Notice of Special Accommodation statement (auxiliary communicative aids and services)',
-    'If public meeting held: non-discrimination poster displayed at meeting venue',
-    'If public meeting held: Title VI-approved sign-in sheet used at each table (race, sex, disability options)',
-    'If public meeting held: meeting materials / flyers translated for non-English-speaking demographics; interpretation services advertised',
-    'If public meeting held: comment collection method provided',
-    'If public meeting held: scanned sign-in sheets and copies of comments emailed to Title VI Coordinator (civilrights@utah.gov)',
-    'If public meeting held: post-meeting Title VI Summary form completed and submitted to civilrights@utah.gov',
-    'If public meeting held: advertised per FHWA and Utah regulations (first ad ≥15 days prior)',
-    'If public meeting held: comments and responses summarized and included in CE document',
-    'If public meeting held: public hearing transcript and certification attached to CE document',
+    // ── NEPA Assignment Disclosure ─────────────────────────────────────────
+    'NEPA assignment disclosure statement included in all NOI, scoping notices, and PI materials: "The environmental review, consultation, and other actions required by applicable Federal environmental laws for this project are being or have been carried out by UDOT pursuant to 23 USC 327 and a Memorandum of Understanding dated May 26, 2022, and executed by FHWA and UDOT."',
+    // ── Public Hearing Requirement Assessment ─────────────────────────────
+    'Public hearing requirement assessed and documented — required if project is on a new location; substantially changes the layout or function of connecting roads or of the facility being improved; has a substantially different social, economic, or environmental effect than the existing facility; has a substantial adverse impact on abutting property; OR UDOT determines a hearing is in the public interest (23 CFR 771.111(h)(2)(iii); UDOT MOI Ch. 4.5(B)(1))',
+    // ── Agency and Stakeholder Coordination ────────────────────────────────
+    'All interested agencies, communities, special-interest groups, and other stakeholders contacted and advised of project scope',
+    'Comments and recommendations solicited from all stakeholders; continued stakeholder involvement maintained throughout decision-making process',
+    // ── CE Document Availability ───────────────────────────────────────────
+    'CE Environmental Study made available for public review at applicant\'s office (and additional locations as decided by project team) — CE document does not need to be formally circulated for comment (UDOT MOI Ch. 4.5(B)(1))',
+    // ── If Public Hearing Held ─────────────────────────────────────────────
+    'If public hearing held: TWO newspaper notices published in statewide and local newspapers — first notice published ≥15 days before request-for-hearing deadline; second notice published ≥7 days before deadline; deadline stated as postmark deadline (UDOT MOI Ch. 4.5(A)(4)(a))',
+    'If public hearing held: written notice sent to all county commissioners, mayors, city council members, state legislators, multi-county planning districts, and all federal/state/local government offices with interest in the project (UDOT MOI Ch. 4.5(A)(5))',
+    'If public hearing held: hearing location in project area — ADA-accessible, adequate size, accessible elevator if multi-floor',
+    'If public hearing held: advertised on UDOT website under Public Meetings and Events',
+    'If public hearing held: UDOT Title VI Specialist invited',
+    'If public hearing held: community demographics reviewed — translators arranged if needed; interpretation services advertised in flyers and notices',
+    'If public hearing held: meeting collateral includes Notice of Special Accommodation statement (auxiliary communicative aids and services)',
+    'If public hearing held: non-discrimination poster displayed at venue',
+    'If public hearing held: Title VI-approved sign-in sheet used at each table — captures name/affiliation, contact info, project info opt-in, and optional gender/race fields (23 CFR §200.9(4))',
+    'If public hearing held: comment collection method provided at hearing',
+    'If public hearing held: court recorder present to record attendee comments',
+    'If public hearing held: scanned sign-in sheets and copies of all comments emailed to Title VI Coordinator (civilrights@utah.gov) after hearing',
+    'If public hearing held: post-meeting Title VI Summary form completed and submitted to civilrights@utah.gov',
+    'If public hearing held: comment period minimum 10 days following the hearing; if day 10 falls on a Sunday or holiday, extended one additional day — comment period start/end dates documented (UDOT MOI Ch. 4.5(A)(10))',
+    'If public hearing held: public hearing transcript prepared and certification attached to CE document; transcript distributed per UDOT 08A2-02',
+    'If public hearing held: all comments and responses summarized and included in CE document',
     // ── Noise Barrier Ballot (if applicable) ───────────────────────────────
     'If noise impacts identified: noise barrier eligibility and reasonableness determination documented',
-    'If noise ballot required: affected property owners and tenants notified by mail',
-    'If noise ballot required: ballot mailed with return deadline of at least 30 days',
-    'If noise ballot required: 75% favorable return rate achieved before barrier is included in project',
-    'If noise ballot required: ballot results documented and retained in project file',
+    'If noise ballot required: affected property owners and tenants notified by mail with return deadline of at least 30 days; 75% favorable return rate required before barrier is included in project; ballot results documented in project file',
     // ── Title VI / Non-Discrimination ──────────────────────────────────────
-    'Non-discrimination compliance confirmed — race, color, national origin, sex, age, disability, religion, income status, gender identity, sexual orientation',
+    'Non-discrimination compliance confirmed — race, color, national origin (Title VI / 42 USC 2000d), sex (23 USC 324), age (Age Discrimination Act), disability (ADA / Section 504), income status, gender identity, sexual orientation',
     // ── Tribal Consultation (if applicable) ────────────────────────────────
-    'If project has potential tribal implications (cultural practices, lands, resources, traditional/religious areas): project assessed for tribal implications per UDOT 08A2-07 and Utah Executive Order 2014/005',
-    'If tribal implications identified: official written notification sent to tribal chairpersons of federally-recognized Indian Tribes located wholly or partially in Utah',
-    'If tribal consultation required: initiated as early as possible and conducted in good faith; technical information and data shared with Tribes upon request',
-    'If tribal consultation conducted: tribal comments and concerns documented and considered in project decisions; consultation activities retained in project file',
-    // ── General Documentation ───────────────────────────────────────────────
-    'All other public involvement activities documented with supporting information in project file',
+    'Project assessed for tribal implications — cultural practices, lands, resources, traditional/religious areas (UDOT 08A2-07; Utah Executive Order 2014/005)',
+    'If tribal implications identified: official written notification sent to tribal chairpersons of all federally-recognized Indian Tribes located wholly or partially in Utah',
+    'If tribal consultation required: initiated as early as possible; conducted in good faith; technical information and data shared with Tribes upon request',
+    'If tribal consultation conducted: tribal comments and concerns documented and considered in project decisions; all consultation activities retained in project file',
+    // ── Documentation ──────────────────────────────────────────────────────
+    'All public involvement activities documented with supporting information in project file',
     'Environmental Commitments Signature Page signed and included in CE document',
     'Mitigation commitments entered in ePM and included in project file'
   ],
   'EA':[
+    // ── NEPA Assignment Disclosure ─────────────────────────────────────────
+    'NEPA assignment disclosure statement included in all NOI, scoping notices, and PI materials: "The environmental review, consultation, and other actions required by applicable Federal environmental laws for this project are being or have been carried out by UDOT pursuant to 23 USC 327 and a Memorandum of Understanding dated May 26, 2022, and executed by FHWA and UDOT."',
     // ── PI Planning (Tasks 01E / 05E) ───────────────────────────────────────
     'Public information from project sponsor reviewed by PI team (Task 01E)',
     'Project stakeholders identified in coordination with Project Manager, RCM, and Communications Office',
@@ -1162,44 +1172,59 @@ const NEPA_CHECKLISTS={
     'PI Plan reviewed and approved by Environmental Program Manager and RCM before distribution',
     // ── PI Plan Implementation (Task 07E) ──────────────────────────────────
     'PI Plan implemented throughout planning and design process (Task 07E)',
-    // ── Scoping / Tribal Consultation (Task 13E) ───────────────────────────
-    'NEPA scoping letters sent to agencies, tribes, and known interested parties (Task 13E)',
+    // ── Scoping / Agency / Tribal Coordination (Task 13E) ──────────────────
+    'All interested agencies, communities, special-interest groups, and other stakeholders contacted and advised of project scope; comments and recommendations solicited (Task 13E)',
+    'NEPA scoping letters sent to agencies, tribes, and known interested parties',
     'Official written notification sent to tribal chairpersons of federally-recognized Indian Tribes in Utah for projects with potential tribal implications (UDOT 08A2-07)',
     'Tribal consultation initiated as early as possible and conducted in good faith; technical information shared with Tribes upon request (UDOT 08A2-07 / Utah EO 2014/005)',
     'NEPA scoping meeting(s) held — public and agency input solicited',
     'Tribal comments and concerns documented and considered; consultation activities retained in project file',
     'NEPA scoping report prepared',
-    // ── Draft EA Circulation (Task 35E) ────────────────────────────────────
-    'Draft EA circulated to agencies and public for review (Task 35E)',
-    // ── Public Hearing (Tasks 39E / 41E) ───────────────────────────────────
+    // ── EA Preparation and Central Environmental Review ────────────────────
+    'EA submitted to Central Environmental for review and approval BEFORE the public hearing — EA does not need to be formally circulated for comment (UDOT MOI Ch. 4.5(B)(2))',
+    // ── Public Hearing Requirement Assessment ──────────────────────────────
+    'Public hearing requirement assessed — required when project requires substantial amounts of right-of-way; substantially changes the layout or function of connecting roads or of the facility being improved; has a substantial adverse impact on abutting property; OR UDOT determines hearing is in the public interest (23 CFR 771.111(h)(2)(iii); UDOT MOI Ch. 4.5(B)(2)); both in-person and virtual hearing formats encouraged',
+    // ── Notice of Availability (NOA) ──────────────────────────────────────
+    'Notice of Availability (NOA) issued in local, state, or regional clearinghouses, newspapers, and other means — EA must be made available for public review at UDOT Region office (UDOT MOI Ch. 4.5(B)(2))',
+    // ── Public Hearing Advertisement ───────────────────────────────────────
+    'TWO newspaper notices published in statewide and local newspapers — first notice ≥15 days before request-for-hearing deadline; second notice ≥7 days before deadline; deadline stated as postmark deadline (UDOT MOI Ch. 4.5(A)(4)(a))',
+    'Written notice sent to all county commissioners, mayors, city council members, state legislators, multi-county planning districts, and all federal/state/local government offices with interest in the project (UDOT MOI Ch. 4.5(A)(5))',
+    // ── Public Hearing Logistics (Task 39E) ────────────────────────────────
     'Public hearing location selected: in project area, ADA-accessible, adequate size, accessible elevator if multi-floor (Task 39E)',
     'Public hearing approval obtained from Environmental Program Manager',
     'Public hearing advertised on UDOT website under Public Meetings and Events',
     'UDOT Title VI Specialist invited to public hearing',
-    'Public hearing advertised: first ad ≥15 days prior, second ad 7–10 days prior',
-    'Community demographics reviewed — translators arranged if needed; interpretation services advertised on flyers',
+    'Community demographics reviewed — translators arranged if needed; interpretation services advertised in flyers and notices',
     'Meeting collateral includes Notice of Special Accommodation statement (auxiliary communicative aids and services)',
     'Non-discrimination poster displayed at public hearing venue',
-    'Title VI-approved sign-in sheet used at each table — captures name/affiliation, contact info, project info opt-in, and optional gender/race fields (CFR 23 §200.9(4))',
+    'Title VI-approved sign-in sheet used at each table — captures name/affiliation, contact info, project info opt-in, and optional gender/race fields (23 CFR §200.9(4))',
     'Comment collection method provided at public hearing',
-    'Court recorder obtained for public hearing',
+    'Court recorder present to record attendee comments at public hearing',
     'Public hearing held — compliant with UDOT Title VI Program (non-discrimination: race, color, national origin, sex, age, disability, income status)',
-    'Scanned sign-in sheets and copies of comments emailed to Title VI Coordinator (civilrights@utah.gov) after hearing',
+    'Scanned sign-in sheets and copies of all comments emailed to Title VI Coordinator (civilrights@utah.gov) after hearing',
     'Post-meeting Title VI Summary form completed and submitted to civilrights@utah.gov',
-    'Public hearing transcript prepared and distributed to project team and interested individuals, groups, and agencies (UDOT 08A2-02)',
-    'EA public comment period completed — minimum 30 days (Task 39E)',
+    'Public hearing transcript prepared and distributed to project team, interested individuals, groups, and agencies (UDOT 08A2-02)',
+    // ── Comment Period ─────────────────────────────────────────────────────
+    'EA public comment period completed — minimum 30 days; comment period begins day of first advertisement; start and end dates documented (UDOT MOI Ch. 4.5(A)(10); Task 39E)',
     // ── Comment Resolution (Task 41E) ──────────────────────────────────────
     'All public and agency comments compiled into comment resolution form (Task 41E)',
-    'Written response prepared for each comment',
+    'Written response prepared for each comment received',
     'Public hearing certification package assembled (Task 41E)',
     'Public hearing summary and analysis report prepared and QC reviewed',
     'Environmental document revised per comment responses',
-    // ── Decision Document (Task 51E) ───────────────────────────────────────
-    'FONSI / EA decision document prepared and submitted (Task 51E)',
+    // ── FONSI / Decision Document (Task 51E) ──────────────────────────────
+    'Finalized EA, public hearing transcript, all comments, and responses to comments submitted to Central Environmental with recommendation for proposed action (if no significant impacts identified)',
+    'FONSI or EIS determination made by Central Environmental — if FONSI, separate written FONSI prepared incorporating EA by reference',
+    'If project would normally require EIS: final EA made available for public review minimum 30 days before FONSI issuance (23 CFR 771.119; UDOT MOI Ch. 4.5(B)(2)(a))',
+    'NOA of FONSI issued per 23 CFR 771.121 — sent to affected federal/state/local government units and state intergovernmental review contacts established under Executive Order 12372; document available from UDOT on public request',
+    // ── Title VI / Non-Discrimination ──────────────────────────────────────
+    'Non-discrimination compliance confirmed — race, color, national origin (Title VI / 42 USC 2000d), sex (23 USC 324), age (Age Discrimination Act), disability (ADA / Section 504), income status, gender identity, sexual orientation',
     // ── Project File (Task 55E) ────────────────────────────────────────────
     'Project PI file assembled and maintained (Task 55E)'
   ],
   'EIS':[
+    // ── NEPA Assignment Disclosure ─────────────────────────────────────────
+    'NEPA assignment disclosure statement included in all NOI, scoping notices, and PI materials: "The environmental review, consultation, and other actions required by applicable Federal environmental laws for this project are being or have been carried out by UDOT pursuant to 23 USC 327 and a Memorandum of Understanding dated May 26, 2022, and executed by FHWA and UDOT."',
     // ── PI Planning (Tasks 01E / 05E) ───────────────────────────────────────
     'Public information from project sponsor reviewed by PI team (Task 01E)',
     'Project stakeholders identified in coordination with Project Manager, RCM, and Communications Office',
@@ -1209,51 +1234,72 @@ const NEPA_CHECKLISTS={
     'Project Public Involvement (PI) Plan prepared (Task 05E)',
     'PI Plan reviewed and approved by Environmental Program Manager and RCM before distribution',
     // ── Notice of Intent (Task 09E) ────────────────────────────────────────
-    'Notice of Intent (NOI) prepared and circulated for legal review (Task 09E)',
-    'NOI published in Federal Register — date and copy retained in project file',
-    // ── Agency and Tribal Coordination (Task 13E) ──────────────────────────
-    'Participating and cooperating agencies identified and invited — invitation letters sent (Task 13E)',
-    'SAFETEA-LU Coordination Plan prepared (Task 13E)',
+    'Notice of Intent (NOI) prepared and submitted for legal review (Task 09E)',
+    'NOI submitted to be published in Federal Register — announces scoping meetings; date of Federal Register publication and copy retained in project file',
+    // ── Agency Coordination and Coordination Plan (Task 13E) ───────────────
+    'Participating and cooperating agencies identified; invitation letters sent within 45 days of NOI publication — federal agencies automatically designated unless they decline; non-federal agencies designated only upon acceptance (23 USC 139; Task 13E)',
+    '23 USC 139 Coordination Plan prepared and submitted to Environmental Program Manager — published no later than 90 days after NOI; identifies key milestones: NOI, scoping, P&N, range of alternatives, impact assessment methodologies, DEIS, preferred alternative, FEIS, ROD, post-ROD permits (Task 13E)',
+    'Negotiated schedule established with concurrence of each participating agency — considers agency responsibilities, resources, project size/complexity, and time required for permits/approvals (23 USC 139)',
     'Scoping Environmental Review Checklist completed (Task 13E)',
+    // ── Tribal Coordination ────────────────────────────────────────────────
     'NEPA scoping letters sent to agencies, tribes, and known interested parties',
-    'Official written notification sent to tribal chairpersons of federally-recognized Indian Tribes in Utah (UDOT 08A2-07)',
+    'Official written notification sent to tribal chairpersons of all federally-recognized Indian Tribes located wholly or partially in Utah (UDOT 08A2-07)',
     'Tribal consultation initiated as early as possible and conducted in good faith; technical information and data shared with Tribes upon request (UDOT 08A2-07 / Utah EO 2014/005)',
-    'NEPA scoping meeting(s) held — public and agency input solicited',
-    'Tribal comments and concerns documented and considered throughout EIS process; consultation activities retained in project file',
+    'Tribal comments and concerns documented and considered throughout entire EIS process; all consultation activities retained in project file',
+    // ── Purpose & Need and Range of Alternatives (23 USC 139) ────────────
+    'Opportunity for public and participating agencies to provide input on Purpose & Need provided before lead agencies\' final P&N decision — widely publicized via workshops, virtual meetings, written input, website, printed materials, or other PI techniques (23 USC 139)',
+    'Opportunity for public and participating agencies to provide input on Range of Reasonable Alternatives provided before lead agencies\' final alternatives decision (23 USC 139)',
+    'Cooperating and participating agencies given opportunity to provide input into impact assessment methodologies and level of detail for analysis of alternatives (23 USC 139)',
+    // ── Scoping ────────────────────────────────────────────────────────────
+    'NEPA scoping meeting(s) held — public and agency input solicited; range of alternatives, impacts, and significant issues identified; scoping includes the public as well as all affected agencies',
     'NEPA scoping report prepared',
     // ── PI Plan Implementation (Task 07E) ──────────────────────────────────
-    'PI Plan implemented throughout planning and design process (Task 07E)',
-    // ── Draft EIS Circulation (Task 35E) ───────────────────────────────────
-    'Draft EIS (DEIS) reviewed and approved for circulation (Task 35E)',
-    'DEIS circulated to agencies and public',
-    // ── Public Hearing (Tasks 39E / 41E) ───────────────────────────────────
+    'PI Plan implemented throughout planning and design process; informational meetings held with affected stakeholders as needed throughout process (Task 07E)',
+    // ── DEIS Preparation and Review (Task 35E) ─────────────────────────────
+    'Pre-draft copies of DEIS submitted to Central Environmental for review and pre-legal sufficiency review; all substantive comments incorporated before circulation (Task 35E)',
+    'DEIS reviewed and approved for public release (Task 35E)',
+    // ── DEIS Advertisement ─────────────────────────────────────────────────
+    'Notice of Availability (NOA) of DEIS published in Federal Register — coordinated by Central Environmental with EPA',
+    'Announcement of DEIS availability published in local and state newspapers by Environmental Services',
+    'TWO newspaper notices published in statewide and local newspapers — first notice ≥15 days before request-for-hearing deadline; second notice ≥7 days before deadline; deadline stated as postmark deadline (UDOT MOI Ch. 4.5(A)(4)(a))',
+    'Written notice sent to all county commissioners, mayors, city council members, state legislators, multi-county planning districts, and all federal/state/local government offices with interest in the project (UDOT MOI Ch. 4.5(A)(5))',
+    // ── DEIS Public Hearing (Tasks 39E / 41E) ─────────────────────────────
     'Public hearing location selected: in project area, ADA-accessible, adequate size, accessible elevator if multi-floor (Task 39E)',
     'Public hearing approval obtained from Environmental Program Manager',
     'Public hearing advertised on UDOT website under Public Meetings and Events',
     'UDOT Title VI Specialist invited to public hearing',
-    'Public hearing advertised: first ad ≥15 days prior, second ad 7–10 days prior',
-    'Community demographics reviewed — translators arranged if needed; interpretation services advertised on flyers',
+    'Public hearing scheduled no earlier than 15 days after Federal Register NOA announcement of DEIS (UDOT MOI Ch. 4.5(B)(4)(b))',
+    'Both in-person and virtual public hearing formats arranged — UDOT encourages both for EIS projects',
+    'Community demographics reviewed — translators arranged if needed; interpretation services advertised in flyers and notices',
     'Meeting collateral includes Notice of Special Accommodation statement (auxiliary communicative aids and services)',
     'Non-discrimination poster displayed at public hearing venue',
-    'Title VI-approved sign-in sheet used at each table — captures name/affiliation, contact info, project info opt-in, and optional gender/race fields (CFR 23 §200.9(4))',
+    'Title VI-approved sign-in sheet used at each table — captures name/affiliation, contact info, project info opt-in, and optional gender/race fields (23 CFR §200.9(4))',
     'Comment collection method provided at public hearing',
-    'Court recorder obtained for public hearing',
+    'Court recorder present to record attendee comments at public hearing',
     'Public hearing held — compliant with UDOT Title VI Program (non-discrimination: race, color, national origin, sex, age, disability, income status)',
-    'Scanned sign-in sheets and copies of comments emailed to Title VI Coordinator (civilrights@utah.gov) after hearing',
+    'Scanned sign-in sheets and copies of all comments emailed to Title VI Coordinator (civilrights@utah.gov) after hearing',
     'Post-meeting Title VI Summary form completed and submitted to civilrights@utah.gov',
-    'Public hearing transcript prepared and distributed to project team and interested individuals, groups, and agencies (UDOT 08A2-02)',
-    'DEIS public comment period completed — minimum 45 days (Task 39E)',
-    // ── Comment Resolution (Task 41E) ──────────────────────────────────────
-    'All public and agency comments compiled into comment resolution form (Task 41E)',
-    'Written response prepared for each comment',
+    'Public hearing transcript prepared and distributed to project team, interested individuals, groups, and agencies (UDOT 08A2-02)',
+    // ── DEIS Comment Period ────────────────────────────────────────────────
+    'DEIS public comment period completed — minimum 45 days following Federal Register NOA announcement; does not exceed 60 days (23 USC 139) unless all lead agencies, project sponsor, and participating agencies agree to a different period; start and end dates documented (UDOT MOI Ch. 4.5(B)(4)(b); Task 39E)',
+    // ── DEIS Comment Resolution (Task 41E) ─────────────────────────────────
+    'All DEIS public and agency comments compiled into comment resolution form (Task 41E)',
+    'Written response prepared for each comment received on DEIS',
     'Public hearing certification package assembled (Task 41E)',
     'Public hearing summary and analysis report prepared and QC reviewed',
-    // ── Final EIS (Tasks 43E / 47E / 49E) ─────────────────────────────────
-    'Final EIS (FEIS) prepared (Task 43E)',
-    'FEIS reviewed — legal sufficiency review completed (Task 47E)',
-    'FEIS released and circulated — minimum 30-day waiting period before ROD (Task 49E)',
-    // ── Record of Decision (Task 53E) ──────────────────────────────────────
-    'Record of Decision (ROD) prepared and submitted (Task 53E)',
+    // ── FEIS Preparation (Tasks 43E / 47E) ────────────────────────────────
+    'Final EIS (FEIS) prepared — summarizes public involvement efforts; includes DEIS review period comments and responses; describes mitigation measures (Task 43E)',
+    'FEIS legal sufficiency review completed by UDOT Legal Counsel prior to UDOT approval (Task 47E)',
+    // ── ROD and Timing Requirements (Tasks 49E / 53E) ────────────────────
+    'If combined FEIS and ROD: UDOT signs combined document no sooner than 90 days after publication of NOA for the DEIS (UDOT MOI Ch. 4.5(B)(4)(c))',
+    'If separate FEIS and ROD: minimum 30-day waiting period between FEIS and ROD; any new comments received on FEIS included with responses in the ROD (Task 49E)',
+    'ROD presents basis for decision, summarizes mitigation commitments, and documents Section 4(f) approvals (Task 53E)',
+    'Copy of FEIS and ROD sent to all persons/agencies/groups that received the DEIS, all who made substantive comments, and all who requested a copy',
+    // ── FEIS/ROD Advertisement ─────────────────────────────────────────────
+    'NOA of FEIS and ROD published in Federal Register — coordinated by Central Environmental with EPA',
+    'Announcement of FEIS availability published in local and state newspapers by Environmental Services',
+    // ── Title VI / Non-Discrimination ──────────────────────────────────────
+    'Non-discrimination compliance confirmed — race, color, national origin (Title VI / 42 USC 2000d), sex (23 USC 324), age (Age Discrimination Act), disability (ADA / Section 504), income status, gender identity, sexual orientation',
     // ── Project File (Task 55E) ────────────────────────────────────────────
     'Project PI file assembled and maintained (Task 55E)'
   ]
@@ -11817,7 +11863,49 @@ const COMM_STATUSES = ['Open','Fulfilled'];
 const CMT_METHODS=['Mail','Email','Online form','Public hearing','Comment card','Phone','In-person','Other'];
 const CMT_TOPICS=['Noise','Traffic / access','Environmental / natural resources','Project scope','Alternatives','Schedule','Cost / funding','Safety','Property / right-of-way','General support','General opposition','Other'];
 const CMT_STATUSES=['Pending','In progress','Responded','No response needed'];
-const CMT_PERIOD_TYPES=['Scoping','CE','EA — 30-day comment period','DEIS — 45-day comment period','FEIS','Other'];
+const CMT_PERIOD_TYPES=[
+  'Scoping',
+  'CE — 10-day comment period',
+  'EA — 30-day public review (NOA)',
+  'EA FONSI — 30-day waiting period',
+  'EIS DEIS — 45-day comment period (max 60)',
+  'EIS FEIS/ROD — notice of availability',
+  'Other'
+];
+
+// UDOT MOI Ch. 4.0 (Rev. March 2025) comment period requirements by type
+const PERIOD_REQUIREMENTS={
+  'CE — 10-day comment period':{
+    minDays:10, maxDays:null, frRequired:false,
+    label:'CE — 10-day minimum',
+    note:'Minimum 10 days following the hearing. If day 10 falls on a Sunday or holiday, extended one additional day. Comment period start = day of first advertisement.',
+    authority:'UDOT MOI Ch. 4.5(B)(1); 23 CFR 771.111(h)(2)(iii)'
+  },
+  'EA — 30-day public review (NOA)':{
+    minDays:30, maxDays:null, frRequired:false,
+    label:'EA — 30-day minimum',
+    note:'NOA must be issued in local, state, or regional clearinghouses, newspapers, and other means. EA does not need to be formally circulated. Comment period start = day of first advertisement.',
+    authority:'UDOT MOI Ch. 4.5(B)(2); 23 CFR 771.111(h)(2)(iii)'
+  },
+  'EA FONSI — 30-day waiting period':{
+    minDays:30, maxDays:null, frRequired:false,
+    label:'EA FONSI — 30-day waiting period',
+    note:'If project would normally require an EIS: final EA must be available for public review for a minimum of 30 days before FONSI is issued.',
+    authority:'23 CFR 771.119; UDOT MOI Ch. 4.5(B)(2)(a)'
+  },
+  'EIS DEIS — 45-day comment period (max 60)':{
+    minDays:45, maxDays:60, frRequired:true,
+    label:'EIS DEIS — 45-day min / 60-day max',
+    note:'Minimum 45 days following Federal Register NOA announcement. Does not exceed 60 days (23 USC 139) unless all lead agencies, project sponsor, and participating agencies agree. Public hearing may not be held earlier than 15 days after Federal Register announcement.',
+    authority:'UDOT MOI Ch. 4.5(B)(4)(b); 23 USC 139'
+  },
+  'EIS FEIS/ROD — notice of availability':{
+    minDays:null, maxDays:null, frRequired:true,
+    label:'EIS FEIS/ROD — 90-day post-DEIS minimum',
+    note:'Combined FEIS+ROD signed no sooner than 90 days after NOA for DEIS. If separate FEIS and ROD, minimum 30-day waiting period between them. NOA published in Federal Register and local/state newspapers.',
+    authority:'UDOT MOI Ch. 4.5(B)(4)(c)'
+  }
+};
 
 // ── TRIBAL CONSULTATION TRACKER ──────────────────────────────────────────────
 const TRIBAL_CONSULT_TYPES=[
@@ -12280,16 +12368,39 @@ function _renderCommentPeriods(allPeriods,allComments,allProjs,projFilt){
       else daysNote=`<span style="color:var(--amber);font-size:11px">${daysLeft}d remaining</span>`;
     }
 
+    // ── Compliance check ────────────────────────────────────────────────
+    const req=PERIOD_REQUIREMENTS[p.periodType||''];
+    let complianceBadge='';
+    if(req&&p.startDate&&p.endDate){
+      const actualDays=Math.ceil((new Date(p.endDate+'T00:00:00')-new Date(p.startDate+'T00:00:00'))/86400000);
+      if(req.minDays&&actualDays<req.minDays){
+        complianceBadge=`<span style="font-size:11px;font-weight:600;color:#ff6b6b;background:rgba(255,107,107,.12);border:1px solid rgba(255,107,107,.3);padding:2px 8px;border-radius:4px" title="${req.authority}">⚠ ${actualDays}d / ${req.minDays}d min</span>`;
+      } else if(req.maxDays&&actualDays>req.maxDays){
+        complianceBadge=`<span style="font-size:11px;font-weight:600;color:var(--amber);background:rgba(232,160,32,.12);border:1px solid rgba(232,160,32,.3);padding:2px 8px;border-radius:4px" title="${req.authority}">⚠ ${actualDays}d exceeds ${req.maxDays}d max</span>`;
+      } else if(req.minDays){
+        complianceBadge=`<span style="font-size:11px;font-weight:600;color:var(--green);background:rgba(40,168,112,.1);border:1px solid rgba(40,168,112,.25);padding:2px 8px;border-radius:4px" title="${req.authority}">✓ ${actualDays}d meets ${req.minDays}d min</span>`;
+      }
+    }
+    // ── Advertising dates row ─────────────────────────────────────────
+    const adRows=[];
+    if(p.firstAdDate) adRows.push(`<span>1st ad: ${dateFmt(p.firstAdDate)}</span>`);
+    if(p.secondAdDate) adRows.push(`<span>2nd ad: ${dateFmt(p.secondAdDate)}</span>`);
+    if(p.federalRegisterDate) adRows.push(`<span style="color:var(--amber)">Fed. Register: ${dateFmt(p.federalRegisterDate)}</span>`);
+    if(p.hearingDate) adRows.push(`<span>Hearing: ${dateFmt(p.hearingDate)}</span>`);
+    const adRowHtml=adRows.length?`<div style="display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:var(--slate);margin-top:5px">${adRows.join('')}</div>`:'';
+
     html+=`<div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px">
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
             <span style="font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;background:${statusBg};color:${statusColor}">${p.status}</span>
             ${p.periodType?`<span style="font-size:11px;color:var(--fog);background:rgba(255,255,255,.06);padding:2px 7px;border-radius:4px">${p.periodType}</span>`:''}
+            ${complianceBadge}
             ${daysNote}
           </div>
-          <div style="font-size:15px;font-weight:600;color:var(--white);margin-bottom:3px">${p.name||'Unnamed period'}</div>
-          <div style="font-size:12px;color:var(--slate)">${projName}${p.startDate?` · ${dateFmt(p.startDate)} – ${dateFmt(p.endDate)}`:''}  </div>
+          <div style="font-size:15px;font-weight:600;color:var(--white);margin-bottom:3px">${escHtml(p.name||p.title||'Unnamed period')}</div>
+          <div style="font-size:12px;color:var(--slate)">${projName}${p.startDate?` · ${dateFmt(p.startDate)} – ${dateFmt(p.endDate)}`:''}</div>
+          ${adRowHtml}
         </div>
         <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">
           <button class="btn btn-ghost btn-xs" onclick="openPeriodModal('${p.id}')">Edit</button>
@@ -12297,6 +12408,8 @@ function _renderCommentPeriods(allPeriods,allComments,allProjs,projFilt){
           <button class="btn btn-ghost btn-xs" style="color:var(--red)" onclick="delPeriod('${p.id}')">Delete</button>
         </div>
       </div>
+      <!-- Compliance note for EIS Federal Register requirement -->
+      ${req&&req.frRequired&&!p.federalRegisterDate?`<div style="margin-bottom:10px;padding:7px 10px;background:rgba(232,160,32,.08);border:1px solid rgba(232,160,32,.25);border-radius:7px;font-size:11px;color:var(--amber)">⚠ Federal Register NOA date not recorded — required for this period type</div>`:''}
       <!-- Stats row -->
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">
         <div style="background:rgba(255,255,255,.04);border-radius:8px;padding:10px 12px;text-align:center">
@@ -12322,7 +12435,7 @@ function _renderCommentPeriods(allPeriods,allComments,allProjs,projFilt){
           <div style="background:${pct===100?'var(--green)':'var(--sky-lt)'};width:${pct}%;height:100%;border-radius:4px;transition:width .3s"></div>
         </div>
       </div>`:''}
-      ${p.notes?`<div style="margin-top:10px;font-size:12px;color:var(--fog);font-style:italic">${p.notes}</div>`:''}
+      ${p.description?`<div style="margin-top:10px;font-size:12px;color:var(--fog);font-style:italic">${escHtml(p.description)}</div>`:''}
     </div>`;
   });
   return html;
@@ -12450,25 +12563,34 @@ function openPeriodModal(id){
   const p=id?(DB.get('comment_periods')||[]).find(x=>String(x.id)===String(id))||{}:{};
   const allProjs=DB.get('projects').filter(x=>x.status==='Active'||x.status==='On hold');
   const projId=p.projectId||S.projectFilter||S.cmtProj||'';
+  const curType=p.periodType||'';
+  const curReq=PERIOD_REQUIREMENTS[curType];
+  const reqHtml=curReq?`<div id="f-preq-hint" style="margin-top:6px;padding:10px 12px;background:rgba(74,155,232,.1);border:1px solid rgba(74,155,232,.3);border-radius:7px;font-size:12px;line-height:1.5">
+    <div style="font-weight:600;color:var(--sky-lt);margin-bottom:3px">${curReq.label}${curReq.frRequired?' · <span style="color:var(--amber)">Federal Register NOA required</span>':''}</div>
+    <div style="color:var(--mist)">${curReq.note}</div>
+    <div style="color:var(--fog);margin-top:3px;font-size:11px">${curReq.authority}</div>
+  </div>`:'<div id="f-preq-hint" style="display:none"></div>';
+  const frRow=curReq&&curReq.frRequired?'':`style="display:${curReq&&curReq.frRequired?'':'none'}"`;
   openM(id?'Edit comment period':'New comment period',`
     <div class="fgrid fg2f">
-      <div class="fr"><label>Period name *</label><input id="f-pname" value="${p.name||''}" placeholder="e.g. EA — 30-Day Public Review"></div>
-      <div class="fr"><label>Type</label>
-        <select id="f-ptype">
+      <div class="fr"><label>Period name *</label><input id="f-pname" value="${escHtml(p.name||p.title||'')}" placeholder="e.g. EA — 30-Day Public Review"></div>
+      <div class="fr"><label>UDOT period type</label>
+        <select id="f-ptype" onchange="_onPeriodTypeChange(this.value)">
           <option value="">— Select type —</option>
-          ${CMT_PERIOD_TYPES.map(t=>`<option value="${t}" ${p.type===t?'selected':''}>${t}</option>`).join('')}
+          ${CMT_PERIOD_TYPES.map(t=>`<option value="${t}" ${curType===t?'selected':''}>${t}</option>`).join('')}
         </select>
       </div>
     </div>
+    ${reqHtml}
     <div class="fr"><label>Project *</label>
       <select id="f-pproj">
         <option value="">— Select project —</option>
-        ${allProjs.map(x=>`<option value="${x.id}" ${String(x.id)===String(projId)?'selected':''}>${x.name} (${x.pid})</option>`).join('')}
+        ${allProjs.map(x=>`<option value="${x.id}" ${String(x.id)===String(projId)?'selected':''}>${escHtml(x.name)} (${x.pid})</option>`).join('')}
       </select>
     </div>
     <div class="fgrid fg2f">
-      <div class="fr"><label>Start date</label><input type="date" id="f-pstart" value="${p.startDate||''}"></div>
-      <div class="fr"><label>End date</label><input type="date" id="f-pend" value="${p.endDate||''}"></div>
+      <div class="fr"><label>Comment period start</label><input type="date" id="f-pstart" value="${p.startDate||''}" onchange="_onPeriodDateChange()"></div>
+      <div class="fr"><label>Comment period end</label><input type="date" id="f-pend" value="${p.endDate||''}"></div>
     </div>
     <div class="fgrid fg2f">
       <div class="fr"><label>Status</label>
@@ -12476,10 +12598,17 @@ function openPeriodModal(id){
           ${PERIOD_STATUSES.map(s=>`<option value="${s}" ${(p.status||'Open')===s?'selected':''}>${s}</option>`).join('')}
         </select>
       </div>
-      <div class="fr"><label>Location / venue</label><input id="f-pvenue" value="${p.venue||''}" placeholder="Hearing location or online link"></div>
+      <div class="fr"><label>Hearing date</label><input type="date" id="f-phearing" value="${p.hearingDate||''}" title="Public hearing date"></div>
     </div>
+    <div class="fr"><label>Hearing location / venue</label><input id="f-pvenue" value="${escHtml(p.venue||'')}" placeholder="Address or virtual meeting link"></div>
+    <div style="margin-top:10px;margin-bottom:4px;font-size:12px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.4px">Advertising — required notices (UDOT MOI Ch. 4.5(A)(4)(a))</div>
+    <div class="fgrid fg2f">
+      <div class="fr"><label>1st newspaper ad date <span style="color:var(--fog);font-weight:400">(≥15 days before deadline)</span></label><input type="date" id="f-pad1" value="${p.firstAdDate||''}"></div>
+      <div class="fr"><label>2nd newspaper ad date <span style="color:var(--fog);font-weight:400">(≥7 days before deadline)</span></label><input type="date" id="f-pad2" value="${p.secondAdDate||''}"></div>
+    </div>
+    <div class="fr" id="f-pfr-wrap" style="${curReq&&curReq.frRequired?'':'display:none'}"><label>Federal Register NOA date <span style="color:var(--amber);font-weight:400">(EIS required)</span></label><input type="date" id="f-pfr" value="${p.federalRegisterDate||''}"></div>
     <div class="fr"><label>Description / notes</label>
-      <textarea id="f-pdesc" rows="3" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:10px 12px;resize:vertical;font-family:inherit;line-height:1.6">${p.description||''}</textarea>
+      <textarea id="f-pdesc" rows="3" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:10px 12px;resize:vertical;font-family:inherit;line-height:1.6">${escHtml(p.description||'')}</textarea>
     </div>
   `,`<button class="btn btn-ghost" onclick="closeM()">Cancel</button>
      <button class="btn btn-primary" onclick="savePeriod()">Save period</button>`,true);
@@ -12491,14 +12620,31 @@ function savePeriod(){
   if(!name){alert('Period name is required.');return;}
   const projId=v('f-pproj');
   if(!projId){alert('Please select a project.');return;}
+  const periodType=v('f-ptype');
+  const startDate=v('f-pstart');
+  const endDate=v('f-pend');
+  // Compliance check on save
+  const req=PERIOD_REQUIREMENTS[periodType];
+  if(req&&req.minDays&&startDate&&endDate){
+    const actual=Math.ceil((new Date(endDate+'T00:00:00')-new Date(startDate+'T00:00:00'))/86400000);
+    if(actual<req.minDays){
+      if(!confirm('Warning: this period is '+actual+' days, which is below the minimum '+req.minDays+' days required for "'+periodType+'" ('+req.authority+'). Save anyway?'))return;
+    }
+    if(req.maxDays&&actual>req.maxDays){
+      if(!confirm('Warning: this period is '+actual+' days, which exceeds the maximum '+req.maxDays+' days allowed for "'+periodType+'" ('+req.authority+'). Save anyway?'))return;
+    }
+  }
   const data={
     id:S.editPeriodId||DB.uid(),
-    name,type:v('f-ptype'),
+    name, periodType,
     projectId:projId,
-    startDate:v('f-pstart'),
-    endDate:v('f-pend'),
+    startDate, endDate,
     status:v('f-pstatus')||'Open',
     venue:v('f-pvenue'),
+    hearingDate:v('f-phearing')||'',
+    firstAdDate:v('f-pad1')||'',
+    secondAdDate:v('f-pad2')||'',
+    federalRegisterDate:v('f-pfr')||'',
     description:v('f-pdesc')
   };
   const all=DB.get('comment_periods')||[];
@@ -12515,6 +12661,38 @@ function delPeriod(id){
   DB.set('comment_periods',(DB.get('comment_periods')||[]).filter(x=>String(x.id)!==String(id)));
   if(S.cmtPeriodId===String(id))S.cmtPeriodId='';
   renderComments(document.getElementById('main'));
+}
+
+function _onPeriodTypeChange(val){
+  const req=PERIOD_REQUIREMENTS[val];
+  const hint=document.getElementById('f-preq-hint');
+  const frWrap=document.getElementById('f-pfr-wrap');
+  if(hint){
+    if(req){
+      hint.style.display='';
+      hint.innerHTML='<div style="font-weight:600;color:var(--sky-lt);margin-bottom:3px">'+req.label+(req.frRequired?' · <span style="color:var(--amber)">Federal Register NOA required</span>':'')+
+        '</div><div style="color:var(--mist)">'+req.note+'</div><div style="color:var(--fog);margin-top:3px;font-size:11px">'+req.authority+'</div>';
+    } else {
+      hint.style.display='none';hint.innerHTML='';
+    }
+  }
+  if(frWrap) frWrap.style.display=(req&&req.frRequired)?'':'none';
+  _onPeriodDateChange();
+}
+
+function _onPeriodDateChange(){
+  const typeEl=document.getElementById('f-ptype');
+  const startEl=document.getElementById('f-pstart');
+  const endEl=document.getElementById('f-pend');
+  if(!typeEl||!startEl||!endEl)return;
+  const req=PERIOD_REQUIREMENTS[typeEl.value];
+  if(!req||!req.minDays||!startEl.value)return;
+  // Auto-suggest end date if not yet set
+  if(!endEl.value){
+    const d=new Date(startEl.value+'T00:00:00');
+    d.setDate(d.getDate()+req.minDays);
+    endEl.value=d.toISOString().slice(0,10);
+  }
 }
 
 function _cmtProjChange(pid){

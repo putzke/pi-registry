@@ -434,6 +434,10 @@ window.onGoogleMapsReady = function() {
       Issues
       <span class="nav-badge" id="issues-badge" style="display:none"></span>
     </button>
+    <button class="nav-btn" id="nav-map" onclick="setView('map')">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2C5.791 2 4 3.791 4 6c0 3.5 4 8 4 8s4-4.5 4-8c0-2.209-1.791-4-4-4z"/><circle cx="8" cy="6" r="1.5"/></svg>
+      Stakeholder map
+    </button>
     <button class="nav-btn" id="nav-reports" onclick="setView('reports')">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="14" height="14" rx="1.5"/><path d="M4 11V8M7 11V5M10 11V7M13 11V4"/></svg>
       Reports
@@ -1415,6 +1419,7 @@ function render(){
   else if(S.view==='interactions')renderInteractions(m);
   else if(S.view==='followups')renderFollowups(m);
   else if(S.view==='deliverables')renderDeliverables(m);
+  else if(S.view==='map')renderMapView(m);
   else if(S.view==='reports')renderReports(m);
   else if(S.view==='meetings')renderMeetings(m);
   else if(S.view==='issues')renderIssuesView(m);
@@ -6635,7 +6640,7 @@ function renderReports(el){
       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h4"/></svg>'},
     {id:'issues-report',name:'Issues tracker report',desc:'Open and resolved issues with linked interactions — export as PDF or Word',
       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><circle cx="12" cy="12" r="9"/><path d="M12 7v5"/><circle cx="12" cy="15.5" r=".8" fill="currentColor"/></svg>'},
-    {id:'stakeholder-map',name:'Stakeholder map',desc:'Interactive map of stakeholder locations with sentiment color-coding — print to PDF',
+    {id:'stakeholder-map',name:'Stakeholder map',desc:'Interactive map with filters by support, type, influence, LEP/EJ — open as a full view with live filtering',
       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M12 2C8.686 2 6 4.686 6 8c0 5 6 12 6 12s6-7 6-12c0-3.314-2.686-6-6-6z"/><circle cx="12" cy="8" r="2"/></svg>'},
     {id:'events-log',name:'Events & outreach log',desc:'All logged public events and outreach activities with attendance and notes',
       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>'},
@@ -6647,7 +6652,7 @@ function renderReports(el){
     cardsHTML+='<div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:18px 20px;cursor:pointer;transition:border-color .12s,transform .12s" '
       +'onmouseover="this.style.borderColor=\'rgba(45,125,210,.5)\';this.style.transform=\'translateY(-2px)\'" '
       +'onmouseout="this.style.borderColor=\'rgba(255,255,255,.14)\';this.style.transform=\'none\'" '
-      +'onclick="'+(r.id==="issues-report"?"generateIssuesReport()":r.id==="stakeholder-map"?"generateMapReport()":r.id==="pi-summary"?"generatePISummary()":("generateReport('"+r.id+"')"))+'">'
+      +'onclick="'+(r.id==="issues-report"?"generateIssuesReport()":r.id==="stakeholder-map"?"setView('map')":r.id==="pi-summary"?"generatePISummary()":("generateReport('"+r.id+"')"))+'">'
       +'<div style="display:flex;align-items:flex-start;gap:12px">'
       +'<div style="color:var(--sky-lt);flex-shrink:0;margin-top:2px">'+r.icon+'</div>'
       +'<div><div style="font-size:14px;font-weight:600;color:var(--white);margin-bottom:5px">'+r.name+'</div>'
@@ -10429,6 +10434,415 @@ function printEngagementMatrix(projectId) {
 // STAKEHOLDER MAP REPORT — Report view version
 // Renders in rpt-output panel with Print to PDF button
 // ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
+// STAKEHOLDER MAP VIEW — Inline interactive view with filter sidebar
+// ══════════════════════════════════════════════════════════════════
+
+function renderMapView(m) {
+  var allProjs = DB.get('projects');
+  var projF = S.projectFilter || '';
+  var projLabel = projF ? (allProjs.find(function(p){return String(p.id)===String(projF);})||{}).name||'' : '';
+
+  var fSupport = S.mapFSupport || '';
+  var fType    = S.mapFType    || '';
+  var fInf     = S.mapFInf     || '';
+  var fEJ      = S.mapFEJ      || false;
+  var fLEP     = S.mapFLEP     || false;
+  var fSearch  = S.mapFSearch  || '';
+  var colorBy  = S.mapColorBy  || 'support';
+
+  var allStakes = DB.getActive('stakeholders');
+  var psLinks   = DB.get('project_stakeholders');
+
+  // Build filtered stakeholder list
+  var candidates;
+  if (projF) {
+    candidates = psLinks.filter(function(x){return String(x.projectId)===String(projF);}).map(function(lk){
+      var s = allStakes.find(function(x){return String(x.id)===String(lk.stakeholderId);});
+      return s ? {s:s, lk:lk} : null;
+    }).filter(Boolean);
+  } else {
+    // No project selected — show all active stakeholders that have at least one address
+    candidates = allStakes.map(function(s){
+      var lk = psLinks.find(function(x){return String(x.stakeholderId)===String(s.id);})||{};
+      return {s:s, lk:lk};
+    });
+  }
+
+  var withAddr = candidates.filter(function(c){return c.s.address && c.s.address.trim();});
+
+  // Apply filters
+  if (fSupport) withAddr = withAddr.filter(function(c){return (c.lk.support||'Neutral')===fSupport;});
+  if (fType)    withAddr = withAddr.filter(function(c){return (c.s.type||'')=== fType;});
+  if (fInf)     withAddr = withAddr.filter(function(c){return (c.lk.influence||c.s.influence||'')=== fInf;});
+  if (fEJ)      withAddr = withAddr.filter(function(c){return c.s.ejCommunity||c.s.ej;});
+  if (fLEP)     withAddr = withAddr.filter(function(c){return c.s.lep;});
+  if (fSearch) {
+    var q = fSearch.toLowerCase();
+    withAddr = withAddr.filter(function(c){
+      return ((c.s.firstName||'')+' '+(c.s.lastName||'')).toLowerCase().includes(q)
+        || (c.s.org||'').toLowerCase().includes(q)
+        || (c.s.address||'').toLowerCase().includes(q);
+    });
+  }
+
+  var totalAddr = (projF
+    ? psLinks.filter(function(x){return String(x.projectId)===String(projF);}).map(function(lk){return allStakes.find(function(x){return String(x.id)===String(lk.stakeholderId);});}).filter(function(s){return s&&s.address&&s.address.trim();})
+    : allStakes.filter(function(s){return s.address&&s.address.trim();})
+  ).length;
+
+  var STAKE_TYPES = ['Business','Business Group','Elected Official','Agency','Community Group','Contractor','Engineering','Media','Property Owner','Resident','Road Traveler','Tribal','Utility','Non-profit','Other'];
+  var INF_LEVELS  = ['High','Medium','Low'];
+  var SUP_LEVELS  = ['Champion','Neutral','Opponent'];
+
+  m.innerHTML = `
+  <div style="display:flex;height:100%;min-height:0;overflow:hidden">
+    <!-- FILTER SIDEBAR -->
+    <div style="width:260px;flex-shrink:0;background:#0e1e30;border-right:1px solid rgba(255,255,255,.1);display:flex;flex-direction:column;overflow-y:auto;padding:14px 12px;gap:12px">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Project</div>
+        ${!projF ? `<div style="font-size:12px;color:var(--amber);padding:6px 10px;background:rgba(232,160,32,.1);border:1px solid rgba(232,160,32,.25);border-radius:6px">Select a project in the sidebar to geocode stakeholders</div>` :
+          `<div style="font-size:13px;color:var(--white);font-weight:600">${projLabel}</div>`}
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Search</div>
+        <input id="mv-search" value="${fSearch}" oninput="S.mapFSearch=this.value;_mapApplyFilters()" placeholder="Name, org, address…" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:var(--white);font-size:12px;padding:6px 9px;outline:none">
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Support level</div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          ${['','Champion','Neutral','Opponent'].map(function(v){
+            var label=v||'All';
+            var dot=v==='Champion'?'#28A870':v==='Neutral'?'#5a87c6':v==='Opponent'?'#C0392B':'rgba(255,255,255,.25)';
+            return `<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:${fSupport===v?'var(--white)':'var(--mist)'}">
+              <input type="radio" name="mv-sup" value="${v}" ${fSupport===v?'checked':''} onchange="S.mapFSupport=this.value;_mapApplyFilters()" style="display:none">
+              <span style="width:10px;height:10px;border-radius:50%;background:${dot};border:1px solid rgba(255,255,255,.3);flex-shrink:0"></span>${label}</label>`;
+          }).join('')}
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Stakeholder type</div>
+        <select id="mv-type" onchange="S.mapFType=this.value;_mapApplyFilters()" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:var(--white);font-size:12px;padding:6px 8px;box-sizing:border-box">
+          <option value="">All types</option>
+          ${STAKE_TYPES.map(function(t){return `<option value="${t}" ${fType===t?'selected':''}>${t}</option>`;}).join('')}
+        </select>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Influence</div>
+        <select id="mv-inf" onchange="S.mapFInf=this.value;_mapApplyFilters()" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:var(--white);font-size:12px;padding:6px 8px;box-sizing:border-box">
+          <option value="">All levels</option>
+          ${INF_LEVELS.map(function(t){return `<option value="${t}" ${fInf===t?'selected':''}>${t}</option>`;}).join('')}
+        </select>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Special designations</div>
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:${fEJ?'var(--white)':'var(--mist)'};margin-bottom:5px">
+          <input type="checkbox" ${fEJ?'checked':''} onchange="S.mapFEJ=this.checked;_mapApplyFilters()" style="accent-color:var(--sky)">
+          EJ community only
+        </label>
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:${fLEP?'var(--white)':'var(--mist)'}">
+          <input type="checkbox" ${fLEP?'checked':''} onchange="S.mapFLEP=this.checked;_mapApplyFilters()" style="accent-color:var(--sky)">
+          LEP only
+        </label>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Color markers by</div>
+        <select id="mv-colorby" onchange="S.mapColorBy=this.value;_mapRecolorView()" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:var(--white);font-size:12px;padding:6px 8px;box-sizing:border-box">
+          <option value="support" ${colorBy==='support'?'selected':''}>Support level</option>
+          <option value="influence" ${colorBy==='influence'?'selected':''}>Influence tier</option>
+          <option value="type" ${colorBy==='type'?'selected':''}>Stakeholder type</option>
+          <option value="ej" ${colorBy==='ej'?'selected':''}>EJ / LEP status</option>
+        </select>
+      </div>
+      <div style="margin-top:auto;padding-top:10px;border-top:1px solid rgba(255,255,255,.08)">
+        <button class="btn btn-ghost" style="width:100%;font-size:12px;margin-bottom:6px" onclick="S.mapFSupport='';S.mapFType='';S.mapFInf='';S.mapFEJ=false;S.mapFLEP=false;S.mapFSearch='';S.mapColorBy='support';renderMapView(document.getElementById('main'))">
+          Clear all filters
+        </button>
+        <button class="btn btn-primary" style="width:100%;font-size:12px" onclick="_mapPrint()">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M4 6V2h8v4"/><rect x="2" y="6" width="12" height="7" rx="1"/><path d="M4 10h8M4 13h5"/></svg>
+          Print / export
+        </button>
+      </div>
+    </div>
+    <!-- MAP AREA -->
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;min-height:0">
+      <!-- Status bar -->
+      <div style="display:flex;align-items:center;gap:12px;padding:8px 16px;background:#0e1e30;border-bottom:1px solid rgba(255,255,255,.1);flex-shrink:0;flex-wrap:wrap">
+        <div style="font-size:12px;color:var(--slate)">
+          ${withAddr.length} of ${totalAddr} plotted
+          ${fSupport||fType||fInf||fEJ||fLEP||fSearch ? `<span style="color:var(--amber);margin-left:6px">· filters active</span>` : ''}
+        </div>
+        <div style="display:flex;gap:14px;margin-left:auto;font-size:11px;color:var(--fog)" id="mv-legend">
+          ${_mapLegendHtml(colorBy)}
+        </div>
+      </div>
+      <!-- Map canvas -->
+      <div id="mv-map" style="flex:1;min-height:0;background:#1a2a3a"></div>
+      <div id="mv-loading" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--slate);font-size:13px;display:flex;align-items:center;gap:8px;pointer-events:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:18px;height:18px;animation:spin 1s linear infinite"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+        Geocoding addresses…
+      </div>
+      <div id="mv-errors" style="display:none;padding:6px 14px;font-size:11px;color:var(--fog);background:#0e1e30;border-top:1px solid rgba(255,255,255,.08)"></div>
+    </div>
+  </div>`;
+
+  // Store filtered list for geocoding
+  window._mvFiltered = withAddr;
+  window._mvProjId   = projF;
+  window._mvProjName = projLabel;
+
+  if (withAddr.length === 0) {
+    document.getElementById('mv-loading').textContent = projF
+      ? 'No stakeholders match the current filters or have addresses.'
+      : 'Select a project to load stakeholders.';
+    return;
+  }
+
+  loadGoogleMaps();
+  _mvGeocode(withAddr, projF);
+}
+
+function _mapLegendHtml(colorBy) {
+  if (colorBy === 'support') {
+    return '<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#28A870;margin-right:3px"></span>Champion</span>'
+      + '<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#5a87c6;margin-right:3px;margin-left:10px"></span>Neutral</span>'
+      + '<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#C0392B;margin-right:3px;margin-left:10px"></span>Opponent</span>';
+  }
+  if (colorBy === 'influence') {
+    return '<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#f59e0b;margin-right:3px"></span>High</span>'
+      + '<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#6366f1;margin-right:3px;margin-left:10px"></span>Medium</span>'
+      + '<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#64748b;margin-right:3px;margin-left:10px"></span>Low</span>';
+  }
+  if (colorBy === 'ej') {
+    return '<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#e94040;margin-right:3px"></span>EJ community</span>'
+      + '<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#f59e0b;margin-right:3px;margin-left:10px"></span>LEP only</span>'
+      + '<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#5a87c6;margin-right:3px;margin-left:10px"></span>Standard</span>';
+  }
+  return '<span style="color:var(--fog)">Color by type</span>';
+}
+
+function _mvMarkerColor(g, colorBy) {
+  if (colorBy === 'influence') {
+    var inf = g.lk.influence || g.s.influence || '';
+    return inf === 'High' ? '#f59e0b' : inf === 'Medium' ? '#6366f1' : '#64748b';
+  }
+  if (colorBy === 'ej') {
+    if (g.s.ejCommunity || g.s.ej) return '#e94040';
+    if (g.s.lep) return '#f59e0b';
+    return '#5a87c6';
+  }
+  if (colorBy === 'type') {
+    var typeColors = {Agency:'#0ea5e9',Business:'#f59e0b','Elected Official':'#8b5cf6','Community Group':'#10b981',Resident:'#64748b','Property Owner':'#ef4444',Tribal:'#d97706',Media:'#06b6d4',Other:'#94a3b8'};
+    return typeColors[g.s.type] || '#94a3b8';
+  }
+  // support
+  return g.lk.support==='Champion'?'#28A870':g.lk.support==='Opponent'?'#C0392B':'#5a87c6';
+}
+
+async function _mvGeocode(filtered, projId) {
+  var loading = document.getElementById('mv-loading');
+  var errDiv  = document.getElementById('mv-errors');
+  var mapEl   = document.getElementById('mv-map');
+  if (!mapEl) return;
+
+  // Wait for Google Maps
+  var waited = 0;
+  while (!window.google || !window.google.maps) {
+    await new Promise(function(r){setTimeout(r,200);});
+    waited += 200;
+    if (waited > 6000) {
+      if (loading) loading.textContent = 'Google Maps failed to load. Check your connection.';
+      return;
+    }
+  }
+
+  // Use cache keyed by project to avoid re-geocoding on filter change
+  var cacheKey = 'proj_' + (projId || 'all');
+  var cache = window._mvGeoCache = window._mvGeoCache || {};
+  var geocoder = new window.google.maps.Geocoder();
+
+  // Geocode only uncached entries
+  var needGeo = filtered.filter(function(c){return !cache[c.s.id];});
+  if (loading && needGeo.length > 0) loading.style.display = 'flex';
+
+  var errors = [];
+  for (var i = 0; i < needGeo.length; i++) {
+    var c = needGeo[i];
+    try {
+      var result = await new Promise(function(resolve, reject){
+        geocoder.geocode({address: c.s.address}, function(results, status){
+          if (status === 'OK' && results[0]) resolve(results[0]);
+          else reject(status);
+        });
+      });
+      cache[c.s.id] = {lat: result.geometry.location.lat(), lng: result.geometry.location.lng(), formatted: result.formatted_address};
+    } catch(e) {
+      errors.push(c.s.address);
+    }
+  }
+
+  if (loading) loading.style.display = 'none';
+
+  // Build geocoded list from cache
+  var geocoded = filtered.map(function(c){
+    var geo = cache[c.s.id];
+    return geo ? Object.assign({}, c, {lat:geo.lat, lng:geo.lng, formatted:geo.formatted}) : null;
+  }).filter(Boolean);
+
+  if (geocoded.length === 0) {
+    if (loading) { loading.style.display='flex'; loading.textContent='No addresses could be geocoded.'; }
+    return;
+  }
+
+  // Render/update the map
+  _mvRenderMarkers(geocoded);
+
+  if (errors.length > 0 && errDiv) {
+    errDiv.style.display = 'block';
+    errDiv.textContent = 'Could not geocode ' + errors.length + ' address' + (errors.length>1?'es':'') + ': ' + errors.join(', ');
+  }
+}
+
+function _mvRenderMarkers(geocoded) {
+  var mapEl = document.getElementById('mv-map');
+  if (!mapEl) return;
+  var colorBy = S.mapColorBy || 'support';
+
+  // Init or reuse map instance
+  if (!window._mvMap || !mapEl.contains(window._mvMap.getDiv())) {
+    window._mvMap = new window.google.maps.Map(mapEl, {
+      zoom: 11,
+      center: {lat: geocoded[0].lat, lng: geocoded[0].lng},
+      mapTypeId: 'roadmap',
+      styles: [
+        {elementType:'geometry',stylers:[{color:'#1d2c4d'}]},
+        {elementType:'labels.text.fill',stylers:[{color:'#8ec3b9'}]},
+        {elementType:'labels.text.stroke',stylers:[{color:'#1a3646'}]},
+        {featureType:'road',elementType:'geometry',stylers:[{color:'#304a7d'}]},
+        {featureType:'water',elementType:'geometry',stylers:[{color:'#0e1626'}]}
+      ]
+    });
+    window._mvInfoWindow = new window.google.maps.InfoWindow();
+  }
+
+  // Clear old markers
+  (window._mvMarkers || []).forEach(function(m){m.setMap(null);});
+  window._mvMarkers = [];
+
+  var bounds = new window.google.maps.LatLngBounds();
+  var infoWindow = window._mvInfoWindow;
+  var theMap = window._mvMap;
+
+  geocoded.forEach(function(g, idx) {
+    var color = _mvMarkerColor(g, colorBy);
+    var num = idx + 1;
+    var name = ((g.s.firstName||'')+' '+(g.s.lastName||'')).trim() || g.s.org || 'Unknown';
+    var supColor = g.lk.support==='Champion'?'#28A870':g.lk.support==='Opponent'?'#C0392B':'#5a87c6';
+    var marker = new window.google.maps.Marker({
+      position: {lat: g.lat, lng: g.lng},
+      map: theMap,
+      title: num + '. ' + name,
+      label: {text: String(num), color:'#ffffff', fontSize: num>=10?'9px':'10px', fontWeight:'bold'},
+      icon: {
+        path: window.google.maps.SymbolPath.CIRCLE,
+        scale: num>=10?11:9,
+        fillColor: color,
+        fillOpacity: 0.95,
+        strokeColor: '#ffffff',
+        strokeWeight: 2
+      }
+    });
+    window._mvMarkers.push(marker);
+    bounds.extend({lat: g.lat, lng: g.lng});
+
+    marker.addListener('click', function(){
+      var ejTag = (g.s.ejCommunity||g.s.ej) ? '<span style="background:#e94040;color:#fff;font-size:10px;padding:1px 5px;border-radius:4px;margin-right:3px">EJ</span>' : '';
+      var lepTag = g.s.lep ? '<span style="background:#f59e0b;color:#000;font-size:10px;padding:1px 5px;border-radius:4px">LEP</span>' : '';
+      infoWindow.setContent(`
+        <div style="font-family:sans-serif;font-size:13px;min-width:200px;max-width:260px">
+          <div style="font-weight:600;margin-bottom:3px">#${num} — ${name}</div>
+          ${g.s.org ? `<div style="color:#555;margin-bottom:3px">${g.s.org}</div>` : ''}
+          <div style="font-size:11px;color:#777;margin-bottom:5px">${g.s.type||''}</div>
+          ${ejTag||lepTag ? `<div style="margin-bottom:6px">${ejTag}${lepTag}</div>` : ''}
+          <div style="padding-top:5px;border-top:1px solid #eee;display:flex;align-items:center;gap:6px">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${supColor}"></span>
+            <span style="color:${supColor};font-weight:600;font-size:12px">${g.lk.support||'Neutral'}</span>
+            ${g.lk.influence ? `<span style="color:#999;font-size:11px;margin-left:6px">${g.lk.influence} influence</span>` : ''}
+          </div>
+          <div style="font-size:11px;color:#888;margin-top:4px">${g.formatted}</div>
+        </div>`);
+      infoWindow.open(theMap, marker);
+    });
+  });
+
+  if (geocoded.length > 1) theMap.fitBounds(bounds);
+  else theMap.setCenter({lat: geocoded[0].lat, lng: geocoded[0].lng});
+
+  // Store for print
+  window._mvGeocoded = geocoded;
+}
+
+function _mapApplyFilters() {
+  renderMapView(document.getElementById('main'));
+}
+
+function _mapRecolorView() {
+  var colorBy = S.mapColorBy || 'support';
+  var legend = document.getElementById('mv-legend');
+  if (legend) legend.innerHTML = _mapLegendHtml(colorBy);
+  if (window._mvGeocoded && window._mvGeocoded.length > 0) {
+    _mvRenderMarkers(window._mvGeocoded);
+  }
+}
+
+function _mapPrint() {
+  var geocoded = window._mvGeocoded;
+  if (!geocoded || geocoded.length === 0) { showToast('No plotted stakeholders to print.','warn',3000); return; }
+  var projName = window._mvProjName || 'All Projects';
+  var colorBy  = S.mapColorBy || 'support';
+
+  var markers = geocoded.map(function(g){
+    var color = g.lk.support==='Champion'?'green':g.lk.support==='Opponent'?'red':'blue';
+    var label = ((g.s.firstName||'')[0]||(g.s.org||'?')[0]||'?').toUpperCase();
+    return 'markers=color:'+color+'%7Clabel:'+label+'%7C'+g.lat+','+g.lng;
+  }).join('&');
+  var staticMapUrl = 'https://maps.googleapis.com/maps/api/staticmap?size=700x400&maptype=roadmap&'+markers+'&key='+GOOGLE_MAPS_API_KEY;
+
+  var rows = geocoded.map(function(g, i){
+    var name = ((g.s.firstName||'')+' '+(g.s.lastName||'')).trim() || g.s.org || 'Unknown';
+    var supColor = g.lk.support==='Champion'?'#28A870':g.lk.support==='Opponent'?'#C0392B':'#5a87c6';
+    return '<tr><td style="padding:6px 10px;border-bottom:1px solid #eee">'+(i+1)+'</td>'
+      +'<td style="padding:6px 10px;border-bottom:1px solid #eee;font-weight:600">'+name+'</td>'
+      +'<td style="padding:6px 10px;border-bottom:1px solid #eee;color:#555">'+(g.s.org||'—')+'</td>'
+      +'<td style="padding:6px 10px;border-bottom:1px solid #eee;color:#555">'+(g.s.type||'—')+'</td>'
+      +'<td style="padding:6px 10px;border-bottom:1px solid #eee"><span style="color:'+supColor+';font-weight:600">'+(g.lk.support||'Neutral')+'</span></td>'
+      +'<td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:11px">'+(g.lk.influence||'—')+'</td>'
+      +'<td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:11px;color:#555">'+(g.s.address||'—')+'</td></tr>';
+  }).join('');
+
+  var printWin = window.open('','_blank','width=1100,height=820,scrollbars=yes');
+  printWin.document.write('<!DOCTYPE html><html><head><title>'+projName+' — Stakeholder Map</title>'
+    +'<style>body{font-family:Arial,sans-serif;margin:30px;color:#222}h1{font-size:18px;margin-bottom:4px}'
+    +'h2{font-size:13px;color:#555;font-weight:400;margin-bottom:16px}'
+    +'table{width:100%;border-collapse:collapse;font-size:13px}'
+    +'th{background:#1A3050;color:#fff;padding:8px 10px;text-align:left}'
+    +'img{max-width:100%;border:1px solid #ddd;border-radius:4px;margin-bottom:20px}'
+    +'.filters{font-size:12px;color:#555;margin-bottom:12px}'
+    +'@media print{button{display:none}}</style></head><body>'
+    +'<h1>'+projName+' — Stakeholder Map</h1>'
+    +'<h2>Generated '+new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})
+    +' · '+geocoded.length+' stakeholders plotted · Color by: '+colorBy+'</h2>'
+    +'<img src="'+staticMapUrl+'" alt="Stakeholder map">'
+    +'<table><thead><tr><th>#</th><th>Name</th><th>Organization</th><th>Type</th><th>Support</th><th>Influence</th><th>Address</th></tr></thead>'
+    +'<tbody>'+rows+'</tbody></table>'
+    +'<script>window.onload=function(){window.print();}<\/script>'
+    +'</body></html>');
+  printWin.document.close();
+}
+// ══════════════════════════════════════════════════════════════════
+// END STAKEHOLDER MAP VIEW
+// ══════════════════════════════════════════════════════════════════
+
 function generateMapReport() {
   var projF = S.projectFilter;
   if (!projF) { showToast('Select a project first.', 'warn', 3000); return; }

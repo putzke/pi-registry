@@ -670,7 +670,8 @@ const SB_TABLES = {
   comment_periods:      'pi_comment_periods',
   public_comments:      'pi_public_comments',
   tribal_consultations: 'pi_tribal_consultations',
-  reports:              'pi_reports'
+  reports:              'pi_reports',
+  report_archive:       'pi_report_archive'
 };
 
 // Map our internal field names to Supabase column names
@@ -782,6 +783,12 @@ const SB_TO_INT = {
     id:'id', projectId:'project_id', reportNum:'report_num', reportTitle:'report_title',
     reportSubtitle:'report_subtitle', periodStart:'period_start', periodEnd:'period_end',
     overallSummary:'overall_summary', sections:'sections', updatedAt:'updated_at'
+  },
+  pi_report_archive: {
+    id:'id', projectId:'project_id', reportNum:'report_num', reportTitle:'report_title',
+    reportSubtitle:'report_subtitle', periodStart:'period_start', periodEnd:'period_end',
+    overallSummary:'overall_summary', sections:'sections',
+    archivedAt:'archived_at', archivedBy:'archived_by'
   }
 };
 
@@ -928,7 +935,7 @@ function cacheClear(k) { delete _cache[k]; delete _cacheTime[k]; }
 const _syncCache = {};
 
 async function loadAllData() {
-  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments','comment_periods','tribal_consultations','reports'];
+  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments','comment_periods','tribal_consultations','reports','report_archive'];
   await Promise.all(tables.map(async t => { _syncCache[t] = await sbGet(t); }));
   // Load dismissed_pairs separately so a 403 doesn't block everything else
   try { _syncCache['dismissed_pairs'] = await sbGet('dismissed_pairs'); }
@@ -1289,7 +1296,8 @@ const S={
   fuSortCol:'dueDate',
   fuSortDir:'asc',
   delSortCol:'',
-  delSortDir:'asc'
+  delSortDir:'asc',
+  rptTab:'reports'
 };
 
 // ── HELPERS ───────────────────────────────────
@@ -6871,26 +6879,66 @@ el.innerHTML=topbar
     +'<div style="font-size:14px;color:var(--fog);margin-top:4px">complete</div></div></div>'
     +'</div></div>';
 
-  var groupPanel='<div style="margin-bottom:24px;background:#0E1E30;border:1px solid rgba(255,255,255,.13);border-radius:12px;padding:16px 20px">'
-    +'<div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:10px">Report distribution — select recipients for this report</div>'
-    +'<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">'+grpHTML+internalToggle+'</div>'
-    +'<div style="margin-top:10px;font-size:12px;color:var(--fog)">'+projPS.length+' stakeholders across all groups</div></div>';
+  var groupPanel='<div style="margin-bottom:20px;background:#0E1E30;border:1px solid rgba(255,255,255,.13);border-radius:10px;padding:14px 18px">'
+    +'<div style="font-size:12px;font-weight:700;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Report distribution — recipients</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">'+grpHTML+internalToggle+'</div>'
+    +'<div style="margin-top:8px;font-size:12px;color:var(--fog)">'+projPS.length+' stakeholders across all groups</div></div>';
 
-  var reportCards='<div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:14px">Select a report to generate</div>'
-    +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px">'
-    +cardsHTML+'</div>';
+  var reportCards='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px">'+cardsHTML+'</div>';
+
+  // archive panel
+  var archiveHtml=_buildArchiveHTML(projF);
+  var archiveCt=(_syncCache['report_archive']||[]).filter(function(r){return String(r.projectId)===String(projF);}).length;
+
+  // tab strip
+  var rptTab=S.rptTab||'reports';
+  function tabBtn(id,label,badge){
+    var active=rptTab===id;
+    var badgeHtml=badge?' <span style="font-size:10px;font-weight:700;background:'+(active?'rgba(255,255,255,.2)':'rgba(255,255,255,.1)')+';border-radius:10px;padding:1px 7px;margin-left:4px">'+badge+'</span>':'';
+    return '<button onclick="S.rptTab=\''+id+'\';renderReports(document.getElementById(\'main\'))" style="'
+      +'padding:8px 18px;border:none;background:'+(active?'var(--sky-lt)':'transparent')+';color:'+(active?'#0a1828':'var(--slate)')+';border-radius:6px;font-size:13px;font-weight:'+(active?'700':'500')+';cursor:pointer;transition:background .15s;white-space:nowrap">'+label+badgeHtml+'</button>';
+  }
+  var tabStrip='<div style="display:flex;gap:4px;margin-bottom:20px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);border-radius:10px;padding:5px">'
+    +tabBtn('reports','Quick Reports')
+    +tabBtn('pi-editor','PI Report Editor')
+    +tabBtn('archive','Report Archive',archiveCt||'')
+    +'</div>';
+
+  // tab content
+  var tabContent='';
+  if(rptTab==='reports'){
+    tabContent=summaryBar+groupPanel
+      +'<div style="font-size:12px;font-weight:700;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Select a report to generate</div>'
+      +reportCards
+      +'<div id="rpt-output"></div>';
+  } else if(rptTab==='pi-editor'){
+    var hasDraft=!!((_syncCache['reports']||[]).find(function(r){return String(r.projectId)===String(projF);}));
+    tabContent='<div style="background:linear-gradient(135deg,#1A3050,#0E2440);border:1px solid rgba(45,125,210,.3);border-radius:12px;padding:24px;display:flex;align-items:flex-start;gap:20px;margin-bottom:20px">'
+      +'<div style="width:52px;height:52px;background:rgba(45,125,210,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="var(--sky-lt)" stroke-width="1.5" style="width:28px;height:28px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6M9 15l3 3 3-3"/></svg></div>'
+      +'<div style="flex:1">'
+      +'<div style="font-size:16px;font-weight:700;color:var(--white);margin-bottom:6px">PI Compliance Report (.docx)</div>'
+      +'<div style="font-size:13px;color:var(--slate);margin-bottom:14px;line-height:1.5">Build a customizable narrative report with auto-populated and manual sections, live preview, AI-assisted drafts, and export as a branded Word document. Each export is automatically archived.</div>'
+      +'<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
+      +'<button class="btn btn-primary" style="padding:10px 22px;font-size:14px" onclick="openPIReport()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:13px;height:13px"><path d="M11 3H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1z"/><path d="M8 6v4M6 8h4"/></svg> Open editor</button>'
+      +(hasDraft?'<span style="font-size:12px;color:var(--teal)">✓ Draft saved</span>':'<span style="font-size:12px;color:var(--fog)">No saved draft</span>')
+      +'</div></div></div>'
+      +'<div style="font-size:12px;color:var(--slate);padding:14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:8px">'
+      +'<strong style="color:var(--mist)">How it works:</strong> The editor opens in a split-pane view — edit on the left, see a live preview on the right. '
+      +'Use AI Draft buttons to generate narrative summaries for each section. Save your draft to Supabase and resume later on any device. '
+      +'When you export to .docx, the report is automatically archived in the <strong>Report Archive</strong> tab.'
+      +'</div>';
+  } else {
+    tabContent='<div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">'
+      +'<div><div style="font-size:15px;font-weight:600;color:var(--white)">Report Archive</div>'
+      +'<div style="font-size:12px;color:var(--slate);margin-top:2px">Snapshots automatically created each time you export a PI Report. Limit: '+ARCHIVE_LIMIT+' per project.</div></div>'
+      +'</div>'
+      +'<div id="rpt-archive-panel">'+archiveHtml+'</div>';
+  }
 
   el.innerHTML=topbar
     +'<div class="content" style="overflow-y:auto"><div style="padding:24px">'
-    +summaryBar
-    +groupPanel
-    +reportCards
-    +'<div style="margin-bottom:24px;background:linear-gradient(135deg,#1A3050,#0E2440);border:1px solid rgba(45,125,210,.3);border-radius:12px;padding:20px;display:flex;align-items:center;gap:16px">'
-    +'<div style="width:48px;height:48px;background:rgba(45,125,210,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="var(--sky-lt)" stroke-width="1.5" style="width:26px;height:26px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6M9 15l3 3 3-3"/></svg></div>'
-    +'<div style="flex:1"><div style="font-size:15px;font-weight:600;color:var(--white);margin-bottom:4px">Generate PI Report (.docx)</div>'
-    +'<div style="font-size:12px;color:var(--slate)">Build a customizable report with auto-populated and manual sections — export as a branded Word document</div></div>'
-    +'<button class="btn btn-primary" style="padding:12px 24px;font-size:14px;flex-shrink:0" onclick="openPIReport()">Open editor</button></div>'
-    +'<div id="rpt-output"></div>'
+    +tabStrip
+    +tabContent
     +'</div></div>';
 }
 
@@ -8707,13 +8755,106 @@ async function resetPIReportDraft(){
 }
 
 
-function exportPIDocx(){
-  savePIReportDraft();
+// ── Report Archive ──────────────────────────────────────────────────────────
+const ARCHIVE_LIMIT = 50;
+
+async function _archiveReport(projF) {
+  if (typeof sbAdd !== 'function') return;
+  var saved = JSON.parse(localStorage.getItem('pir4_pi_reports_'+projF)||'{}');
+  if (!saved.reportTitle && !saved.sections) return; // nothing to archive
+
+  // Enforce limit: warn at 40, block at 50
+  var existing = (_syncCache['report_archive']||[]).filter(function(r){ return String(r.projectId)===String(projF); });
+  if (existing.length >= ARCHIVE_LIMIT) {
+    showToast('Archive limit ('+ARCHIVE_LIMIT+') reached for this project. Delete old reports to continue archiving.', 'warn', 5000);
+    return;
+  }
+  if (existing.length >= ARCHIVE_LIMIT - 10) {
+    showToast('Archive approaching limit: '+(ARCHIVE_LIMIT-existing.length)+' slots remaining.', 'warn', 4000);
+  }
+
+  var payload = {
+    projectId:      projF,
+    reportNum:      saved.reportNum||'',
+    reportTitle:    saved.reportTitle||'',
+    reportSubtitle: saved.reportSubtitle||'',
+    periodStart:    saved.periodStart||'',
+    periodEnd:      saved.periodEnd||'',
+    overallSummary: saved.overallSummary||'',
+    sections:       saved.sections||[],
+    archivedAt:     new Date().toISOString(),
+    archivedBy:     'J. Putzke'
+  };
+
+  try {
+    var newId = await sbAdd('report_archive', payload);
+    if (newId) {
+      if (!_syncCache['report_archive']) _syncCache['report_archive'] = [];
+      _syncCache['report_archive'].push(Object.assign({}, payload, {id: newId}));
+    }
+  } catch(e) {
+    console.warn('Archive snapshot failed:', e.message);
+  }
+}
+
+async function deleteArchivedReport(archiveId) {
+  if (!confirm('Delete this archived report? This cannot be undone.')) return;
+  try {
+    await sbDelete('report_archive', archiveId);
+    _syncCache['report_archive'] = (_syncCache['report_archive']||[]).filter(function(r){ return String(r.id) !== String(archiveId); });
+    // Re-render the archive panel in place
+    var projF = S.projectFilter;
+    var panel = document.getElementById('rpt-archive-panel');
+    if (panel) panel.innerHTML = _buildArchiveHTML(projF);
+    showToast('Archived report deleted', 'info', 2000);
+  } catch(e) {
+    console.error('Delete archive error:', e);
+    showToast('Error deleting archive: '+e.message, 'error', 4000);
+  }
+}
+
+function _buildArchiveHTML(projF) {
+  var archives = (_syncCache['report_archive']||[])
+    .filter(function(r){ return String(r.projectId)===String(projF); })
+    .sort(function(a,b){ return (b.archivedAt||'').localeCompare(a.archivedAt||''); });
+
+  if (!archives.length) {
+    return '<div style="font-size:12px;color:var(--fog);font-style:italic">No archived reports yet. Reports are archived automatically each time you export.</div>';
+  }
+
+  var limit = ARCHIVE_LIMIT;
+  var countColor = archives.length >= limit ? 'var(--red)' : archives.length >= limit-10 ? 'var(--amber)' : 'var(--fog)';
+
+  var html = '<div style="font-size:11px;color:'+countColor+';margin-bottom:10px">'+archives.length+' of '+limit+' archived reports</div>';
+  html += '<div style="display:flex;flex-direction:column;gap:6px">';
+  archives.forEach(function(r) {
+    var date = r.archivedAt ? new Date(r.archivedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+    var period = (r.periodStart||r.periodEnd) ? ((r.periodStart?fmt(r.periodStart):'?')+' – '+(r.periodEnd?fmt(r.periodEnd):'?')) : 'No period set';
+    html += '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:8px">'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:12px;font-weight:600;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+      +(r.reportTitle||'Untitled')+(r.reportNum?' <span style="color:var(--fog);font-weight:400">#'+r.reportNum+'</span>':'')
+      +'</div>'
+      +'<div style="font-size:11px;color:var(--fog);margin-top:2px">'+period+' &nbsp;·&nbsp; Archived '+date+'</div>'
+      +'</div>'
+      +'<button class="btn btn-xs" style="color:var(--red);border-color:rgba(220,80,80,.3);background:rgba(220,80,80,.08);flex-shrink:0" '
+      +'onclick="deleteArchivedReport(\''+r.id+'\')">Delete</button>'
+      +'</div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+async function exportPIDocx(){
+  await savePIReportDraft();
   var projF=S.projectFilter;
   if(!projF)return;
   var projs=DB.get('projects');
   var proj=projs.find(function(p){return p.id===projF});
   if(!proj)return;
+
+  // Snapshot to archive before export
+  await _archiveReport(projF);
 
   var saved=JSON.parse(localStorage.getItem('pir4_pi_reports_'+projF)||'{}');
   var allStakes=DB.getActive('stakeholders');

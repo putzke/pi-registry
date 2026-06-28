@@ -7621,26 +7621,119 @@ function getSectionDesc(type){
 }
 
 
-function generateSectionDraft(secType, textareaIdx) {
+// ── Claude AI narrative helper ──────────────────────────────────────────────
+function _getClaudeKey() {
+  return localStorage.getItem('compass_claude_api_key') || '';
+}
+
+async function _claudeNarrative(systemPrompt, userContent) {
+  var key = _getClaudeKey();
+  if (!key) return null;
+  try {
+    var resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 400,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userContent }]
+      })
+    });
+    if (!resp.ok) {
+      var err = await resp.json().catch(function(){return {};});
+      throw new Error((err.error && err.error.message) || ('API error ' + resp.status));
+    }
+    var data = await resp.json();
+    return (data.content && data.content[0] && data.content[0].text) || null;
+  } catch(e) {
+    console.error('Claude API error:', e);
+    showToast('Claude API error: ' + e.message, 'error', 5000);
+    return null;
+  }
+}
+
+function _claudeSystemPrompt() {
+  return 'You are a professional public involvement coordinator at a transportation engineering firm. '
+    + 'Write concise, professional 2-4 sentence narrative summaries suitable for an FHWA project progress report. '
+    + 'Use plain, factual language. Do not use headers, bullet points, or markdown. '
+    + 'Do not invent data — only summarize the facts provided. '
+    + 'Write in third person past or present tense as appropriate.';
+}
+
+async function generateSectionDraft(secType, textareaIdx) {
   var ta = document.querySelector('.rpt-sec-summary[data-idx="'+textareaIdx+'"]');
   if (!ta) return;
   if (ta.value.trim()) {
     if (!confirm('This section already has a summary. Replace it with a generated draft?')) return;
   }
-  var draft = _buildSectionDraft(secType);
-  if (!draft) { showToast('Not enough data yet to generate a draft for this section.', 'warn'); return; }
-  ta.value = draft;
+
+  var templateDraft = _buildSectionDraft(secType);
+  var key = _getClaudeKey();
+
+  if (!key) {
+    // Fall back to template draft
+    if (!templateDraft) { showToast('Not enough data yet to generate a draft for this section.', 'warn'); return; }
+    ta.value = templateDraft;
+    return;
+  }
+
+  if (!templateDraft) { showToast('Not enough data yet to generate a draft for this section.', 'warn'); return; }
+
+  // Use Claude to turn stats into narrative
+  var btn = document.getElementById('sec-draft-btn-'+textareaIdx);
+  var origText = btn ? btn.textContent : '';
+  if (btn) { btn.textContent = 'Generating…'; btn.disabled = true; }
+
+  var narrative = await _claudeNarrative(
+    _claudeSystemPrompt(),
+    'Write a narrative summary for the "' + secType.replace('auto-','').replace(/-/g,' ') + '" section of a PI progress report. '
+    + 'Base it strictly on these facts: ' + templateDraft
+  );
+
+  if (btn) { btn.textContent = origText; btn.disabled = false; }
+  ta.value = narrative || templateDraft;
+  if (narrative) showToast('AI narrative generated', 'info', 2000);
 }
 
-function generateOverallDraft() {
+async function generateOverallDraft() {
   var ta = document.getElementById('rpt-overall-summary');
   if (!ta) return;
   if (ta.value.trim()) {
     if (!confirm('The overall summary already has content. Replace it with a generated draft?')) return;
   }
-  var draft = _buildOverallDraft();
-  if (!draft) { showToast('Not enough data yet to generate an overall summary.', 'warn'); return; }
-  ta.value = draft;
+
+  var templateDraft = _buildOverallDraft();
+  var key = _getClaudeKey();
+
+  if (!key) {
+    if (!templateDraft) { showToast('Not enough data yet to generate an overall summary.', 'warn'); return; }
+    ta.value = templateDraft;
+    return;
+  }
+
+  if (!templateDraft) { showToast('Not enough data yet to generate an overall summary.', 'warn'); return; }
+
+  var btn = document.getElementById('overall-draft-btn');
+  if (btn) { btn.textContent = 'Generating…'; btn.disabled = true; }
+
+  // Gather all section stats for context
+  var projF = S.projectFilter;
+  var proj = projF ? (DB.get('projects').find(function(p){return p.id===projF;}))||{} : {};
+  var userContent = 'Write a 3-4 sentence executive summary for a PI progress report for project "'
+    + (proj.name||'this project') + '" (' + (proj.pid||'') + '). '
+    + 'Synthesize the following facts into a cohesive narrative: ' + templateDraft;
+
+  var narrative = await _claudeNarrative(_claudeSystemPrompt(), userContent);
+
+  if (btn) { btn.textContent = '✦ Generate Overall Summary'; btn.disabled = false; }
+  ta.value = narrative || templateDraft;
+  if (narrative) showToast('AI narrative generated', 'info', 2000);
 }
 
 function _buildSectionDraft(secType) {
@@ -8048,7 +8141,7 @@ function openPIReport(){
       +'</div>'
       +(isAuto?'<div style="font-size:12px;color:var(--fog);line-height:1.5;margin-left:62px">'+getSectionDesc(sec.type)+'</div>'
         :'<textarea class="rpt-sec-content" data-idx="'+idx+'" style="width:100%;min-height:100px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;color:var(--mist);font-family:var(--font);font-size:13px;padding:10px 12px;outline:none;resize:vertical;line-height:1.6" placeholder="Each line becomes a bullet. Indent with spaces for sub-bullets.">'+(sec.content||'')+'</textarea>')
-      +'<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.07)">'      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">'      +'<div style="font-size:11px;color:var(--slate);font-style:italic">Section summary <span style="color:var(--fog)">(optional — prints after section data in Word export)</span></div>'      +(isAuto?'<button class="btn btn-xs" style="background:rgba(74,155,232,.15);border-color:rgba(74,155,232,.4);color:var(--sky-lt);font-size:10px;padding:2px 8px;white-space:nowrap" onclick="generateSectionDraft(\''+sec.type+'\','+idx+')">✦ Draft</button>':'')      +'</div>'      +'<textarea class="rpt-sec-summary" data-idx="'+idx+'" style="width:100%;min-height:60px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;color:var(--mist);font-family:var(--font);font-size:12px;padding:8px 12px;outline:none;resize:vertical;line-height:1.6" placeholder="Optional narrative or summary for this section...">'+(sec.summary||'')+'</textarea>'      +'</div>'      +'</div>';
+      +'<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.07)">'      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">'      +'<div style="font-size:11px;color:var(--slate);font-style:italic">Section summary <span style="color:var(--fog)">(optional — prints after section data in Word export)</span></div>'      +(isAuto?'<button id="sec-draft-btn-'+idx+'" class="btn btn-xs" style="background:rgba(74,155,232,.15);border-color:rgba(74,155,232,.4);color:var(--sky-lt);font-size:10px;padding:2px 8px;white-space:nowrap" onclick="generateSectionDraft(\''+sec.type+'\','+idx+')">'+(_getClaudeKey()?'✦ AI Draft':'✦ Draft')+'</button>':'')      +'</div>'      +'<textarea class="rpt-sec-summary" data-idx="'+idx+'" style="width:100%;min-height:60px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;color:var(--mist);font-family:var(--font);font-size:12px;padding:8px 12px;outline:none;resize:vertical;line-height:1.6" placeholder="Optional narrative or summary for this section...">'+(sec.summary||'')+'</textarea>'      +'</div>'      +'</div>';
   });
 
   var available=getAvailableSections();
@@ -8086,7 +8179,7 @@ function openPIReport(){
     +'<div class="fr"><label>Period start</label><input type="date" id="rpt-pstart" value="'+periodStart+'"></div>'
     +'<div class="fr"><label>Period end</label><input type="date" id="rpt-pend" value="'+periodEnd+'"></div>'
     +'</div>'
-    +'<div style="margin-top:12px;font-size:12px;color:var(--fog)">The report period controls which interactions appear in the auto-populated sections.</div>'    +'<div style="margin-top:14px">'    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'    +'<label style="margin:0">Overall summary <span style="font-weight:400;font-style:italic;color:var(--fog)">(optional — prints before first section)</span></label>'    +'<button class="btn btn-xs" style="background:rgba(74,155,232,.15);border-color:rgba(74,155,232,.4);color:var(--sky-lt);font-size:10px;padding:2px 8px;white-space:nowrap" onclick="generateOverallDraft()">✦ Generate Overall Summary</button>'    +'</div>'    +'<textarea id="rpt-overall-summary" rows="4" placeholder="Enter an overall project summary, narrative, or context to print before the first report section..." style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:10px 12px;resize:vertical;font-family:inherit;line-height:1.6;box-sizing:border-box">'+escHtml(saved.overallSummary||'')+'</textarea></div>'    +'</div>'
+    +'<div style="margin-top:12px;font-size:12px;color:var(--fog)">The report period controls which interactions appear in the auto-populated sections.</div>'    +'<div style="margin-top:14px">'    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'    +'<label style="margin:0">Overall summary <span style="font-weight:400;font-style:italic;color:var(--fog)">(optional — prints before first section)</span></label>'    +'<button id="overall-draft-btn" class="btn btn-xs" style="background:rgba(74,155,232,.15);border-color:rgba(74,155,232,.4);color:var(--sky-lt);font-size:10px;padding:2px 8px;white-space:nowrap" onclick="generateOverallDraft()">'+(_getClaudeKey()?'✦ AI: Generate Overall Summary':'✦ Generate Overall Summary')+'</button>'    +'</div>'    +'<textarea id="rpt-overall-summary" rows="4" placeholder="Enter an overall project summary, narrative, or context to print before the first report section..." style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:10px 12px;resize:vertical;font-family:inherit;line-height:1.6;box-sizing:border-box">'+escHtml(saved.overallSummary||'')+'</textarea></div>'    +'</div>'
     +'<div style="margin-bottom:24px;background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:20px">'
     +'<div style="font-size:14px;font-weight:600;color:var(--white);margin-bottom:10px">Report Distribution</div>'
     +'<div style="font-size:12px;color:var(--fog);margin-bottom:10px">Stakeholders tagged to the selected groups will appear in the \'Distributed To\' header of the exported report, grouped by category. Stakeholders with no group assigned are excluded.</div>'
@@ -12319,6 +12412,29 @@ function renderSettings(m) {
     <div class="topbar-sub">App configuration and data tools</div>
   </div>
   <div style="padding:24px;max-width:800px;margin:0 auto">
+
+    <!-- Claude AI -->
+    <div style="background:var(--navy-mid);border:1px solid rgba(74,155,232,.25);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+        <div style="font-size:15px;font-weight:700;color:var(--white)">Claude AI Narrative Generation</div>
+        <span id="claude-key-status" style="font-size:11px;padding:2px 8px;border-radius:10px;background:${localStorage.getItem('compass_claude_api_key')?'rgba(40,168,112,.2)':'rgba(255,255,255,.07)'};color:${localStorage.getItem('compass_claude_api_key')?'var(--green)':'var(--fog)'};">${localStorage.getItem('compass_claude_api_key')?'Key saved':'No key'}</span>
+      </div>
+      <div style="font-size:12px;color:var(--fog);margin-bottom:14px">Enter your Anthropic API key to enable AI-generated narrative summaries in the PI Report Editor. The key is stored only in your browser's local storage — it is never sent to Supabase or any server other than the Anthropic API.</div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <input id="claude-api-key-input" type="password" placeholder="sk-ant-…" value="${localStorage.getItem('compass_claude_api_key')||''}"
+          style="flex:1;min-width:260px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);border-radius:6px;color:var(--white);font-size:13px;padding:8px 12px;font-family:var(--mono);box-sizing:border-box;outline:none">
+        <button class="btn btn-primary" onclick="
+          var k=document.getElementById('claude-api-key-input').value.trim();
+          if(k){localStorage.setItem('compass_claude_api_key',k);showToast('API key saved','info',2000);}
+          else{localStorage.removeItem('compass_claude_api_key');showToast('API key removed','info',2000);}
+          renderSettings(document.getElementById('main'));
+        ">Save key</button>
+        <button class="btn" style="color:var(--fog);border-color:rgba(255,255,255,.15)" onclick="
+          if(confirm('Remove saved Claude API key?')){localStorage.removeItem('compass_claude_api_key');document.getElementById('claude-api-key-input').value='';renderSettings(document.getElementById('main'));showToast('Key removed','info',2000);}
+        ">Remove</button>
+      </div>
+      <div style="margin-top:12px;font-size:11px;color:var(--fog)">Model: <span style="color:var(--slate)">claude-haiku-4-5</span> · Max tokens per call: <span style="color:var(--slate)">400</span> · Typical cost: &lt;$0.001 per narrative</div>
+    </div>
 
     <!-- Data Integrity -->
     <div style="background:var(--navy-mid);border:1px solid rgba(255,255,255,.12);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">

@@ -666,7 +666,10 @@ const SB_TABLES = {
   commitments:          'pi_commitments',
   groups:               'pi_groups',
   group_members:        'pi_group_members',
-  dismissed_pairs:      'pi_dismissed_pairs'
+  dismissed_pairs:      'pi_dismissed_pairs',
+  comment_periods:      'pi_comment_periods',
+  public_comments:      'pi_public_comments',
+  tribal_consultations: 'pi_tribal_consultations'
 };
 
 // Map our internal field names to Supabase column names
@@ -674,14 +677,18 @@ const SB_TO_INT = {
   pi_projects: {
     id:'id', name:'name', pid:'pid', client:'client', type:'project_type',
     county:'county', phase:'phase', status:'status', startDate:'start_date',
-    endDate:'end_date', preconDate:'precon_date', notes:'notes', lastExported:'last_exported'
+    endDate:'end_date', preconDate:'precon_date', notes:'notes', lastExported:'last_exported',
+    nepaClassification:'nepa_classification', nepaStage:'nepa_stage',
+    nepaChecklist:'nepa_checklist', phaseHistory:'phase_history',
+    nepaStageHistory:'nepa_stage_history'
   },
   pi_stakeholders: {
     id:'id', firstName:'first_name', lastName:'last_name', org:'org',
     title:'title', email:'email', phone:'phone', address:'address',
     parcelId:'parcel_id', type:'stakeholder_type', influenceTier:'influence_tier',
     prefContact:'pref_contact', isMaster:'is_master',
-    isArchived:'is_archived',
+    isArchived:'is_archived', isLEP:'is_lep', isEJ:'is_ej',
+    stakeholderRole:'stakeholder_role',
     notes:'notes'
   },
   pi_project_stakeholders: {
@@ -698,8 +705,8 @@ const SB_TO_INT = {
     followUpNote:'follow_up_note', followUpDone:'follow_up_done', followUpResolved:'follow_up_resolved', meetingId:'meeting_id'
   },
   pi_deliverables: {
-    id:'id', projectId:'project_id', type:'deliverable_type', scopeType:'scope_type',
-    status:'status', contractedQty:'contracted_qty', deliveredCount:'delivered_count',
+    id:'id', projectId:'project_id', title:'title', type:'deliverable_type', scopeType:'scope_type',
+    status:'status', progress:'progress', contractedQty:'contracted_qty', deliveredCount:'delivered_count',
     freq:'freq', milestoneStart:'milestone_start', milestoneEnd:'milestone_end',
     dueDate:'due_date', distList:'dist_list', notes:'notes'
   },
@@ -740,6 +747,35 @@ const SB_TO_INT = {
   },
   pi_dismissed_pairs: {
     id:'id', idA:'id_a', idB:'id_b'
+  },
+  pi_comment_periods: {
+    id:'id', projectId:'project_id', title:'title', description:'description',
+    startDate:'start_date', endDate:'end_date', status:'status', createdAt:'created_at'
+  },
+  pi_public_comments: {
+    id:'id', projectId:'project_id', periodId:'period_id', commentDate:'comment_date',
+    commentType:'comment_type', commenter:'commenter', affiliation:'affiliation',
+    channel:'channel', summary:'summary', category:'category', sentiment:'sentiment',
+    responseStatus:'response_status', responseText:'response_text',
+    responseDate:'response_date', linkedStakeholderId:'linked_stakeholder_id',
+    createdAt:'created_at'
+  },
+  pi_tribal_consultations: {
+    id:'id', projectId:'project_id', tribeName:'tribe_name', tribeType:'tribe_type',
+    thpoContact:'thpo_contact', thpoEmail:'thpo_email', thpoPhone:'thpo_phone',
+    consultationType:'consultation_type', phase:'phase', section106Phase:'section106_phase',
+    notificationDate:'notification_date', responseDeadline:'response_deadline',
+    responseDate:'response_date', responseStatus:'response_status',
+    tribalOfficial:'tribal_official', tribalOfficialEmail:'tribal_official_email',
+    tribalOfficialPhone:'tribal_official_phone', agencyOfficial:'agency_official',
+    fhwaLiaison:'fhwa_liaison', consultationTrigger:'consultation_trigger',
+    languageAccessNeeded:'language_access_needed', moaRequired:'moa_required',
+    biaInvolvement:'bia_involvement', nearTribalLands:'near_tribal_lands',
+    cfr710Review:'cfr710_review', rowType:'row_type', uraNoticeDate:'ura_notice_date',
+    biaApprovalStatus:'bia_approval_status', utahPARef:'utah_pa_ref',
+    certificationStatus:'certification_status', includedInAnnualReport:'included_in_annual_report',
+    annualReportYear:'annual_report_year', nextAction:'next_action',
+    followUpDate:'follow_up_date', notes:'notes', createdAt:'created_at'
   }
 };
 
@@ -754,7 +790,7 @@ function localToday(){
   return y+'-'+m+'-'+day;
 }
 
-const DATE_FIELDS = new Set(['interaction_date','follow_up_due','follow_up_resolved','due_date','start_date','end_date','precon_date','added_date','meeting_date','date_raised','date_resolved','date_made','fulfilled_date','last_exported']);
+const DATE_FIELDS = new Set(['interaction_date','follow_up_due','follow_up_resolved','due_date','start_date','end_date','precon_date','added_date','meeting_date','date_raised','date_resolved','date_made','fulfilled_date','last_exported','comment_date','response_date','notification_date','response_deadline','ura_notice_date','follow_up_date']);
 
 // Integer FK columns that Supabase expects as numbers
 const SB_INT_FIELDS = new Set(['project_id','stakeholder_id','issue_id','interaction_id','meeting_id']);
@@ -806,10 +842,16 @@ async function sbGet(table) {
   const cached = cacheGet(table);
   if (cached) return cached;
   const sbTable = SB_TABLES[table];
+  if (!sbTable) { console.warn('sbGet: no Supabase mapping for table', table); return []; }
   const r = await fetch(SUPA_REST + '/' + sbTable + '?select=*&order=id.asc&limit=5000', {
     headers: getAuthHeaders()
   });
-  if (!r.ok) { console.error('SB GET error:', r.status, table); return []; }
+  if (!r.ok) {
+    // 404 = table not yet created in Supabase — treat as empty, not an error
+    if (r.status === 404) { cacheSet(table, []); return []; }
+    console.error('SB GET error:', r.status, table);
+    return [];
+  }
   const rows = await r.json();
   const items = rows.map(row => fromSB(table, row));
   cacheSet(table, items);

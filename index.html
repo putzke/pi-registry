@@ -669,7 +669,8 @@ const SB_TABLES = {
   dismissed_pairs:      'pi_dismissed_pairs',
   comment_periods:      'pi_comment_periods',
   public_comments:      'pi_public_comments',
-  tribal_consultations: 'pi_tribal_consultations'
+  tribal_consultations: 'pi_tribal_consultations',
+  reports:              'pi_reports'
 };
 
 // Map our internal field names to Supabase column names
@@ -776,6 +777,11 @@ const SB_TO_INT = {
     certificationStatus:'certification_status', includedInAnnualReport:'included_in_annual_report',
     annualReportYear:'annual_report_year', nextAction:'next_action',
     followUpDate:'follow_up_date', notes:'notes', createdAt:'created_at'
+  },
+  pi_reports: {
+    id:'id', projectId:'project_id', reportNum:'report_num', reportTitle:'report_title',
+    reportSubtitle:'report_subtitle', periodStart:'period_start', periodEnd:'period_end',
+    overallSummary:'overall_summary', sections:'sections', updatedAt:'updated_at'
   }
 };
 
@@ -790,7 +796,7 @@ function localToday(){
   return y+'-'+m+'-'+day;
 }
 
-const DATE_FIELDS = new Set(['interaction_date','follow_up_due','follow_up_resolved','due_date','start_date','end_date','precon_date','added_date','meeting_date','date_raised','date_resolved','date_made','fulfilled_date','last_exported','comment_date','response_date','notification_date','response_deadline','ura_notice_date','follow_up_date']);
+const DATE_FIELDS = new Set(['interaction_date','follow_up_due','follow_up_resolved','due_date','start_date','end_date','precon_date','added_date','meeting_date','date_raised','date_resolved','date_made','fulfilled_date','last_exported','comment_date','response_date','notification_date','response_deadline','ura_notice_date','follow_up_date','period_start','period_end']);
 
 // Integer FK columns that Supabase expects as numbers
 const SB_INT_FIELDS = new Set(['project_id','stakeholder_id','issue_id','interaction_id','meeting_id']);
@@ -922,7 +928,7 @@ function cacheClear(k) { delete _cache[k]; delete _cacheTime[k]; }
 const _syncCache = {};
 
 async function loadAllData() {
-  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments','comment_periods','tribal_consultations'];
+  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments','comment_periods','tribal_consultations','reports'];
   await Promise.all(tables.map(async t => { _syncCache[t] = await sbGet(t); }));
   // Load dismissed_pairs separately so a 403 doesn't block everything else
   try { _syncCache['dismissed_pairs'] = await sbGet('dismissed_pairs'); }
@@ -7626,19 +7632,35 @@ function getAvailableSections(){
 }
 
 function loadReportSections(projF){
-  var saved=JSON.parse(localStorage.getItem('pir4_pi_reports_'+projF)||'{}');
+  // Prefer Supabase record (loaded into _syncCache['reports'] at startup)
+  var sbRec=(_syncCache['reports']||[]).find(function(r){return String(r.projectId)===String(projF);});
+  var saved;
+  if(sbRec){
+    saved={
+      reportNum:   sbRec.reportNum||'',
+      reportTitle: sbRec.reportTitle||'',
+      reportSubtitle: sbRec.reportSubtitle||'',
+      periodStart: sbRec.periodStart||'',
+      periodEnd:   sbRec.periodEnd||'',
+      overallSummary: sbRec.overallSummary||'',
+      sections:    sbRec.sections||[],
+      sbId:        sbRec.id  // track for updates
+    };
+    // Also keep localStorage in sync
+    localStorage.setItem('pir4_pi_reports_'+projF, JSON.stringify(saved));
+  } else {
+    saved=JSON.parse(localStorage.getItem('pir4_pi_reports_'+projF)||'{}');
+  }
   // Always ensure 'concerns' section is first
   if(saved.sections&&saved.sections.length>0){
     var ci=saved.sections.findIndex(function(s){return s.id==='concerns';});
     if(ci>0){
       var cs=saved.sections.splice(ci,1)[0];
       saved.sections.unshift(cs);
-      localStorage.setItem('pir4_pi_reports_'+projF,JSON.stringify(saved));
     }
   }
   if(!saved.sections||saved.sections.length===0){
     var sections=getDefaultSections();
-    // Ensure concerns is always first by default
     if(saved.sections_actions)sections[1].content=saved.sections_actions;
     if(saved.sections_planned)sections[2].content=saved.sections_planned;
     if(saved.customSections){
@@ -8628,16 +8650,59 @@ function removePISection(idx){
   }catch(e){console.error('removePISection error:',e);}
 }
 
-function savePIReportDraft(){
+async function savePIReportDraft(){
   var saved=captureFormState();if(!saved)return;
-  localStorage.setItem('pir4_pi_reports_'+S.projectFilter,JSON.stringify(saved));
-  showToast('Draft saved');
+  var projF=S.projectFilter;
+  // Always keep localStorage as immediate cache
+  localStorage.setItem('pir4_pi_reports_'+projF,JSON.stringify(saved));
+  // Persist to Supabase
+  if(typeof sbAdd==='function'){
+    try{
+      // Check if a record already exists for this project
+      var existing=(_syncCache['reports']||[]).find(function(r){return String(r.projectId)===String(projF);});
+      var payload={
+        projectId:projF,
+        reportNum:saved.reportNum||'',
+        reportTitle:saved.reportTitle||'',
+        reportSubtitle:saved.reportSubtitle||'',
+        periodStart:saved.periodStart||'',
+        periodEnd:saved.periodEnd||'',
+        overallSummary:saved.overallSummary||'',
+        sections:saved.sections||[],
+        updatedAt:new Date().toISOString()
+      };
+      if(existing&&existing.sbId){
+        await sbUpdate('reports',existing.sbId,payload);
+      } else {
+        var newId=await sbAdd('reports',payload);
+        // Cache the returned ID so next save does an update
+        if(newId){
+          if(!_syncCache['reports'])_syncCache['reports']=[];
+          var rec=Object.assign({},payload,{id:newId,sbId:newId});
+          _syncCache['reports']=_syncCache['reports'].filter(function(r){return String(r.projectId)!==String(projF);});
+          _syncCache['reports'].push(rec);
+        }
+      }
+      showToast('Draft saved','success',2000);
+    }catch(e){
+      console.error('Report save error:',e);
+      showToast('Saved locally (Supabase error)','warn',3000);
+    }
+  } else {
+    showToast('Draft saved');
+  }
 }
 
-
-function resetPIReportDraft(){
+async function resetPIReportDraft(){
   if(!confirm('Reset the report editor? This will clear all saved content including section summaries, the overall summary, and restore default sections. This cannot be undone.')) return;
-  localStorage.removeItem('pir4_pi_reports_'+S.projectFilter);
+  var projF=S.projectFilter;
+  localStorage.removeItem('pir4_pi_reports_'+projF);
+  // Delete from Supabase
+  if(typeof sbDelete==='function'){
+    var existing=(_syncCache['reports']||[]).find(function(r){return String(r.projectId)===String(projF);});
+    if(existing&&existing.sbId) await sbDelete('reports',existing.sbId).catch(function(){});
+  }
+  if(_syncCache['reports'])_syncCache['reports']=_syncCache['reports'].filter(function(r){return String(r.projectId)!==String(projF);});
   openPIReport();
 }
 

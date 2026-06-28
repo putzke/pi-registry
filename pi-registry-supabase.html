@@ -1941,7 +1941,7 @@ function renderDash(el){
                   +'<div style="background:rgba(255,255,255,.08);border-radius:4px;height:6px;overflow:hidden">'
                   +'<div style="background:'+col+';width:'+pct+'%;height:100%;border-radius:4px;transition:width .4s"></div>'
                   +'</div>'
-                  +'<div style="font-size:10px;color:var(--fog);margin-top:3px">'+p.nepaClass+' · '+(p.pid||'')+'</div></div>';
+                  +'<div style="font-size:10px;color:var(--fog);margin-top:3px">'+(p.nepaClassification||'')+(p.nepaClassification?' · ':'')+(p.pid||'')+'</div></div>';
               }).join('')}
           </div>
 

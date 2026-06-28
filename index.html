@@ -7729,7 +7729,7 @@ async function _claudeNarrative(systemPrompt, userContent) {
         'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 400,
         system: systemPrompt,
         messages: [{ role: 'user', content: userContent }]
@@ -12604,7 +12604,7 @@ function renderSettings(m) {
           if(confirm('Remove saved Claude API key?')){_setClaudeKey('');renderSettings(document.getElementById('main'));showToast('Key removed','info',2000);}
         ">Remove</button>
       </div>
-      <div style="margin-top:12px;font-size:11px;color:var(--fog)">Model: <span style="color:var(--slate)">claude-sonnet-4-6</span> · Max tokens per call: <span style="color:var(--slate)">400</span> · Typical cost: ~$0.002–0.005 per narrative</div>
+      <div style="margin-top:12px;font-size:11px;color:var(--fog)">Model: <span style="color:var(--slate)">claude-haiku-4-5</span> · Max tokens per call: <span style="color:var(--slate)">400</span> · Typical cost: ~$0.0002–0.0005 per narrative</div>
     </div>
 
     <!-- Data Integrity -->

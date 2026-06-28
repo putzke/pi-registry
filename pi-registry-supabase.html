@@ -875,7 +875,8 @@ async function sbAdd(table, obj) {
     body: JSON.stringify(body)
   });
   if (!r.ok) { const e = await r.text(); console.error('SB ADD error:', r.status, e); return null; }
-  const rows = await r.json();
+  const text = await r.text();
+  const rows = text ? JSON.parse(text) : [];
   cacheClear(table);
   return rows[0] ? String(rows[0].id) : null;
 }
@@ -1980,7 +1981,7 @@ function renderDash(el){
                 const cmtCount=(allPcomm.filter(c=>String(c.commentPeriodId)===String(p.id))).length;
                 return '<div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,.07)">'
                   +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">'
-                  +'<div style="font-size:12px;color:var(--mist);font-weight:500;flex:1">'+p.name+'</div>'
+                  +'<div style="font-size:12px;color:var(--mist);font-weight:500;flex:1">'+(p.title||p.name||'Untitled period')+'</div>'
                   +'<span style="font-size:10px;color:'+statusColor+';font-weight:600;white-space:nowrap">'+p.status+'</span>'
                   +'</div>'
                   +'<div style="font-size:11px;color:var(--fog);margin-top:2px">'+(proj?proj.pid+' · ':'')+cmtCount+' comment'+(cmtCount!==1?'s':'')

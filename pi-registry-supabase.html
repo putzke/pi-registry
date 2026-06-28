@@ -800,8 +800,9 @@ function toSB(table, obj) {
   const map = SB_TO_INT[sbTable];
   if (!map) return obj; // table not in SB schema — pass through as-is
   const result = {};
-  // Include id if it's a text key (app-generated); skip if numeric (Supabase auto-increments)
-  if (obj.id && typeof obj.id === 'string' && isNaN(Number(obj.id))) result.id = obj.id;
+  // Include id only for tables that use app-generated text PKs (not Supabase auto-increment integers)
+  const TEXT_PK_TABLES = new Set(['pi_comment_periods','pi_public_comments','pi_tribal_consultations']);
+  if (TEXT_PK_TABLES.has(sbTable) && obj.id) result.id = obj.id;
   for (const [intKey, sbCol] of Object.entries(map)) {
     if (intKey === 'id') continue;
     let val = obj[intKey];

@@ -6547,7 +6547,7 @@ function exportIssuesPdf(){
   var issProj=isssProjF?issProjs.find(function(p){return p.id===isssProjF;}):null;
   var issProjLabel=issProj?(issProj.pid+' — '+issProj.name):'All Projects';
   var issDateStr=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-  var win=window.open('','_blank');
+  var win=window.open('','_blank','width=1100,height=820,scrollbars=yes');
   win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Issues Tracker</title><style>'
     +'*{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
     +'body{font-family:Arial,sans-serif;font-size:10px;color:#111;margin:0;padding:0;background:#fff}'
@@ -7479,7 +7479,7 @@ function _openRptPopup(rawHtml, rptTitle, rptProjLabel, dateStr, summaryTxt){
 
   var footerLabel=(rptProjLabel?(rptProjLabel+' · '):'')+rptTitle;
 
-  var win=window.open('','_blank');
+  var win=window.open('','_blank','width=1100,height=820,scrollbars=yes');
   win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+rptTitle+'</title><style>'
     +'*{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
     +'body{font-family:Arial,sans-serif;font-size:10px;color:#111;margin:0;padding:0;background:#fff}'
@@ -9083,7 +9083,7 @@ function exportProject(projectId) {
 
 function _portfolioPrintWin(title, bodyHtml) {
   var date = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-  var win = window.open('', '_blank');
+  var win = window.open('', '_blank', 'width=1100,height=820,scrollbars=yes');
   win.document.write(`<!DOCTYPE html><html><head>
   <title>${title}</title>
   <style>
@@ -9992,7 +9992,7 @@ function printStakeholderMap(projectId, projectName) {
       <td style="padding:6px 10px;border-bottom:1px solid #eee;color:#555;font-size:12px">${g.stake.address||'—'}</td></tr>`;
   }).join('');
 
-  const printWin = window.open('', '_blank');
+  const printWin = window.open('', '_blank', 'width=1100,height=820,scrollbars=yes');
   printWin.document.write(`<!DOCTYPE html><html><head><title>${projectName} — Stakeholder Map</title>
   <style>body{font-family:Arial,sans-serif;margin:30px;color:#222}h1{font-size:18px;margin-bottom:4px}
   h2{font-size:13px;color:#555;font-weight:400;margin-bottom:16px}
@@ -10350,7 +10350,7 @@ function printEngagementMatrix(projectId) {
   const neut  = total - champ - opp;
   const hi    = stakes.filter(s=>s.influence==='High').length;
 
-  const printWin = window.open('', '_blank');
+  const printWin = window.open('', '_blank', 'width=1100,height=820,scrollbars=yes');
   printWin.document.write(`<!DOCTYPE html><html><head>
   <title>${projectName} — Stakeholder Engagement Matrix</title>
   <style>

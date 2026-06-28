@@ -410,6 +410,11 @@ window.onGoogleMapsReady = function() {
       Commitments
       <span class="nav-badge warn hide" id="nb-comm">0</span>
     </button>
+    <button class="nav-btn" id="nav-comments" onclick="setView('comments')">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H5l-3 2V3a1 1 0 0 1 1-1z"/><path d="M5 6h6M5 9h4"/></svg>
+      Public comments
+      <span class="nav-badge warn hide" id="nb-pcomm">0</span>
+    </button>
     <button class="nav-btn" id="nav-deliverables" onclick="setView('deliverables')">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 1h8l3 3v10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z"/><path d="M4 1v4h8"/><path d="M4 9h8M4 12h5"/></svg>
       Deliverables
@@ -855,7 +860,7 @@ function cacheClear(k) { delete _cache[k]; delete _cacheTime[k]; }
 const _syncCache = {};
 
 async function loadAllData() {
-  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members'];
+  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments'];
   await Promise.all(tables.map(async t => { _syncCache[t] = await sbGet(t); }));
   // Load dismissed_pairs separately so a 403 doesn't block everything else
   try { _syncCache['dismissed_pairs'] = await sbGet('dismissed_pairs'); }
@@ -1033,6 +1038,151 @@ const DEL_GROUPS=[
   {group:'Other',types:['Other']}
 ];
 const DEL_TYPES=DEL_GROUPS.reduce(function(a,g){return a.concat(g.types)},[]);
+const NEPA_CHECKLISTS={
+  'CE':[
+    // ── Public Meeting Requirement ──────────────────────────────────────────
+    'Public meeting requirement assessed and documented (required if project adds through travel lanes, substantially changes facility layout, or results in substantial adverse impacts)',
+    // ── If Public Meeting / Hearing Held ───────────────────────────────────
+    'If public meeting held: advertised on UDOT website under Public Meetings and Events',
+    'If public meeting held: UDOT Title VI Specialist invited to meeting',
+    'If public meeting held: location selected in project area — ADA-accessible, adequate size, accessible elevator if multi-floor',
+    'If public meeting held: signage is readable; accessibility accommodations confirmed',
+    'If public meeting held: community demographics reviewed — translators arranged if needed',
+    'If public meeting held: meeting collateral includes Notice of Special Accommodation statement (auxiliary communicative aids and services)',
+    'If public meeting held: non-discrimination poster displayed at meeting venue',
+    'If public meeting held: Title VI-approved sign-in sheet used at each table (race, sex, disability options)',
+    'If public meeting held: meeting materials / flyers translated for non-English-speaking demographics; interpretation services advertised',
+    'If public meeting held: comment collection method provided',
+    'If public meeting held: scanned sign-in sheets and copies of comments emailed to Title VI Coordinator (civilrights@utah.gov)',
+    'If public meeting held: post-meeting Title VI Summary form completed and submitted to civilrights@utah.gov',
+    'If public meeting held: advertised per FHWA and Utah regulations (first ad ≥15 days prior)',
+    'If public meeting held: comments and responses summarized and included in CE document',
+    'If public meeting held: public hearing transcript and certification attached to CE document',
+    // ── Noise Barrier Ballot (if applicable) ───────────────────────────────
+    'If noise impacts identified: noise barrier eligibility and reasonableness determination documented',
+    'If noise ballot required: affected property owners and tenants notified by mail',
+    'If noise ballot required: ballot mailed with return deadline of at least 30 days',
+    'If noise ballot required: 75% favorable return rate achieved before barrier is included in project',
+    'If noise ballot required: ballot results documented and retained in project file',
+    // ── Title VI / Non-Discrimination ──────────────────────────────────────
+    'Non-discrimination compliance confirmed — race, color, national origin, sex, age, disability, religion, income status, gender identity, sexual orientation',
+    // ── Tribal Consultation (if applicable) ────────────────────────────────
+    'If project has potential tribal implications (cultural practices, lands, resources, traditional/religious areas): project assessed for tribal implications per UDOT 08A2-07 and Utah Executive Order 2014/005',
+    'If tribal implications identified: official written notification sent to tribal chairpersons of federally-recognized Indian Tribes located wholly or partially in Utah',
+    'If tribal consultation required: initiated as early as possible and conducted in good faith; technical information and data shared with Tribes upon request',
+    'If tribal consultation conducted: tribal comments and concerns documented and considered in project decisions; consultation activities retained in project file',
+    // ── General Documentation ───────────────────────────────────────────────
+    'All other public involvement activities documented with supporting information in project file',
+    'Environmental Commitments Signature Page signed and included in CE document',
+    'Mitigation commitments entered in ePM and included in project file'
+  ],
+  'EA':[
+    // ── PI Planning (Tasks 01E / 05E) ───────────────────────────────────────
+    'Public information from project sponsor reviewed by PI team (Task 01E)',
+    'Project stakeholders identified in coordination with Project Manager, RCM, and Communications Office',
+    'PI strategy meeting held with project team — PI goals and evaluation criteria established',
+    'Community outreach strategies developed to meet PI Plan objectives',
+    'Media plan developed with RCM and Communications Office',
+    'Project Public Involvement (PI) Plan prepared (Task 05E)',
+    'PI Plan reviewed and approved by Environmental Program Manager and RCM before distribution',
+    // ── PI Plan Implementation (Task 07E) ──────────────────────────────────
+    'PI Plan implemented throughout planning and design process (Task 07E)',
+    // ── Scoping / Tribal Consultation (Task 13E) ───────────────────────────
+    'NEPA scoping letters sent to agencies, tribes, and known interested parties (Task 13E)',
+    'Official written notification sent to tribal chairpersons of federally-recognized Indian Tribes in Utah for projects with potential tribal implications (UDOT 08A2-07)',
+    'Tribal consultation initiated as early as possible and conducted in good faith; technical information shared with Tribes upon request (UDOT 08A2-07 / Utah EO 2014/005)',
+    'NEPA scoping meeting(s) held — public and agency input solicited',
+    'Tribal comments and concerns documented and considered; consultation activities retained in project file',
+    'NEPA scoping report prepared',
+    // ── Draft EA Circulation (Task 35E) ────────────────────────────────────
+    'Draft EA circulated to agencies and public for review (Task 35E)',
+    // ── Public Hearing (Tasks 39E / 41E) ───────────────────────────────────
+    'Public hearing location selected: in project area, ADA-accessible, adequate size, accessible elevator if multi-floor (Task 39E)',
+    'Public hearing approval obtained from Environmental Program Manager',
+    'Public hearing advertised on UDOT website under Public Meetings and Events',
+    'UDOT Title VI Specialist invited to public hearing',
+    'Public hearing advertised: first ad ≥15 days prior, second ad 7–10 days prior',
+    'Community demographics reviewed — translators arranged if needed; interpretation services advertised on flyers',
+    'Meeting collateral includes Notice of Special Accommodation statement (auxiliary communicative aids and services)',
+    'Non-discrimination poster displayed at public hearing venue',
+    'Title VI-approved sign-in sheet used at each table — captures name/affiliation, contact info, project info opt-in, and optional gender/race fields (CFR 23 §200.9(4))',
+    'Comment collection method provided at public hearing',
+    'Court recorder obtained for public hearing',
+    'Public hearing held — compliant with UDOT Title VI Program (non-discrimination: race, color, national origin, sex, age, disability, income status)',
+    'Scanned sign-in sheets and copies of comments emailed to Title VI Coordinator (civilrights@utah.gov) after hearing',
+    'Post-meeting Title VI Summary form completed and submitted to civilrights@utah.gov',
+    'Public hearing transcript prepared and distributed to project team and interested individuals, groups, and agencies (UDOT 08A2-02)',
+    'EA public comment period completed — minimum 30 days (Task 39E)',
+    // ── Comment Resolution (Task 41E) ──────────────────────────────────────
+    'All public and agency comments compiled into comment resolution form (Task 41E)',
+    'Written response prepared for each comment',
+    'Public hearing certification package assembled (Task 41E)',
+    'Public hearing summary and analysis report prepared and QC reviewed',
+    'Environmental document revised per comment responses',
+    // ── Decision Document (Task 51E) ───────────────────────────────────────
+    'FONSI / EA decision document prepared and submitted (Task 51E)',
+    // ── Project File (Task 55E) ────────────────────────────────────────────
+    'Project PI file assembled and maintained (Task 55E)'
+  ],
+  'EIS':[
+    // ── PI Planning (Tasks 01E / 05E) ───────────────────────────────────────
+    'Public information from project sponsor reviewed by PI team (Task 01E)',
+    'Project stakeholders identified in coordination with Project Manager, RCM, and Communications Office',
+    'PI strategy meeting held with project team — PI goals and evaluation criteria established',
+    'Community outreach strategies developed to meet PI Plan objectives',
+    'Media plan developed with RCM and Communications Office',
+    'Project Public Involvement (PI) Plan prepared (Task 05E)',
+    'PI Plan reviewed and approved by Environmental Program Manager and RCM before distribution',
+    // ── Notice of Intent (Task 09E) ────────────────────────────────────────
+    'Notice of Intent (NOI) prepared and circulated for legal review (Task 09E)',
+    'NOI published in Federal Register — date and copy retained in project file',
+    // ── Agency and Tribal Coordination (Task 13E) ──────────────────────────
+    'Participating and cooperating agencies identified and invited — invitation letters sent (Task 13E)',
+    'SAFETEA-LU Coordination Plan prepared (Task 13E)',
+    'Scoping Environmental Review Checklist completed (Task 13E)',
+    'NEPA scoping letters sent to agencies, tribes, and known interested parties',
+    'Official written notification sent to tribal chairpersons of federally-recognized Indian Tribes in Utah (UDOT 08A2-07)',
+    'Tribal consultation initiated as early as possible and conducted in good faith; technical information and data shared with Tribes upon request (UDOT 08A2-07 / Utah EO 2014/005)',
+    'NEPA scoping meeting(s) held — public and agency input solicited',
+    'Tribal comments and concerns documented and considered throughout EIS process; consultation activities retained in project file',
+    'NEPA scoping report prepared',
+    // ── PI Plan Implementation (Task 07E) ──────────────────────────────────
+    'PI Plan implemented throughout planning and design process (Task 07E)',
+    // ── Draft EIS Circulation (Task 35E) ───────────────────────────────────
+    'Draft EIS (DEIS) reviewed and approved for circulation (Task 35E)',
+    'DEIS circulated to agencies and public',
+    // ── Public Hearing (Tasks 39E / 41E) ───────────────────────────────────
+    'Public hearing location selected: in project area, ADA-accessible, adequate size, accessible elevator if multi-floor (Task 39E)',
+    'Public hearing approval obtained from Environmental Program Manager',
+    'Public hearing advertised on UDOT website under Public Meetings and Events',
+    'UDOT Title VI Specialist invited to public hearing',
+    'Public hearing advertised: first ad ≥15 days prior, second ad 7–10 days prior',
+    'Community demographics reviewed — translators arranged if needed; interpretation services advertised on flyers',
+    'Meeting collateral includes Notice of Special Accommodation statement (auxiliary communicative aids and services)',
+    'Non-discrimination poster displayed at public hearing venue',
+    'Title VI-approved sign-in sheet used at each table — captures name/affiliation, contact info, project info opt-in, and optional gender/race fields (CFR 23 §200.9(4))',
+    'Comment collection method provided at public hearing',
+    'Court recorder obtained for public hearing',
+    'Public hearing held — compliant with UDOT Title VI Program (non-discrimination: race, color, national origin, sex, age, disability, income status)',
+    'Scanned sign-in sheets and copies of comments emailed to Title VI Coordinator (civilrights@utah.gov) after hearing',
+    'Post-meeting Title VI Summary form completed and submitted to civilrights@utah.gov',
+    'Public hearing transcript prepared and distributed to project team and interested individuals, groups, and agencies (UDOT 08A2-02)',
+    'DEIS public comment period completed — minimum 45 days (Task 39E)',
+    // ── Comment Resolution (Task 41E) ──────────────────────────────────────
+    'All public and agency comments compiled into comment resolution form (Task 41E)',
+    'Written response prepared for each comment',
+    'Public hearing certification package assembled (Task 41E)',
+    'Public hearing summary and analysis report prepared and QC reviewed',
+    // ── Final EIS (Tasks 43E / 47E / 49E) ─────────────────────────────────
+    'Final EIS (FEIS) prepared (Task 43E)',
+    'FEIS reviewed — legal sufficiency review completed (Task 47E)',
+    'FEIS released and circulated — minimum 30-day waiting period before ROD (Task 49E)',
+    // ── Record of Decision (Task 53E) ──────────────────────────────────────
+    'Record of Decision (ROD) prepared and submitted (Task 53E)',
+    // ── Project File (Task 55E) ────────────────────────────────────────────
+    'Project PI file assembled and maintained (Task 55E)'
+  ]
+};
 function delGroupIcon(type){
   var icons={
     'Community Outreach':'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" style="width:16px;height:16px"><circle cx="7" cy="6" r="3"/><path d="M1 16c0-2.8 2.7-5 6-5s6 2.2 6 5"/><circle cx="15" cy="6" r="2"/><path d="M19 16c0-2.2-1.8-4-4-4"/></svg>',
@@ -1130,10 +1280,10 @@ function initDashRows(){
     }
   });
 }
-function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.showBulkAdd=false;S.showEmailPanel=false;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;
+function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.showBulkAdd=false;S.showEmailPanel=false;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;S.cmtSearch='';S.cmtProj='';S.cmtStatus='';S.cmtPeriod='';
   S.view=v;S.selStakeholder=null;S.selInteraction=null;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
-  const navId=v==='commitments'?'nav-commitments':('nav-'+v);
+  const navId=v==='commitments'?'nav-commitments':v==='comments'?'nav-comments':('nav-'+v);
   const nb=document.getElementById(navId);if(nb)nb.classList.add('active');
   render();
 }
@@ -1215,6 +1365,10 @@ function refreshBadges(){
   const openComm=(DB.get('commitments')||[]).filter(c=>c.status==='Open'||c.status==='Overdue').length;
   const commEl=document.getElementById('nb-comm');
   if(commEl){commEl.textContent=openComm;commEl.classList.toggle('hide',openComm===0);}
+  // Public comments badge — pending
+  const pendingPcomm=(DB.get('public_comments')||[]).filter(c=>c.responseStatus==='Pending').length;
+  const pcommEl=document.getElementById('nb-pcomm');
+  if(pcommEl){pcommEl.textContent=pendingPcomm;pcommEl.classList.toggle('hide',pendingPcomm===0);}
 }
 function buildProjList(){
   const allProjs=DB.get('projects');
@@ -1255,6 +1409,7 @@ function render(){
   else if(S.view==='meetings')renderMeetings(m);
   else if(S.view==='issues')renderIssuesView(m);
   else if(S.view==='commitments')renderCommitments(m);
+  else if(S.view==='comments')renderComments(m);
   else if(S.view==='settings')renderSettings(m);
   else if(S.view==='projects')renderProjects(m);
 }
@@ -2750,7 +2905,7 @@ function renderMaster(el){
               </div>
               <div class="avatar" style="background:${col}22;color:${col}">${ini(s.firstName,s.lastName)}</div>
               <div class="lrow-body">
-                <div class="lrow-name">${dispName(s)}${isOrgContact(s)?'<span class="badge b-sky" style="font-size:9px;margin-left:5px">ORG</span>':''}</div>
+                <div class="lrow-name">${dispName(s)}${isOrgContact(s)?'<span class="badge b-sky" style="font-size:9px;margin-left:5px">ORG</span>':''}${s.lep?'<span class="badge" style="font-size:9px;margin-left:5px;background:rgba(232,160,32,.18);color:#e8a020;border:1px solid rgba(232,160,32,.3)">LEP</span>':''}${s.underserved?'<span class="badge" style="font-size:9px;margin-left:5px;background:rgba(124,92,191,.18);color:#a98de8;border:1px solid rgba(124,92,191,.3)">EJ</span>':''}</div>
                 <div class="lrow-sub">${s.org||s.type||'—'}${s.title?' · '+s.title:''}</div>
               </div>
               <div class="lrow-meta">
@@ -2798,6 +2953,8 @@ function renderStakeholders(el){
   if(search)listItems=listItems.filter(s=>(s.firstName+' '+s.lastName+' '+(s.org||'')).toLowerCase().includes(search));
   if(typeF)listItems=listItems.filter(s=>s.type===typeF);
   if(S.skOrgOnly)listItems=listItems.filter(s=>isOrgContact(s));
+  if(S.skLEP)listItems=listItems.filter(s=>s.lep);
+  if(S.skEJ)listItems=listItems.filter(s=>s.underserved);
   if(S.projectFilter)listItems=_applyGroupFilter(listItems,S.projectFilter);
   // Sort: Internal first by last name, then External by last name
   if(S.projectFilter){
@@ -2853,6 +3010,8 @@ function renderStakeholders(el){
       <option value="">All types</option>
       ${['Business','Business Group','Elected Official','Agency','Community Group','Contractor','Engineering','Media','Property Owner','Resident','Road Traveler','Other'].map(t=>`<option${(S.stakeType||'')===''+t?' selected':''}>${t}</option>`).join('')}
     </select>
+    <button class="btn btn-sm${S.skLEP?' btn-primary':''}" style="${S.skLEP?'background:rgba(232,160,32,.25);border-color:#e8a020;color:#e8a020':'background:rgba(232,160,32,.08);border-color:rgba(232,160,32,.3);color:rgba(232,160,32,.7)'}" onclick="S.skLEP=!S.skLEP;renderStakeholders(document.getElementById('main'))">LEP</button>
+    <button class="btn btn-sm${S.skEJ?' btn-primary':''}" style="${S.skEJ?'background:rgba(124,92,191,.25);border-color:#a98de8;color:#a98de8':'background:rgba(124,92,191,.08);border-color:rgba(124,92,191,.3);color:rgba(124,92,191,.7)'}" onclick="S.skEJ=!S.skEJ;renderStakeholders(document.getElementById('main'))">EJ</button>
     <div class="tb-sp"></div><span class="tb-info">${listItems.length} contact${listItems.length!==1?'s':''}</span>
   </div>`}
   ${S.skView==='issues'&&S.projectFilter ? `
@@ -2912,7 +3071,7 @@ function renderStakeholders(el){
               </div>`:''}
               <div class="avatar" style="background:${col}22;color:${col}">${ini(s.firstName,s.lastName)}</div>
               <div class="lrow-body">
-                <div class="lrow-name">${dispName(s)}${isOrgContact(s)?'<span class="badge b-sky" style="font-size:9px;margin-left:5px">ORG</span>':''}</div>
+                <div class="lrow-name">${dispName(s)}${isOrgContact(s)?'<span class="badge b-sky" style="font-size:9px;margin-left:5px">ORG</span>':''}${s.lep?'<span class="badge" style="font-size:9px;margin-left:5px;background:rgba(232,160,32,.18);color:#e8a020;border:1px solid rgba(232,160,32,.3)">LEP</span>':''}${s.underserved?'<span class="badge" style="font-size:9px;margin-left:5px;background:rgba(124,92,191,.18);color:#a98de8;border:1px solid rgba(124,92,191,.3)">EJ</span>':''}</div>
                 <div class="lrow-sub">${s.org||s.type||'—'}${s.title?' · '+s.title:''}</div>
               </div>
               <div class="lrow-meta">
@@ -3721,7 +3880,7 @@ function renderStakeDetail(s,link){
   const infoHTML=`<div class="det-body">
     <div class="fg fg3" style="margin-bottom:14px">
       <div class="fi"><div class="fl">Type</div><div class="fv">${s.type||'—'}</div></div>
-
+      ${s.lep||s.underserved?`<div class="fi"><div class="fl">Equity flags</div><div class="fv">${s.lep?'<span class="badge" style="font-size:10px;background:rgba(232,160,32,.18);color:#e8a020;border:1px solid rgba(232,160,32,.3);margin-right:4px">LEP</span>':''}${s.underserved?'<span class="badge" style="font-size:10px;background:rgba(124,92,191,.18);color:#a98de8;border:1px solid rgba(124,92,191,.3)">EJ</span>':''}</div></div>`:''}
       <div class="fi"><div class="fl">Email</div><div class="fv">${s.email?`<a href="mailto:${s.email}" style="color:var(--sky-lt)">${s.email}</a>`:'—'}</div></div>
       <div class="fi"><div class="fl">Phone</div><div class="fv">${s.phone||'—'}</div></div>
     </div>
@@ -3798,6 +3957,7 @@ function renderStakeDetail(s,link){
         <div class="log-hdr">
           <span class="badge ${i.direction==='Incoming'?'b-sky':'b-green'}">${i.direction}</span>
           <span class="badge b-gray">${i.channel}</span>
+          ${i.equityFormSubmitted?'<span class="badge" style="font-size:10px;background:rgba(40,168,112,.15);color:var(--green);border:1px solid rgba(40,168,112,.3)">✓ Equity form</span>':''}
           <span style="font-size:12px;color:var(--slate)">${i.loggedBy}</span>
           ${(function(){if(link)return '';var _p=projs.find(function(x){return String(x.id)===String(i.projectId);});return _p?'<span class="badge b-dark" style="font-size:10px;color:var(--sky-lt);border-color:rgba(45,125,210,.3)">'+_p.name+'</span>':'';}())}
           <span class="log-date">${fmt(i.date)} <span style="color:var(--fog)">${ago(i.date)}</span></span>
@@ -3847,7 +4007,7 @@ function renderStakeDetail(s,link){
     <div class="det-hero">
       <div class="det-avatar" style="background:${col}22;color:${col}">${ini(s.firstName,s.lastName)}</div>
       <div style="flex:1">
-        <div class="det-name">${dispName(s)}${isOrgContact(s)?'<span class="badge b-sky" style="font-size:11px;margin-left:8px">Org</span>':''}</div>
+        <div class="det-name">${dispName(s)}${isOrgContact(s)?'<span class="badge b-sky" style="font-size:11px;margin-left:8px">Org</span>':''}${s.lep?'<span class="badge" style="font-size:10px;margin-left:6px;background:rgba(232,160,32,.18);color:#e8a020;border:1px solid rgba(232,160,32,.3)">LEP</span>':''}${s.underserved?'<span class="badge" style="font-size:10px;margin-left:6px;background:rgba(124,92,191,.18);color:#a98de8;border:1px solid rgba(124,92,191,.3)">EJ</span>':''}</div>
         <div class="det-role">${s.title||''}${s.title&&s.org?' · ':''}${s.org||''}</div>
         <div class="det-badges">
           <span class="badge b-gray">${s.type||'—'}</span>
@@ -4201,7 +4361,7 @@ function renderInteractions(el){
               <td class="td-mono" style="white-space:nowrap">${fmt(i.date)}</td>
               <td><span class="badge b-dark td-mono">${p?p.pid:'?'}</span></td>
               <td><div class="td-link" onclick="selectStake('${i.stakeholderId}');setView('stakeholders')">${s?dispName(s):(i.anonLabel||'Anonymous')}</div><div style="font-size:11px;color:var(--fog)">${s?s.org||s.type||'':''}</div></td>
-              <td><span class="badge ${chCls(i.channel)}">${i.channel}</span></td>
+              <td><span class="badge ${chCls(i.channel)}">${i.channel}</span>${i.equityFormSubmitted?'<span class="badge" style="font-size:9px;margin-left:3px;background:rgba(40,168,112,.15);color:var(--green);border:1px solid rgba(40,168,112,.3)">✓ EQ</span>':''}</td>
               <td><span class="badge ${i.direction==='Incoming'?'b-sky':'b-green'}">${i.direction}</span></td>
               <td style="font-size:12px;color:var(--mist)">${i.subject||'General'}</td>
               <td><span class="badge ${(i.nature||'Inquiry')==='Complaint'?'b-red':(i.nature||'Inquiry')==='Compliment'?'b-green':'b-sky'}" style="font-size:11px">${i.nature||'Inquiry'}</span></td>
@@ -4343,10 +4503,51 @@ function renderDelScope(pF){
         }).join('')}</tbody>
       </table></div>`}
       <div style="margin-top:10px;display:flex;gap:7px"><button class="btn btn-sm" onclick="openTplApply('${proj.id}')">+ Template</button><button class="btn btn-sm btn-primary" onclick="S.projectFilter='${proj.id}';openDelModal()">+ Add item</button></div>
+      ${(()=>{
+        const nc=proj.nepaClassification;
+        if(!nc||nc==='N/A')return'';
+        const cl=proj.nepaChecklist||[];
+        const total=cl.length,done=cl.filter(x=>x.checked).length;
+        const pctN=total>0?Math.round(done/total*100):0;
+        return`<div style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div style="font-weight:600;font-size:13px;color:var(--sky-lt)">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" style="width:14px;height:14px;vertical-align:-2px;margin-right:5px"><path d="M13 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z"/><path d="M5 8l2 2 4-4"/></svg>
+              NEPA Compliance Checklist — ${nc}
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:12px;color:${pctN===100?'var(--green)':'var(--slate)'};font-weight:500">${done}/${total} complete</span>
+              <div class="pbar" style="width:80px"><div class="pfill ${pctN===100?'green':''}" style="width:${pctN}%"></div></div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px">
+            ${cl.map((item,idx)=>`
+              <div style="display:flex;align-items:flex-start;gap:10px;padding:6px 8px;border-radius:5px;background:${item.checked?'rgba(34,197,94,.07)':'rgba(255,255,255,.03)'};cursor:pointer" onclick="toggleNepaCheck('${proj.id}',${idx})">
+                <div style="flex-shrink:0;margin-top:1px;width:16px;height:16px;border-radius:3px;border:1.5px solid ${item.checked?'var(--green)':'rgba(255,255,255,.25)'};background:${item.checked?'var(--green)':'transparent'};display:flex;align-items:center;justify-content:center">
+                  ${item.checked?'<svg viewBox="0 0 10 10" fill="none" stroke="white" stroke-width="2" style="width:9px;height:9px"><path d="M2 5l2.5 2.5L8 3"/></svg>':''}
+                </div>
+                <div style="flex:1;font-size:13px;color:${item.checked?'var(--slate)':'var(--mist)'}${item.checked?';text-decoration:line-through':''}">${item.label}</div>
+                ${item.checked?`<div style="font-size:11px;color:var(--fog);white-space:nowrap;flex-shrink:0">${item.checkedDate?fmt(item.checkedDate):''} ${item.checkedBy?'· '+item.checkedBy:''}</div>`:''}
+              </div>`).join('')}
+          </div>
+          ${pctN===100?`<div style="margin-top:10px;padding:8px 12px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:6px;font-size:12px;color:var(--green);font-weight:500">✓ All NEPA PI compliance items complete for this ${nc} project.</div>`:''}
+        </div>`;
+      })()}
     </div>`;
   }).join('')+'</div>';
 }
 
+function toggleNepaCheck(projId,idx){
+  const all=DB.get('projects');
+  const proj=all.find(x=>x.id===projId);
+  if(!proj||!proj.nepaChecklist||!proj.nepaChecklist[idx])return;
+  const item=proj.nepaChecklist[idx];
+  item.checked=!item.checked;
+  item.checkedDate=item.checked?localToday():'';
+  item.checkedBy=item.checked?(getLoggedBy()||''):'';
+  DB.set('projects',all);
+  renderDeliverables(document.getElementById('main'));
+}
 function renderDelAll(pF){
   let dels=DB.get('deliverables');
   if(pF)dels=dels.filter(d=>d.projectId===pF);
@@ -4698,6 +4899,11 @@ function renderProjects(el){
         const openFU=ints.filter(i=>i.projectId===p.id&&i.followUp&&!i.followUpDone).length;
         const isArchived=p.status==='Complete'||p.status==='Cancelled';
         const statusBadge=p.status==='Active'?'b-green':p.status==='On hold'?'b-amber':p.status==='Complete'?'b-sky':'b-red';
+        const _ncl=p.nepaChecklist||[];
+        const _nTotal=_ncl.length;
+        const _nDone=_ncl.filter(x=>x.checked).length;
+        const _nPct=_nTotal>0?Math.round(_nDone/_nTotal*100):null;
+        const _nColor=_nPct===100?'var(--green)':_nPct>=60?'#4db6ac':_nPct>=30?'var(--amber)':'var(--sky)';
         return`<div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:16px 18px;${isArchived?'opacity:.85':''}">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
             <div>
@@ -4715,6 +4921,15 @@ function renderProjects(el){
             ${p.preconDate?`<div><span style="color:var(--slate)">Precon: </span>${fmt(p.preconDate)}</div>`:''}
             ${p.endDate?`<div><span style="color:var(--slate)">End: </span>${fmt(p.endDate)}</div>`:''}
           </div>
+          ${_nPct!==null?`<div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <span style="font-size:11px;color:var(--fog);text-transform:uppercase;letter-spacing:.4px">NEPA PI Checklist</span>
+              <span style="font-size:11px;color:${_nColor};font-weight:600">${_nDone}/${_nTotal} · ${_nPct}%</span>
+            </div>
+            <div style="background:rgba(255,255,255,.08);border-radius:4px;height:5px;overflow:hidden">
+              <div style="background:${_nColor};width:${_nPct}%;height:100%;border-radius:4px;transition:width .3s"></div>
+            </div>
+          </div>`:''}
           <div style="display:flex;gap:10px;font-size:12px;padding-top:9px;border-top:1px solid var(--border)">
             <span style="color:var(--mist)">${psSt.length} stakeholders</span>
             <span style="color:var(--green)">${champ} champ.</span>
@@ -4794,6 +5009,10 @@ function openStakeModal(id){
   <div class="fgrid fg3f">
     <div class="fr"><label>Stakeholder type</label><select id="f-st">${['Business','Business Group','Elected Official','Agency','Community Group','Contractor','Engineering','Media','Property Owner','Resident','Road Traveler','Other'].map(t=>`<option${s.type===t?' selected':''}>${t}</option>`).join('')}</select></div>
 
+  </div>
+  <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:6px">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:400"><input type="checkbox" id="f-slep" ${s.lep?'checked':''} style="accent-color:var(--sky);width:15px;height:15px"><span>Limited English Proficiency (LEP)</span></label>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:400"><input type="checkbox" id="f-sund" ${s.underserved?'checked':''} style="accent-color:var(--sky);width:15px;height:15px"><span>Underserved / Environmental Justice population</span></label>
   </div>
 
   ${!id?`<div class="fsec">Link to project (optional)</div>
@@ -4875,7 +5094,7 @@ function saveStake(){
   if(phoneErr){alert(phoneErr);return;}
   const emailErr=validateEmail(v('f-em'));
   if(emailErr){alert(emailErr);return;}
-  const data={id:S.editId||DB.uid(),firstName:document.getElementById('f-fn')?.value||'',lastName:document.getElementById('f-ln')?.value||'',org:v('f-org'),title:v('f-ti'),email:v('f-em'),phone:rawPhone.trim()?formatPhone(cleanPhone(rawPhone)):'',address:v('f-ad'),parcelId:v('f-parc'),type:v('f-st'),isMaster:!!(document.getElementById('f-smaster')?.checked),notes:v('f-no'),isAnonymous:false};
+  const data={id:S.editId||DB.uid(),firstName:document.getElementById('f-fn')?.value||'',lastName:document.getElementById('f-ln')?.value||'',org:v('f-org'),title:v('f-ti'),email:v('f-em'),phone:rawPhone.trim()?formatPhone(cleanPhone(rawPhone)):'',address:v('f-ad'),parcelId:v('f-parc'),type:v('f-st'),lep:!!(document.getElementById('f-slep')?.checked),underserved:!!(document.getElementById('f-sund')?.checked),isMaster:!!(document.getElementById('f-smaster')?.checked),notes:v('f-no'),isAnonymous:false};
   if(!data.firstName&&!data.lastName&&!data.org){alert('First and last name, or Organization name required.');return}
 
   // ── Duplicate detection (new contacts only) ───────────────────
@@ -5275,14 +5494,14 @@ function openIntModal(preStake){
   const projs=DB.get('projects'),stakes=DB.getActive('stakeholders');
   openM('Log interaction',
   `<div class="fgrid fg2f">
-    <div class="fr"><label>Project *</label><select id="f-ip" onchange="updateIntStakeholders();updateIntIssues()"><option value="">— Select project —</option>${projs.map(p=>`<option value="${p.id}"${S.projectFilter===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
+    <div class="fr"><label>Project *</label><select id="f-ip" onchange="updateIntStakeholders();updateIntIssues();updateIntNepaStage()"><option value="">— Select project —</option>${projs.map(p=>`<option value="${p.id}"${S.projectFilter===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
     <div class="fr" style="position:relative"><label>Stakeholder</label>
       <input id="f-is-search" autocomplete="off" placeholder="Search by name or org..." oninput="filterIntStakeList()" onfocus="filterIntStakeList()" style="width:100%;box-sizing:border-box">
       <input type="hidden" id="f-is" value="${preStake||''}">
       <div id="f-is-list" style="display:none;position:absolute;z-index:99999;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;max-height:220px;overflow-y:auto;width:100%;left:0;top:100%;margin-top:2px;box-shadow:0 4px 16px rgba(0,0,0,.6)"></div>
     </div>
     <div class="fr"><label>Date *</label><input type="date" id="f-id" value="${localToday()}"></div>
-    <div class="fr"><label>Channel</label><select id="f-ic">${['Phone','Email','In-person','Public meeting','Public event','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'].map(c=>`<option>${c}</option>`).join('')}</select></div>
+    <div class="fr"><label>Channel</label><select id="f-ic" onchange="_toggleEquityWrap(this.value)">${['Phone','Email','In-person','Public meeting','Public event','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'].map(c=>`<option>${c}</option>`).join('')}</select></div>
   </div>
   <div class="fgrid fg3f">
     <div class="fr"><label>Direction</label><select id="f-idr">${['Incoming','Outgoing','In-person'].map(d=>`<option>${d}</option>`).join('')}</select></div>
@@ -5295,6 +5514,10 @@ function openIntModal(preStake){
     <div style="display:flex;gap:8px;align-items:center">
       <select id="f-iissue" style="flex:1"><option value="">— None —</option>${(DB.get('issues')||[]).filter(x=>!S.projectFilter||x.projectId===S.projectFilter).map(iss=>`<option value="${iss.id}">[${iss.status}] ${iss.title}</option>`).join('')}</select>
     </div>
+  </div>
+  <input type="hidden" id="f-inepastage">
+  <div id="f-equity-wrap" style="display:none;margin-top:4px">
+    <div class="fcheck"><input type="checkbox" id="f-iequity"><label for="f-iequity">Equity / civil rights compliance form submitted <span style="font-size:11px;font-weight:400;color:var(--fog)">(e.g. Title VI summary, sign-in sheet sent to coordinator)</span></label></div>
   </div>
   <div class="fsec">Follow-up</div>
   <div class="fr"><div class="fcheck"><input type="checkbox" id="f-ifu" onchange="document.getElementById('fu-f').style.display=this.checked?'':'none'"><label for="f-ifu">This interaction requires a follow-up action</label></div></div>
@@ -5315,6 +5538,21 @@ function openIntModal(preStake){
   }, 50);
   // Auto-populate Logged by from session
   (function(){var lb=getLoggedBy();var d=document.getElementById('f-il-display');var h=document.getElementById('f-il');if(d)d.textContent=lb||'—';if(h)h.value=lb;})();
+  // Auto-populate NEPA stage from selected project
+  updateIntNepaStage();
+}
+function updateIntNepaStage(){
+  const projId=document.getElementById('f-ip')?.value||'';
+  const h=document.getElementById('f-inepastage');
+  if(!h) return;
+  const proj=(DB.get('projects')||[]).find(x=>x.id===projId);
+  h.value=(proj&&proj.nepaStage)||'';
+}
+function _toggleEquityWrap(channel){
+  const wrap=document.getElementById('f-equity-wrap');
+  if(!wrap) return;
+  const show=channel==='Public meeting'||channel==='Public event';
+  wrap.style.display=show?'':'none';
 }
 function openEditIntModal(id){
   S.editId=id;
@@ -5325,7 +5563,7 @@ function openEditIntModal(id){
     <div class="fr"><label>Project</label><select id="f-ip">${projs.map(p=>`<option value="${p.id}"${i.projectId===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
     <div class="fr"><label>Stakeholder</label><select id="f-is">${stakes.map(s=>`<option value="${s.id}"${String(i.stakeholderId)===String(s.id)?' selected':''}>${dispName(s)}${(s.firstName||s.lastName)&&s.org?' — '+s.org:''}</option>`).join('')}</select></div>
     <div class="fr"><label>Date</label><input type="date" id="f-id" value="${i.date||''}"></div>
-    <div class="fr"><label>Channel</label><select id="f-ic">${['Phone','Email','In-person','Public meeting','Public event','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'].map(c=>`<option${i.channel===c?' selected':''}>${c}</option>`).join('')}</select></div>
+    <div class="fr"><label>Channel</label><select id="f-ic" onchange="_toggleEquityWrap(this.value)">${['Phone','Email','In-person','Public meeting','Public event','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'].map(c=>`<option${i.channel===c?' selected':''}>${c}</option>`).join('')}</select></div>
   </div>
   <div class="fgrid fg3f">
     <div class="fr"><label>Direction</label><select id="f-idr">${['Incoming','Outgoing','In-person'].map(d=>`<option${i.direction===d?' selected':''}>${d}</option>`).join('')}</select></div>
@@ -5341,6 +5579,9 @@ function openEditIntModal(id){
       const linkedIssueId=existingLink?String(existingLink.issueId):'';
       return '<option value="">— None —</option>'+projIssues.map(iss=>`<option value="${iss.id}"${String(iss.id)===linkedIssueId?' selected':''}>[${iss.status}] ${iss.title}</option>`).join('');
     })()}</select>
+  </div>
+  <div id="f-equity-wrap" style="${(i.channel==='Public meeting'||i.channel==='Public event')?'':'display:none'};margin-top:4px">
+    <div class="fcheck"><input type="checkbox" id="f-iequity"${i.equityFormSubmitted?' checked':''}><label for="f-iequity">Equity / civil rights compliance form submitted <span style="font-size:11px;font-weight:400;color:var(--fog)">(e.g. Title VI summary, sign-in sheet sent to coordinator)</span></label></div>
   </div>
   <div class="fsec">Follow-up</div>
   <div class="fr"><div style="display:flex;gap:20px;flex-wrap:wrap">
@@ -5367,7 +5608,9 @@ function saveInt(){
   const fuDone=document.getElementById('f-ifudo')?.checked||false;
   const fuResolved=fuDone?(vDate('f-ifudr')||localToday()):'';
   const anonLbl = !stakeId ? getAnonLabel(projId, S.editId||null) : '';
-  const data={id:S.editId||DB.uid(),projectId:projId,stakeholderId:stakeId,anonLabel:anonLbl,date:vDate('f-id'),channel:v('f-ic'),direction:v('f-idr'),subject:v('f-isub')||'General',nature:v('f-inat')||'Inquiry',summary:v('f-isu'),loggedBy:v('f-il'),followUp:document.getElementById('f-ifu')?.checked||false,followUpNote:v('f-ifun'),followUpDue:vDate('f-ifud'),followUpDone:fuDone,followUpResolved:fuResolved};
+  const _existingInt=S.editId?(DB.get('interactions')||[]).find(x=>x.id===S.editId):null;
+  const _nepaStageVal=S.editId?(_existingInt?.nepaStage||''):v('f-inepastage');
+  const data={id:S.editId||DB.uid(),projectId:projId,stakeholderId:stakeId,anonLabel:anonLbl,date:vDate('f-id'),channel:v('f-ic'),direction:v('f-idr'),subject:v('f-isub')||'General',nature:v('f-inat')||'Inquiry',summary:v('f-isu'),loggedBy:v('f-il'),nepaStage:_nepaStageVal,equityFormSubmitted:document.getElementById('f-iequity')?.checked||false,followUp:document.getElementById('f-ifu')?.checked||false,followUpNote:v('f-ifun'),followUpDue:vDate('f-ifud'),followUpDone:fuDone,followUpResolved:fuResolved};
   const psAll=DB.get('project_stakeholders');
   if(stakeId&&!psAll.find(x=>x.projectId===projId&&x.stakeholderId===stakeId)){
     psAll.push({id:DB.uid(),projectId:projId,stakeholderId:stakeId,support:'Neutral',issueTags:'',addedDate:data.date,notes:'Auto-linked via interaction log.',distributionGroups:'',stakeholderRole:'External'});
@@ -5498,7 +5741,7 @@ function openProjModal(id){
     <div class="fr"><label>Client / agency</label><input id="f-pc2" value="${p.client||''}" list="dl-clients" autocomplete="off"><datalist id="dl-clients">${clientOpts}</datalist></div>
     <div class="fr"><label>Project type</label><select id="f-pty">${['Roadway','Bridge','Transit','Trail / Active transport','Drainage','Water','Wastewater','Water Resource Planning','Utility','Municipal Development','Environmental Assessment','Master Plan','Other'].map(t=>`<option${p.type===t?' selected':''}>${t}</option>`).join('')}</select></div>
     <div class="fr"><label>County / region</label><input id="f-pco" value="${p.county||''}" list="dl-counties" autocomplete="off"><datalist id="dl-counties">${countyOpts}</datalist></div>
-    <div class="fr"><label>Phase</label><select id="f-pph" onchange="var show=['Precon','Construction','Closeout'].indexOf(this.value)>=0;document.getElementById('precon-date-wrap').style.display=show?'':'none';if(!show)document.getElementById('f-ppd').value=''">${['Planning','NEPA / Environmental','Design','Precon','Construction','Closeout','Community Outreach','Survey / Data Collection','Analysis','Draft Plan / Public Comment','Final Adoption'].map(t=>`<option${p.phase===t?' selected':''}>${t}</option>`).join('')}</select></div>
+    <div class="fr"><label>Phase</label><select id="f-pph" onchange="var show=['Precon','Construction','Closeout'].indexOf(this.value)>=0;document.getElementById('precon-date-wrap').style.display=show?'':'none';if(!show)document.getElementById('f-ppd').value=''">${['Planning','CatEx / CE','NEPA / Environmental','Design','Precon','Construction','Closeout','Community Outreach','Survey / Data Collection','Analysis','Draft Plan / Public Comment','Final Adoption'].map(t=>`<option${p.phase===t?' selected':''}>${t}</option>`).join('')}</select></div>
     <div class="fr"><label>Status</label><select id="f-pst">${['Active','On hold','Complete','Cancelled'].map(t=>`<option${p.status===t?' selected':''}>${t}</option>`).join('')}</select></div>
   </div>
 
@@ -5507,6 +5750,13 @@ function openProjModal(id){
     <div class="fr"><label>Start date</label><input type="date" id="f-psd" value="${p.startDate||''}"></div>
     <div class="fr"><label>End date</label><input type="date" id="f-ped" value="${p.endDate||''}"></div>
     <div id="precon-date-wrap" style="${['Precon','Construction','Closeout'].indexOf(p.phase||'')>=0?'':'display:none'}"><div class="fr"><label>Precon date</label><input type="date" id="f-ppd" value="${['Precon','Construction','Closeout'].indexOf(p.phase||'')>=0?(p.preconDate||''):''}"></div></div>
+  </div>
+  <div class="fsec" style="cursor:pointer;user-select:none" onclick="var b=document.getElementById('nepa-section');var a=document.getElementById('nepa-arrow');b.style.display=b.style.display==='none'?'':'none';a.textContent=b.style.display===''?'▾':'▸'"><span id="nepa-arrow">${(p.nepaClassification&&p.nepaClassification!=='N/A')?'▾':'▸'}</span> NEPA / Compliance <span style="font-weight:400;font-size:11px;color:var(--fog);text-transform:none;letter-spacing:0">(optional)</span></div>
+  <div id="nepa-section" style="${(p.nepaClassification&&p.nepaClassification!=='N/A')?'':'display:none'}">
+    <div class="fgrid fg2f">
+      <div class="fr"><label>NEPA Classification</label><select id="f-pnc" onchange="document.getElementById('nepa-stage-wrap').style.display=this.value&&this.value!=='N/A'?'':'none'">${['N/A','CE','EA','EIS'].map(t=>`<option${(p.nepaClassification||'N/A')===t?' selected':''}>${t}</option>`).join('')}</select></div>
+      <div class="fr" id="nepa-stage-wrap" style="${(p.nepaClassification&&p.nepaClassification!=='N/A')?'':'display:none'}"><label>Current NEPA Stage</label><select id="f-pns">${['Pre-NEPA','CE','EA - Scoping','EA - Draft','EA - Final / FONSI','EIS - Scoping','EIS - DEIS','EIS - FEIS','EIS - ROD','Post-NEPA / Construction','N/A'].map(t=>`<option${(p.nepaStage||'Pre-NEPA')===t?' selected':''}>${t}</option>`).join('')}</select></div>
+    </div>
   </div>
   <div class="fr"><label>Notes</label><textarea id="f-pno">${p.notes||''}</textarea></div>
 `,
@@ -5519,7 +5769,39 @@ async function saveProj(){
   const vDate=id=>{const val=document.getElementById(id)?.value||'';return val||null;};
   const _phase=v('f-pph');
   const _preconPhases=['Precon','Construction','Closeout'];
-  const data={id:S.editId||DB.uid(),pid:v('f-pid'),name:v('f-pn'),client:v('f-pc2'),type:v('f-pty'),county:v('f-pco'),phase:_phase,status:v('f-pst'),startDate:vDate('f-psd'),endDate:vDate('f-ped'),preconDate:_preconPhases.indexOf(_phase)>=0?vDate('f-ppd'):null,notes:v('f-pno')};
+  const _nepaClass=v('f-pnc')||'N/A';
+  const _nepaStage=(_nepaClass&&_nepaClass!=='N/A')?v('f-pns')||'Pre-NEPA':'';
+  const _by=getLoggedBy()||'';
+  const _today=localToday();
+  const all=DB.get('projects');
+  const _existing=S.editId?all.find(x=>x.id===S.editId):null;
+  // Build phase history
+  const _phaseHistory=[...(_existing?.phaseHistory||[])];
+  if(_existing&&_existing.phase&&_existing.phase!==_phase){
+    _phaseHistory.push({from:_existing.phase,to:_phase,date:_today,by:_by});
+  }
+  // Build NEPA stage history
+  const _nepaHistory=[...(_existing?.nepaStageHistory||[])];
+  if(_existing&&(_existing.nepaStage||'')!==_nepaStage&&_nepaStage){
+    _nepaHistory.push({from:_existing.nepaStage||'',to:_nepaStage,date:_today,by:_by});
+  }
+  // Build NEPA checklist — preserve checked items, add new ones for changed classification
+  const _defaultItems=(NEPA_CHECKLISTS[_nepaClass]||[]).map(label=>({label,checked:false,checkedDate:'',checkedBy:''}));
+  let _nepaChecklist=_existing?.nepaChecklist||[];
+  if(_nepaClass&&_nepaClass!=='N/A'){
+    if(_existing?.nepaClassification!==_nepaClass){
+      // Classification changed or newly set — start fresh but keep any matching checked items
+      const _oldChecked=Object.fromEntries((_existing?.nepaChecklist||[]).filter(x=>x.checked).map(x=>[x.label,x]));
+      _nepaChecklist=_defaultItems.map(item=>_oldChecked[item.label]||item);
+    } else {
+      // Same classification — preserve existing checklist, add any new items from template
+      const _existingLabels=new Set(_nepaChecklist.map(x=>x.label));
+      _defaultItems.forEach(item=>{if(!_existingLabels.has(item.label))_nepaChecklist.push(item);});
+    }
+  } else {
+    _nepaChecklist=[];
+  }
+  const data={id:S.editId||DB.uid(),pid:v('f-pid'),name:v('f-pn'),client:v('f-pc2'),type:v('f-pty'),county:v('f-pco'),phase:_phase,status:v('f-pst'),startDate:vDate('f-psd'),endDate:vDate('f-ped'),preconDate:_preconPhases.indexOf(_phase)>=0?vDate('f-ppd'):null,notes:v('f-pno'),nepaClassification:_nepaClass,nepaStage:_nepaStage,phaseHistory:_phaseHistory,nepaStageHistory:_nepaHistory,nepaChecklist:_nepaChecklist};
   if(!data.pid||!/^\d{3,5}$/.test(data.pid)){alert('Project ID must be 3 to 5 digits.');return}
   if(!data.name){alert('Project name is required.');return}
   if(!data.startDate&&!data.preconDate){alert('Please enter at least a Start date or Precon date — this is required for deliverable scheduling.');return}
@@ -5530,7 +5812,6 @@ async function saveProj(){
   if(_sd&&_ed<=_sd){alert('End date must be later than Start date.');return}
   if(_pd&&_ed<=_pd){alert('End date must be later than Precon date.');return}
   const isNew=!S.editId;
-  const all=DB.get('projects');
   if(S.editId){const i=all.findIndex(x=>x.id===S.editId);if(i>-1)all[i]=data;}else all.push(data);
   closeM();
   await DB.set('projects',all);
@@ -9912,6 +10193,237 @@ async function _smapGeocodeAndRenderInEl(containerId, loadingId, errorsId, proje
 const COMM_CATS = ['Access / Traffic','Agency Coordination','Cultural / Historic Resources','Drainage / Flooding','Environmental','Meeting Follow-up','Noise / Hours','Notification','Restoration / Landscaping','ROW / Property','Schedule / Timeline','Utilities / Service Interruption','Other'];
 const COMM_STATUSES = ['Open','Fulfilled'];
 
+// ── PUBLIC COMMENT LOG ────────────────────────────────────────────────────────
+const CMT_METHODS=['Mail','Email','Online form','Public hearing','Comment card','Phone','In-person','Other'];
+const CMT_TOPICS=['Noise','Traffic / access','Environmental / natural resources','Project scope','Alternatives','Schedule','Cost / funding','Safety','Property / right-of-way','General support','General opposition','Other'];
+const CMT_STATUSES=['Pending','In progress','Responded','No response needed'];
+const CMT_PERIOD_TYPES=['Scoping','CE','EA — 30-day comment period','DEIS — 45-day comment period','FEIS','Other'];
+
+function renderComments(m){
+  const allComments=DB.get('public_comments')||[];
+  const allProjs=DB.get('projects');
+  const projF=S.projectFilter||'';
+  const srch=(S.cmtSearch||'').toLowerCase();
+  const statusF=S.cmtStatus||'';
+  const periodF=S.cmtPeriod||'';
+  const projFilt=S.cmtProj||projF;
+
+  let filtered=allComments.filter(c=>{
+    if(projFilt&&String(c.projectId)!==String(projFilt))return false;
+    if(statusF&&c.responseStatus!==statusF)return false;
+    if(periodF&&c.commentPeriodType!==periodF)return false;
+    if(srch){
+      const hay=(c.commenterName||'')+(c.commenterOrg||'')+(c.commentText||'')+(c.topic||'');
+      if(!hay.toLowerCase().includes(srch))return false;
+    }
+    return true;
+  });
+  filtered.sort((a,b)=>(b.submittedDate||'').localeCompare(a.submittedDate||''));
+
+  const pendingCt=allComments.filter(c=>c.responseStatus==='Pending'&&(!projFilt||String(c.projectId)===String(projFilt))).length;
+  const inProgCt=allComments.filter(c=>c.responseStatus==='In progress'&&(!projFilt||String(c.projectId)===String(projFilt))).length;
+  const respondedCt=allComments.filter(c=>c.responseStatus==='Responded'&&(!projFilt||String(c.projectId)===String(projFilt))).length;
+
+  const projLabel=projFilt?(allProjs.find(p=>String(p.id)===String(projFilt))||{}).name||'':'';
+
+  let html=`<div class="topbar">
+    <div>
+      <div class="topbar-title">Public comment log</div>
+      ${projLabel?`<div class="topbar-sub">${projLabel}</div>`:''}
+    </div>
+    <div class="topbar-sp"></div>
+    <div class="topbar-acts">
+      <button class="btn btn-primary" onclick="openCommentModal()">+ Log comment</button>
+    </div>
+  </div>
+  <div class="content" style="overflow-y:auto"><div style="padding:20px;max-width:960px;margin:0 auto">`;
+
+  // Summary cards
+  html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px">
+    <div style="background:rgba(232,160,32,.08);border:1px solid rgba(232,160,32,.25);border-radius:10px;padding:14px 16px;cursor:pointer" onclick="S.cmtStatus='Pending';renderComments(document.getElementById('main'))">
+      <div style="font-size:28px;font-weight:700;color:var(--amber)">${pendingCt}</div>
+      <div style="font-size:11px;color:var(--fog);margin-top:2px">Pending response</div>
+    </div>
+    <div style="background:rgba(90,135,198,.08);border:1px solid rgba(90,135,198,.25);border-radius:10px;padding:14px 16px;cursor:pointer" onclick="S.cmtStatus='In progress';renderComments(document.getElementById('main'))">
+      <div style="font-size:28px;font-weight:700;color:var(--sky-lt)">${inProgCt}</div>
+      <div style="font-size:11px;color:var(--fog);margin-top:2px">In progress</div>
+    </div>
+    <div style="background:rgba(40,168,112,.08);border:1px solid rgba(40,168,112,.25);border-radius:10px;padding:14px 16px;cursor:pointer" onclick="S.cmtStatus='Responded';renderComments(document.getElementById('main'))">
+      <div style="font-size:28px;font-weight:700;color:var(--green)">${respondedCt}</div>
+      <div style="font-size:11px;color:var(--fog);margin-top:2px">Responded</div>
+    </div>
+  </div>`;
+
+  // Filter bar
+  html+=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+    <input placeholder="Search comments…" value="${S.cmtSearch||''}" oninput="S.cmtSearch=this.value;renderComments(document.getElementById('main'))"
+      style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white);width:200px">
+    <select style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)" onchange="S.cmtProj=this.value;renderComments(document.getElementById('main'))">
+      <option value="">All projects</option>
+      ${allProjs.map(p=>`<option value="${p.id}" ${String(p.id)===String(projFilt)?'selected':''}>${p.name}</option>`).join('')}
+    </select>
+    <select style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)" onchange="S.cmtStatus=this.value;renderComments(document.getElementById('main'))">
+      <option value="">All statuses</option>
+      ${CMT_STATUSES.map(s=>`<option value="${s}" ${statusF===s?'selected':''}>${s}</option>`).join('')}
+    </select>
+    <select style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)" onchange="S.cmtPeriod=this.value;renderComments(document.getElementById('main'))">
+      <option value="">All comment periods</option>
+      ${CMT_PERIOD_TYPES.map(t=>`<option value="${t}" ${periodF===t?'selected':''}>${t}</option>`).join('')}
+    </select>
+    ${srch||statusF||periodF||projFilt?`<button class="btn btn-ghost btn-sm" onclick="S.cmtSearch='';S.cmtStatus='';S.cmtPeriod='';S.cmtProj='';renderComments(document.getElementById('main'))">Clear</button>`:''}
+    <span style="margin-left:auto;font-size:12px;color:var(--fog)">${filtered.length} comment${filtered.length!==1?'s':''}</span>
+  </div>`;
+
+  if(filtered.length===0){
+    html+=`<div style="text-align:center;padding:60px 20px;color:var(--fog);font-size:13px">${allComments.length===0?'No public comments logged yet. Use the button above to log your first comment.':'No comments match the current filters.'}</div>`;
+  } else {
+    filtered.forEach(c=>{
+      const proj=allProjs.find(p=>String(p.id)===String(c.projectId));
+      const projName=proj?proj.name:'Unknown project';
+      const sColor=c.responseStatus==='Responded'?'var(--green)':c.responseStatus==='In progress'?'var(--sky-lt)':c.responseStatus==='No response needed'?'var(--fog)':'var(--amber)';
+      const sBg=c.responseStatus==='Responded'?'rgba(40,168,112,.12)':c.responseStatus==='In progress'?'rgba(90,135,198,.12)':c.responseStatus==='No response needed'?'rgba(255,255,255,.06)':'rgba(232,160,32,.12)';
+      const dateFmt=d=>d?new Date(d+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
+      html+=`<div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+              <span style="font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;background:${sBg};color:${sColor}">${c.responseStatus||'Pending'}</span>
+              ${c.commentPeriodType?`<span style="font-size:11px;color:var(--fog);background:rgba(255,255,255,.06);padding:2px 7px;border-radius:4px">${c.commentPeriodType}</span>`:''}
+              ${c.topic?`<span style="font-size:11px;color:var(--slate);background:rgba(255,255,255,.04);padding:2px 7px;border-radius:4px">${c.topic}</span>`:''}
+              ${c.commentMethod?`<span style="font-size:11px;color:var(--slate)">${c.commentMethod}</span>`:''}
+              <span style="font-size:11px;color:var(--fog);margin-left:auto">${dateFmt(c.submittedDate)}</span>
+            </div>
+            <div style="font-size:13px;color:var(--white);line-height:1.6;margin-bottom:8px;white-space:pre-wrap">${c.commentText||'—'}</div>
+            <div style="display:flex;gap:14px;font-size:11px;color:var(--slate);flex-wrap:wrap;margin-bottom:${c.responseText?'10px':'0'}">
+              ${c.commenterName?`<span>From: <strong style="color:var(--white)">${c.commenterName}</strong>${c.commenterOrg?' · '+c.commenterOrg:''}</span>`:''}
+              ${!projFilt?`<span>Project: <strong style="color:var(--mist)">${projName}</strong></span>`:''}
+              ${c.commenterEmail?`<span>${c.commenterEmail}</span>`:''}
+            </div>
+            ${c.responseText?`<div style="margin-top:8px;border-left:2px solid rgba(40,168,112,.4);padding-left:10px">
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--green);margin-bottom:3px">Response${c.responseDate?' · '+dateFmt(c.responseDate):''}${c.respondedBy?' · '+c.respondedBy:''}</div>
+              <div style="font-size:12px;color:var(--mist);white-space:pre-wrap;line-height:1.5">${c.responseText}</div>
+            </div>`:''}
+            ${c.notes?`<div style="margin-top:6px;font-size:12px;color:var(--fog);font-style:italic">${c.notes}</div>`:''}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+            <button class="btn btn-ghost btn-xs" onclick="openCommentModal('${c.id}')">Edit</button>
+            <button class="btn btn-ghost btn-xs" style="color:var(--red)" onclick="delComment('${c.id}')">Delete</button>
+          </div>
+        </div>
+      </div>`;
+    });
+  }
+
+  html+='</div></div>';
+  m.innerHTML=html;
+}
+
+function openCommentModal(id){
+  S.editId=id||null;
+  const c=id?(DB.get('public_comments')||[]).find(x=>String(x.id)===String(id))||{}:{};
+  const allProjs=DB.get('projects').filter(p=>p.status==='Active'||p.status==='On hold');
+  const projId=c.projectId||S.projectFilter||S.cmtProj||'';
+
+  openM(id?'Edit comment':'Log public comment',`
+    <div class="fsec">Comment details</div>
+    <div class="fr"><label>Comment text *</label>
+      <textarea id="f-cmttext" rows="4" placeholder="Paste or type the comment as received…" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:10px 12px;resize:vertical;font-family:inherit;line-height:1.6">${c.commentText||''}</textarea>
+    </div>
+    <div class="fgrid fg3f">
+      <div class="fr"><label>Comment period type</label>
+        <select id="f-cmtperiodtype">
+          <option value="">— Not specified —</option>
+          ${CMT_PERIOD_TYPES.map(t=>`<option value="${t}" ${c.commentPeriodType===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fr"><label>Topic / category</label>
+        <select id="f-cmttopic">
+          <option value="">— Not specified —</option>
+          ${CMT_TOPICS.map(t=>`<option value="${t}" ${c.topic===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fr"><label>Submission method</label>
+        <select id="f-cmtmethod">
+          <option value="">— Not specified —</option>
+          ${CMT_METHODS.map(m=>`<option value="${m}" ${c.commentMethod===m?'selected':''}>${m}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="fgrid fg2f">
+      <div class="fr"><label>Date received</label>
+        <input type="date" id="f-cmtdate" value="${c.submittedDate||''}">
+      </div>
+      <div class="fr"><label>Project *</label>
+        <select id="f-cmtproj">
+          <option value="">— Select project —</option>
+          ${allProjs.map(p=>`<option value="${p.id}" ${String(p.id)===String(projId)?'selected':''}>${p.name} (${p.pid})</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="fsec">Commenter information</div>
+    <div class="fgrid fg3f">
+      <div class="fr"><label>Name</label><input id="f-cmtname" value="${c.commenterName||''}" placeholder="Full name"></div>
+      <div class="fr"><label>Organization</label><input id="f-cmtorg" value="${c.commenterOrg||''}" placeholder="Agency, company, group…"></div>
+      <div class="fr"><label>Email</label><input type="email" id="f-cmtemail" value="${c.commenterEmail||''}"></div>
+    </div>
+    <div class="fsec">Response tracking</div>
+    <div class="fgrid fg2f">
+      <div class="fr"><label>Response status</label>
+        <select id="f-cmtrstatus">
+          ${CMT_STATUSES.map(s=>`<option value="${s}" ${(c.responseStatus||'Pending')===s?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fr"><label>Date responded</label>
+        <input type="date" id="f-cmtrdate" value="${c.responseDate||''}">
+      </div>
+    </div>
+    <div class="fr"><label>Responded by (staff)</label><input id="f-cmtrby" value="${c.respondedBy||''}" placeholder="Name of staff who responded"></div>
+    <div class="fr"><label>Formal response text</label>
+      <textarea id="f-cmtresp" rows="3" placeholder="Enter the formal response provided to this commenter…" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:10px 12px;resize:vertical;font-family:inherit;line-height:1.6">${c.responseText||''}</textarea>
+    </div>
+    <div class="fr"><label>Internal notes</label><textarea id="f-cmtnotes" rows="2" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:10px 12px;resize:vertical;font-family:inherit;line-height:1.6">${c.notes||''}</textarea></div>
+  `,`<button class="btn btn-ghost" onclick="closeM()">Cancel</button>
+     <button class="btn btn-primary" onclick="saveComment()">Save comment</button>`,true);
+}
+
+function saveComment(){
+  const v=id=>document.getElementById(id)?.value||'';
+  const projId=v('f-cmtproj');
+  if(!projId){alert('Please select a project.');return;}
+  const text=v('f-cmttext').trim();
+  if(!text){alert('Comment text is required.');return;}
+  const data={
+    id:S.editId||DB.uid(),
+    projectId:projId,
+    commentText:text,
+    commentPeriodType:v('f-cmtperiodtype'),
+    topic:v('f-cmttopic'),
+    commentMethod:v('f-cmtmethod'),
+    submittedDate:v('f-cmtdate'),
+    commenterName:v('f-cmtname'),
+    commenterOrg:v('f-cmtorg'),
+    commenterEmail:v('f-cmtemail'),
+    responseStatus:v('f-cmtrstatus')||'Pending',
+    responseDate:v('f-cmtrdate'),
+    respondedBy:v('f-cmtrby'),
+    responseText:v('f-cmtresp'),
+    notes:v('f-cmtnotes')
+  };
+  const all=DB.get('public_comments')||[];
+  const idx=all.findIndex(x=>String(x.id)===String(data.id));
+  if(idx>=0)all[idx]=data;else all.push(data);
+  DB.set('public_comments',all);
+  closeM();
+  renderComments(document.getElementById('main'));
+}
+
+function delComment(id){
+  if(!confirm('Delete this comment?'))return;
+  DB.set('public_comments',(DB.get('public_comments')||[]).filter(x=>String(x.id)!==String(id)));
+  renderComments(document.getElementById('main'));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 function renderCommitments(m) {
   const projF = S.projectFilter || '';
   const today = localToday();
@@ -10030,7 +10542,10 @@ function renderCommitments(m) {
               ${stakeName?`<span>Made to: <strong style="color:var(--white)">${stakeName}</strong></span>`:''}
               ${c.madeBy?`<span>By: <strong style="color:var(--white)">${c.madeBy}</strong></span>`:''}
               ${c.dateMade?`<span>On: ${madeFmt}</span>`:''}
+              ${c.phase?`<span>Phase: <strong style="color:var(--white)">${c.phase}</strong></span>`:''}
+              ${c.source?`<span>Source: <em style="color:var(--mist)">${c.source}</em></span>`:''}
             </div>
+            ${c.followUpActions?`<div style="margin-top:8px;font-size:12px;color:var(--slate);border-left:2px solid rgba(255,255,255,.15);padding-left:8px"><span style="color:var(--fog);font-size:10px;text-transform:uppercase;letter-spacing:.4px">Follow-up actions</span><div style="margin-top:3px;white-space:pre-wrap;line-height:1.5">${c.followUpActions}</div></div>`:''}
             ${c.status==='Fulfilled'&&c.fulfilledNotes?`<div style="margin-top:8px;font-size:12px;color:var(--green);font-style:italic">✓ ${c.fulfilledNotes}</div>`:''}
             ${c.notes?`<div style="margin-top:6px;font-size:12px;color:var(--fog)">${c.notes}</div>`:''}
           </div>
@@ -10114,10 +10629,21 @@ function openCommModal(id) {
         <input id="f-cmadeby" value="${c.madeBy||''}" placeholder="Name responsible for fulfilling">
       </div>
     </div>
-    <div class="fsec">Dates</div>
+    <div class="fsec">Dates & context</div>
     <div class="fgrid fg2f">
       <div class="fr"><label>Date made</label><input type="date" id="f-cdatemade" value="${c.dateMade||localToday()}"></div>
-      <div class="fr"><label>Due date</label><input type="date" id="f-cduedate" value="${c.dueDate||''}"></div>
+      <div class="fr"><label>Due date <span style="font-weight:400;color:var(--fog)">(optional)</span></label><input type="date" id="f-cduedate" value="${c.dueDate||''}"></div>
+    </div>
+    <div class="fgrid fg2f">
+      <div class="fr"><label>Project phase at time of commitment</label>
+        <select id="f-cphase">
+          <option value="">— Not specified —</option>
+          ${['Planning','CatEx / CE','NEPA / Environmental','Design','Precon','Construction','Closeout','Community Outreach','Survey / Data Collection','Analysis','Draft Plan / Public Comment','Final Adoption'].map(ph=>`<option value="${ph}" ${c.phase===ph?'selected':''}>${ph}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fr"><label>Source / how commitment was made</label>
+        <input id="f-csource" value="${c.source||''}" placeholder="e.g. Public hearing, one-on-one meeting, letter">
+      </div>
     </div>
     <div id="f-fulfilled-wrap" style="display:${(c.status==='Fulfilled'||c.status==='Overdue'&&c.fulfilledDate)?'block':'none'}">
       <div class="fgrid fg2f">
@@ -10127,8 +10653,11 @@ function openCommModal(id) {
         </div>
       </div>
     </div>
+    <div class="fr"><label>Follow-up actions taken <span style="font-weight:400;color:var(--fog)">(ongoing steps before fulfillment)</span></label>
+      <textarea id="f-cfollowup" rows="2" placeholder="Document ongoing follow-up steps, responses, and communications toward fulfilling this commitment…" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:10px 12px;resize:vertical;font-family:inherit;line-height:1.6;box-sizing:border-box">${c.followUpActions||''}</textarea>
+    </div>
     <div class="fr"><label>Notes</label>
-      <input id="f-cnotes" value="${c.notes||''}" placeholder="Source document, meeting where commitment was made, etc.">
+      <input id="f-cnotes" value="${c.notes||''}" placeholder="Additional context, related documents, background…">
     </div>`;
 
   const footer = `<button class="btn" onclick="closeM()">Cancel</button>
@@ -10152,6 +10681,12 @@ function _commProjChanged(projId, preselStakeId) {
     if (hid)  hid.value='';
     if (list) list.style.display='none';
     return;
+  }
+  // Auto-populate phase from project's current phase (new commitments only — don't override existing)
+  if (!S.editId) {
+    const proj = (DB.get('projects')||[]).find(p=>String(p.id)===String(projId));
+    const phSel = document.getElementById('f-cphase');
+    if (phSel && proj && proj.phase && !phSel.value) phSel.value = proj.phase;
   }
   const allStakes = DB.getActive('stakeholders');
   const ps = DB.get('project_stakeholders').filter(x=>String(x.projectId)===String(projId));
@@ -10256,20 +10791,23 @@ async function saveCommitment() {
     madeBy: v('f-cmadeby'),
     dateMade: dateMade,
     dueDate: vDate('f-cduedate'),
+    phase: v('f-cphase'),
+    source: v('f-csource'),
     category: v('f-ccat'),
     status: (()=>{
       const sel=v('f-cstat')||'Open';
       const fd=vDate('f-cfuldate');
-      if(fd) return 'Fulfilled';  // fulfilled date entered → always Fulfilled
+      if(fd) return 'Fulfilled';
       return sel;
     })(),
     fulfilledDate: (()=>{
       const fd=vDate('f-cfuldate');
       const sel=v('f-cstat')||'Open';
-      if(sel==='Fulfilled'&&!fd) return localToday();  // auto-set today if fulfilled with no date
+      if(sel==='Fulfilled'&&!fd) return localToday();
       return fd||null;
     })(),
     fulfilledNotes: v('f-cfulnotes'),
+    followUpActions: v('f-cfollowup'),
     notes: v('f-cnotes')
   };
 

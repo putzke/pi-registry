@@ -8478,7 +8478,7 @@ function renderLivePreview() {
   }
 
   var dateStr = new Date().toLocaleDateString('en-US', {month:'long',day:'numeric',year:'numeric'});
-  var periodStr = pstart && pend ? (fmtDate(pstart) + ' – ' + fmtDate(pend)) : pstart ? ('From ' + fmtDate(pstart)) : pend ? ('Through ' + fmtDate(pend)) : '';
+  var periodStr = pstart && pend ? (fmt(pstart) + ' – ' + fmt(pend)) : pstart ? ('From ' + fmt(pstart)) : pend ? ('Through ' + fmt(pend)) : '';
 
   var html = '';
 

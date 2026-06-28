@@ -410,6 +410,11 @@ window.onGoogleMapsReady = function() {
       Commitments
       <span class="nav-badge warn hide" id="nb-comm">0</span>
     </button>
+    <button class="nav-btn" id="nav-comments" onclick="setView('comments')">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H5l-3 2V3a1 1 0 0 1 1-1z"/><path d="M5 6h6M5 9h4"/></svg>
+      Public comments
+      <span class="nav-badge warn hide" id="nb-pcomm">0</span>
+    </button>
     <button class="nav-btn" id="nav-deliverables" onclick="setView('deliverables')">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 1h8l3 3v10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z"/><path d="M4 1v4h8"/><path d="M4 9h8M4 12h5"/></svg>
       Deliverables
@@ -855,7 +860,7 @@ function cacheClear(k) { delete _cache[k]; delete _cacheTime[k]; }
 const _syncCache = {};
 
 async function loadAllData() {
-  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members'];
+  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments'];
   await Promise.all(tables.map(async t => { _syncCache[t] = await sbGet(t); }));
   // Load dismissed_pairs separately so a 403 doesn't block everything else
   try { _syncCache['dismissed_pairs'] = await sbGet('dismissed_pairs'); }
@@ -1275,10 +1280,10 @@ function initDashRows(){
     }
   });
 }
-function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.showBulkAdd=false;S.showEmailPanel=false;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;
+function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.showBulkAdd=false;S.showEmailPanel=false;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;S.cmtSearch='';S.cmtProj='';S.cmtStatus='';S.cmtPeriod='';
   S.view=v;S.selStakeholder=null;S.selInteraction=null;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
-  const navId=v==='commitments'?'nav-commitments':('nav-'+v);
+  const navId=v==='commitments'?'nav-commitments':v==='comments'?'nav-comments':('nav-'+v);
   const nb=document.getElementById(navId);if(nb)nb.classList.add('active');
   render();
 }
@@ -1360,6 +1365,10 @@ function refreshBadges(){
   const openComm=(DB.get('commitments')||[]).filter(c=>c.status==='Open'||c.status==='Overdue').length;
   const commEl=document.getElementById('nb-comm');
   if(commEl){commEl.textContent=openComm;commEl.classList.toggle('hide',openComm===0);}
+  // Public comments badge — pending
+  const pendingPcomm=(DB.get('public_comments')||[]).filter(c=>c.responseStatus==='Pending').length;
+  const pcommEl=document.getElementById('nb-pcomm');
+  if(pcommEl){pcommEl.textContent=pendingPcomm;pcommEl.classList.toggle('hide',pendingPcomm===0);}
 }
 function buildProjList(){
   const allProjs=DB.get('projects');
@@ -1400,6 +1409,7 @@ function render(){
   else if(S.view==='meetings')renderMeetings(m);
   else if(S.view==='issues')renderIssuesView(m);
   else if(S.view==='commitments')renderCommitments(m);
+  else if(S.view==='comments')renderComments(m);
   else if(S.view==='settings')renderSettings(m);
   else if(S.view==='projects')renderProjects(m);
 }
@@ -10183,6 +10193,237 @@ async function _smapGeocodeAndRenderInEl(containerId, loadingId, errorsId, proje
 const COMM_CATS = ['Access / Traffic','Agency Coordination','Cultural / Historic Resources','Drainage / Flooding','Environmental','Meeting Follow-up','Noise / Hours','Notification','Restoration / Landscaping','ROW / Property','Schedule / Timeline','Utilities / Service Interruption','Other'];
 const COMM_STATUSES = ['Open','Fulfilled'];
 
+// ── PUBLIC COMMENT LOG ────────────────────────────────────────────────────────
+const CMT_METHODS=['Mail','Email','Online form','Public hearing','Comment card','Phone','In-person','Other'];
+const CMT_TOPICS=['Noise','Traffic / access','Environmental / natural resources','Project scope','Alternatives','Schedule','Cost / funding','Safety','Property / right-of-way','General support','General opposition','Other'];
+const CMT_STATUSES=['Pending','In progress','Responded','No response needed'];
+const CMT_PERIOD_TYPES=['Scoping','CE','EA — 30-day comment period','DEIS — 45-day comment period','FEIS','Other'];
+
+function renderComments(m){
+  const allComments=DB.get('public_comments')||[];
+  const allProjs=DB.get('projects');
+  const projF=S.projectFilter||'';
+  const srch=(S.cmtSearch||'').toLowerCase();
+  const statusF=S.cmtStatus||'';
+  const periodF=S.cmtPeriod||'';
+  const projFilt=S.cmtProj||projF;
+
+  let filtered=allComments.filter(c=>{
+    if(projFilt&&String(c.projectId)!==String(projFilt))return false;
+    if(statusF&&c.responseStatus!==statusF)return false;
+    if(periodF&&c.commentPeriodType!==periodF)return false;
+    if(srch){
+      const hay=(c.commenterName||'')+(c.commenterOrg||'')+(c.commentText||'')+(c.topic||'');
+      if(!hay.toLowerCase().includes(srch))return false;
+    }
+    return true;
+  });
+  filtered.sort((a,b)=>(b.submittedDate||'').localeCompare(a.submittedDate||''));
+
+  const pendingCt=allComments.filter(c=>c.responseStatus==='Pending'&&(!projFilt||String(c.projectId)===String(projFilt))).length;
+  const inProgCt=allComments.filter(c=>c.responseStatus==='In progress'&&(!projFilt||String(c.projectId)===String(projFilt))).length;
+  const respondedCt=allComments.filter(c=>c.responseStatus==='Responded'&&(!projFilt||String(c.projectId)===String(projFilt))).length;
+
+  const projLabel=projFilt?(allProjs.find(p=>String(p.id)===String(projFilt))||{}).name||'':'';
+
+  let html=`<div class="topbar">
+    <div>
+      <div class="topbar-title">Public comment log</div>
+      ${projLabel?`<div class="topbar-sub">${projLabel}</div>`:''}
+    </div>
+    <div class="topbar-sp"></div>
+    <div class="topbar-acts">
+      <button class="btn btn-primary" onclick="openCommentModal()">+ Log comment</button>
+    </div>
+  </div>
+  <div class="content" style="overflow-y:auto"><div style="padding:20px;max-width:960px;margin:0 auto">`;
+
+  // Summary cards
+  html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px">
+    <div style="background:rgba(232,160,32,.08);border:1px solid rgba(232,160,32,.25);border-radius:10px;padding:14px 16px;cursor:pointer" onclick="S.cmtStatus='Pending';renderComments(document.getElementById('main'))">
+      <div style="font-size:28px;font-weight:700;color:var(--amber)">${pendingCt}</div>
+      <div style="font-size:11px;color:var(--fog);margin-top:2px">Pending response</div>
+    </div>
+    <div style="background:rgba(90,135,198,.08);border:1px solid rgba(90,135,198,.25);border-radius:10px;padding:14px 16px;cursor:pointer" onclick="S.cmtStatus='In progress';renderComments(document.getElementById('main'))">
+      <div style="font-size:28px;font-weight:700;color:var(--sky-lt)">${inProgCt}</div>
+      <div style="font-size:11px;color:var(--fog);margin-top:2px">In progress</div>
+    </div>
+    <div style="background:rgba(40,168,112,.08);border:1px solid rgba(40,168,112,.25);border-radius:10px;padding:14px 16px;cursor:pointer" onclick="S.cmtStatus='Responded';renderComments(document.getElementById('main'))">
+      <div style="font-size:28px;font-weight:700;color:var(--green)">${respondedCt}</div>
+      <div style="font-size:11px;color:var(--fog);margin-top:2px">Responded</div>
+    </div>
+  </div>`;
+
+  // Filter bar
+  html+=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+    <input placeholder="Search comments…" value="${S.cmtSearch||''}" oninput="S.cmtSearch=this.value;renderComments(document.getElementById('main'))"
+      style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white);width:200px">
+    <select style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)" onchange="S.cmtProj=this.value;renderComments(document.getElementById('main'))">
+      <option value="">All projects</option>
+      ${allProjs.map(p=>`<option value="${p.id}" ${String(p.id)===String(projFilt)?'selected':''}>${p.name}</option>`).join('')}
+    </select>
+    <select style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)" onchange="S.cmtStatus=this.value;renderComments(document.getElementById('main'))">
+      <option value="">All statuses</option>
+      ${CMT_STATUSES.map(s=>`<option value="${s}" ${statusF===s?'selected':''}>${s}</option>`).join('')}
+    </select>
+    <select style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)" onchange="S.cmtPeriod=this.value;renderComments(document.getElementById('main'))">
+      <option value="">All comment periods</option>
+      ${CMT_PERIOD_TYPES.map(t=>`<option value="${t}" ${periodF===t?'selected':''}>${t}</option>`).join('')}
+    </select>
+    ${srch||statusF||periodF||projFilt?`<button class="btn btn-ghost btn-sm" onclick="S.cmtSearch='';S.cmtStatus='';S.cmtPeriod='';S.cmtProj='';renderComments(document.getElementById('main'))">Clear</button>`:''}
+    <span style="margin-left:auto;font-size:12px;color:var(--fog)">${filtered.length} comment${filtered.length!==1?'s':''}</span>
+  </div>`;
+
+  if(filtered.length===0){
+    html+=`<div style="text-align:center;padding:60px 20px;color:var(--fog);font-size:13px">${allComments.length===0?'No public comments logged yet. Use the button above to log your first comment.':'No comments match the current filters.'}</div>`;
+  } else {
+    filtered.forEach(c=>{
+      const proj=allProjs.find(p=>String(p.id)===String(c.projectId));
+      const projName=proj?proj.name:'Unknown project';
+      const sColor=c.responseStatus==='Responded'?'var(--green)':c.responseStatus==='In progress'?'var(--sky-lt)':c.responseStatus==='No response needed'?'var(--fog)':'var(--amber)';
+      const sBg=c.responseStatus==='Responded'?'rgba(40,168,112,.12)':c.responseStatus==='In progress'?'rgba(90,135,198,.12)':c.responseStatus==='No response needed'?'rgba(255,255,255,.06)':'rgba(232,160,32,.12)';
+      const dateFmt=d=>d?new Date(d+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
+      html+=`<div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+              <span style="font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;background:${sBg};color:${sColor}">${c.responseStatus||'Pending'}</span>
+              ${c.commentPeriodType?`<span style="font-size:11px;color:var(--fog);background:rgba(255,255,255,.06);padding:2px 7px;border-radius:4px">${c.commentPeriodType}</span>`:''}
+              ${c.topic?`<span style="font-size:11px;color:var(--slate);background:rgba(255,255,255,.04);padding:2px 7px;border-radius:4px">${c.topic}</span>`:''}
+              ${c.commentMethod?`<span style="font-size:11px;color:var(--slate)">${c.commentMethod}</span>`:''}
+              <span style="font-size:11px;color:var(--fog);margin-left:auto">${dateFmt(c.submittedDate)}</span>
+            </div>
+            <div style="font-size:13px;color:var(--white);line-height:1.6;margin-bottom:8px;white-space:pre-wrap">${c.commentText||'—'}</div>
+            <div style="display:flex;gap:14px;font-size:11px;color:var(--slate);flex-wrap:wrap;margin-bottom:${c.responseText?'10px':'0'}">
+              ${c.commenterName?`<span>From: <strong style="color:var(--white)">${c.commenterName}</strong>${c.commenterOrg?' · '+c.commenterOrg:''}</span>`:''}
+              ${!projFilt?`<span>Project: <strong style="color:var(--mist)">${projName}</strong></span>`:''}
+              ${c.commenterEmail?`<span>${c.commenterEmail}</span>`:''}
+            </div>
+            ${c.responseText?`<div style="margin-top:8px;border-left:2px solid rgba(40,168,112,.4);padding-left:10px">
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--green);margin-bottom:3px">Response${c.responseDate?' · '+dateFmt(c.responseDate):''}${c.respondedBy?' · '+c.respondedBy:''}</div>
+              <div style="font-size:12px;color:var(--mist);white-space:pre-wrap;line-height:1.5">${c.responseText}</div>
+            </div>`:''}
+            ${c.notes?`<div style="margin-top:6px;font-size:12px;color:var(--fog);font-style:italic">${c.notes}</div>`:''}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+            <button class="btn btn-ghost btn-xs" onclick="openCommentModal('${c.id}')">Edit</button>
+            <button class="btn btn-ghost btn-xs" style="color:var(--red)" onclick="delComment('${c.id}')">Delete</button>
+          </div>
+        </div>
+      </div>`;
+    });
+  }
+
+  html+='</div></div>';
+  m.innerHTML=html;
+}
+
+function openCommentModal(id){
+  S.editId=id||null;
+  const c=id?(DB.get('public_comments')||[]).find(x=>String(x.id)===String(id))||{}:{};
+  const allProjs=DB.get('projects').filter(p=>p.status==='Active'||p.status==='On hold');
+  const projId=c.projectId||S.projectFilter||S.cmtProj||'';
+
+  openM(id?'Edit comment':'Log public comment',`
+    <div class="fsec">Comment details</div>
+    <div class="fr"><label>Comment text *</label>
+      <textarea id="f-cmttext" rows="4" placeholder="Paste or type the comment as received…" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:10px 12px;resize:vertical;font-family:inherit;line-height:1.6">${c.commentText||''}</textarea>
+    </div>
+    <div class="fgrid fg3f">
+      <div class="fr"><label>Comment period type</label>
+        <select id="f-cmtperiodtype">
+          <option value="">— Not specified —</option>
+          ${CMT_PERIOD_TYPES.map(t=>`<option value="${t}" ${c.commentPeriodType===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fr"><label>Topic / category</label>
+        <select id="f-cmttopic">
+          <option value="">— Not specified —</option>
+          ${CMT_TOPICS.map(t=>`<option value="${t}" ${c.topic===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fr"><label>Submission method</label>
+        <select id="f-cmtmethod">
+          <option value="">— Not specified —</option>
+          ${CMT_METHODS.map(m=>`<option value="${m}" ${c.commentMethod===m?'selected':''}>${m}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="fgrid fg2f">
+      <div class="fr"><label>Date received</label>
+        <input type="date" id="f-cmtdate" value="${c.submittedDate||''}">
+      </div>
+      <div class="fr"><label>Project *</label>
+        <select id="f-cmtproj">
+          <option value="">— Select project —</option>
+          ${allProjs.map(p=>`<option value="${p.id}" ${String(p.id)===String(projId)?'selected':''}>${p.name} (${p.pid})</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="fsec">Commenter information</div>
+    <div class="fgrid fg3f">
+      <div class="fr"><label>Name</label><input id="f-cmtname" value="${c.commenterName||''}" placeholder="Full name"></div>
+      <div class="fr"><label>Organization</label><input id="f-cmtorg" value="${c.commenterOrg||''}" placeholder="Agency, company, group…"></div>
+      <div class="fr"><label>Email</label><input type="email" id="f-cmtemail" value="${c.commenterEmail||''}"></div>
+    </div>
+    <div class="fsec">Response tracking</div>
+    <div class="fgrid fg2f">
+      <div class="fr"><label>Response status</label>
+        <select id="f-cmtrstatus">
+          ${CMT_STATUSES.map(s=>`<option value="${s}" ${(c.responseStatus||'Pending')===s?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fr"><label>Date responded</label>
+        <input type="date" id="f-cmtrdate" value="${c.responseDate||''}">
+      </div>
+    </div>
+    <div class="fr"><label>Responded by (staff)</label><input id="f-cmtrby" value="${c.respondedBy||''}" placeholder="Name of staff who responded"></div>
+    <div class="fr"><label>Formal response text</label>
+      <textarea id="f-cmtresp" rows="3" placeholder="Enter the formal response provided to this commenter…" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:10px 12px;resize:vertical;font-family:inherit;line-height:1.6">${c.responseText||''}</textarea>
+    </div>
+    <div class="fr"><label>Internal notes</label><textarea id="f-cmtnotes" rows="2" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:10px 12px;resize:vertical;font-family:inherit;line-height:1.6">${c.notes||''}</textarea></div>
+  `,`<button class="btn btn-ghost" onclick="closeM()">Cancel</button>
+     <button class="btn btn-primary" onclick="saveComment()">Save comment</button>`,true);
+}
+
+function saveComment(){
+  const v=id=>document.getElementById(id)?.value||'';
+  const projId=v('f-cmtproj');
+  if(!projId){alert('Please select a project.');return;}
+  const text=v('f-cmttext').trim();
+  if(!text){alert('Comment text is required.');return;}
+  const data={
+    id:S.editId||DB.uid(),
+    projectId:projId,
+    commentText:text,
+    commentPeriodType:v('f-cmtperiodtype'),
+    topic:v('f-cmttopic'),
+    commentMethod:v('f-cmtmethod'),
+    submittedDate:v('f-cmtdate'),
+    commenterName:v('f-cmtname'),
+    commenterOrg:v('f-cmtorg'),
+    commenterEmail:v('f-cmtemail'),
+    responseStatus:v('f-cmtrstatus')||'Pending',
+    responseDate:v('f-cmtrdate'),
+    respondedBy:v('f-cmtrby'),
+    responseText:v('f-cmtresp'),
+    notes:v('f-cmtnotes')
+  };
+  const all=DB.get('public_comments')||[];
+  const idx=all.findIndex(x=>String(x.id)===String(data.id));
+  if(idx>=0)all[idx]=data;else all.push(data);
+  DB.set('public_comments',all);
+  closeM();
+  renderComments(document.getElementById('main'));
+}
+
+function delComment(id){
+  if(!confirm('Delete this comment?'))return;
+  DB.set('public_comments',(DB.get('public_comments')||[]).filter(x=>String(x.id)!==String(id)));
+  renderComments(document.getElementById('main'));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 function renderCommitments(m) {
   const projF = S.projectFilter || '';
   const today = localToday();

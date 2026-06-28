@@ -7147,15 +7147,9 @@ function generateReport(type){
 
   var now=new Date();
   var dateStr=now.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-  var out=document.getElementById('rpt-output');
 
-  // Report header
-  var hdr='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;padding-bottom:14px;border-bottom:2px solid var(--border)">'
-    +'<div><div style="font-size:18px;font-weight:600;color:var(--white);margin-bottom:3px">'+getReportTitle(type)+'</div>'
-    +'<div style="font-size:14px;color:var(--slate)">'+proj.name+' — '+proj.pid+'</div>'
-    +'<div style="font-size:13px;color:var(--fog);margin-top:4px">Generated '+dateStr+'</div></div>'
-    +'<button class="btn btn-sm" onclick="saveAsPdf()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M8 2v8M5 7l3 3 3-3"/><rect x="2" y="11" width="12" height="2" rx="1"/></svg> Save as PDF</button></div></div>'
-;
+  // Report header (print-safe light theme — goes into popup)
+  var hdr='';
   // Distributed to box — kept separate so summary/narrative prints after it
   var distBlock=(recipientNames.length>0?'<div style="margin-bottom:14px;padding:12px 16px;background:#e8eef4;border:1px solid #b0c4d8;border-radius:8px;font-size:14px"><span style="color:#444;text-transform:uppercase;letter-spacing:.5px;font-weight:600">Distributed to: </span><span style="color:#111">'+recipientNames.join(', ')+'</span><span style="color:var(--fog)"> ('+selGroups.join(', ')+')</span></div>':'');
 
@@ -7423,40 +7417,22 @@ function generateReport(type){
     body+='</tbody></table>';
   }
 
-  out.innerHTML=hdr+distBlock+summaryBlock+body;
-  out.scrollIntoView({behavior:'smooth',block:'start'});
+  var summaryTxtVal=summaryBlock; // summaryBlock is the raw textarea wrapper; extract text if present
+  var tempDiv=document.createElement('div');tempDiv.innerHTML=summaryBlock;
+  var ta=tempDiv.querySelector('#rpt-summary-text');
+  var summaryTxtVal2=ta?ta.value||'':'';
+  // Strip the summary wrap from body passed to popup (popup re-renders it via summaryTxt param)
+  var bodyForPopup=distBlock+body;
+  _openRptPopup(bodyForPopup, getReportTitle(type), proj.pid+' — '+proj.name, dateStr, summaryTxtVal2);
 }
 
 // ── PI REPORT EDITOR ──────────────────────────────
 // ── PI REPORT EDITOR (with reorderable sections) ──────────
 // ── PI REPORT EDITOR (all sections selectable and orderable) ──
 
-function saveAsPdf(){
-  var output=document.getElementById('rpt-output');
-  if(!output){showToast('Report panel not found.');return;}
-  var html=output.innerHTML.trim();
-  if(!html){showToast('Generate a report first, then click Save as PDF.');return;}
-
-  // Gather labels
-  var rptProjs=DB.get('projects')||[];
-  var rptProjF=S.projectFilter||'';
-  var rptProj=rptProjF?rptProjs.find(function(p){return p.id===rptProjF;}):null;
-  var rptProjLabel=rptProj?(rptProj.pid+' — '+rptProj.name):'';
-  var rptTitleEl=output.querySelector('h2');
-  var rptTitle=rptTitleEl?rptTitleEl.textContent.trim():'PI Report';
-  var dateStr=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-
-  // Extract summary text
-  var summaryEl=output.querySelector('#rpt-summary-text');
-  var summaryTxt=summaryEl?summaryEl.value.trim():'';
-
-  // Clone output, strip summary wrapper
-  var outputClone=output.cloneNode(true);
-  var wrapClone=outputClone.querySelector('#rpt-summary-wrap');
-  if(wrapClone)wrapClone.remove();
-
-  // Fix CSS variables to print-safe values in the cloned HTML
-  var bodyHtml=outputClone.innerHTML
+function _openRptPopup(rawHtml, rptTitle, rptProjLabel, dateStr, summaryTxt){
+  // Fix CSS variables to print-safe values
+  var bodyHtml=rawHtml
     .replace(/color:var\(--fog\)/g,'color:#666')
     .replace(/color:var\(--mist\)/g,'color:#444')
     .replace(/color:var\(--slate\)/g,'color:#444')
@@ -7534,6 +7510,26 @@ function saveAsPdf(){
   win.document.close();
 }
 
+
+function saveAsPdf(){
+  var output=document.getElementById('rpt-output');
+  if(!output){showToast('Report panel not found.');return;}
+  var html=output.innerHTML.trim();
+  if(!html){showToast('Generate a report first, then click Save as PDF.');return;}
+  var rptProjs=DB.get('projects')||[];
+  var rptProjF=S.projectFilter||'';
+  var rptProj=rptProjF?rptProjs.find(function(p){return p.id===rptProjF;}):null;
+  var rptProjLabel=rptProj?(rptProj.pid+' — '+rptProj.name):'';
+  var rptTitleEl=output.querySelector('h2');
+  var rptTitle=rptTitleEl?rptTitleEl.textContent.trim():'PI Report';
+  var dateStr=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  var summaryEl=output.querySelector('#rpt-summary-text');
+  var summaryTxt=summaryEl?summaryEl.value.trim():'';
+  var outputClone=output.cloneNode(true);
+  var wrapClone=outputClone.querySelector('#rpt-summary-wrap');
+  if(wrapClone)wrapClone.remove();
+  _openRptPopup(outputClone.innerHTML, rptTitle, rptProjLabel, dateStr, summaryTxt);
+}
 
 function getDefaultSections(){
   return[
@@ -10435,33 +10431,29 @@ function generateMapReport() {
     return s && s.address && s.address.trim() ? {s:s, lk:lk} : null;
   }).filter(Boolean);
 
-  var out = document.getElementById('rpt-output');
-  if (!out) return;
-
-  // Build header (reuse existing hdr pattern)
-  var today = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-  var hdr = '<div style="border-bottom:1px solid var(--border);padding-bottom:14px;margin-bottom:18px">'    +'<div style="font-size:22px;font-weight:700;color:var(--white);margin-bottom:4px">Stakeholder Map</div>'    +'<div style="font-size:13px;color:var(--slate)">'+(proj.name)+' — '+proj.pid+'</div>'    +'<div style="font-size:12px;color:var(--fog)">Generated '+today+'</div>'    +'</div>';
-
   if (withAddr.length === 0) {
-    out.innerHTML = hdr + '<div style="padding:40px;text-align:center;color:var(--fog);font-size:13px">No stakeholders with addresses found for this project.<br><span style="font-size:12px">Add mailing addresses to stakeholders to enable map view.</span></div>';
-    out.scrollIntoView({behavior:'smooth',block:'start'});
+    alert('No stakeholders with addresses found for this project.\nAdd mailing addresses to stakeholders to enable the map.');
     return;
   }
 
-  // Legend + print button (wired via addEventListener to avoid escaping projF)
-  var legend = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">'    +'<div style="display:flex;gap:16px;font-size:12px;color:var(--slate)">'    +'<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#28A870;margin-right:4px"></span>Champion</span>'    +'<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#5a87c6;margin-right:4px"></span>Neutral</span>'    +'<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#C0392B;margin-right:4px"></span>Opponent</span>'    +'<span style="color:var(--fog)">'+withAddr.length+' stakeholder'+(withAddr.length!==1?'s':'')+' with addresses</span>'    +'</div>'    +'<button id="rpt-map-print-btn" class="btn btn-sm">'    +'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M4 6V2h8v4"/><rect x="2" y="6" width="12" height="7" rx="1"/><path d="M4 10h8M4 13h5"/></svg> Print / PDF</button>'    +'</div>';
+  // Show a toast while geocoding, then open the print popup
+  showToast('Geocoding addresses… map will open shortly.', 'info', 5000);
 
-  var mapDiv = '<div id="rpt-map-container" style="width:100%;height:500px;border-radius:10px;background:#1a2a3a;border:1px solid var(--border);overflow:hidden">'    +'<div id="rpt-map-loading" style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--slate);font-size:13px">'    +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:20px;height:20px;margin-right:8px;animation:spin 1s linear infinite"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>'    +'Geocoding addresses...</div></div>'    +'<div id="rpt-map-errors" style="display:none;margin-top:8px;font-size:11px;color:var(--fog)"></div>';
+  // Render into a hidden scratch container, then fire printStakeholderMap
+  var scratch = document.getElementById('rpt-map-scratch');
+  if (!scratch) {
+    scratch = document.createElement('div');
+    scratch.id = 'rpt-map-scratch';
+    scratch.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;height:500px;visibility:hidden';
+    document.body.appendChild(scratch);
+  }
+  scratch.innerHTML = '<div id="rpt-map-container" style="width:100%;height:500px"></div>'
+    + '<div id="rpt-map-loading"></div><div id="rpt-map-errors"></div>';
 
-  out.innerHTML = hdr + legend + mapDiv;
-  out.scrollIntoView({behavior:'smooth',block:'start'});
-  // Wire print button via JS (avoids string escaping of projF in onclick HTML)
-  var printBtn=document.getElementById('rpt-map-print-btn');
-  if(printBtn) printBtn.addEventListener('click',function(){printStakeholderMap(projF);});
-
-  // Geocode and render — reuses _smapGeocodeAndRender with rpt-map-container
   loadGoogleMaps();
-  _smapGeocodeAndRenderInEl('rpt-map-container', 'rpt-map-loading', 'rpt-map-errors', projF, withAddr.map(function(x){return x.s;}));
+  _smapGeocodeAndRenderInEl('rpt-map-container', 'rpt-map-loading', 'rpt-map-errors', projF, withAddr.map(function(x){return x.s;}))
+    .then(function(){ setTimeout(function(){ printStakeholderMap(projF, proj.name); }, 800); })
+    .catch(function(){ showToast('Map geocoding failed — check addresses.', 'error'); });
 }
 
 // Variant of _smapGeocodeAndRender that targets a specific container id

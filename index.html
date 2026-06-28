@@ -1546,11 +1546,12 @@ function renderDash(el){
       <div><div style="font-weight:600;font-size:14px;margin-bottom:2px">${p.name}</div>
       <div style="font-size:12px;color:var(--fog);font-family:var(--mono)">${p.pid} · ${p.client}</div></div>
       <span class="badge b-sky">${p.phase}</span></div>
-      <div style="height:4px;border-radius:2px;overflow:hidden;background:rgba(255,255,255,.06);margin-bottom:10px;display:flex">
+      <div style="height:4px;border-radius:2px;overflow:hidden;background:rgba(255,255,255,.06);margin-bottom:${p.nepaChecklist&&p.nepaChecklist.length>0?'6':'10'}px;display:flex">
         <div style="width:${champPct}%;background:var(--green)"></div>
         <div style="width:${neutPct}%;background:var(--slate)"></div>
         <div style="width:${oppPct}%;background:var(--red)"></div>
       </div>
+      ${(()=>{const cl=p.nepaChecklist||[];if(!cl.length)return'';const done=cl.filter(x=>x.checked).length;const pct=Math.round(done/cl.length*100);const col=pct===100?'var(--green)':pct>=60?'#4db6ac':'var(--sky-lt)';return'<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px"><span style="font-size:10px;color:var(--fog);font-weight:600;text-transform:uppercase;letter-spacing:.4px">NEPA checklist</span><span style="font-size:10px;color:'+col+';font-weight:700">'+done+'/'+cl.length+' ('+pct+'%)</span></div><div style="height:3px;border-radius:2px;overflow:hidden;background:rgba(255,255,255,.06)"><div style="width:'+pct+'%;height:100%;background:'+col+';border-radius:2px;transition:width .3s"></div></div></div>';})()}
       <div style="display:flex;gap:12px;font-size:12px;flex-wrap:wrap;padding-top:8px;border-top:1px solid var(--border)">
         <span style="color:var(--mist)">${psSt.length} contacts</span>
         <span style="color:var(--green)">${champ} champ.</span>
@@ -8402,6 +8403,7 @@ function openPIReport(){
     +'<div class="topbar-acts">'
     +(_getClaudeKey()?'<button class="btn" id="all-drafts-btn" onclick="generateAllSectionDrafts()" style="background:linear-gradient(135deg,#1e3a5f,#0f4c75);border-color:var(--sky-lt);color:var(--sky-lt)">✦ AI: Draft all sections</button>':'')
     +'<button class="btn" onclick="savePIReportDraft()">Save draft</button>'
+    +'<button class="btn" onclick="manualArchiveReport()" title="Checkpoint the current draft to the archive without exporting"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:13px;height:13px"><path d="M2 13h12M4 13V7l4-4 4 4v6"/><path d="M6 13v-3h4v3"/></svg> Save to archive</button>'
     +'<button class="btn" style="color:var(--fog);border-color:rgba(255,255,255,.15)" onclick="resetPIReportDraft()" title="Clear saved draft and reset to default sections">Reset</button>'
     +'<label style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--slate);cursor:pointer;margin-right:6px"><input type="checkbox" id="docx-letterhead-cb" checked style="accent-color:var(--sky-lt);width:13px;height:13px"> Letterhead</label>'
     +'<button class="btn btn-primary" onclick="exportPIDocx()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:14px;height:14px"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg> Export .docx</button>'
@@ -8757,6 +8759,21 @@ async function resetPIReportDraft(){
 
 // ── Report Archive ──────────────────────────────────────────────────────────
 const ARCHIVE_LIMIT = 50;
+
+async function manualArchiveReport() {
+  var projF = S.projectFilter;
+  if (!projF) { showToast('No project selected.', 'warn'); return; }
+  await savePIReportDraft();
+  var existing = (_syncCache['report_archive']||[]).filter(function(r){ return String(r.projectId)===String(projF); });
+  if (existing.length >= ARCHIVE_LIMIT) {
+    showToast('Archive limit ('+ARCHIVE_LIMIT+') reached. Delete old snapshots first.', 'warn', 5000); return;
+  }
+  await _archiveReport(projF);
+  showToast('Draft saved to archive.', 'success', 3000);
+  // Refresh archive panel if visible
+  var panel = document.getElementById('rpt-archive-panel');
+  if (panel) panel.innerHTML = _buildArchiveHTML(projF);
+}
 
 async function _archiveReport(projF) {
   if (typeof sbAdd !== 'function') return;

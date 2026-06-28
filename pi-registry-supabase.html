@@ -4889,6 +4889,11 @@ function renderProjects(el){
         const openFU=ints.filter(i=>i.projectId===p.id&&i.followUp&&!i.followUpDone).length;
         const isArchived=p.status==='Complete'||p.status==='Cancelled';
         const statusBadge=p.status==='Active'?'b-green':p.status==='On hold'?'b-amber':p.status==='Complete'?'b-sky':'b-red';
+        const _ncl=p.nepaChecklist||[];
+        const _nTotal=_ncl.length;
+        const _nDone=_ncl.filter(x=>x.checked).length;
+        const _nPct=_nTotal>0?Math.round(_nDone/_nTotal*100):null;
+        const _nColor=_nPct===100?'var(--green)':_nPct>=60?'#4db6ac':_nPct>=30?'var(--amber)':'var(--sky)';
         return`<div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:16px 18px;${isArchived?'opacity:.85':''}">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
             <div>
@@ -4906,6 +4911,15 @@ function renderProjects(el){
             ${p.preconDate?`<div><span style="color:var(--slate)">Precon: </span>${fmt(p.preconDate)}</div>`:''}
             ${p.endDate?`<div><span style="color:var(--slate)">End: </span>${fmt(p.endDate)}</div>`:''}
           </div>
+          ${_nPct!==null?`<div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <span style="font-size:11px;color:var(--fog);text-transform:uppercase;letter-spacing:.4px">NEPA PI Checklist</span>
+              <span style="font-size:11px;color:${_nColor};font-weight:600">${_nDone}/${_nTotal} · ${_nPct}%</span>
+            </div>
+            <div style="background:rgba(255,255,255,.08);border-radius:4px;height:5px;overflow:hidden">
+              <div style="background:${_nColor};width:${_nPct}%;height:100%;border-radius:4px;transition:width .3s"></div>
+            </div>
+          </div>`:''}
           <div style="display:flex;gap:10px;font-size:12px;padding-top:9px;border-top:1px solid var(--border)">
             <span style="color:var(--mist)">${psSt.length} stakeholders</span>
             <span style="color:var(--green)">${champ} champ.</span>

@@ -575,7 +575,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div class="form-group">
             <label class="form-label">Channel</label>
-            <select class="form-input form-select" id="log-channel">
+            <select class="form-input form-select" id="log-channel" onchange="_mobileToggleEquity(this.value)">
               <option>Phone</option><option>Email</option><option>In-person</option>
               <option>Public meeting</option><option>Public event</option><option>Mail</option><option>Social media</option>
               <option>Media inquiry</option><option>Door-to-door</option>
@@ -608,6 +608,20 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
         <div class="form-group">
           <label class="form-label">Summary *</label>
           <textarea class="form-input" id="log-summary" placeholder="What was discussed…" rows="3"></textarea>
+        </div>
+        <!-- Equity compliance — shown for Public meeting / Public event -->
+        <div class="card" style="padding:12px 14px;display:none" id="log-equity-wrap">
+          <div class="toggle-row" style="padding:0">
+            <div>
+              <div class="toggle-label">Equity / civil rights form submitted</div>
+              <div style="font-size:12px;color:var(--text3);margin-top:2px">Title VI summary, sign-in sheet sent to coordinator</div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="log-equity">
+              <div class="toggle-track"></div>
+              <div class="toggle-thumb"></div>
+            </label>
+          </div>
         </div>
         <!-- Follow-up toggle -->
         <div class="card" style="padding:12px 14px">
@@ -710,6 +724,30 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
           <select class="form-input form-select" id="add-proj">
             <option value="">— Master list only —</option>
           </select>
+        </div>
+        <div class="card" style="padding:12px 14px;overflow:visible;margin-bottom:10px">
+          <div class="toggle-row" style="padding:0">
+            <div>
+              <div class="toggle-label">Limited English Proficiency (LEP)</div>
+              <div style="font-size:12px;color:var(--text3);margin-top:2px">Contact may need language assistance</div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="add-lep">
+              <div class="toggle-track"></div>
+              <div class="toggle-thumb"></div>
+            </label>
+          </div>
+          <div class="toggle-row" style="padding:12px 0 0">
+            <div>
+              <div class="toggle-label">Underserved / Environmental Justice</div>
+              <div style="font-size:12px;color:var(--text3);margin-top:2px">EJ or historically underserved population</div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="add-underserved">
+              <div class="toggle-track"></div>
+              <div class="toggle-thumb"></div>
+            </label>
+          </div>
         </div>
         <div class="card" style="padding:12px 14px;overflow:visible">
           <div class="toggle-row" style="padding:0">
@@ -1036,7 +1074,7 @@ function cacheClear(k) { delete _cache[k]; delete _cacheTime[k]; }
 const _syncCache = {};
 
 async function loadAllData() {
-  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','dismissed_pairs'];
+  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','dismissed_pairs','public_comments'];
   await Promise.all(tables.map(async t => { _syncCache[t] = await sbGet(t); }));
 }
 
@@ -1445,7 +1483,8 @@ function showContactDetail(id){
       ${s.org?`<div class="detail-org">${s.org}${s.title?' · '+s.title:''}</div>`:''}
       <div class="detail-pills">
         ${s.type?`<span class="badge b-navy">${s.type}</span>`:''}
-        
+        ${s.lep?'<span class="badge" style="background:rgba(232,160,32,.25);color:#e8a020;border:1px solid rgba(232,160,32,.4)">LEP</span>':''}
+        ${s.underserved?'<span class="badge" style="background:rgba(124,92,191,.25);color:#b39ddb;border:1px solid rgba(124,92,191,.4)">EJ</span>':''}
         ${s.isMaster?'<span class="badge" style="background:rgba(255,255,255,.15);color:#fff">Master list</span>':'<span class="badge" style="background:rgba(255,255,255,.08);color:rgba(255,255,255,.6)">Project only</span>'}
       </div>
     </div>
@@ -1810,6 +1849,10 @@ function toggleLogFU(){
   fields.style.display=checked?'flex':'none';
   if(checked) document.getElementById('log-fu-date').value=today();
 }
+function _mobileToggleEquity(ch){
+  const wrap=document.getElementById('log-equity-wrap');
+  if(wrap) wrap.style.display=(ch==='Public meeting'||ch==='Public event')?'':'none';
+}
 
 function getAnonLabel(projectId, excludeId){
   var anons = DB.get('interactions').filter(function(i){
@@ -1884,7 +1927,8 @@ async function saveInteraction(){
     followUpDue:fuChecked?(fuDate||null):null,
     followUpNote:fuChecked?fuNote:'',
     followUpDone:fuDone,
-    followUpResolved:fuRDate
+    followUpResolved:fuRDate,
+    equityFormSubmitted:document.getElementById('log-equity')?.checked||false
   };
 
   const ints=DB.get('interactions');
@@ -1902,6 +1946,8 @@ async function saveInteraction(){
   document.getElementById('log-summary').value='';
   document.getElementById('log-fu').checked=false;
   document.getElementById('log-fu-fields').style.display='none';
+  const _eqw=document.getElementById('log-equity-wrap');if(_eqw)_eqw.style.display='none';
+  const _eqc=document.getElementById('log-equity');if(_eqc)_eqc.checked=false;
   document.getElementById('log-fu-note').value='';
   if(document.getElementById('log-fu-done')){
     document.getElementById('log-fu-done').checked=false;
@@ -1927,6 +1973,8 @@ function prepAddStakeholderSheet(){
   document.getElementById('add-email').value='';
   document.getElementById('add-phone').value='';
   document.getElementById('add-master').checked=true;
+  if(document.getElementById('add-lep'))document.getElementById('add-lep').checked=false;
+  if(document.getElementById('add-underserved'))document.getElementById('add-underserved').checked=false;
   document.getElementById('name-fields').style.opacity='1';
   document.getElementById('add-fn').disabled=false;
   document.getElementById('add-ln').disabled=false;
@@ -1964,6 +2012,8 @@ async function saveStakeholder(){
     email,
     phone,
     type:document.getElementById('add-type').value,
+    lep:document.getElementById('add-lep')?.checked||false,
+    underserved:document.getElementById('add-underserved')?.checked||false,
     isMaster,
     notes:''
   };
@@ -2017,6 +2067,8 @@ function openEditStakeholder(id){
   document.getElementById('add-phone').value=s.phone||'';
   document.getElementById('add-parcel').value=s.parcelId||'';
   document.getElementById('add-type').value=s.type||'Property Owner';
+  if(document.getElementById('add-lep'))document.getElementById('add-lep').checked=!!s.lep;
+  if(document.getElementById('add-underserved'))document.getElementById('add-underserved').checked=!!s.underserved;
   document.getElementById('add-master').checked=s.isMaster!==false;
   document.getElementById('name-fields').style.opacity='1';
   document.getElementById('add-fn').disabled=false;
@@ -2055,6 +2107,8 @@ async function updateStakeholder(){
     phone,
     parcelId:document.getElementById('add-parcel').value.trim(),
     type:document.getElementById('add-type').value,
+    lep:document.getElementById('add-lep')?.checked||false,
+    underserved:document.getElementById('add-underserved')?.checked||false,
     isMaster:document.getElementById('add-master').checked
   };
   // Push to Supabase
@@ -2140,6 +2194,10 @@ function openLogEdit(id){
       document.getElementById('log-fu-rdate-wrap').style.display=i.followUpDone?'block':'none';
       document.getElementById('log-fu-rdate').value=i.followUpResolved||'';
     }
+    // Equity toggle
+    _mobileToggleEquity(i.channel||'');
+    const _eqc=document.getElementById('log-equity');
+    if(_eqc)_eqc.checked=!!i.equityFormSubmitted;
   },100);
 
   // Store the edit id so saveInteraction updates instead of creates

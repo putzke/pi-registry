@@ -108,13 +108,28 @@ pi_report_archive   -- exported report snapshots (up to 50 per project)
 connect-src https://ncfbblhlsiglxkoiounv.supabase.co https://maps.googleapis.com https://places.googleapis.com https://api.anthropic.com https://cdnjs.cloudflare.com;
 ```
 
+## Mobile app (`mobile.html`)
+Field companion for logging interactions, managing contacts, follow-ups, and issues. ~2,420 lines.
+- **Status: current** — LEP, EJ (`underserved`), and `equityFormSubmitted` fields are all implemented
+- Has its own `SB_TABLES`, `SB_TO_INT`, `toSB()`, `fromSB()`, `sbGet/Add/Update/Delete()`, `loadAllData()`
+- Does NOT have the reports module — reports are desktop-only
+- No known bugs as of this session
+
+## Importer app (`importer.html`)
+Bulk CSV import wizard for stakeholders and interactions. ~2,420 lines.
+- **Updated this session**: added LEP and EJ/underserved field support:
+  - `SB_TO_INT` pi_stakeholders: `lep` and `underserved` mappings added
+  - `APP_FIELDS`: LEP and EJ appear in the column-mapping dropdown
+  - `AUTO_MAP`: auto-detects headers `lep`, `limited english`, `underserved`, `ej`, `environmental justice`
+  - Boolean parsing: `yes/true/1/y → true` for `lep`/`underserved` (same as `isMaster`)
+- `sbAdd()` at line ~746 calls `r.json()` directly — safe because it uses plain POST (not upsert), so body is never empty
+
 ## Pending / next tasks
 1. **Manual "Save to archive" button** — checkpoint a draft without exporting (discussed, not yet built)
 2. **Absorb popup report windows** — currently `generateReport()`, `generatePISummary()`, `generateIssuesReport()` open `window.open()` popups; absorb into inline output panel (deferred by user)
 3. **AI cross-report trend summary testing** — needs 2+ real exports to test fully
-4. **Mobile app** (`mobile.html`) — may need same bug fixes applied to `index.html`
-5. **NEPA checklist progress bar on project cards** — mentioned in verify skill context, may be partially implemented
-6. **Continue testing** stakeholders LEP/EJ checkboxes, public meeting equity toggle, public comments nav/form
+4. **NEPA checklist progress bar on project cards** — may be partially implemented, needs verification
+5. **Continue testing** stakeholders LEP/EJ checkboxes, public meeting equity toggle, public comments nav/form
 
 ## Supabase project
 - URL: `https://ncfbblhlsiglxkoiounv.supabase.co`

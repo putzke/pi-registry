@@ -6627,14 +6627,16 @@ function renderReports(el){
     {id:'stakeholder-map',name:'Stakeholder map',desc:'Interactive map of stakeholder locations with sentiment color-coding — print to PDF',
       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M12 2C8.686 2 6 4.686 6 8c0 5 6 12 6 12s6-7 6-12c0-3.314-2.686-6-6-6z"/><circle cx="12" cy="8" r="2"/></svg>'},
     {id:'events-log',name:'Events & outreach log',desc:'All logged public events and outreach activities with attendance and notes',
-      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>'}
+      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>'},
+    {id:'pi-summary',name:'PI Compliance Summary',desc:'FHWA/NEPA public involvement summary: NEPA checklist, public meetings, comment response rate, LEP/EJ outreach, and commitments — export as PDF',
+      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h4"/><circle cx="8" cy="9" r="1" fill="currentColor"/></svg>'}
   ];
   var cardsHTML='';
   rptCards.forEach(function(r){
     cardsHTML+='<div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:18px 20px;cursor:pointer;transition:border-color .12s,transform .12s" '
       +'onmouseover="this.style.borderColor=\'rgba(45,125,210,.5)\';this.style.transform=\'translateY(-2px)\'" '
       +'onmouseout="this.style.borderColor=\'rgba(255,255,255,.14)\';this.style.transform=\'none\'" '
-      +'onclick="'+(r.id==="issues-report"?"generateIssuesReport()":r.id==="stakeholder-map"?"generateMapReport()":("generateReport('"+r.id+"')"))+'">'  
+      +'onclick="'+(r.id==="issues-report"?"generateIssuesReport()":r.id==="stakeholder-map"?"generateMapReport()":r.id==="pi-summary"?"generatePISummary()":("generateReport('"+r.id+"')"))+'">'
       +'<div style="display:flex;align-items:flex-start;gap:12px">'
       +'<div style="color:var(--sky-lt);flex-shrink:0;margin-top:2px">'+r.icon+'</div>'
       +'<div><div style="font-size:14px;font-weight:600;color:var(--white);margin-bottom:5px">'+r.name+'</div>'
@@ -6815,6 +6817,238 @@ el.innerHTML=topbar
     +'<button class="btn btn-primary" style="padding:12px 24px;font-size:14px;flex-shrink:0" onclick="openPIReport()">Open editor</button></div>'
     +'<div id="rpt-output"></div>'
     +'</div></div>';
+}
+
+function generatePISummary(){
+  var projF=S.projectFilter;
+  if(!projF){alert('Please select a project first.');return;}
+  var projs=DB.get('projects')||[];
+  var proj=projs.find(function(p){return p.id===projF;});
+  if(!proj)return;
+
+  var allStakes=DB.getActive('stakeholders');
+  var ps=DB.get('project_stakeholders').filter(function(x){return x.projectId===projF;});
+  var ints=DB.get('interactions').filter(function(i){return i.projectId===projF;});
+  var comms=DB.get('commitments').filter(function(c){return c.projectId===projF;});
+  var pcomms=(DB.get('public_comments')||[]).filter(function(c){return String(c.projectId)===String(projF);});
+  var periods=(DB.get('comment_periods')||[]).filter(function(p){return String(p.projectId)===String(projF);});
+  var meetings=(DB.get('meetings')||[]).filter(function(m){return m.projectId===projF;});
+  var now=new Date();
+  var dateStr=now.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+
+  // ── Stakeholder breakdown ─────────────────────────────────────────
+  var extPS=ps.filter(function(x){return(x.stakeholderRole||'External')==='External';});
+  var stakeIds=extPS.map(function(x){return x.stakeholderId;});
+  var lepSt=allStakes.filter(function(s){return stakeIds.indexOf(String(s.id))>=0&&s.lep;});
+  var ejSt=allStakes.filter(function(s){return stakeIds.indexOf(String(s.id))>=0&&s.underserved;});
+  var champCt=extPS.filter(function(x){return x.support==='Champion';}).length;
+  var neutCt=extPS.filter(function(x){return x.support==='Neutral';}).length;
+  var oppCt=extPS.filter(function(x){return x.support==='Opponent';}).length;
+  var sentTot=champCt+neutCt+oppCt||1;
+
+  // ── Public meetings / events ──────────────────────────────────────
+  var pubMeets=ints.filter(function(i){return i.channel==='Public meeting'||i.channel==='Public event';});
+  var pubMeetMeetings=meetings.filter(function(m){return m.type==='Public meeting'||m.type==='Public event';});
+  var equityMeets=pubMeets.filter(function(i){return i.equityFormSubmitted;});
+
+  // ── Comments ──────────────────────────────────────────────────────
+  var pendingCmts=pcomms.filter(function(c){return c.responseStatus==='Pending';}).length;
+  var respondedCmts=pcomms.filter(function(c){return c.responseStatus==='Responded';}).length;
+  var inProgCmts=pcomms.filter(function(c){return c.responseStatus==='In progress';}).length;
+  var noRespCmts=pcomms.filter(function(c){return c.responseStatus==='No response needed';}).length;
+  var cmtRespRate=pcomms.length>0?Math.round((respondedCmts+noRespCmts)/pcomms.length*100):null;
+
+  // ── Commitments ───────────────────────────────────────────────────
+  var openComms=comms.filter(function(c){return c.status==='Open'||c.status==='Overdue';}).length;
+  var fulfilledComms=comms.filter(function(c){return c.status==='Fulfilled';}).length;
+  var commRate=comms.length>0?Math.round(fulfilledComms/comms.length*100):null;
+  var overdueComms=comms.filter(function(c){return(c.status==='Open'||c.status==='Overdue')&&c.dueDate&&c.dueDate<now.toISOString().slice(0,10);}).length;
+
+  // ── NEPA checklist ────────────────────────────────────────────────
+  var cl=proj.nepaChecklist||[];
+  var clDone=cl.filter(function(x){return x.checked;}).length;
+  var clPct=cl.length>0?Math.round(clDone/cl.length*100):null;
+  var clColor=clPct===100?'#28A870':clPct>=60?'#4db6ac':clPct>=30?'#D9A544':'#5BA4CF';
+
+  // ── Open follow-ups ───────────────────────────────────────────────
+  var openFUs=ints.filter(function(i){return i.followUp&&!i.followUpDone;}).length;
+  var overdueFUs=ints.filter(function(i){return i.followUp&&!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<now;}).length;
+
+  function pct(n,d){return d>0?Math.round(n/d*100)+'%':'N/A';}
+  function statBox(label,val,sub,color){
+    return '<div style="background:#f0f4f8;border:1px solid #c8d6e5;border-radius:8px;padding:14px 16px;text-align:center">'
+      +'<div style="font-size:22px;font-weight:700;color:'+(color||'#1a3050')+'">'+val+'</div>'
+      +'<div style="font-size:11px;font-weight:700;color:#5a7a9a;text-transform:uppercase;letter-spacing:.5px;margin:2px 0">'+label+'</div>'
+      +(sub?'<div style="font-size:11px;color:#7a95a8">'+sub+'</div>':'')
+      +'</div>';
+  }
+  function sectionHdr(title){
+    return '<div style="font-size:13px;font-weight:700;color:#1a3050;text-transform:uppercase;letter-spacing:.7px;'
+      +'margin:22px 0 10px;padding-bottom:6px;border-bottom:2px solid #2d7dd2">'+title+'</div>';
+  }
+  function statusPill(label,color){
+    return '<span style="display:inline-block;background:'+color+'22;color:'+color+';border:1px solid '+color+'55;'
+      +'border-radius:12px;padding:2px 10px;font-size:11px;font-weight:600;margin-left:8px">'+label+'</span>';
+  }
+
+  var sentBar='<div style="display:flex;height:10px;border-radius:5px;overflow:hidden;background:#e0e8f0;margin:6px 0">'
+    +'<div style="width:'+(champCt/sentTot*100)+'%;background:#28A870" title="Champions"></div>'
+    +'<div style="width:'+(neutCt/sentTot*100)+'%;background:#7a9aae" title="Neutral"></div>'
+    +'<div style="width:'+(oppCt/sentTot*100)+'%;background:#e05252" title="Opponents"></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:14px;font-size:11px;color:#5a7a9a">'
+    +'<span>● Champions: <strong>'+champCt+'</strong> ('+pct(champCt,sentTot)+')</span>'
+    +'<span>● Neutral: <strong>'+neutCt+'</strong> ('+pct(neutCt,sentTot)+')</span>'
+    +'<span>● Opponents: <strong>'+oppCt+'</strong> ('+pct(oppCt,sentTot)+')</span>'
+    +'</div>';
+
+  // Build period rows
+  var periodRows=periods.length?periods.map(function(per){
+    var perCmts=pcomms.filter(function(c){return String(c.commentPeriodId)===String(per.id);}).length;
+    var perResp=pcomms.filter(function(c){return String(c.commentPeriodId)===String(per.id)&&c.responseStatus==='Responded';}).length;
+    var daysLeft=per.endDate?Math.ceil((new Date(per.endDate+'T00:00:00')-now)/86400000):null;
+    return '<tr><td style="padding:7px 10px;border-bottom:1px solid #d8e4f0">'+per.name+'</td>'
+      +'<td style="padding:7px 10px;border-bottom:1px solid #d8e4f0">'+per.type+'</td>'
+      +'<td style="padding:7px 10px;border-bottom:1px solid #d8e4f0">'+(per.startDate||'—')+'</td>'
+      +'<td style="padding:7px 10px;border-bottom:1px solid #d8e4f0">'+(per.endDate||'—')+'</td>'
+      +'<td style="padding:7px 10px;border-bottom:1px solid #d8e4f0">'+per.status+(daysLeft!==null&&per.status==='Open'?' ('+(daysLeft>0?daysLeft+'d left':Math.abs(daysLeft)+'d past')+')':'')+'</td>'
+      +'<td style="padding:7px 10px;border-bottom:1px solid #d8e4f0;text-align:center">'+perCmts+'</td>'
+      +'<td style="padding:7px 10px;border-bottom:1px solid #d8e4f0;text-align:center">'+pct(perResp,perCmts)+'</td>'
+      +'</tr>';
+  }).join(''):'<tr><td colspan="7" style="padding:10px;color:#7a95a8;font-style:italic">No comment periods recorded.</td></tr>';
+
+  // Checklist table
+  var clRows=cl.length?cl.map(function(item){
+    return '<tr><td style="padding:7px 10px;border-bottom:1px solid #d8e4f0">'+(item.checked?'✓':'○')+'</td>'
+      +'<td style="padding:7px 10px;border-bottom:1px solid #d8e4f0;color:'+(item.checked?'#1a3050':'#7a95a8')+'">'+item.label+'</td>'
+      +'<td style="padding:7px 10px;border-bottom:1px solid #d8e4f0">'+(item.checkedDate||'')+'</td>'
+      +'<td style="padding:7px 10px;border-bottom:1px solid #d8e4f0">'+(item.checkedBy||'')+'</td>'
+      +'</tr>';
+  }).join(''):'<tr><td colspan="4" style="padding:10px;color:#7a95a8;font-style:italic">No NEPA classification set for this project.</td></tr>';
+
+  // Public meetings list
+  var pmRows=pubMeets.concat(pubMeetMeetings.map(function(m){return{date:m.date,channel:m.type,summary:m.title,location:m.location,equityFormSubmitted:false};}))
+    .sort(function(a,b){return(a.date||'').localeCompare(b.date||'');})
+    .slice(0,20)
+    .map(function(i){
+      return '<tr><td style="padding:7px 10px;border-bottom:1px solid #d8e4f0">'+(i.date||'')+'</td>'
+        +'<td style="padding:7px 10px;border-bottom:1px solid #d8e4f0">'+(i.channel||i.type||'')+'</td>'
+        +'<td style="padding:7px 10px;border-bottom:1px solid #d8e4f0">'+(i.location||i.venue||'—')+'</td>'
+        +'<td style="padding:7px 10px;border-bottom:1px solid #d8e4f0;max-width:240px">'+((i.summary||i.title||'').slice(0,80))+'</td>'
+        +'<td style="padding:7px 10px;border-bottom:1px solid #d8e4f0;text-align:center">'+(i.equityFormSubmitted?'✓':'')+'</td>'
+        +'</tr>';
+    }).join('') || '<tr><td colspan="5" style="padding:10px;color:#7a95a8;font-style:italic">No public meetings or events logged.</td></tr>';
+
+  // LEP/EJ contacts list
+  var lepEJRows=(lepSt.concat(ejSt.filter(function(s){return!lepSt.find(function(l){return l.id===s.id;});}))).map(function(s){
+    return '<tr><td style="padding:7px 10px;border-bottom:1px solid #d8e4f0">'+(s.firstName||'')+' '+(s.lastName||'')+'</td>'
+      +'<td style="padding:7px 10px;border-bottom:1px solid #d8e4f0">'+(s.org||s.organization||'—')+'</td>'
+      +'<td style="padding:7px 10px;border-bottom:1px solid #d8e4f0">'+(s.lep?'LEP ':'')+(s.underserved?'EJ':'')+'</td>'
+      +'<td style="padding:7px 10px;border-bottom:1px solid #d8e4f0">'+(s.email||s.phone||'—')+'</td>'
+      +'</tr>';
+  }).join('') || '<tr><td colspan="4" style="padding:10px;color:#7a95a8;font-style:italic">No LEP or EJ contacts recorded for this project.</td></tr>';
+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>PI Compliance Summary — '+proj.pid+'</title>'
+    +'<style>*{box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:13px;color:#1a2a3a;background:#fff;margin:0;padding:32px 40px}'
+    +'h1{font-size:20px;color:#1a3050;margin:0 0 4px}table{width:100%;border-collapse:collapse;margin-bottom:4px}'
+    +'th{background:#1a3050;color:#fff;padding:8px 10px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}'
+    +'@media print{.no-print{display:none!important}body{padding:16px 24px}}'
+    +'</style></head><body>'
+    // Print button
+    +'<div class="no-print" style="display:flex;justify-content:flex-end;margin-bottom:16px">'
+    +'<button onclick="window.print()" style="background:#1a3050;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;cursor:pointer;font-weight:600">⬇ Save / Print PDF</button></div>'
+    // Header
+    +'<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px">'
+    +'<div><h1>Public Involvement Compliance Summary</h1>'
+    +'<div style="font-size:14px;color:#2d7dd2;font-weight:600">'+proj.name+' &nbsp;·&nbsp; '+proj.pid+'</div>'
+    +'<div style="font-size:12px;color:#7a95a8;margin-top:2px">Client: '+(proj.client||'—')+' &nbsp;·&nbsp; Phase: '+(proj.phase||'—')+' &nbsp;·&nbsp; NEPA: '+(proj.nepaClass||'Not set')+'</div>'
+    +'</div>'
+    +'<div style="text-align:right;font-size:12px;color:#7a95a8">Generated<br><strong>'+dateStr+'</strong><br>Sunrise Engineering Inc.</div>'
+    +'</div>'
+    +'<div style="height:3px;background:linear-gradient(90deg,#1a3050,#2d7dd2,#28A870);border-radius:2px;margin-bottom:22px"></div>'
+
+    // ── EXECUTIVE SNAPSHOT ─────────────────────────────────────────
+    +sectionHdr('Executive Snapshot')
+    +'<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:8px">'
+    +statBox('Stakeholders',ps.length,'on this project','#1a3050')
+    +statBox('Interactions',ints.length,'total logged','#2d7dd2')
+    +statBox('Public Meetings',pubMeets.length+pubMeetMeetings.length,'& events','#28A870')
+    +statBox('Comments',pcomms.length,pcomms.length?cmtRespRate+'% response rate':'none logged',pendingCmts>0?'#D9A544':'#28A870')
+    +statBox('Commitments',comms.length,comms.length?fulfilledComms+' fulfilled':'none recorded',overdueComms>0?'#e05252':'#28A870')
+    +statBox('LEP / EJ',lepSt.length+ejSt.length,'contacts',lepSt.length+ejSt.length>0?'#b36b00':'#7a95a8')
+    +'</div>'
+
+    // ── NEPA PI CHECKLIST ──────────────────────────────────────────
+    +sectionHdr('NEPA PI Checklist'+(cl.length?' ('+clDone+'/'+cl.length+' · '+clPct+'%)':''))
+    +(cl.length?'<div style="margin-bottom:8px"><div style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:#e0e8f0">'
+      +'<div style="width:'+clPct+'%;background:'+clColor+'"></div></div>'
+      +'<div style="font-size:11px;color:#7a95a8;margin-top:4px">'+clDone+' of '+cl.length+' items complete</div></div>':'')
+    +'<table><thead><tr><th style="width:30px"></th><th>Checklist item</th><th style="width:120px">Date completed</th><th style="width:140px">Completed by</th></tr></thead>'
+    +'<tbody>'+clRows+'</tbody></table>'
+
+    // ── STAKEHOLDER ENGAGEMENT ─────────────────────────────────────
+    +sectionHdr('Stakeholder Engagement — '+extPS.length+' External Contacts')
+    +sentBar
+    +'<div style="font-size:12px;color:#5a7a9a;margin:8px 0">Open follow-ups: <strong style="color:'+(openFUs>0?'#D9A544':'#28A870')+'">'+openFUs+'</strong>'
+    +(overdueFUs>0?' &nbsp;·&nbsp; <strong style="color:#e05252">'+overdueFUs+' overdue</strong>':'')+'</div>'
+
+    // ── PUBLIC MEETINGS & EVENTS ───────────────────────────────────
+    +sectionHdr('Public Meetings & Events ('+(pubMeets.length+pubMeetMeetings.length)+')')
+    +'<table><thead><tr><th>Date</th><th>Type</th><th>Location</th><th>Summary / title</th><th>Equity form</th></tr></thead>'
+    +'<tbody>'+pmRows+'</tbody></table>'
+
+    // ── PUBLIC COMMENT PERIODS ─────────────────────────────────────
+    +sectionHdr('Comment Periods ('+periods.length+')')
+    +'<table><thead><tr><th>Period name</th><th>Type</th><th>Start</th><th>End</th><th>Status</th><th>Comments</th><th>Resp. rate</th></tr></thead>'
+    +'<tbody>'+periodRows+'</tbody></table>'
+
+    // ── PUBLIC COMMENT RESPONSE ────────────────────────────────────
+    +sectionHdr('Public Comment Response ('+pcomms.length+' comments)')
+    +(pcomms.length?'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">'
+      +statBox('Pending',pendingCmts,'awaiting response',pendingCmts>0?'#D9A544':'#7a95a8')
+      +statBox('In Progress',inProgCmts,'being drafted','#2d7dd2')
+      +statBox('Responded',respondedCmts,'complete','#28A870')
+      +statBox('No Resp. Needed',noRespCmts,'','#7a95a8')
+      +'</div>'
+      +'<div style="font-size:12px;color:#5a7a9a">Overall response rate: <strong style="color:'+(cmtRespRate===100?'#28A870':'#D9A544')+'">'+cmtRespRate+'%</strong> ('+(respondedCmts+noRespCmts)+' of '+pcomms.length+' resolved)</div>'
+      :'<div style="font-size:12px;color:#7a95a8;font-style:italic">No public comments recorded for this project.</div>')
+
+    // ── LEP / EJ OUTREACH ─────────────────────────────────────────
+    +sectionHdr('LEP / EJ Outreach ('+lepSt.length+' LEP · '+ejSt.length+' EJ)')
+    +(lepSt.length+ejSt.length?
+      '<div style="font-size:12px;color:#5a7a9a;margin-bottom:8px">'
+      +equityMeets.length+' public meeting'+(equityMeets.length!==1?'s':'')+' with equity/civil rights form submitted.</div>'
+      +'<table><thead><tr><th>Name</th><th>Organization</th><th>Flags</th><th>Contact</th></tr></thead>'
+      +'<tbody>'+lepEJRows+'</tbody></table>'
+      :'<div style="font-size:12px;color:#7a95a8;font-style:italic">No LEP or EJ contacts recorded for this project.</div>')
+
+    // ── COMMITMENTS ───────────────────────────────────────────────
+    +sectionHdr('Commitments ('+(comms.length)+' total)')
+    +(comms.length?
+      '<div style="font-size:12px;color:#5a7a9a;margin-bottom:8px">'
+      +fulfilledComms+' fulfilled · '+openComms+' open'
+      +(overdueComms>0?' · <strong style="color:#e05252">'+overdueComms+' overdue</strong>':'')
+      +(commRate!==null?' · Fulfillment rate: <strong>'+commRate+'%</strong>':'')+'</div>'
+      +'<table><thead><tr><th>Commitment</th><th>Made to</th><th>Due date</th><th>Status</th></tr></thead>'
+      +'<tbody>'+comms.map(function(c){
+        var s=c.stakeholderId?allStakes.find(function(x){return String(x.id)===String(c.stakeholderId);}):null;
+        var madeTo=s?((s.firstName||'')+' '+(s.lastName||'')).trim()||(s.org||s.organization||''):(c.madeTo||'—');
+        var stColor=c.status==='Fulfilled'?'#28A870':c.status==='Overdue'?'#e05252':'#D9A544';
+        return '<tr><td style="padding:7px 10px;border-bottom:1px solid #d8e4f0">'+((c.commitment||'').slice(0,80))+'</td>'
+          +'<td style="padding:7px 10px;border-bottom:1px solid #d8e4f0">'+madeTo+'</td>'
+          +'<td style="padding:7px 10px;border-bottom:1px solid #d8e4f0">'+(c.dueDate||'—')+'</td>'
+          +'<td style="padding:7px 10px;border-bottom:1px solid #d8e4f0;color:'+stColor+';font-weight:600">'+c.status+'</td>'
+          +'</tr>';
+      }).join('')+'</tbody></table>'
+      :'<div style="font-size:12px;color:#7a95a8;font-style:italic">No commitments recorded for this project.</div>')
+
+    +'<div style="margin-top:30px;padding-top:12px;border-top:1px solid #c8d6e5;font-size:11px;color:#7a95a8;display:flex;justify-content:space-between">'
+    +'<span>Horizon COMPASS — Sunrise Engineering Inc.</span><span>'+dateStr+'</span></div>'
+    +'</body></html>';
+
+  var win=window.open('','_blank','width=1100,height=820,scrollbars=yes');
+  if(win){win.document.write(html);win.document.close();}
+  else{alert('Pop-up blocked. Please allow pop-ups for this site and try again.');}
 }
 
 function generateIssuesReport(){

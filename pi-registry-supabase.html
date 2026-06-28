@@ -10628,13 +10628,24 @@ function renderTribal(m){
         ${c.moaRequired?'<span class="badge b-amber">MOA required</span>':''}
         ${c.responseStatus?`<span class="badge b-dark">${c.responseStatus}</span>`:''}
       </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+        ${c.languageAccessNeeded?'<span class="badge b-amber">Language access needed</span>':''}
+        ${c.nearTribalLands?'<span class="badge b-purple">Near tribal lands</span>':''}
+        ${c.cfr710Review?'<span class="badge b-dark">23 CFR 710 review</span>':''}
+        ${c.includedInAnnualReport?`<span class="badge b-green">Annual report${c.annualReportYear?' '+c.annualReportYear:''}</span>`:''}
+      </div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:11px;color:var(--fog);margin-bottom:10px">
         <div><span style="color:var(--slate)">THPO:</span> ${c.thpoContact||'—'}</div>
         <div><span style="color:var(--slate)">Notified:</span> ${c.notificationDate||'—'}</div>
         <div><span style="color:var(--slate)">Response received:</span> ${c.responseDate||'—'}</div>
+        ${c.tribalOfficial?`<div><span style="color:var(--slate)">Tribal official:</span> ${c.tribalOfficial}</div>`:''}
+        ${c.agencyOfficial?`<div><span style="color:var(--slate)">Agency official:</span> ${c.agencyOfficial}</div>`:''}
+        ${c.fhwaLiaison?`<div><span style="color:var(--slate)">FHWA liaison:</span> ${c.fhwaLiaison}</div>`:''}
         <div><span style="color:var(--slate)">Next action:</span> ${c.nextAction||'—'}</div>
-        <div><span style="color:var(--slate)">BIA involvement:</span> ${c.biaInvolvement?'Yes':'No'}</div>
+        <div><span style="color:var(--slate)">BIA involvement:</span> ${c.biaInvolvement?'Yes':'No'}${c.biaApprovalStatus?' · '+c.biaApprovalStatus:''}</div>
         <div><span style="color:var(--slate)">Follow-up due:</span> ${c.followUpDate||'—'}</div>
+        ${c.certificationStatus?`<div><span style="color:var(--slate)">EO 13175 cert:</span> ${c.certificationStatus}</div>`:''}
+        ${c.utahPARef?`<div><span style="color:var(--slate)">Utah PA:</span> ${c.utahPARef}</div>`:''}
       </div>
       ${c.notes?`<div style="font-size:12px;color:var(--mist);background:rgba(255,255,255,.04);border-radius:6px;padding:8px 10px;margin-bottom:10px;line-height:1.5">${c.notes}</div>`:''}
       <div style="display:flex;gap:8px">
@@ -10704,7 +10715,7 @@ function openTribalModal(id){
   const projId=c.projectId||S.projectFilter||'';
 
   openM(id?'Edit tribal consultation':'Log tribal consultation',`
-    <div class="fsec">Tribe & contact</div>
+    <div class="fsec">Tribe & contacts</div>
     <div class="fgrid fg2f">
       <div class="fr"><label>Tribe name *</label><input id="f-tname" value="${c.tribeName||''}" placeholder="Full tribal nation name"></div>
       <div class="fr"><label>Tribe type</label>
@@ -10717,9 +10728,18 @@ function openTribalModal(id){
       </div>
     </div>
     <div class="fgrid fg3f">
-      <div class="fr"><label>THPO / contact name</label><input id="f-tthpo" value="${c.thpoContact||''}" placeholder="Tribal Historic Preservation Officer"></div>
-      <div class="fr"><label>Contact email</label><input type="email" id="f-temail" value="${c.thpoEmail||''}"></div>
-      <div class="fr"><label>Contact phone</label><input id="f-tphone" value="${c.thpoPhone||''}"></div>
+      <div class="fr"><label>Tribal Official (G2G contact)</label><input id="f-tofficial" value="${c.tribalOfficial||''}" placeholder="Elected / appointed rep — EO 13175"></div>
+      <div class="fr"><label>Official email</label><input type="email" id="f-toffemail" value="${c.tribalOfficialEmail||''}"></div>
+      <div class="fr"><label>Official phone</label><input id="f-toffphone" value="${c.tribalOfficialPhone||''}"></div>
+    </div>
+    <div class="fgrid fg3f">
+      <div class="fr"><label>THPO name</label><input id="f-tthpo" value="${c.thpoContact||''}" placeholder="Tribal Historic Preservation Officer"></div>
+      <div class="fr"><label>THPO email</label><input type="email" id="f-temail" value="${c.thpoEmail||''}"></div>
+      <div class="fr"><label>THPO phone</label><input id="f-tphone" value="${c.thpoPhone||''}"></div>
+    </div>
+    <div class="fgrid fg2f">
+      <div class="fr"><label>Agency designated official</label><input id="f-tagency" value="${c.agencyOfficial||''}" placeholder="Sunrise / UDOT staff responsible (EO 13175)"></div>
+      <div class="fr"><label>FHWA Tribal Liaison</label><input id="f-tfhwa" value="${c.fhwaLiaison||''}" placeholder="FHWA point of contact"></div>
     </div>
     <div class="fsec">Project & consultation type</div>
     <div class="fgrid fg2f">
@@ -10735,6 +10755,9 @@ function openTribalModal(id){
           ${TRIBAL_CONSULT_TYPES.map(t=>`<option value="${t}" ${c.consultationType===t?'selected':''}>${t}</option>`).join('')}
         </select>
       </div>
+    </div>
+    <div class="fr"><label>Consultation trigger / state action with tribal implications</label>
+      <input id="f-ttrigger" value="${c.consultationTrigger||''}" placeholder="e.g. CE determination, ROW acquisition near tribal lands, DEIS publication…">
     </div>
     <div class="fgrid fg2f">
       <div class="fr"><label>Phase / status</label>
@@ -10762,27 +10785,72 @@ function openTribalModal(id){
         ${TRIBAL_RESPONSE_STATUSES.map(s=>`<option value="${s}" ${c.responseStatus===s?'selected':''}>${s}</option>`).join('')}
       </select>
     </div>
-    <div class="fsec">ROW & agreement details</div>
+    <div class="fr" style="flex-direction:row;align-items:center;gap:10px;padding:8px 0">
+      <input type="checkbox" id="f-tlang" ${c.languageAccessNeeded?'checked':''} style="width:16px;height:16px;accent-color:var(--sky)">
+      <label for="f-tlang" style="color:var(--mist);font-size:13px;cursor:pointer">Language access / translation needed <span style="color:var(--fog);font-size:11px">(DOT requirement — "understandable language")</span></label>
+    </div>
+    <div class="fsec">ROW & land acquisition</div>
     <div class="fgrid fg2f">
       <div class="fr" style="flex-direction:row;align-items:center;gap:10px;padding:10px 0">
-        <input type="checkbox" id="f-tmoa" ${c.moaRequired?'checked':''} style="width:16px;height:16px;accent-color:var(--sky)">
-        <label for="f-tmoa" style="color:var(--mist);font-size:13px;cursor:pointer">MOA / Agreement required</label>
+        <input type="checkbox" id="f-tneartribal" ${c.nearTribalLands?'checked':''} style="width:16px;height:16px;accent-color:var(--sky)">
+        <label for="f-tneartribal" style="color:var(--mist);font-size:13px;cursor:pointer">Land interest near / on tribal lands</label>
       </div>
+      <div class="fr" style="flex-direction:row;align-items:center;gap:10px;padding:10px 0">
+        <input type="checkbox" id="f-t710" ${c.cfr710Review?'checked':''} style="width:16px;height:16px;accent-color:var(--sky)">
+        <label for="f-t710" style="color:var(--mist);font-size:13px;cursor:pointer">23 CFR Part 710 review required</label>
+      </div>
+    </div>
+    <div class="fgrid fg2f">
+      <div class="fr"><label>ROW / land interest type</label>
+        <select id="f-trowtype">
+          <option value="">— None / N/A —</option>
+          <option value="Fee acquisition" ${c.rowType==='Fee acquisition'?'selected':''}>Fee acquisition</option>
+          <option value="Permanent easement" ${c.rowType==='Permanent easement'?'selected':''}>Permanent easement</option>
+          <option value="Temporary construction easement" ${c.rowType==='Temporary construction easement'?'selected':''}>Temporary construction easement</option>
+          <option value="License / permit" ${c.rowType==='License / permit'?'selected':''}>License / permit</option>
+          <option value="Trust land — BIA approval required" ${c.rowType==='Trust land — BIA approval required'?'selected':''}>Trust land — BIA approval required</option>
+        </select>
+      </div>
+      <div class="fr"><label>URA notice sent date</label><input type="date" id="f-tura" value="${c.uraNoticeDate||''}" placeholder="Uniform Relocation Act notice"></div>
+    </div>
+    <div class="fgrid fg2f">
       <div class="fr" style="flex-direction:row;align-items:center;gap:10px;padding:10px 0">
         <input type="checkbox" id="f-tbia" ${c.biaInvolvement?'checked':''} style="width:16px;height:16px;accent-color:var(--sky)">
         <label for="f-tbia" style="color:var(--mist);font-size:13px;cursor:pointer">BIA involvement required</label>
       </div>
+      <div class="fr"><label>BIA approval status</label>
+        <select id="f-tbiastatus">
+          <option value="">— N/A —</option>
+          <option value="Required — pending" ${c.biaApprovalStatus==='Required — pending'?'selected':''}>Required — pending</option>
+          <option value="Submitted — awaiting approval" ${c.biaApprovalStatus==='Submitted — awaiting approval'?'selected':''}>Submitted — awaiting approval</option>
+          <option value="Approved" ${c.biaApprovalStatus==='Approved'?'selected':''}>Approved</option>
+          <option value="Not required" ${c.biaApprovalStatus==='Not required'?'selected':''}>Not required</option>
+        </select>
+      </div>
     </div>
-    <div class="fr"><label>ROW / land interest type</label>
-      <select id="f-trowtype">
-        <option value="">— None / N/A —</option>
-        <option value="Fee acquisition" ${c.rowType==='Fee acquisition'?'selected':''}>Fee acquisition</option>
-        <option value="Permanent easement" ${c.rowType==='Permanent easement'?'selected':''}>Permanent easement</option>
-        <option value="Temporary construction easement" ${c.rowType==='Temporary construction easement'?'selected':''}>Temporary construction easement</option>
-        <option value="License / permit" ${c.rowType==='License / permit'?'selected':''}>License / permit</option>
-        <option value="Trust land — BIA approval required" ${c.rowType==='Trust land — BIA approval required'?'selected':''}>Trust land — BIA approval required</option>
-      </select>
+    <div class="fsec">Agreement & compliance</div>
+    <div class="fgrid fg2f">
+      <div class="fr" style="flex-direction:row;align-items:center;gap:10px;padding:10px 0">
+        <input type="checkbox" id="f-tmoa" ${c.moaRequired?'checked':''} style="width:16px;height:16px;accent-color:var(--sky)">
+        <label for="f-tmoa" style="color:var(--mist);font-size:13px;cursor:pointer">MOA / Programmatic Agreement required</label>
+      </div>
+      <div class="fr"><label>Utah PA reference</label><input id="f-tpa" value="${c.utahPARef||''}" placeholder="PA name / number (FHWA Utah Programmatic Agreement)"></div>
     </div>
+    <div class="fgrid fg2f">
+      <div class="fr"><label>EO 13175 certification status</label>
+        <select id="f-tcert">
+          <option value="">— Select —</option>
+          <option value="Not required" ${c.certificationStatus==='Not required'?'selected':''}>Not required</option>
+          <option value="Pending" ${c.certificationStatus==='Pending'?'selected':''}>Pending</option>
+          <option value="Certified" ${c.certificationStatus==='Certified'?'selected':''}>Certified</option>
+        </select>
+      </div>
+      <div class="fr" style="flex-direction:row;align-items:center;gap:10px;padding:10px 0">
+        <input type="checkbox" id="f-tannual" ${c.includedInAnnualReport?'checked':''} style="width:16px;height:16px;accent-color:var(--sky)">
+        <label for="f-tannual" style="color:var(--mist);font-size:13px;cursor:pointer">Included in annual DIA / OMB report</label>
+      </div>
+    </div>
+    <div class="fr"><label>Annual report year</label><input id="f-treportyear" value="${c.annualReportYear||''}" placeholder="e.g. FY2025" style="max-width:180px"></div>
     <div class="fsec">Follow-up & notes</div>
     <div class="fgrid fg2f">
       <div class="fr"><label>Next action</label><input id="f-tnext" value="${c.nextAction||''}" placeholder="e.g. Send draft MOA, Schedule meeting…"></div>
@@ -10818,9 +10886,24 @@ function saveTribal(){
     responseDeadline:v('f-tdeadline'),
     responseDate:v('f-trespdate'),
     responseStatus:v('f-trespstatus'),
+    tribalOfficial:v('f-tofficial'),
+    tribalOfficialEmail:v('f-toffemail'),
+    tribalOfficialPhone:v('f-toffphone'),
+    agencyOfficial:v('f-tagency'),
+    fhwaLiaison:v('f-tfhwa'),
+    consultationTrigger:v('f-ttrigger'),
+    languageAccessNeeded:document.getElementById('f-tlang')?.checked||false,
     moaRequired:document.getElementById('f-tmoa')?.checked||false,
     biaInvolvement:document.getElementById('f-tbia')?.checked||false,
+    nearTribalLands:document.getElementById('f-tneartribal')?.checked||false,
+    cfr710Review:document.getElementById('f-t710')?.checked||false,
     rowType:v('f-trowtype'),
+    uraNoticeDate:v('f-tura'),
+    biaApprovalStatus:v('f-tbiastatus'),
+    utahPARef:v('f-tpa'),
+    certificationStatus:v('f-tcert'),
+    includedInAnnualReport:document.getElementById('f-tannual')?.checked||false,
+    annualReportYear:v('f-treportyear'),
     nextAction:v('f-tnext'),
     followUpDate:v('f-tfudate'),
     notes:v('f-tnotes')

@@ -10449,6 +10449,7 @@ function renderMapView(m) {
   var fEJ      = S.mapFEJ      || false;
   var fLEP     = S.mapFLEP     || false;
   var fSearch  = S.mapFSearch  || '';
+  var fRole    = S.mapFRole !== undefined ? S.mapFRole : 'External';
   var colorBy  = S.mapColorBy  || 'support';
 
   var allStakes = DB.getActive('stakeholders');
@@ -10472,6 +10473,7 @@ function renderMapView(m) {
   var withAddr = candidates.filter(function(c){return c.s.address && c.s.address.trim();});
 
   // Apply filters
+  if (fRole) withAddr = withAddr.filter(function(c){return (c.lk.stakeholderRole||'External')===fRole;});
   if (fSupport) withAddr = withAddr.filter(function(c){return (c.lk.support||'Neutral')===fSupport;});
   if (fType)    withAddr = withAddr.filter(function(c){return (c.s.type||'')=== fType;});
   if (fInf)     withAddr = withAddr.filter(function(c){return (c.lk.influence||c.s.influence||'')=== fInf;});
@@ -10535,6 +10537,14 @@ function renderMapView(m) {
         </select>
       </div>
       <div>
+        <div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Engagement role</div>
+        <div style="display:flex;border:1px solid rgba(255,255,255,.15);border-radius:6px;overflow:hidden;font-size:12px">
+          <button onclick="S.mapFRole='External';_mapApplyFilters()" style="flex:1;padding:5px 0;border:none;cursor:pointer;font-size:12px;font-family:inherit;background:${fRole==='External'?'rgba(45,125,210,.4)':'rgba(255,255,255,.05)'};color:${fRole==='External'?'var(--white)':'var(--mist)'};transition:background .12s">External</button>
+          <button onclick="S.mapFRole='Internal';_mapApplyFilters()" style="flex:1;padding:5px 0;border:none;border-left:1px solid rgba(255,255,255,.1);cursor:pointer;font-size:12px;font-family:inherit;background:${fRole==='Internal'?'rgba(45,125,210,.4)':'rgba(255,255,255,.05)'};color:${fRole==='Internal'?'var(--white)':'var(--mist)'};transition:background .12s">Internal</button>
+          <button onclick="S.mapFRole='';_mapApplyFilters()" style="flex:1;padding:5px 0;border:none;border-left:1px solid rgba(255,255,255,.1);cursor:pointer;font-size:12px;font-family:inherit;background:${fRole===''?'rgba(45,125,210,.4)':'rgba(255,255,255,.05)'};color:${fRole===''?'var(--white)':'var(--mist)'};transition:background .12s">Both</button>
+        </div>
+      </div>
+      <div>
         <div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Special designations</div>
         <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:${fEJ?'var(--white)':'var(--mist)'};margin-bottom:5px">
           <input type="checkbox" ${fEJ?'checked':''} onchange="S.mapFEJ=this.checked;_mapApplyFilters()" style="accent-color:var(--sky)">
@@ -10555,7 +10565,7 @@ function renderMapView(m) {
         </select>
       </div>
       <div style="margin-top:auto;padding-top:10px;border-top:1px solid rgba(255,255,255,.08)">
-        <button class="btn btn-ghost" style="width:100%;font-size:12px;margin-bottom:6px" onclick="S.mapFSupport='';S.mapFType='';S.mapFInf='';S.mapFEJ=false;S.mapFLEP=false;S.mapFSearch='';S.mapColorBy='support';renderMapView(document.getElementById('main'))">
+        <button class="btn btn-ghost" style="width:100%;font-size:12px;margin-bottom:6px" onclick="S.mapFSupport='';S.mapFType='';S.mapFInf='';S.mapFEJ=false;S.mapFLEP=false;S.mapFSearch='';S.mapFRole='External';S.mapColorBy='support';renderMapView(document.getElementById('main'))">
           Clear all filters
         </button>
         <button class="btn btn-primary" style="width:100%;font-size:12px" onclick="_mapPrint()">

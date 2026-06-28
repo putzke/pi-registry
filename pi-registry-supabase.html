@@ -762,6 +762,7 @@ const SB_INT_FIELDS = new Set(['project_id','stakeholder_id','issue_id','interac
 function toSB(table, obj) {
   const sbTable = SB_TABLES[table];
   const map = SB_TO_INT[sbTable];
+  if (!map) return obj; // table not in SB schema — pass through as-is
   const result = {};
   for (const [intKey, sbCol] of Object.entries(map)) {
     if (intKey === 'id') continue;
@@ -787,6 +788,7 @@ function toSB(table, obj) {
 function fromSB(table, row) {
   const sbTable = SB_TABLES[table];
   const map = SB_TO_INT[sbTable];
+  if (!map) return row; // table not in SB schema — pass through as-is
   const result = {};
   for (const [intKey, sbCol] of Object.entries(map)) {
     if (intKey === 'id') { result.id = String(row.id || ''); continue; }

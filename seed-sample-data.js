@@ -302,51 +302,80 @@
     { id: uid(), projectId: p3, type: 'Section 106 / tribal consultation record', title: 'Ute Indian Tribe Section 106 consultation record', scopeType: 'milestone', freq: '', contractedQty: 1, deliveredCount: 0, status: 'In progress', progress: 35, milestoneStart: 'NEPA initiation', milestoneEnd: '', distList: 'N. Begay (THPO), SHPO, UDOT EPM', notes: 'Initial notification sent. Site visit completed. Formal consultation meeting pending restart of project.' }
   ];
 
-  // ── WRITE TO DB ──
-  console.log('Seeding projects...');
-  DB.set('projects', DB.get('projects').concat(newProjects));
-
-  console.log('Seeding stakeholders...');
-  DB.set('stakeholders', DB.get('stakeholders').concat(newStakeholders));
-
-  console.log('Seeding project-stakeholder links...');
-  DB.set('project_stakeholders', DB.get('project_stakeholders').concat(newPS));
-
-  console.log('Seeding interactions...');
-  DB.set('interactions', DB.get('interactions').concat(newInteractions));
-
-  console.log('Seeding meetings...');
-  DB.set('meetings', (DB.get('meetings') || []).concat(newMeetings));
-
-  console.log('Seeding comment periods...');
-  DB.set('comment_periods', (DB.get('comment_periods') || []).concat(newPeriods));
-
-  console.log('Seeding public comments...');
-  DB.set('public_comments', (DB.get('public_comments') || []).concat(newComments));
-
-  console.log('Seeding deliverables...');
-  DB.set('deliverables', (DB.get('deliverables') || []).concat(newDeliverables));
-
-  // Push to Supabase using the app's own REST helper
-  if (typeof sbAdd === 'function') {
-    console.log('Syncing to Supabase...');
-    try {
-      const allWrites = [
-        ...newProjects.map(r => sbAdd('projects', r)),
-        ...newStakeholders.map(r => sbAdd('stakeholders', r)),
-        ...newPS.map(r => sbAdd('project_stakeholders', r)),
-        ...newInteractions.map(r => sbAdd('interactions', r)),
-        ...newMeetings.map(r => sbAdd('meetings', r)),
-        ...newPeriods.map(r => sbAdd('comment_periods', r)),
-        ...newComments.map(r => sbAdd('public_comments', r)),
-        ...newDeliverables.map(r => sbAdd('deliverables', r)),
-      ];
-      await Promise.all(allWrites);
-      console.log('✅ Supabase sync complete.');
-    } catch (e) {
-      console.warn('Supabase sync error:', e.message);
-    }
+  // ── WRITE TO SUPABASE ──
+  // Projects and stakeholders use Supabase auto-increment integer PKs.
+  // We must insert them first, capture the real IDs, then remap all
+  // foreign keys before inserting dependent records.
+  if (typeof sbAdd !== 'function') {
+    console.error('sbAdd not found — is the COMPASS app loaded?');
+    return;
   }
+
+  console.log('Inserting projects...');
+  const projIdMap = {}; // temp uid → real Supabase id
+  for (const proj of newProjects) {
+    const realId = await sbAdd('projects', proj);
+    if (realId) projIdMap[proj.id] = realId;
+    else console.warn('Failed to insert project', proj.pid);
+  }
+  console.log('Project ID map:', projIdMap);
+
+  console.log('Inserting stakeholders...');
+  const stakeIdMap = {}; // temp uid → real Supabase id
+  for (const stake of newStakeholders) {
+    const realId = await sbAdd('stakeholders', stake);
+    if (realId) stakeIdMap[stake.id] = realId;
+    else console.warn('Failed to insert stakeholder', stake.firstName, stake.lastName);
+  }
+  console.log('Stakeholder ID map:', stakeIdMap);
+
+  // Remap foreign keys in all dependent records
+  const remap = id => projIdMap[id] || stakeIdMap[id] || id;
+
+  const remapPS = newPS.map(r => ({...r,
+    projectId:     projIdMap[r.projectId]     || r.projectId,
+    stakeholderId: stakeIdMap[r.stakeholderId] || r.stakeholderId
+  }));
+  const remapInts = newInteractions.map(r => ({...r,
+    projectId:     projIdMap[r.projectId]     || r.projectId,
+    stakeholderId: stakeIdMap[r.stakeholderId] || r.stakeholderId
+  }));
+  const remapMeetings = newMeetings.map(r => ({...r,
+    projectId: projIdMap[r.projectId] || r.projectId
+  }));
+  const remapPeriods = newPeriods.map(r => ({...r,
+    projectId: projIdMap[r.projectId] || r.projectId
+  }));
+  const remapComments = newComments.map(r => ({...r,
+    projectId:           projIdMap[r.projectId] || r.projectId,
+    // periodId stays as text (pi_comment_periods uses text PKs)
+    linkedStakeholderId: r.linkedStakeholderId ? (stakeIdMap[r.linkedStakeholderId] || r.linkedStakeholderId) : null
+  }));
+  const remapDeliverables = newDeliverables.map(r => ({...r,
+    projectId: projIdMap[r.projectId] || r.projectId
+  }));
+
+  console.log('Inserting project-stakeholder links...');
+  await Promise.all(remapPS.map(r => sbAdd('project_stakeholders', r)));
+
+  console.log('Inserting interactions...');
+  await Promise.all(remapInts.map(r => sbAdd('interactions', r)));
+
+  console.log('Inserting meetings...');
+  await Promise.all(remapMeetings.map(r => sbAdd('meetings', r)));
+
+  console.log('Inserting comment periods...');
+  await Promise.all(remapPeriods.map(r => sbAdd('comment_periods', r)));
+
+  console.log('Inserting public comments...');
+  await Promise.all(remapComments.map(r => sbAdd('public_comments', r)));
+
+  console.log('Inserting deliverables...');
+  await Promise.all(remapDeliverables.map(r => sbAdd('deliverables', r)));
+
+  // Reload all data from Supabase so _syncCache has canonical IDs
+  console.log('Reloading from Supabase...');
+  await loadAllData();
 
   // Trigger UI refresh
   if (typeof render === 'function') render();

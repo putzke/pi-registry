@@ -7789,6 +7789,7 @@ async function generateSectionDraft(secType, textareaIdx) {
   if (btn) { btn.textContent = origText; btn.disabled = false; }
   ta.value = narrative || templateDraft;
   if (narrative) showToast('AI narrative generated', 'info', 2000);
+  schedulePreview();
 }
 
 async function generateOverallDraft() {
@@ -7824,6 +7825,7 @@ async function generateOverallDraft() {
   if (btn) { btn.textContent = '✦ Generate Overall Summary'; btn.disabled = false; }
   ta.value = narrative || templateDraft;
   if (narrative) showToast('AI narrative generated', 'info', 2000);
+  schedulePreview();
 }
 
 async function generateAllSectionDrafts() {
@@ -7900,6 +7902,7 @@ async function generateAllSectionDrafts() {
   if (allBtn) { allBtn.disabled = false; allBtn.textContent = '✦ AI: Draft all sections'; }
   showToast('All section drafts generated', 'success', 3000);
   setTimeout(function() { if (bar) bar.style.display = 'none'; }, 4000);
+  renderLivePreview();
 }
 
 function _buildSectionDraft(secType) {
@@ -8338,42 +8341,215 @@ function openPIReport(){
       +'<div style="flex:1;height:6px;background:rgba(255,255,255,.08);border-radius:3px"><div id="all-drafts-bar-inner" style="height:100%;width:0%;background:var(--sky-lt);border-radius:3px;transition:width .3s"></div></div>'
       +'<span id="all-drafts-bar-label" style="font-size:11px;color:var(--slate);white-space:nowrap">0 of 0 sections drafted</span>'
       +'</div>':'')
-    +'<div class="content" style="overflow-y:auto"><div style="padding:24px;max-width:900px">'
-    +'<div style="margin-bottom:24px;background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:20px">'
-    +'<div style="font-size:14px;font-weight:600;color:var(--white);margin-bottom:14px">Report header</div>'
+    // Split pane: left = editor, right = live preview
+    +'<div style="display:flex;height:calc(100vh - 56px);overflow:hidden">'
+    // LEFT editor pane
+    +'<div id="rpt-editor-pane" style="width:50%;min-width:320px;overflow-y:auto;border-right:1px solid var(--border);padding:18px 20px;box-sizing:border-box">'
+    +'<div style="margin-bottom:18px;background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:16px">'
+    +'<div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:10px">Report header</div>'
     +'<div class="fgrid fg2f">'
-    +'<div class="fr"><label>Report # / issue</label><input id="rpt-num" value="'+reportNum+'" placeholder="e.g. 1, 2, 3"></div>'
-    +'<div class="fr"><label>Report title</label><input id="rpt-title" value="'+reportTitle+'" placeholder="e.g. Project Team PI Update"></div>'
+    +'<div class="fr"><label>Report # / issue</label><input id="rpt-num" value="'+reportNum+'" placeholder="e.g. 1, 2, 3" oninput="schedulePreview()"></div>'
+    +'<div class="fr"><label>Report title</label><input id="rpt-title" value="'+reportTitle+'" placeholder="e.g. Project Team PI Update" oninput="schedulePreview()"></div>'
     +'</div>'
-    +'<div class="fr"><label>Subtitle (optional)</label><input id="rpt-subtitle" value="'+reportSubtitle+'" placeholder="e.g. pre-con update, monthly summary"></div>'
+    +'<div class="fr"><label>Subtitle (optional)</label><input id="rpt-subtitle" value="'+reportSubtitle+'" placeholder="e.g. pre-con update, monthly summary" oninput="schedulePreview()"></div>'
     +'<div class="fgrid fg2f" style="margin-top:8px">'
-    +'<div class="fr"><label>Period start</label><input type="date" id="rpt-pstart" value="'+periodStart+'"></div>'
-    +'<div class="fr"><label>Period end</label><input type="date" id="rpt-pend" value="'+periodEnd+'"></div>'
+    +'<div class="fr"><label>Period start</label><input type="date" id="rpt-pstart" value="'+periodStart+'" onchange="schedulePreview()"></div>'
+    +'<div class="fr"><label>Period end</label><input type="date" id="rpt-pend" value="'+periodEnd+'" onchange="schedulePreview()"></div>'
     +'</div>'
-    +'<div style="margin-top:12px;font-size:12px;color:var(--fog)">The report period controls which interactions appear in the auto-populated sections.</div>'    +'<div style="margin-top:14px">'    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'    +'<label style="margin:0">Overall summary <span style="font-weight:400;font-style:italic;color:var(--fog)">(optional — prints before first section)</span></label>'    +'<button id="overall-draft-btn" class="btn btn-xs" style="background:rgba(74,155,232,.15);border-color:rgba(74,155,232,.4);color:var(--sky-lt);font-size:10px;padding:2px 8px;white-space:nowrap" onclick="generateOverallDraft()">'+(_getClaudeKey()?'✦ AI: Generate Overall Summary':'✦ Generate Overall Summary')+'</button>'    +'</div>'    +'<textarea id="rpt-overall-summary" rows="4" placeholder="Enter an overall project summary, narrative, or context to print before the first report section..." style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:10px 12px;resize:vertical;font-family:inherit;line-height:1.6;box-sizing:border-box">'+escHtml(saved.overallSummary||'')+'</textarea></div>'    +'</div>'
-    +'<div style="margin-bottom:24px;background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:20px">'
-    +'<div style="font-size:14px;font-weight:600;color:var(--white);margin-bottom:10px">Report Distribution</div>'
-    +'<div style="font-size:12px;color:var(--fog);margin-bottom:10px">Stakeholders tagged to the selected groups will appear in the \'Distributed To\' header of the exported report, grouped by category. Stakeholders with no group assigned are excluded.</div>'
+    +'<div style="margin-top:10px;font-size:11px;color:var(--fog)">Report period controls which interactions appear in auto-populated sections.</div>'
+    +'<div style="margin-top:12px">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">'
+    +'<label style="margin:0;font-size:12px">Overall summary <span style="font-weight:400;font-style:italic;color:var(--fog)">(prints before first section)</span></label>'
+    +'<button id="overall-draft-btn" class="btn btn-xs" style="background:rgba(74,155,232,.15);border-color:rgba(74,155,232,.4);color:var(--sky-lt);font-size:10px;padding:2px 8px;white-space:nowrap" onclick="generateOverallDraft()">'
+    +(_getClaudeKey()?'✦ AI: Generate Overall Summary':'✦ Generate Overall Summary')
+    +'</button>'
+    +'</div>'
+    +'<textarea id="rpt-overall-summary" rows="3" placeholder="Overall project summary or context to print before the first section..." oninput="schedulePreview()" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:12px;padding:8px 10px;resize:vertical;font-family:inherit;line-height:1.5;box-sizing:border-box">'+escHtml(saved.overallSummary||'')+'</textarea>'
+    +'</div></div>'
+    +'<div style="margin-bottom:18px;background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:16px">'
+    +'<div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:6px">Report Distribution</div>'
+    +'<div style="font-size:11px;color:var(--fog);margin-bottom:8px">Stakeholders in selected groups appear in the Distributed To header.</div>'
     +'<div style="display:flex;flex-wrap:wrap;gap:8px" id="rpt-ed-groups">'
-    +DIST_GROUPS.map(function(g){return '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--mist)"><input type="checkbox" class="rpt-ed-grp" value="'+g+'"'+(g==='Project team'?' checked':'')+'" style="accent-color:var(--sky);width:14px;height:14px"> '+g+'</label>'}).join('')
+    +DIST_GROUPS.map(function(g){return '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--mist)"><input type="checkbox" class="rpt-ed-grp" value="'+g+'"'+(g==='Project team'?' checked':'')+' style="accent-color:var(--sky);width:13px;height:13px" onchange="schedulePreview()"> '+g+'</label>'}).join('')
     +'</div>'
-    +'<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.07)">'
-    +'<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--mist)">'
-    +'<input type="checkbox" id="rpt-ed-include-internal" style="accent-color:var(--sky);width:14px;height:14px"'+(document.getElementById('rpt-include-internal')&&document.getElementById('rpt-include-internal').checked?' checked':'')+' onchange="var cb=document.getElementById(\'rpt-include-internal\');if(cb)cb.checked=this.checked;"> '
+    +'<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.07)">'
+    +'<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--mist)">'
+    +'<input type="checkbox" id="rpt-ed-include-internal" style="accent-color:var(--sky);width:13px;height:13px"'+(document.getElementById('rpt-include-internal')&&document.getElementById('rpt-include-internal').checked?' checked':'')+' onchange="schedulePreview()"> '
     +'Include internal stakeholders in interaction log</label>'
     +'</div></div>'
-    +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">'
-    +'<div style="font-size:14px;font-weight:600;color:var(--white)">Report sections</div>'
-    +'<div style="font-size:12px;color:var(--fog)">\u25B2\u25BC reorder \u2022 \u2715 remove \u2022 Sections export in the order shown</div>'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'
+    +'<div style="font-size:13px;font-weight:600;color:var(--white)">Report sections</div>'
+    +'<div style="font-size:11px;color:var(--fog)">▲▼ reorder • ✕ remove</div>'
     +'</div>'
     +sectionsHTML
-    +'<div style="margin-top:16px;margin-bottom:16px">'
-    +'<div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:10px">Add sections</div>'
-    +(addAutoHTML?'<div style="display:flex;flex-wrap:wrap;gap:0;margin-bottom:10px">'+addAutoHTML+'</div>':'<div style="font-size:12px;color:var(--fog);margin-bottom:10px">All auto-populated sections are included. You can still add custom manual sections below.</div>')
+    +'<div style="margin-top:12px;margin-bottom:12px">'
+    +'<div style="font-size:12px;font-weight:600;color:var(--white);margin-bottom:8px">Add sections</div>'
+    +(addAutoHTML?'<div style="display:flex;flex-wrap:wrap;gap:0;margin-bottom:8px">'+addAutoHTML+'</div>':'<div style="font-size:11px;color:var(--fog);margin-bottom:8px">All auto-populated sections included. Add manual sections below.</div>')
     +'<button class="btn" onclick="addPISection()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><path d="M8 3v10M3 8h10"/></svg> Add custom manual section</button>'
     +'</div>'
-    +'<div style="padding:20px 0;border-top:1px solid var(--border);font-size:12px;color:var(--fog);margin-top:24px">*Stakeholder registry can be provided on request. Please contact us for any requests regarding communication needs.</div>'
-    +'</div></div>';
+    +'<div style="padding:14px 0;border-top:1px solid var(--border);font-size:11px;color:var(--fog);margin-top:18px">*Stakeholder registry can be provided on request.</div>'
+    +'</div>'
+    // RIGHT live preview pane
+    +'<div id="rpt-preview-pane" style="width:50%;overflow-y:auto;background:#f4f6f8">'
+    +'<div style="padding:8px 16px;background:#e8edf2;border-bottom:1px solid #cdd4dc;display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:10">'
+    +'<svg viewBox="0 0 16 16" fill="none" stroke="#555" stroke-width="1.8" style="width:13px;height:13px"><path d="M2 4h12M2 8h8M2 12h10"/></svg>'
+    +'<span style="font-size:11px;font-weight:600;color:#555;text-transform:uppercase;letter-spacing:.5px">Live Preview</span>'
+    +'<span style="font-size:10px;color:#888;margin-left:4px">updates as you type</span>'
+    +'</div>'
+    +'<div id="rpt-live-preview" style="padding:32px 40px;font-family:Georgia,serif;color:#111;line-height:1.7;font-size:13px;min-height:100%">'
+    +'<div style="color:#aaa;font-style:italic;text-align:center;padding-top:60px">Preview loading…</div>'
+    +'</div></div>'
+    +'</div>';
+  // Trigger initial preview render after DOM is set
+  setTimeout(renderLivePreview, 50);
+}
+
+// ── Live preview debouncer ──────────────────────────────────────────────────
+var _previewTimer = null;
+function schedulePreview() {
+  clearTimeout(_previewTimer);
+  _previewTimer = setTimeout(renderLivePreview, 350);
+}
+
+function renderLivePreview() {
+  var pane = document.getElementById('rpt-live-preview');
+  if (!pane) return;
+
+  var projF = S.projectFilter;
+  if (!projF) { pane.innerHTML = '<div style="color:#aaa;font-style:italic;text-align:center;padding-top:60px">No project selected.</div>'; return; }
+
+  var projs = DB.get('projects');
+  var proj = projs.find(function(p){ return p.id === projF; });
+  if (!proj) return;
+
+  // Read current form state
+  var title    = (document.getElementById('rpt-title')    || {}).value || 'PI Progress Report';
+  var num      = (document.getElementById('rpt-num')      || {}).value || '';
+  var subtitle = (document.getElementById('rpt-subtitle') || {}).value || '';
+  var pstart   = (document.getElementById('rpt-pstart')   || {}).value || '';
+  var pend     = (document.getElementById('rpt-pend')     || {}).value || '';
+  var overall  = (document.getElementById('rpt-overall-summary') || {}).value || '';
+
+  // Sections
+  var sections = [];
+  document.querySelectorAll('.rpt-sec-title').forEach(function(inp, i) {
+    var idx = parseInt(inp.getAttribute('data-idx'));
+    var summaryEl = document.querySelector('.rpt-sec-summary[data-idx="'+idx+'"]');
+    var contentEl = document.querySelector('.rpt-sec-content[data-idx="'+idx+'"]');
+    var typeEl    = summaryEl ? summaryEl.getAttribute('data-sectype') : 'manual';
+    sections[idx] = {
+      title:   inp.value || ('Section ' + (idx+1)),
+      summary: summaryEl ? summaryEl.value : '',
+      content: contentEl ? contentEl.value : '',
+      type:    typeEl || 'manual'
+    };
+  });
+  sections = sections.filter(Boolean);
+
+  // Distribution recipients
+  var selGroups = [];
+  document.querySelectorAll('.rpt-ed-grp:checked').forEach(function(cb){ selGroups.push(cb.value); });
+  var ps = DB.get('project_stakeholders').filter(function(lk){ return String(lk.projectId) === String(projF); });
+  var allStakes = DB.get('stakeholders');
+  var recipients = [];
+  ps.forEach(function(lk) {
+    if (!selGroups.length) return;
+    var groups = (lk.distributionGroups||'').split(',').map(function(s){return s.trim();});
+    var match = groups.some(function(g){ return selGroups.indexOf(g) >= 0; });
+    if (!match) return;
+    var s = allStakes.find(function(x){ return String(x.id) === String(lk.stakeholderId); });
+    if (s) recipients.push(dispName(s));
+  });
+
+  // Auto-section data snippets
+  var ints = DB.get('interactions').filter(function(i){ return String(i.projectId) === String(projF); });
+  var dels = DB.get('deliverables').filter(function(d){ return String(d.projectId) === String(projF); });
+  var periods = DB.get('comment_periods').filter(function(p){ return String(p.projectId) === String(projF); });
+  var pcomms = DB.get('public_comments').filter(function(c){ return String(c.projectId) === String(projF); });
+
+  // Date range filter for interactions
+  var filteredInts = ints;
+  if (pstart || pend) {
+    filteredInts = ints.filter(function(i) {
+      if (pstart && i.date < pstart) return false;
+      if (pend   && i.date > pend)   return false;
+      return true;
+    });
+  }
+
+  var dateStr = new Date().toLocaleDateString('en-US', {month:'long',day:'numeric',year:'numeric'});
+  var periodStr = pstart && pend ? (fmtDate(pstart) + ' – ' + fmtDate(pend)) : pstart ? ('From ' + fmtDate(pstart)) : pend ? ('Through ' + fmtDate(pend)) : '';
+
+  var html = '';
+
+  // Header
+  html += '<div style="border-bottom:3px solid #1e3a5f;padding-bottom:16px;margin-bottom:20px">';
+  html += '<div style="font-size:9px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Public Involvement Progress Report</div>';
+  html += '<div style="font-size:20px;font-weight:700;color:#1e3a5f;line-height:1.2">' + escHtml(title) + (num ? ' <span style="font-size:14px;color:#555">#' + escHtml(num) + '</span>' : '') + '</div>';
+  if (subtitle) html += '<div style="font-size:13px;color:#444;margin-top:3px">' + escHtml(subtitle) + '</div>';
+  html += '<div style="font-size:11px;color:#666;margin-top:6px">' + escHtml(proj.name) + ' &nbsp;·&nbsp; ' + escHtml(proj.pid || '') + '</div>';
+  if (periodStr) html += '<div style="font-size:11px;color:#666">Report period: ' + escHtml(periodStr) + '</div>';
+  html += '<div style="font-size:11px;color:#999;margin-top:3px">Generated: ' + dateStr + '</div>';
+  html += '</div>';
+
+  // Distributed to
+  if (recipients.length) {
+    html += '<div style="background:#e8eef4;border:1px solid #b0c4d8;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:12px">';
+    html += '<span style="font-weight:700;color:#333;text-transform:uppercase;letter-spacing:.4px;font-size:10px">Distributed to: </span>';
+    html += '<span style="color:#111">' + recipients.map(escHtml).join(', ') + '</span>';
+    html += '</div>';
+  }
+
+  // Overall summary
+  if (overall.trim()) {
+    html += '<div style="background:#f0f4f8;border-left:3px solid #4a9be8;padding:10px 14px;margin-bottom:18px;font-size:13px;color:#222;line-height:1.6">' + escHtml(overall) + '</div>';
+  }
+
+  // Sections
+  sections.forEach(function(sec, i) {
+    html += '<div style="margin-bottom:22px">';
+    html += '<div style="font-size:13px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #cdd4dc;padding-bottom:4px;margin-bottom:10px">' + escHtml(sec.title) + '</div>';
+
+    var isAuto = sec.type && sec.type !== 'manual';
+
+    if (isAuto) {
+      // Show auto-data summary row counts
+      var counts = [];
+      if (sec.type === 'auto-concerns' || sec.type === 'auto-intlog') counts.push(filteredInts.length + ' interaction' + (filteredInts.length !== 1 ? 's' : '') + ' in period');
+      if (sec.type === 'auto-del') counts.push(dels.length + ' deliverable' + (dels.length !== 1 ? 's' : ''));
+      if (sec.type === 'auto-comments') counts.push(pcomms.length + ' public comment' + (pcomms.length !== 1 ? 's' : ''));
+      if (sec.type === 'auto-contacts') {
+        var extCt = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; }).length;
+        counts.push(extCt + ' external contact' + (extCt !== 1 ? 's' : ''));
+      }
+      if (counts.length) {
+        html += '<div style="font-size:11px;color:#888;font-style:italic;background:#f0f0f0;border-radius:4px;padding:5px 10px;margin-bottom:8px">Auto-populated · ' + counts.join(' · ') + '</div>';
+      }
+    } else if (sec.content) {
+      // Render manual bullet content
+      html += '<ul style="margin:0 0 8px 0;padding-left:20px">';
+      sec.content.split('\n').forEach(function(line) {
+        if (line.trim()) html += '<li style="margin-bottom:4px;font-size:13px;color:#222">' + escHtml(line.trim()) + '</li>';
+      });
+      html += '</ul>';
+    }
+
+    if (sec.summary) {
+      html += '<div style="font-size:12px;color:#444;font-style:italic;margin-top:6px;border-left:2px solid #9ab;padding-left:10px;line-height:1.6">' + escHtml(sec.summary) + '</div>';
+    } else if (isAuto) {
+      html += '<div style="font-size:11px;color:#bbb;font-style:italic">Section narrative will appear here after AI draft or manual entry.</div>';
+    }
+
+    html += '</div>';
+  });
+
+  if (!sections.length) {
+    html += '<div style="color:#aaa;font-style:italic;text-align:center;padding:30px 0">Add sections in the editor on the left.</div>';
+  }
+
+  html += '<div style="border-top:1px solid #cdd4dc;margin-top:24px;padding-top:12px;font-size:10px;color:#aaa">*Stakeholder registry can be provided on request.</div>';
+
+  pane.innerHTML = html;
 }
 
 function captureFormState(){

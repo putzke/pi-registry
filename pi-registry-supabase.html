@@ -7567,7 +7567,8 @@ function getAvailableSections(){
     {id:'comment-matrix',title:'Public comment matrix',type:'auto-comments'},
     {id:'events-log',title:'Events & outreach log',type:'auto-events'},
     {id:'issues',title:'Issues tracker',type:'auto-issues'},
-    {id:'commitments',title:'Commitments tracker',type:'auto-commitments'}
+    {id:'commitments',title:'Commitments tracker',type:'auto-commitments'},
+    {id:'pi-compliance',title:'PI Compliance Summary (FHWA/NEPA)',type:'auto-pi-compliance'}
   ];
 }
 
@@ -7613,7 +7614,8 @@ function getSectionDesc(type){
     'auto-comments':'Auto-populates public comments received with response status for formal documentation.',
     'auto-events':'Auto-populates all logged public events and outreach activities with attendance counts and notes.',
     'auto-issues':'Auto-populates open and resolved issues with priority, status, category, and linked interaction details.',
-    'auto-commitments':'Auto-populates open and fulfilled commitments made to stakeholders, grouped by category and status.'
+    'auto-commitments':'Auto-populates open and fulfilled commitments made to stakeholders, grouped by category and status.',
+    'auto-pi-compliance':'Auto-populates a FHWA/NEPA PI compliance summary: NEPA checklist progress, public meetings, comment response rate, LEP/EJ outreach, and commitment fulfillment.'
   };
   return descs[type]||'';
 }
@@ -7795,6 +7797,30 @@ function _buildSectionDraft(secType) {
     txt10 += ' '+responded+' '+(responded!==1?'have':'has')+' received a formal response.';
     if (comments.length - responded > 0) txt10 += ' '+(comments.length-responded)+' remain'+(comments.length-responded!==1?'':'s')+' pending response.';
     return txt10;
+  }
+
+  if (secType === 'auto-pi-compliance') {
+    var pcomms2 = (DB.get('public_comments')||[]).filter(function(c){return String(c.projectId)===String(projF);});
+    var cl2 = proj.nepaChecklist||[];
+    var clDone2 = cl2.filter(function(x){return x.checked;}).length;
+    var clPct2 = cl2.length > 0 ? Math.round(clDone2/cl2.length*100) : null;
+    var lepSt2 = stakes.filter(function(s){return s.lep;}).length;
+    var ejSt2  = stakes.filter(function(s){return s.ejCommunity||s.underserved||s.ej;}).length;
+    var pubMeet2 = meetings.filter(function(m){return m.type==='Public meeting'||m.type==='Public event';}).length;
+    var totalAtt2 = meetings.filter(function(m){return m.type==='Public meeting'||m.type==='Public event';}).reduce(function(s,m){return s+(parseInt(m.attendanceCount)||0);},0);
+    var responded2 = pcomms2.filter(function(c){return c.responseStatus==='Responded'||c.responseStatus==='No response needed';}).length;
+    var respRate2  = pcomms2.length > 0 ? Math.round(responded2/pcomms2.length*100) : null;
+    var comms2 = DB.get('commitments').filter(function(c){return String(c.projectId)===String(projF);});
+    var fulfilled2 = comms2.filter(function(c){return c.status==='Fulfilled';}).length;
+    var txt11 = 'PI Compliance Summary for '+proj.name+' ('+proj.pid+'):';
+    if (clPct2 !== null) txt11 += ' NEPA PI checklist is '+clPct2+'% complete ('+clDone2+' of '+cl2.length+' items).';
+    txt11 += ' '+pubMeet2+' public meeting'+(pubMeet2!==1?'s have':' has')+' been held';
+    if (totalAtt2 > 0) txt11 += ' with an estimated total attendance of '+totalAtt2;
+    txt11 += '.';
+    if (pcomms2.length > 0) txt11 += ' Comment response rate: '+(respRate2!==null?respRate2+'%':'N/A')+' ('+responded2+' of '+pcomms2.length+' comments addressed).';
+    if (lepSt2 > 0 || ejSt2 > 0) txt11 += ' LEP/EJ outreach: '+lepSt2+' LEP stakeholder'+(lepSt2!==1?'s':'')+(ejSt2>0?' and '+ejSt2+' EJ community stakeholder'+(ejSt2!==1?'s':'')+' are':' is')+' engaged.';
+    if (comms2.length > 0) txt11 += ' Commitment fulfillment: '+fulfilled2+' of '+comms2.length+' commitment'+(comms2.length!==1?'s':'')+(fulfilled2===comms2.length?' — all fulfilled.':' fulfilled.');
+    return txt11;
   }
 
   return null;
@@ -8763,6 +8789,57 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
           }
           xml+=spacer();
         });
+      }
+
+    } else if(sec.type==='auto-pi-compliance'){
+      var _pcomms=(DB.get('public_comments')||[]).filter(function(c){return String(c.projectId)===String(proj.id);});
+      var _meets=(DB.get('meetings')||[]).filter(function(m){return String(m.projectId)===String(proj.id)&&(m.type==='Public meeting'||m.type==='Public event');});
+      var _comms=(DB.get('commitments')||[]).filter(function(c){return String(c.projectId)===String(proj.id);});
+      var _cl=proj.nepaChecklist||[];
+      var _clDone=_cl.filter(function(x){return x.checked;}).length;
+      var _clPct=_cl.length>0?Math.round(_clDone/_cl.length*100):null;
+      var _extSk=externalPS.map(function(lk){return allStakes.find(function(x){return String(x.id)===String(lk.stakeholderId);});}).filter(Boolean);
+      var _lep=_extSk.filter(function(s){return s.lep;}).length;
+      var _ej=_extSk.filter(function(s){return s.ejCommunity||s.underserved||s.ej;}).length;
+      var _totalAtt=_meets.reduce(function(s,m){return s+(parseInt(m.attendanceCount)||0);},0);
+      var _responded=_pcomms.filter(function(c){return c.responseStatus==='Responded'||c.responseStatus==='No response needed';}).length;
+      var _fulfilled=_comms.filter(function(c){return c.status==='Fulfilled';}).length;
+      var _champCt=externalPS.filter(function(x){return x.support==='Champion';}).length;
+      var _oppCt=externalPS.filter(function(x){return x.support==='Opponent';}).length;
+      var _neutCt=externalPS.filter(function(x){return x.support==='Neutral';}).length;
+
+      xml+=para('NEPA PI Checklist',boldRpr);
+      xml+=bullet(_clPct!==null?('Progress: '+_clDone+' of '+_cl.length+' items complete ('+_clPct+'%)'):'No NEPA checklist configured for this project.');
+      xml+=spacer();
+      xml+=para('Public Meetings & Events',boldRpr);
+      xml+=bullet(_meets.length+' public meeting'+(  _meets.length!==1?'s have':' has')+' been held'+(  _totalAtt>0?' with an estimated total attendance of '+_totalAtt+' participants.':'.'));
+      xml+=spacer();
+      xml+=para('Public Comment Response',boldRpr);
+      if(_pcomms.length===0){
+        xml+=bullet('No public comments on record.');
+      } else {
+        var _rr=Math.round(_responded/_pcomms.length*100);
+        xml+=bullet('Comments received: '+_pcomms.length);
+        xml+=bullet('Responded or no response needed: '+_responded+' ('+_rr+'%)');
+        xml+=bullet('Pending response: '+(_pcomms.length-_responded));
+      }
+      xml+=spacer();
+      xml+=para('LEP / EJ Outreach',boldRpr);
+      xml+=bullet('LEP stakeholders engaged: '+_lep);
+      xml+=bullet('EJ community stakeholders engaged: '+_ej);
+      xml+=spacer();
+      xml+=para('Stakeholder Sentiment (External)',boldRpr);
+      xml+=bullet('Champion: '+_champCt);
+      xml+=bullet('Neutral: '+_neutCt);
+      xml+=bullet('Opponent: '+_oppCt);
+      xml+=spacer();
+      xml+=para('Commitment Fulfillment',boldRpr);
+      if(_comms.length===0){
+        xml+=bullet('No commitments recorded.');
+      } else {
+        xml+=bullet('Total commitments: '+_comms.length);
+        xml+=bullet('Fulfilled: '+_fulfilled);
+        xml+=bullet('Open / pending: '+(_comms.length-_fulfilled));
       }
 
     } else {

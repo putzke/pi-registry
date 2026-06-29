@@ -130,6 +130,7 @@ Bulk CSV import wizard for stakeholders and interactions. ~2,420 lines.
 3. **AI cross-report trend summary testing** — needs 2+ real exports to test fully
 4. **NEPA checklist progress bar on project cards** — may be partially implemented, needs verification
 5. **Continue testing** stakeholders LEP/EJ checkboxes, public meeting equity toggle, public comments nav/form
+6. **NEPA Compliance section in PI Report Editor** — new section type `'nepa-compliance'` in the Add Section dropdown; auto-populates with live checklist group progress + comment period compliance for the project; includes an "AI Draft" button that calls `_claudeNarrative()` to generate a professional narrative paragraph from the compliance snapshot, written into the section text field like other AI-drafted sections. High priority — good AI use case.
 
 ## Supabase project
 - URL: `https://ncfbblhlsiglxkoiounv.supabase.co`

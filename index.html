@@ -7903,7 +7903,8 @@ function getAvailableSections(){
     {id:'events-log',title:'Events & outreach log',type:'auto-events'},
     {id:'issues',title:'Issues tracker',type:'auto-issues'},
     {id:'commitments',title:'Commitments tracker',type:'auto-commitments'},
-    {id:'pi-compliance',title:'PI Compliance Summary (FHWA/NEPA)',type:'auto-pi-compliance'}
+    {id:'pi-compliance',title:'PI Compliance Summary (FHWA/NEPA)',type:'auto-pi-compliance'},
+    {id:'nepa-compliance',title:'NEPA Compliance — Checklist & Comment Periods',type:'auto-nepa-compliance'}
   ];
 }
 
@@ -7966,7 +7967,8 @@ function getSectionDesc(type){
     'auto-events':'Auto-populates all logged public events and outreach activities with attendance counts and notes.',
     'auto-issues':'Auto-populates open and resolved issues with priority, status, category, and linked interaction details.',
     'auto-commitments':'Auto-populates open and fulfilled commitments made to stakeholders, grouped by category and status.',
-    'auto-pi-compliance':'Auto-populates a FHWA/NEPA PI compliance summary: NEPA checklist progress, public meetings, comment response rate, LEP/EJ outreach, and commitment fulfillment.'
+    'auto-pi-compliance':'Auto-populates a FHWA/NEPA PI compliance summary: NEPA checklist progress, public meetings, comment response rate, LEP/EJ outreach, and commitment fulfillment.',
+    'auto-nepa-compliance':'Auto-populates NEPA checklist progress by phase group, outstanding items, and comment period duration compliance. Supports AI-drafted narrative.'
   };
   return descs[type]||'';
 }
@@ -8357,6 +8359,44 @@ function _buildSectionDraft(secType) {
     txt10 += ' '+responded+' '+(responded!==1?'have':'has')+' received a formal response.';
     if (comments.length - responded > 0) txt10 += ' '+(comments.length-responded)+' remain'+(comments.length-responded!==1?'':'s')+' pending response.';
     return txt10;
+  }
+
+  if (secType === 'auto-nepa-compliance') {
+    var cl_n = proj.nepaChecklist || [];
+    if (cl_n.length === 0) return null;
+    var clDone_n = cl_n.filter(function(x){return x.checked;}).length;
+    var clPct_n  = Math.round(clDone_n / cl_n.length * 100);
+    // Group breakdown
+    var groupMap = {};
+    cl_n.forEach(function(item){
+      var g = item.group || 'General';
+      if (!groupMap[g]) groupMap[g] = {total:0,done:0};
+      groupMap[g].total++;
+      if (item.checked) groupMap[g].done++;
+    });
+    var groupLines = Object.keys(groupMap).map(function(g){
+      var gm = groupMap[g];
+      return g+': '+gm.done+'/'+gm.total+' ('+Math.round(gm.done/gm.total*100)+'%)';
+    });
+    // Comment period compliance
+    var periods_n = (DB.get('comment_periods')||[]).filter(function(p){return String(p.projectId)===String(projF);});
+    var periodLines = periods_n.map(function(p){
+      var req = getPeriodReq(p.periodType);
+      if (!req || !req.minDays) return null;
+      if (!p.startDate || !p.endDate) return null;
+      var days = Math.round((new Date(p.endDate)-new Date(p.startDate))/(1000*60*60*24));
+      var status = days >= req.minDays ? 'compliant ('+days+' days)' : 'NON-COMPLIANT ('+days+' days, minimum '+req.minDays+')';
+      return (p.name||getPeriodLabel(p.periodType)||p.periodType)+': '+status;
+    }).filter(Boolean);
+    // Outstanding items
+    var outstanding = cl_n.filter(function(x){return !x.checked;});
+    var nepaClass = proj.nepaClassification || '';
+    var txt_n = 'NEPA Compliance for '+proj.name+' ('+nepaClass+'): checklist is '+clPct_n+'% complete — '+clDone_n+' of '+cl_n.length+' items completed.';
+    if (groupLines.length) txt_n += ' Group progress: '+groupLines.join('; ')+'.';
+    if (outstanding.length) txt_n += ' '+outstanding.length+' item'+(outstanding.length!==1?'s remain':' remains')+' outstanding.';
+    if (periodLines.length) txt_n += ' Comment period compliance: '+periodLines.join('; ')+'.';
+    else txt_n += ' No comment periods on record.';
+    return txt_n;
   }
 
   if (secType === 'auto-pi-compliance') {
@@ -8820,6 +8860,14 @@ function renderLivePreview() {
       if (sec.type === 'auto-contacts') {
         var extCt = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; }).length;
         counts.push(extCt + ' external contact' + (extCt !== 1 ? 's' : ''));
+      }
+      if (sec.type === 'auto-nepa-compliance') {
+        var _prj = DB.get('projects').find(function(p){ return p.id === projF; });
+        var _cl = (_prj && _prj.nepaChecklist) || [];
+        var _clDone = _cl.filter(function(x){ return x.checked; }).length;
+        if (_cl.length) counts.push(_clDone + '/' + _cl.length + ' checklist items');
+        var _perCt = (DB.get('comment_periods')||[]).filter(function(p){ return String(p.projectId)===String(projF); }).length;
+        if (_perCt) counts.push(_perCt + ' comment period' + (_perCt !== 1 ? 's' : ''));
       }
       if (counts.length) {
         html += '<div style="font-size:11px;color:#888;font-style:italic;background:#f0f0f0;border-radius:4px;padding:5px 10px;margin-bottom:8px">Auto-populated · ' + counts.join(' · ') + '</div>';
@@ -9836,6 +9884,49 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
         xml+=bullet('Total commitments: '+_comms.length);
         xml+=bullet('Fulfilled: '+_fulfilled);
         xml+=bullet('Open / pending: '+(_comms.length-_fulfilled));
+      }
+
+    } else if(sec.type==='auto-nepa-compliance'){
+      var _ncl=proj.nepaChecklist||[];
+      var _nDone=_ncl.filter(function(x){return x.checked;}).length;
+      var _nPct=_ncl.length>0?Math.round(_nDone/_ncl.length*100):null;
+      xml+=para('NEPA Checklist Progress'+(proj.nepaClassification?' — '+proj.nepaClassification:''),boldRpr);
+      if(_nPct===null){
+        xml+=bullet('No NEPA checklist configured for this project.');
+      } else {
+        xml+=bullet('Overall: '+_nDone+' of '+_ncl.length+' items complete ('+_nPct+'%)');
+        // Group breakdown
+        var _nGroups={};
+        _ncl.forEach(function(item){var g=item.group||'General';if(!_nGroups[g])_nGroups[g]={t:0,d:0};_nGroups[g].t++;if(item.checked)_nGroups[g].d++;});
+        Object.keys(_nGroups).forEach(function(g){var gd=_nGroups[g];xml+=bullet(g+': '+gd.d+'/'+gd.t+' ('+Math.round(gd.d/gd.t*100)+'%)',1);});
+      }
+      xml+=spacer();
+      // Outstanding items
+      var _nOut=_ncl.filter(function(x){return !x.checked;});
+      xml+=para('Outstanding Checklist Items',boldRpr);
+      if(_nOut.length===0){
+        xml+=bullet('All checklist items are complete.');
+      } else {
+        _nOut.forEach(function(item){xml+=bullet(item.label,1);});
+      }
+      xml+=spacer();
+      // Comment period compliance
+      var _nPers=(DB.get('comment_periods')||[]).filter(function(p){return String(p.projectId)===String(proj.id);});
+      xml+=para('Comment Period Compliance',boldRpr);
+      if(_nPers.length===0){
+        xml+=bullet('No comment periods on record.');
+      } else {
+        _nPers.forEach(function(p){
+          var req=getPeriodReq(p.periodType);
+          var label=p.name||getPeriodLabel(p.periodType)||p.periodType||'Period';
+          if(!req||!req.minDays||!p.startDate||!p.endDate){
+            xml+=bullet(label+': dates or requirements not set');
+            return;
+          }
+          var days=Math.round((new Date(p.endDate)-new Date(p.startDate))/(1000*60*60*24));
+          var comp=days>=req.minDays;
+          xml+=bullet(label+': '+days+' days — '+(comp?'Compliant (min '+req.minDays+'d)':'NON-COMPLIANT (min '+req.minDays+'d required)'));
+        });
       }
 
     } else {

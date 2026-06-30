@@ -4802,7 +4802,10 @@ function toggleNepaCheck(projId,idx){
   item.checkedDate=item.checked?localToday():'';
   item.checkedBy=item.checked?(getLoggedBy()||''):'';
   DB.set('projects',all);
-  renderDeliverables(document.getElementById('main'));
+  const _main=document.getElementById('main');
+  const _scrollTop=_main?_main.scrollTop:0;
+  renderDeliverables(_main);
+  if(_main)_main.scrollTop=_scrollTop;
 }
 function renderDelAll(pF){
   let dels=DB.get('deliverables');

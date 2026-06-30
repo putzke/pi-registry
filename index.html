@@ -9982,7 +9982,7 @@ function openImportTool(projectId) {
   // Pass the target project and auth token as URL params
   const sess = getSession();
   const token = sess ? sess.access_token : '';
-  let importerPath = 'stakeholder-importer-supabase.html';
+  let importerPath = 'importer.html';
   const params = [];
   if (projectId) params.push('project=' + encodeURIComponent(projectId));
   if (token) params.push('token=' + encodeURIComponent(token));

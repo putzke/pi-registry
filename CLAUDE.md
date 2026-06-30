@@ -201,6 +201,51 @@ a prerequisite check before large new feature commitments — if a proposed
 feature only reflects Sunrise's specific workflow rather than an
 industry-wide PI pain point, flag it for Jeff to validate first.
 
+**De-prioritized (keep, but don't deepen further — commodity ground already
+served well by competitors):** influence map / stakeholder engagement
+matrix visualizations, sentiment tracking / bulk sentiment update,
+group/coalition management. Do NOT build mass public engagement tooling
+(surveys, SMS blasts, social monitoring, resident-facing input portals) —
+that's PublicInput/Granicus/EngagementHQ territory; Horizon COMPASS stays
+internal-facing.
+
+## FUTURE — PI Client Portal (identified June 29, 2026, high strategic priority)
+
+**The differentiator no competitor has:** every competitor researched is
+either a public-facing engagement platform (talks to residents) or an
+internal stakeholder CRM (talks to the PI team). Nobody builds the third
+leg — keeping the PI firm's actual client (DOT, city, county leadership)
+continuously informed without a manual reporting cycle. This is especially
+valuable during construction, when physical impacts are greatest and the
+client most wants visibility without waiting for a periodic report. Also
+strengthens the FHWA compliance story — DOTs/FHWA already require
+documented continuous PI communication; this gives the client a live
+window into that record instead of a static quarterly PDF.
+
+**Goal:** a client contact (e.g., Logan City Engineering) logs in and sees
+ONLY the public engagement activity and deliverable progress for their
+specific project — nothing else in the system.
+
+**Requirements:**
+- New role: Client Viewer — read-only, scoped to one project or a defined
+  set of projects (e.g., a DOT region office overseeing multiple projects)
+- Curated client-facing dashboard, distinct from internal PI team
+  interface — likely: engagement activity summary, deliverable progress,
+  recent outreach events, high-level issue status (open/resolved). Probably
+  NOT full interaction-level detail, internal notes, or raw sentiment scores
+- RLS scoping in Supabase so client logins only see their own project data
+  — dovetails directly with the multi-tenant org_id work already on roadmap
+- Field-level curation layer controlling exactly what surfaces externally
+
+**Why this matters strategically:** not incremental feature parity — a
+structurally different category move, and it fits naturally alongside
+(not in competition with) the multi-tenant org layer and AI report
+drafting already planned, rather than requiring a separate dev track.
+
+**Before building:** design session to define exact client-visible vs.
+internal-only fields/views, design the Client Viewer role and login flow,
+and validate with one or two friendly DOT/municipal contacts first.
+
 ## Supabase project
 - URL: `https://ncfbblhlsiglxkoiounv.supabase.co`
 - Anon key in `index.html` line ~505 (`SUPA_KEY`)

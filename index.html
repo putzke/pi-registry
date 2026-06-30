@@ -3918,8 +3918,10 @@ function selectStake(id){
   // Master detail: also restore ms-data-list scroll
   if(S.view==='master'){
     requestAnimationFrame(()=>{
-      const ml=document.getElementById('ms-data-list');
-      if(ml&&_savedScroll)ml.scrollTop=_savedScroll;
+      requestAnimationFrame(()=>{
+        const ml=document.getElementById('ms-data-list');
+        if(ml&&_savedScroll)ml.scrollTop=_savedScroll;
+      });
     });
   }
 }

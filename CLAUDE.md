@@ -132,6 +132,120 @@ Bulk CSV import wizard for stakeholders and interactions. ~2,420 lines.
 5. **Continue testing** stakeholders LEP/EJ checkboxes, public meeting equity toggle, public comments nav/form
 6. **NEPA Compliance section in PI Report Editor** — new section type `'nepa-compliance'` in the Add Section dropdown; auto-populates with live checklist group progress + comment period compliance for the project; includes an "AI Draft" button that calls `_claudeNarrative()` to generate a professional narrative paragraph from the compliance snapshot, written into the section text field like other AI-drafted sections. High priority — good AI use case.
 
+## Competitive positioning (researched June 29, 2026)
+
+**Only direct competitor: PublicInput.com.** Founded by former transportation
+planning consultants, used by 12 state DOTs + major MPOs + 200 consulting
+firms. Functions as a public-facing engagement CRM (geo-targeted outreach,
+multi-channel input collection, meeting/hearing management, analytics).
+Enterprise SaaS, agency-wide contracts, likely $20K–$100K+/yr.
+
+**Not direct competitors** (different category/buyer):
+- **CivicPlus** — municipal CMS/resident self-service (permits, FOIA, 311), not PI/transportation-specific
+- **Granicus** — citizen-facing engagement hubs/dashboards, not an internal PI consultant tool
+- **OpenGov** — government finance/budgeting/transparency platform, community feedback is a minor module
+
+**Second-tier competitor: Simply Stakeholders.** Modern AI-equipped stakeholder
+RM platform, ~30 years founder experience, real clients (Glencore, NZ Transport
+Agency, etc.), cheap entry pricing for small teams. General-purpose — not
+transportation/NEPA-specific. Also note the wider field of established
+infrastructure stakeholder tools: Tractivity (UK regulated infrastructure),
+Borealis (large NA programs), Jambo (entry-level NA logging), EngagementHQ/
+Granicus, Syrenis SMART, Citizen Space (UK compliance/consultation). **None of
+these — including Simply Stakeholders — are purpose-built for FHWA/NEPA-
+regulated U.S. transportation PI.** No NEPA stage tagging, no U.S. Title VI/EJ
+compliance fields, no UDOT-specific workflow. That gap is real and is Horizon
+COMPASS's defensible niche.
+
+**Core distinction driving all product decisions:** PublicInput is built for
+the *agency* to collect public input at scale. Horizon COMPASS is built for
+the *PI consultant* (the Sunrise-style firm) to manage stakeholder
+relationships, commitments, issues, and FHWA/NEPA compliance documentation
+as their actual daily internal workflow. Compliance in PublicInput is a
+byproduct of engagement data; in Horizon COMPASS it is the product itself.
+
+**Differentiation priorities (do NOT build toward #1):**
+1. Do not compete on public engagement scale — no mass SMS/social campaigns, no survey tooling. PublicInput owns this; not worth contesting.
+2. Own the consultant's internal system of record — this is the underserved buyer.
+3. Compliance docs (NEPA stage tagging, tribal consultation, LEP/EJ flags, comment periods) should stay daily-use workflow tools, not just report outputs.
+4. AI report drafting (`_claudeNarrative()`) is a genuine wedge — no competitor researched offers this.
+5. Win on price/speed of adoption vs. PublicInput's agency procurement cycle — sell to the consultant/firm, not the state.
+
+**Strategic framing for any UDOT-facing pitch:** position Horizon COMPASS as
+*complementary to* existing PublicInput contracts a DOT may already have,
+not a replacement. Full positioning brief: `HC_Competitive_Positioning_Brief.docx`
+(not in this repo — held by Jeff).
+
+**Realistic market assessment (why this is winnable, not just defensible):**
+1. No researched competitor is purpose-built for FHWA/NEPA-regulated U.S.
+   transportation PI — this gap is real and currently unaddressed.
+2. The builder is the buyer — every competitor was built by a software
+   company selling to PI professionals from the outside; Horizon COMPASS is
+   built by a working PI professional living the daily workflow. This shows
+   up in design details (report distribution groups, anonymous contact
+   logging, bulk import) shaped by real friction, not guesswork.
+3. Winnable segment is small-to-mid PI consulting firms (Sunrise and similar
+   regional firms doing UDOT/county/municipal work), NOT enterprise agency
+   contracts — competitors sell agency-wide enterprise deals with long
+   procurement cycles; this product should stay fast-to-adopt for an
+   individual firm or PI manager.
+4. The win condition is staying laser-focused on the niche, not becoming a
+   general-purpose stakeholder platform. Going general-purpose loses against
+   better-capitalized, longer-tenured competitors (PublicInput, Simply
+   Stakeholders, Tractivity). Staying NEPA/UDOT-specific keeps the moat.
+
+**Open validation step (not yet done):** talk to 3–5 PI managers at other
+firms (not just Sunrise) to confirm NEPA/UDOT pain points are shared
+industry-wide before investing further in feature build-out. Treat this as
+a prerequisite check before large new feature commitments — if a proposed
+feature only reflects Sunrise's specific workflow rather than an
+industry-wide PI pain point, flag it for Jeff to validate first.
+
+**De-prioritized (keep, but don't deepen further — commodity ground already
+served well by competitors):** influence map / stakeholder engagement
+matrix visualizations, sentiment tracking / bulk sentiment update,
+group/coalition management. Do NOT build mass public engagement tooling
+(surveys, SMS blasts, social monitoring, resident-facing input portals) —
+that's PublicInput/Granicus/EngagementHQ territory; Horizon COMPASS stays
+internal-facing.
+
+## FUTURE — PI Client Portal (identified June 29, 2026, high strategic priority)
+
+**The differentiator no competitor has:** every competitor researched is
+either a public-facing engagement platform (talks to residents) or an
+internal stakeholder CRM (talks to the PI team). Nobody builds the third
+leg — keeping the PI firm's actual client (DOT, city, county leadership)
+continuously informed without a manual reporting cycle. This is especially
+valuable during construction, when physical impacts are greatest and the
+client most wants visibility without waiting for a periodic report. Also
+strengthens the FHWA compliance story — DOTs/FHWA already require
+documented continuous PI communication; this gives the client a live
+window into that record instead of a static quarterly PDF.
+
+**Goal:** a client contact (e.g., Logan City Engineering) logs in and sees
+ONLY the public engagement activity and deliverable progress for their
+specific project — nothing else in the system.
+
+**Requirements:**
+- New role: Client Viewer — read-only, scoped to one project or a defined
+  set of projects (e.g., a DOT region office overseeing multiple projects)
+- Curated client-facing dashboard, distinct from internal PI team
+  interface — likely: engagement activity summary, deliverable progress,
+  recent outreach events, high-level issue status (open/resolved). Probably
+  NOT full interaction-level detail, internal notes, or raw sentiment scores
+- RLS scoping in Supabase so client logins only see their own project data
+  — dovetails directly with the multi-tenant org_id work already on roadmap
+- Field-level curation layer controlling exactly what surfaces externally
+
+**Why this matters strategically:** not incremental feature parity — a
+structurally different category move, and it fits naturally alongside
+(not in competition with) the multi-tenant org layer and AI report
+drafting already planned, rather than requiring a separate dev track.
+
+**Before building:** design session to define exact client-visible vs.
+internal-only fields/views, design the Client Viewer role and login flow,
+and validate with one or two friendly DOT/municipal contacts first.
+
 ## Supabase project
 - URL: `https://ncfbblhlsiglxkoiounv.supabase.co`
 - Anon key in `index.html` line ~505 (`SUPA_KEY`)

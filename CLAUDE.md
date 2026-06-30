@@ -132,6 +132,38 @@ Bulk CSV import wizard for stakeholders and interactions. ~2,420 lines.
 5. **Continue testing** stakeholders LEP/EJ checkboxes, public meeting equity toggle, public comments nav/form
 6. **NEPA Compliance section in PI Report Editor** — new section type `'nepa-compliance'` in the Add Section dropdown; auto-populates with live checklist group progress + comment period compliance for the project; includes an "AI Draft" button that calls `_claudeNarrative()` to generate a professional narrative paragraph from the compliance snapshot, written into the section text field like other AI-drafted sections. High priority — good AI use case.
 
+## Competitive positioning (researched June 29, 2026)
+
+**Only direct competitor: PublicInput.com.** Founded by former transportation
+planning consultants, used by 12 state DOTs + major MPOs + 200 consulting
+firms. Functions as a public-facing engagement CRM (geo-targeted outreach,
+multi-channel input collection, meeting/hearing management, analytics).
+Enterprise SaaS, agency-wide contracts, likely $20K–$100K+/yr.
+
+**Not direct competitors** (different category/buyer):
+- **CivicPlus** — municipal CMS/resident self-service (permits, FOIA, 311), not PI/transportation-specific
+- **Granicus** — citizen-facing engagement hubs/dashboards, not an internal PI consultant tool
+- **OpenGov** — government finance/budgeting/transparency platform, community feedback is a minor module
+
+**Core distinction driving all product decisions:** PublicInput is built for
+the *agency* to collect public input at scale. Horizon COMPASS is built for
+the *PI consultant* (the Sunrise-style firm) to manage stakeholder
+relationships, commitments, issues, and FHWA/NEPA compliance documentation
+as their actual daily internal workflow. Compliance in PublicInput is a
+byproduct of engagement data; in Horizon COMPASS it is the product itself.
+
+**Differentiation priorities (do NOT build toward #1):**
+1. Do not compete on public engagement scale — no mass SMS/social campaigns, no survey tooling. PublicInput owns this; not worth contesting.
+2. Own the consultant's internal system of record — this is the underserved buyer.
+3. Compliance docs (NEPA stage tagging, tribal consultation, LEP/EJ flags, comment periods) should stay daily-use workflow tools, not just report outputs.
+4. AI report drafting (`_claudeNarrative()`) is a genuine wedge — no competitor researched offers this.
+5. Win on price/speed of adoption vs. PublicInput's agency procurement cycle — sell to the consultant/firm, not the state.
+
+**Strategic framing for any UDOT-facing pitch:** position Horizon COMPASS as
+*complementary to* existing PublicInput contracts a DOT may already have,
+not a replacement. Full positioning brief: `HC_Competitive_Positioning_Brief.docx`
+(not in this repo — held by Jeff).
+
 ## Supabase project
 - URL: `https://ncfbblhlsiglxkoiounv.supabase.co`
 - Anon key in `index.html` line ~505 (`SUPA_KEY`)

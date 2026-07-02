@@ -6682,8 +6682,7 @@ function exportIssuesPdf(){
   var issProj=isssProjF?issProjs.find(function(p){return p.id===isssProjF;}):null;
   var issProjLabel=issProj?(issProj.pid+' — '+issProj.name):'All Projects';
   var issDateStr=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-  var win=window.open('','_blank','width=1100,height=820,scrollbars=yes');
-  win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Issues Tracker</title><style>'
+  var _rptHtml='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Issues Tracker</title><style>'
     +'*{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
     +'body{font-family:Arial,sans-serif;font-size:10px;color:#111;margin:0;padding:0;background:#fff}'
     +'@page{size:letter portrait;margin:19mm 14mm 14mm 14mm}'
@@ -6708,8 +6707,8 @@ function exportIssuesPdf(){
     +'<span>PI Registry · Sunrise Engineering</span>'
     +'<span>'+issProjLabel+' · Issues Tracker</span>'
     +'</div>'
-    +'</body></html>');
-  win.document.close();
+    +'</body></html>';
+  showInlineReport(_rptHtml, 'Issues Tracker');
 }
 
 function renderReports(el){
@@ -7235,9 +7234,7 @@ function generatePISummary(){
     +'<span>Horizon COMPASS — Sunrise Engineering Inc.</span><span>'+dateStr+'</span></div>'
     +'</body></html>';
 
-  var win=window.open('','_blank','width=1100,height=820,scrollbars=yes');
-  if(win){win.document.write(html);win.document.close();}
-  else{alert('Pop-up blocked. Please allow pop-ups for this site and try again.');}
+  showInlineReport(html, 'PI Summary Report');
 }
 
 function generateNepaComplianceReport(){
@@ -7400,9 +7397,7 @@ function generateNepaComplianceReport(){
     +'<span>Horizon COMPASS — Sunrise Engineering Inc.</span><span>'+dateStr+'</span></div>'
     +'</body></html>';
 
-  var win=window.open('','_blank','width=1100,height=820,scrollbars=yes');
-  if(win){win.document.write(html);win.document.close();}
-  else{alert('Pop-up blocked. Please allow pop-ups for this site and try again.');}
+  showInlineReport(html, 'NEPA Compliance Report');
 }
 
 function generateIssuesReport(){
@@ -7822,8 +7817,7 @@ function _openRptPopup(rawHtml, rptTitle, rptProjLabel, dateStr, summaryTxt){
 
   var footerLabel=(rptProjLabel?(rptProjLabel+' · '):'')+rptTitle;
 
-  var win=window.open('','_blank','width=1100,height=820,scrollbars=yes');
-  win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+rptTitle+'</title><style>'
+  var _rptHtml='<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+rptTitle+'</title><style>'
     +'*{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
     +'body{font-family:Arial,sans-serif;font-size:10px;color:#111;margin:0;padding:0;background:#fff}'
     +'@page{size:letter portrait;margin:19mm 14mm 14mm 14mm}'
@@ -7860,8 +7854,8 @@ function _openRptPopup(rawHtml, rptTitle, rptProjLabel, dateStr, summaryTxt){
     +'<span>PI Registry · Sunrise Engineering</span>'
     +'<span>'+footerLabel+'</span>'
     +'</div>'
-    +'</body></html>');
-  win.document.close();
+    +'</body></html>';
+  showInlineReport(_rptHtml, rptTitle);
 }
 
 
@@ -10003,6 +9997,27 @@ function openImportTool(projectId) {
   }, 800);
 }
 
+// ── INLINE REPORT VIEWER (replaces window.open popups) ─────────────
+function showInlineReport(html, title) {
+  const existing = document.getElementById('inline-rpt-overlay');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'inline-rpt-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(6,14,24,.75);display:flex;flex-direction:column;align-items:center;padding:24px 0';
+  overlay.innerHTML =
+    '<div style="width:min(1100px,94vw);height:100%;display:flex;flex-direction:column;background:#0e1e30;border:1px solid rgba(255,255,255,.15);border-radius:10px;overflow:hidden">'
+    + '<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.12);background:#132840;flex-shrink:0">'
+    + '<div style="flex:1;font-size:13px;font-weight:600;color:var(--white)">' + (title || 'Report') + '</div>'
+    + '<button class="btn btn-sm" onclick="document.getElementById(\'inline-rpt-frame\').contentWindow.print()">Print</button>'
+    + '<button class="btn btn-sm" onclick="document.getElementById(\'inline-rpt-overlay\').remove()">Close</button>'
+    + '</div>'
+    + '<iframe id="inline-rpt-frame" style="flex:1;width:100%;border:none;background:#fff"></iframe>'
+    + '</div>';
+  document.body.appendChild(overlay);
+  const frame = document.getElementById('inline-rpt-frame');
+  frame.srcdoc = html;
+}
+
 // Toast notification
 function showToast(msg, type, duration) {
   // type: 'info' (default), 'warn', 'error'
@@ -10255,8 +10270,7 @@ function exportProject(projectId) {
 
 function _portfolioPrintWin(title, bodyHtml) {
   var date = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-  var win = window.open('', '_blank', 'width=1100,height=820,scrollbars=yes');
-  win.document.write(`<!DOCTYPE html><html><head>
+  var _rptHtml = `<!DOCTYPE html><html><head>
   <title>${title}</title>
   <style>
     *{box-sizing:border-box}
@@ -10287,9 +10301,8 @@ function _portfolioPrintWin(title, bodyHtml) {
   </div>
   ${bodyHtml}
   <div class="footer"><span>PI Registry · Sunrise Engineering</span><span>${title} · ${date}</span></div>
-  <script>window.onload=function(){window.print()}<\/script>
-  </body></html>`);
-  win.document.close();
+  </body></html>`;
+  showInlineReport(_rptHtml, title);
 }
 
 // ── 1. MASTER CONTACT LIST ─────────────────────────────────────────────────
@@ -11164,8 +11177,7 @@ function printStakeholderMap(projectId, projectName) {
       <td style="padding:6px 10px;border-bottom:1px solid #eee;color:#555;font-size:12px">${g.stake.address||'—'}</td></tr>`;
   }).join('');
 
-  const printWin = window.open('', '_blank', 'width=1100,height=820,scrollbars=yes');
-  printWin.document.write(`<!DOCTYPE html><html><head><title>${projectName} — Stakeholder Map</title>
+  const _rptHtml = `<!DOCTYPE html><html><head><title>${projectName} — Stakeholder Map</title>
   <style>body{font-family:Arial,sans-serif;margin:30px;color:#222}h1{font-size:18px;margin-bottom:4px}
   h2{font-size:13px;color:#555;font-weight:400;margin-bottom:16px}
   table{width:100%;border-collapse:collapse;font-size:13px}
@@ -11184,9 +11196,8 @@ function printStakeholderMap(projectId, projectName) {
   <img src="${staticMapUrl}" alt="Stakeholder map">
   <table><thead><tr><th>#</th><th>Name</th><th>Organization</th><th>Type</th><th>Support</th><th>Address</th></tr></thead>
   <tbody>${rows}</tbody></table>
-  <script>window.onload=function(){window.print();}<\/script>
-  </body></html>`);
-  printWin.document.close();
+  </body></html>`;
+  showInlineReport(_rptHtml, projectName + ' — Stakeholder Map');
 }
 // ══════════════════════════════════════════════════════════════════
 // END STAKEHOLDER MAP
@@ -11522,8 +11533,7 @@ function printEngagementMatrix(projectId) {
   const neut  = total - champ - opp;
   const hi    = stakes.filter(s=>s.influence==='High').length;
 
-  const printWin = window.open('', '_blank', 'width=1100,height=820,scrollbars=yes');
-  printWin.document.write(`<!DOCTYPE html><html><head>
+  const _rptHtml = `<!DOCTYPE html><html><head>
   <title>${projectName} — Stakeholder Engagement Matrix</title>
   <style>
     * { box-sizing: border-box; }
@@ -11586,9 +11596,8 @@ function printEngagementMatrix(projectId) {
     <span>${projectName} · ${projObj.pid||''}</span>
   </div>
 
-  <script>window.onload=function(){window.print();}<\/script>
-  </body></html>`);
-  printWin.document.close();
+  </body></html>`;
+  showInlineReport(_rptHtml, projectName + ' — Stakeholder Engagement Matrix');
 }
 
 
@@ -12001,8 +12010,7 @@ function _mapPrint() {
       +'<td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:11px;color:#555">'+(g.s.address||'—')+'</td></tr>';
   }).join('');
 
-  var printWin = window.open('','_blank','width=1100,height=820,scrollbars=yes');
-  printWin.document.write('<!DOCTYPE html><html><head><title>'+projName+' — Stakeholder Map</title>'
+  var _rptHtml = '<!DOCTYPE html><html><head><title>'+projName+' — Stakeholder Map</title>'
     +'<style>body{font-family:Arial,sans-serif;margin:30px;color:#222}h1{font-size:18px;margin-bottom:4px}'
     +'h2{font-size:13px;color:#555;font-weight:400;margin-bottom:16px}'
     +'table{width:100%;border-collapse:collapse;font-size:13px}'
@@ -12016,9 +12024,8 @@ function _mapPrint() {
     +'<img src="'+staticMapUrl+'" alt="Stakeholder map">'
     +'<table><thead><tr><th>#</th><th>Name</th><th>Organization</th><th>Type</th><th>Support</th><th>Influence</th><th>Address</th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table>'
-    +'<script>window.onload=function(){window.print();}<\/script>'
-    +'</body></html>');
-  printWin.document.close();
+    +'</body></html>';
+  showInlineReport(_rptHtml, projName + ' — Stakeholder Map');
 }
 // ══════════════════════════════════════════════════════════════════
 // END STAKEHOLDER MAP VIEW

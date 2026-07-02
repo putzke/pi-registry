@@ -128,12 +128,12 @@ Bulk CSV import wizard for stakeholders and interactions. ~2,420 lines.
 **Done this session:**
 - ~~Manual "Save to archive" button~~ — built: `manualArchiveReport()` (line ~9041), wired to the "Save to archive" button in `openPIReport()` toolbar. Saves draft, checkpoints to `pi_report_archive`, enforces `ARCHIVE_LIMIT`, refreshes archive panel in place.
 - ~~NEPA Compliance section in PI Report Editor~~ — built: section type `'nepa-compliance'` in Add Section dropdown, auto-populates with live checklist group progress + comment period compliance, AI Draft button via `_claudeNarrative()`.
+- ~~Absorb popup report windows~~ — built: new `showInlineReport(html, title)` helper (~line 10000) renders an in-app overlay with an iframe + Print/Close buttons instead of `window.open()`. All 8 report generators (`exportIssuesPdf`, `generatePISummary`, `generateNepaComplianceReport`, `_openRptPopup`, `_portfolioPrintWin`, `printStakeholderMap`, `printEngagementMatrix`, `_mapPrint`) now call it. The bulk-import tool popup (`openImportTool`) intentionally still uses `window.open()` — it's a separate app window, not a report.
 
 **Still open:**
-1. **Absorb popup report windows** — currently `generateReport()`, `generatePISummary()`, `generateIssuesReport()` open `window.open()` popups; absorb into inline output panel (deferred by user)
-2. **AI cross-report trend summary testing** — needs 2+ real exports to test fully
-3. **NEPA checklist progress bar on project cards** — may be partially implemented, needs verification
-4. **Continue testing** stakeholders LEP/EJ checkboxes, public meeting equity toggle, public comments nav/form
+1. **AI cross-report trend summary testing** — needs 2+ real exports to test fully
+2. **NEPA checklist progress bar on project cards** — may be partially implemented, needs verification
+3. **Continue testing** stakeholders LEP/EJ checkboxes, public meeting equity toggle, public comments nav/form
 
 ## Competitive positioning (researched June 29, 2026)
 

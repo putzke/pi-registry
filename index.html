@@ -3884,11 +3884,14 @@ function selectStake(id){
   window._pendingListScroll=_savedScroll;
   S.selStakeholder=id;S.stakeTab='info';
   if(S.view==='master'){
-    // Master: use targeted update (filterMasterList only updates list innerHTML,
-    // not the full panel) to avoid scroll reset; fall back to full render if needed
     const existingList=document.getElementById('ms-data-list');
-    if(existingList){
-      filterMasterList();
+    const detPane=document.getElementById('master-detail');
+    if(existingList&&detPane){
+      // Toggle .sel on existing rows — never rebuilds list, never resets scroll
+      existingList.querySelectorAll('.lrow').forEach(row=>{
+        const rowId=row.getAttribute('onclick')?.match(/selectStake\('([^']+)'\)/)?.[1];
+        if(rowId)row.classList.toggle('sel',rowId===String(id));
+      });
       renderMasterDetail();
     } else {
       renderMaster(document.getElementById('main'));
@@ -3914,15 +3917,6 @@ function selectStake(id){
       const el=document.getElementById('sk-search');
       if(el&&skVal)el.value=skVal;
     }
-  }
-  // Master detail: also restore ms-data-list scroll
-  if(S.view==='master'){
-    requestAnimationFrame(()=>{
-      requestAnimationFrame(()=>{
-        const ml=document.getElementById('ms-data-list');
-        if(ml&&_savedScroll)ml.scrollTop=_savedScroll;
-      });
-    });
   }
 }
 

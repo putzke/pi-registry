@@ -947,9 +947,9 @@ async function loadAllData() {
 
 // ── DB SHIM ────────────────────────────────────────────────────────
 const DB = {
-  get(k) { return (_syncCache[k] || []).map(x => ({...x})); },
+  get(k) { return JSON.parse(JSON.stringify(_syncCache[k] || [])); },
   set(k, arr) {
-    const old = (_syncCache[k] || []).slice();
+    const old = JSON.parse(JSON.stringify(_syncCache[k] || []));
     _syncCache[k] = arr;
     return DB._sync(k, old, arr); // return promise so callers can await if needed
   },
@@ -4799,9 +4799,13 @@ function toggleNepaCheck(projId,idx){
   item.checkedBy=item.checked?(getLoggedBy()||''):'';
   DB.set('projects',all);
   const _main=document.getElementById('main');
-  const _scrollTop=_main?_main.scrollTop:0;
+  const _content=_main?.querySelector('.content[style*="overflow"]');
+  const _scrollTop=_content?_content.scrollTop:0;
   renderDeliverables(_main);
-  if(_main)_main.scrollTop=_scrollTop;
+  requestAnimationFrame(()=>{
+    const c=document.getElementById('main')?.querySelector('.content[style*="overflow"]');
+    if(c)c.scrollTop=_scrollTop;
+  });
 }
 function renderDelAll(pF){
   let dels=DB.get('deliverables');

@@ -125,12 +125,15 @@ Bulk CSV import wizard for stakeholders and interactions. ~2,420 lines.
 - `sbAdd()` at line ~746 calls `r.json()` directly — safe because it uses plain POST (not upsert), so body is never empty
 
 ## Pending / next tasks
-1. **Manual "Save to archive" button** — checkpoint a draft without exporting (discussed, not yet built)
-2. **Absorb popup report windows** — currently `generateReport()`, `generatePISummary()`, `generateIssuesReport()` open `window.open()` popups; absorb into inline output panel (deferred by user)
-3. **AI cross-report trend summary testing** — needs 2+ real exports to test fully
-4. **NEPA checklist progress bar on project cards** — may be partially implemented, needs verification
-5. **Continue testing** stakeholders LEP/EJ checkboxes, public meeting equity toggle, public comments nav/form
-6. **NEPA Compliance section in PI Report Editor** — new section type `'nepa-compliance'` in the Add Section dropdown; auto-populates with live checklist group progress + comment period compliance for the project; includes an "AI Draft" button that calls `_claudeNarrative()` to generate a professional narrative paragraph from the compliance snapshot, written into the section text field like other AI-drafted sections. High priority — good AI use case.
+**Done this session:**
+- ~~Manual "Save to archive" button~~ — built: `manualArchiveReport()` (line ~9041), wired to the "Save to archive" button in `openPIReport()` toolbar. Saves draft, checkpoints to `pi_report_archive`, enforces `ARCHIVE_LIMIT`, refreshes archive panel in place.
+- ~~NEPA Compliance section in PI Report Editor~~ — built: section type `'nepa-compliance'` in Add Section dropdown, auto-populates with live checklist group progress + comment period compliance, AI Draft button via `_claudeNarrative()`.
+
+**Still open:**
+1. **Absorb popup report windows** — currently `generateReport()`, `generatePISummary()`, `generateIssuesReport()` open `window.open()` popups; absorb into inline output panel (deferred by user)
+2. **AI cross-report trend summary testing** — needs 2+ real exports to test fully
+3. **NEPA checklist progress bar on project cards** — may be partially implemented, needs verification
+4. **Continue testing** stakeholders LEP/EJ checkboxes, public meeting equity toggle, public comments nav/form
 
 ## Competitive positioning (researched June 29, 2026)
 

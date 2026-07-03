@@ -158,10 +158,10 @@ document.getElementById('login-form').addEventListener('submit', async e => {
   msg.className = '';
 
   try {
-    const res = await fetch(`${SUPA_URL}/auth/v1/otp`, {
+    const res = await fetch(`${SUPA_URL}/auth/v1/otp?redirect_to=${encodeURIComponent(PORTAL_URL)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': SUPA_KEY },
-      body: JSON.stringify({ email, create_user: false, redirect_to: PORTAL_URL })
+      body: JSON.stringify({ email, create_user: false })
     });
     // Supabase returns 200 even for unknown emails (prevents enumeration)
     if (res.ok) {

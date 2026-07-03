@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Horizon COMPASS — Client Portal</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f6fa; color: #1a1a2e; min-height: 100vh; }
+
+    /* ── Login ── */
+    #login-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
+    .brand { text-align: center; margin-bottom: 36px; }
+    .brand-name { font-size: 26px; font-weight: 700; color: #1a1a2e; letter-spacing: -0.5px; }
+    .brand-sub { font-size: 12px; color: #888; margin-top: 4px; text-transform: uppercase; letter-spacing: 1.2px; }
+    .login-card { background: white; border-radius: 12px; padding: 36px; width: 100%; max-width: 400px; box-shadow: 0 2px 24px rgba(0,0,0,0.09); }
+    .login-card h2 { font-size: 19px; font-weight: 600; margin-bottom: 8px; }
+    .login-card p { font-size: 14px; color: #666; margin-bottom: 24px; line-height: 1.5; }
+    .login-card input[type="email"] { width: 100%; padding: 11px 14px; border: 1.5px solid #dde1ea; border-radius: 8px; font-size: 15px; outline: none; margin-bottom: 12px; transition: border-color 0.15s; font-family: inherit; }
+    .login-card input[type="email"]:focus { border-color: #3b5bdb; }
+    .btn-primary { width: 100%; padding: 12px; background: #3b5bdb; color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.15s; font-family: inherit; }
+    .btn-primary:hover { background: #2f4ac0; }
+    .btn-primary:disabled { background: #a5b4fc; cursor: not-allowed; }
+    #login-msg { margin-top: 16px; font-size: 14px; text-align: center; line-height: 1.5; }
+    #login-msg.success { color: #2e7d32; }
+    #login-msg.error { color: #c62828; }
+
+    /* ── App shell ── */
+    #app { display: none; }
+    .topbar { background: white; border-bottom: 1px solid #e8eaf0; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; height: 56px; position: sticky; top: 0; z-index: 100; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .topbar .brand-name { font-size: 18px; }
+    .topbar .brand-sub { font-size: 10px; }
+    .btn-signout { padding: 7px 16px; border: 1.5px solid #dde1ea; border-radius: 7px; background: white; font-size: 13px; cursor: pointer; color: #555; font-family: inherit; transition: border-color 0.15s; }
+    .btn-signout:hover { border-color: #aaa; color: #222; }
+    .main { max-width: 980px; margin: 0 auto; padding: 32px 24px; }
+
+    /* ── Project header ── */
+    .project-header { background: white; border-radius: 10px; padding: 24px 28px; margin-bottom: 20px; box-shadow: 0 1px 6px rgba(0,0,0,0.06); border-left: 4px solid #3b5bdb; }
+    .project-header h1 { font-size: 20px; font-weight: 700; margin-bottom: 10px; }
+    .project-meta { display: flex; gap: 24px; flex-wrap: wrap; }
+    .project-meta span { font-size: 13px; color: #666; }
+    .project-meta strong { color: #333; }
+
+    /* ── Cards ── */
+    .card { background: white; border-radius: 10px; padding: 24px 28px; box-shadow: 0 1px 6px rgba(0,0,0,0.06); margin-bottom: 20px; }
+    .section-title { font-size: 15px; font-weight: 600; margin-bottom: 16px; color: #1a1a2e; }
+    .project-block { margin-bottom: 40px; }
+
+    /* ── Table ── */
+    .tbl-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #999; padding: 0 16px 11px 0; border-bottom: 1.5px solid #f0f1f5; white-space: nowrap; }
+    td { padding: 13px 16px 13px 0; border-bottom: 1px solid #f5f6fa; font-size: 14px; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    td.title-col { font-weight: 500; max-width: 280px; }
+
+    /* ── Status badges ── */
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+    .badge-complete { background: #e8f5e9; color: #2e7d32; }
+    .badge-progress { background: #e3f2fd; color: #1565c0; }
+    .badge-notstarted { background: #f5f5f5; color: #757575; }
+    .badge-onhold { background: #fff3e0; color: #e65100; }
+
+    /* ── Progress bar ── */
+    .prog-wrap { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+    .prog-bar { background: #eef0f7; border-radius: 4px; height: 6px; width: 80px; overflow: hidden; flex-shrink: 0; }
+    .prog-fill { height: 100%; background: #3b5bdb; border-radius: 4px; }
+    .prog-label { font-size: 12px; color: #888; }
+
+    /* ── States ── */
+    .empty { text-align: center; padding: 36px; color: #bbb; font-size: 14px; }
+    .loading { text-align: center; padding: 80px; color: #aaa; font-size: 15px; }
+    .error-box { background: #fff5f5; border: 1px solid #ffcdd2; border-radius: 8px; padding: 18px 20px; color: #c62828; font-size: 14px; line-height: 1.5; }
+
+    @media (max-width: 600px) {
+      .main { padding: 16px; }
+      .project-header { padding: 18px; }
+      .card { padding: 18px; }
+      .topbar { padding: 0 16px; }
+      td.title-col { max-width: 160px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Login Screen ──────────────────────────────────────────────────── -->
+<div id="login-screen">
+  <div class="brand">
+    <div class="brand-name">Horizon COMPASS</div>
+    <div class="brand-sub">Client Portal</div>
+  </div>
+  <div class="login-card">
+    <h2>Sign in</h2>
+    <p>Enter the email address your project manager used to invite you. We'll send you a one-click login link — no password needed.</p>
+    <form id="login-form">
+      <input type="email" id="email-input" placeholder="your@email.com" required autocomplete="email">
+      <button type="submit" class="btn-primary" id="login-btn">Send login link</button>
+    </form>
+    <div id="login-msg"></div>
+  </div>
+</div>
+
+<!-- ── App Shell ─────────────────────────────────────────────────────── -->
+<div id="app">
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-name">Horizon COMPASS</div>
+      <div class="brand-sub">Client Portal</div>
+    </div>
+    <button class="btn-signout" onclick="signOut()">Sign out</button>
+  </div>
+  <div class="main" id="main-content">
+    <div class="loading">Loading your project&hellip;</div>
+  </div>
+</div>
+
+<script>
+const SUPA_URL = 'https://ncfbblhlsiglxkoiounv.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5jZmJibGhsc2lnbHhrb2lvdW52Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0MTUzOTMsImV4cCI6MjA5NDk5MTM5M30.-fRI1QGkr1teN0sFvl25Uq7U38Jq1SAc6heIJvOud2Q';
+const PORTAL_URL = 'https://putzke.github.io/pi-registry/client-portal.html';
+const SESSION_KEY = 'cp_session_v1';
+
+// ── Session ───────────────────────────────────────────────────────────────────
+function saveSession(data) { try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(data)); } catch (_) {} }
+function loadSession() { try { return JSON.parse(sessionStorage.getItem(SESSION_KEY)); } catch (_) { return null; } }
+function clearSession() { sessionStorage.removeItem(SESSION_KEY); }
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  // Magic link lands here with token in URL hash
+  const hash = window.location.hash;
+  if (hash && hash.includes('access_token=')) {
+    const params = new URLSearchParams(hash.slice(1));
+    const access_token = params.get('access_token');
+    const refresh_token = params.get('refresh_token');
+    if (access_token) {
+      saveSession({ access_token, refresh_token });
+      history.replaceState(null, '', window.location.pathname);
+      showApp();
+      return;
+    }
+  }
+
+  const session = loadSession();
+  if (session && session.access_token) { showApp(); return; }
+  showLogin();
+});
+
+// ── Login form ────────────────────────────────────────────────────────────────
+document.getElementById('login-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const email = document.getElementById('email-input').value.trim();
+  const btn = document.getElementById('login-btn');
+  const msg = document.getElementById('login-msg');
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+  msg.textContent = '';
+  msg.className = '';
+
+  try {
+    const res = await fetch(`${SUPA_URL}/auth/v1/otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPA_KEY },
+      body: JSON.stringify({ email, create_user: false, redirect_to: PORTAL_URL })
+    });
+    // Supabase returns 200 even for unknown emails (prevents enumeration)
+    if (res.ok) {
+      msg.className = 'success';
+      msg.textContent = 'Login link sent — check your inbox and click the link to sign in.';
+      btn.textContent = 'Sent ✓';
+    } else {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.msg || err.error_description || `Error ${res.status}`);
+    }
+  } catch (err) {
+    msg.className = 'error';
+    msg.textContent = err.message || 'Something went wrong. Please try again.';
+    btn.disabled = false;
+    btn.textContent = 'Send login link';
+  }
+});
+
+// ── Sign out ──────────────────────────────────────────────────────────────────
+function signOut() { clearSession(); showLogin(); }
+
+// ── Screen switching ──────────────────────────────────────────────────────────
+function showLogin() {
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  loadDashboard();
+}
+
+// ── API helpers ───────────────────────────────────────────────────────────────
+function authHeaders() {
+  const s = loadSession();
+  return { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${s.access_token}`, 'Accept': 'application/json' };
+}
+
+async function sbFetch(path) {
+  const res = await fetch(`${SUPA_URL}/rest/v1/${path}`, { headers: authHeaders() });
+  if (res.status === 401) { clearSession(); showLogin(); throw new Error('session_expired'); }
+  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || `API ${res.status}`); }
+  return res.json();
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+async function loadDashboard() {
+  const el = document.getElementById('main-content');
+  try {
+    // RLS policies scope both queries automatically — no extra filters needed
+    const [projects, deliverables] = await Promise.all([
+      sbFetch('pi_projects?select=id,name,pid,client,phase,status,start_date,end_date&order=name.asc'),
+      sbFetch('pi_deliverables?select=id,project_id,title,deliverable_type,status,progress,due_date,milestone_end&order=due_date.asc.nullslast')
+    ]);
+
+    if (!projects.length) {
+      el.innerHTML = '<div class="error-box">No projects have been assigned to your account yet. Please contact your project manager.</div>';
+      return;
+    }
+
+    el.innerHTML = projects.map(p =>
+      renderProject(p, deliverables.filter(d => String(d.project_id) === String(p.id)))
+    ).join('');
+
+  } catch (err) {
+    if (err.message !== 'session_expired') {
+      el.innerHTML = '<div class="error-box">Unable to load your project data. Please refresh the page, or <a href="#" onclick="signOut();return false;">sign in again</a> if the problem persists.</div>';
+    }
+  }
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function fmt(d) {
+  if (!d) return '—';
+  return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function statusBadge(s) {
+  if (!s) return '<span class="badge badge-notstarted">—</span>';
+  const sl = s.toLowerCase();
+  if (sl.includes('complet') || sl === 'done' || sl === 'closed') return `<span class="badge badge-complete">${s}</span>`;
+  if (sl.includes('progress') || sl === 'active' || sl.includes('review')) return `<span class="badge badge-progress">${s}</span>`;
+  if (sl.includes('hold') || sl.includes('delay') || sl.includes('pend')) return `<span class="badge badge-onhold">${s}</span>`;
+  return `<span class="badge badge-notstarted">${s}</span>`;
+}
+
+function progressCell(d) {
+  const pct = parseInt(d.progress, 10);
+  if (!isNaN(pct)) {
+    return `<div class="prog-wrap"><div class="prog-bar"><div class="prog-fill" style="width:${Math.min(100,Math.max(0,pct))}%"></div></div><span class="prog-label">${pct}%</span></div>`;
+  }
+  return d.progress ? String(d.progress) : '—';
+}
+
+function renderProject(proj, deliverables) {
+  const rows = deliverables.length
+    ? deliverables.map(d => `
+        <tr>
+          <td class="title-col">${esc(d.title || '—')}</td>
+          <td>${esc(d.deliverable_type || '—')}</td>
+          <td>${statusBadge(d.status)}</td>
+          <td>${progressCell(d)}</td>
+          <td style="white-space:nowrap">${fmt(d.due_date || d.milestone_end)}</td>
+        </tr>`).join('')
+    : '<tr><td colspan="5" class="empty">No deliverables on record yet.</td></tr>';
+
+  const meta = [
+    proj.pid    ? `<span><strong>Project #</strong> ${esc(proj.pid)}</span>` : '',
+    proj.client ? `<span><strong>Client</strong> ${esc(proj.client)}</span>` : '',
+    proj.phase  ? `<span><strong>Phase</strong> ${esc(proj.phase)}</span>` : '',
+    proj.status ? `<span><strong>Status</strong> ${esc(proj.status)}</span>` : '',
+    proj.start_date ? `<span><strong>Start</strong> ${fmt(proj.start_date)}</span>` : '',
+    proj.end_date   ? `<span><strong>End</strong> ${fmt(proj.end_date)}</span>` : '',
+  ].filter(Boolean).join('');
+
+  return `
+    <div class="project-block">
+      <div class="project-header">
+        <h1>${esc(proj.name || 'Unnamed Project')}</h1>
+        <div class="project-meta">${meta}</div>
+      </div>
+      <div class="card">
+        <div class="section-title">Deliverable Progress</div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>Deliverable</th><th>Type</th><th>Status</th><th>Progress</th><th>Due Date</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+}
+
+function esc(s) {
+  return String(s ?? '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+</script>
+</body>
+</html>

@@ -211,14 +211,22 @@ async function sbFetch(path) {
 async function loadDashboard() {
   const el = document.getElementById('main-content');
   try {
-    // RLS policies scope both queries automatically — no extra filters needed
+    // Fetch this client's allowed project IDs first, then filter explicitly
+    const access = await sbFetch('pi_client_access?select=project_id');
+    if (!access.length) {
+      el.innerHTML = '<div class="error-box">No projects have been assigned to your account yet. Please contact your project manager.</div>';
+      return;
+    }
+
+    const ids = access.map(r => r.project_id).join(',');
+
     const [projects, deliverables] = await Promise.all([
-      sbFetch('pi_projects?select=id,name,pid,client,phase,status,start_date,end_date&order=name.asc'),
-      sbFetch('pi_deliverables?select=id,project_id,title,deliverable_type,status,progress,due_date,milestone_end&order=due_date.asc.nullslast')
+      sbFetch(`pi_projects?id=in.(${ids})&select=id,name,pid,client,phase,status,start_date,end_date&order=name.asc`),
+      sbFetch(`pi_deliverables?project_id=in.(${ids})&select=id,project_id,title,deliverable_type,status,progress,due_date,milestone_end&order=due_date.asc.nullslast`)
     ]);
 
     if (!projects.length) {
-      el.innerHTML = '<div class="error-box">No projects have been assigned to your account yet. Please contact your project manager.</div>';
+      el.innerHTML = '<div class="error-box">No projects found. Please contact your project manager.</div>';
       return;
     }
 

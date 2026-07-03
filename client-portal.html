@@ -236,7 +236,7 @@ async function loadDashboard() {
 
   } catch (err) {
     if (err.message !== 'session_expired') {
-      el.innerHTML = '<div class="error-box">Unable to load your project data. Please refresh the page, or <a href="#" onclick="signOut();return false;">sign in again</a> if the problem persists.</div>';
+      el.innerHTML = `<div class="error-box">Unable to load your project data: <strong>${err.message}</strong><br>Please refresh the page, or <a href="#" onclick="signOut();return false;">sign in again</a> if the problem persists.</div>`;
     }
   }
 }

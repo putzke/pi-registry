@@ -155,6 +155,26 @@
     .empty-state { text-align: center; padding: 40px 20px; color: #9ca3af; font-size: 14px; }
     .loading-state { text-align: center; padding: 60px 20px; color: #9ca3af; font-size: 14px; }
     .error-box { background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px 18px; color: #991b1b; font-size: 13.5px; line-height: 1.5; margin-bottom: 16px; }
+    .info-box { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 14px 18px; color: #1e40af; font-size: 13.5px; line-height: 1.5; margin-bottom: 16px; display: flex; align-items: flex-start; gap: 10px; }
+    .info-box-icon { flex-shrink: 0; margin-top: 1px; }
+
+    /* ── Multi-project cards ──────────────────────────────────────────── */
+    .proj-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .proj-card { background: white; border-radius: 10px; padding: 16px 18px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); cursor: pointer; border: 2px solid transparent; transition: border-color 0.15s, box-shadow 0.15s; }
+    .proj-card:hover { border-color: #3b5bdb; box-shadow: 0 2px 8px rgba(59,91,219,0.12); }
+    .proj-card.pc-active { border-color: #3b5bdb; background: #f5f8ff; }
+    .pc-name { font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 4px; line-height: 1.35; }
+    .pc-meta { font-size: 12px; color: #6b7280; margin-bottom: 10px; }
+    .pc-prog { display: flex; align-items: center; gap: 8px; }
+    .pc-bar  { flex: 1; background: #e5e7eb; border-radius: 4px; height: 5px; overflow: hidden; }
+    .pc-fill { height: 100%; background: #3b5bdb; border-radius: 4px; }
+    .pc-lbl  { font-size: 11px; color: #9ca3af; white-space: nowrap; }
+
+    /* ── Mobile project bar ───────────────────────────────────────────── */
+    .mob-proj-bar { display: none; background: #f0f2fa; border-bottom: 1px solid #e0e3ef; padding: 8px 16px; }
+    .mob-proj-bar select { width: 100%; background: white; border: 1.5px solid #dde1ea; border-radius: 7px; color: #374151; font-size: 14px; padding: 8px 10px; font-family: inherit; cursor: pointer; outline: none; }
+    .mob-proj-bar select:focus { border-color: #3b5bdb; }
+    @media (max-width: 768px) { .mob-proj-bar.has-multi { display: block; } }
 
     /* ── Print ────────────────────────────────────────────────────────── */
     @media print {
@@ -226,6 +246,7 @@
       <button class="btn-signout" onclick="signOut()">Sign out</button>
     </div>
   </header>
+  <div id="mob-proj-bar" class="mob-proj-bar"></div>
   <div id="chip-strip" class="chip-strip"></div>
   <div class="app-layout">
     <nav id="sidebar" class="sidebar"></nav>
@@ -373,14 +394,15 @@ async function bootApp() {
 
 // ── Nav shell ─────────────────────────────────────────────────────────────────
 function buildNav() {
-  const sb = document.getElementById('sidebar');
-  const cs = document.getElementById('chip-strip');
+  const sb  = document.getElementById('sidebar');
+  const cs  = document.getElementById('chip-strip');
+  const mpb = document.getElementById('mob-proj-bar');
 
-  // Project selector
+  // Sidebar project selector
   const projHtml = _projects.length === 1
     ? `<div class="sidebar-proj-label">Project</div><div class="sidebar-proj-name">${esc(_projects[0].name)}</div>`
     : `<div class="sidebar-proj-label">Project</div>
-       <select class="proj-select" onchange="switchProject(this.value)">
+       <select id="sb-proj-select" class="proj-select" onchange="switchProject(this.value)">
          ${_projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}
        </select>`;
 
@@ -393,6 +415,19 @@ function buildNav() {
   cs.innerHTML = NAV.map(n =>
     `<button class="chip" id="chip-${n.id}" onclick="setView('${n.id}')">${n.icon}${esc(n.label)}</button>`
   ).join('');
+
+  // Mobile project bar — only shown when 2+ projects
+  if (mpb) {
+    if (_projects.length > 1) {
+      mpb.innerHTML = `<select id="mob-proj-select" onchange="switchProject(this.value)">
+        ${_projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}
+      </select>`;
+      mpb.classList.add('has-multi');
+    } else {
+      mpb.innerHTML = '';
+      mpb.classList.remove('has-multi');
+    }
+  }
 }
 
 function setView(view) {
@@ -409,6 +444,10 @@ function setView(view) {
 
 function switchProject(id) {
   _projId = Number(id);
+  ['sb-proj-select','mob-proj-select'].forEach(sid => {
+    const el = document.getElementById(sid);
+    if (el) el.value = String(id);
+  });
   renderSection(_view);
 }
 
@@ -431,7 +470,28 @@ function projBanner() {
   return `<div class="proj-banner"><h1>${esc(p.name || 'Project')}</h1><div class="proj-meta">${meta}</div></div>`;
 }
 
-// ── Multi-project selector for content area ───────────────────────────────────
+// ── Multi-project cards grid (for Overview) ───────────────────────────────────
+function projCardsGrid() {
+  if (_projects.length < 2) return '';
+  return `<div class="proj-cards">${_projects.map(p => {
+    const devs  = _deliverables.filter(d => String(d.project_id) === String(p.id));
+    const total = devs.length;
+    const done  = devs.filter(d => isComplete(d.status)).length;
+    const pct   = total ? Math.round(done / total * 100) : 0;
+    const active = p.id === _projId;
+    const meta   = [p.client, p.phase].filter(Boolean).join(' · ');
+    return `<div class="proj-card${active ? ' pc-active' : ''}" onclick="switchProject(${p.id})">
+      <div class="pc-name">${esc(p.name)}</div>
+      ${meta ? `<div class="pc-meta">${esc(meta)}</div>` : ''}
+      <div class="pc-prog">
+        <div class="pc-bar"><div class="pc-fill" style="width:${pct}%"></div></div>
+        <span class="pc-lbl">${done}/${total} deliverables</span>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+// ── Multi-project selector for content area (non-overview sections) ───────────
 function projSelector() {
   if (_projects.length < 2) return '';
   return `<div style="margin-bottom:16px">
@@ -439,6 +499,12 @@ function projSelector() {
       ${_projects.map(p => `<option value="${p.id}"${p.id===_projId?' selected':''}>${esc(p.name)}</option>`).join('')}
     </select>
   </div>`;
+}
+
+// ── Info message (soft blue, for non-critical unavailable sections) ────────────
+function infoMsg(text) {
+  const icon = `<svg class="info-box-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><circle cx="8" cy="8" r="6.5"/><line x1="8" y1="5.5" x2="8" y2="5.5" stroke-width="2.5" stroke-linecap="round"/><line x1="8" y1="8" x2="8" y2="11" stroke-linecap="round"/></svg>`;
+  return `<div class="info-box">${icon}${esc(text)}</div>`;
 }
 
 // ── Section dispatcher ────────────────────────────────────────────────────────
@@ -467,7 +533,7 @@ async function renderOverview() {
     .sort((a,b) => (a.due_date||a.milestone_end) < (b.due_date||b.milestone_end) ? -1 : 1)
     .slice(0, 5);
 
-  setContent(`${projSelector()}${projBanner()}
+  setContent(`${projCardsGrid()}${projBanner()}
     <div class="stat-row">
       <div class="stat-tile stat-blue">
         <div class="stat-num">${doneD}/${totalD}</div>
@@ -629,7 +695,7 @@ async function loadActivityData() {
   } catch(err) {
     if (err.message !== 'session_expired') {
       const el = document.getElementById('activity-content');
-      if (el) el.innerHTML = `<div class="error-box">Unable to load activity: ${esc(err.message)}</div>`;
+      if (el) el.innerHTML = infoMsg('Engagement activity couldn\'t be loaded at this time. Please contact your project manager if this persists.');
     }
   }
 }
@@ -658,7 +724,7 @@ async function renderIssues() {
   } catch(err) {
     if (err.message !== 'session_expired') {
       const el = document.getElementById('issues-content');
-      if (el) el.innerHTML = `<div class="error-box">${esc(err.message)}</div>`;
+      if (el) el.innerHTML = infoMsg('Issues couldn\'t be loaded at this time. Please contact your project manager if this persists.');
     }
   }
 }
@@ -688,7 +754,7 @@ async function renderCommitments() {
   } catch(err) {
     if (err.message !== 'session_expired') {
       const el = document.getElementById('comm-content');
-      if (el) el.innerHTML = `<div class="error-box">${esc(err.message)}</div>`;
+      if (el) el.innerHTML = infoMsg('Commitments couldn\'t be loaded at this time. Please contact your project manager if this persists.');
     }
   }
 }
@@ -724,7 +790,7 @@ async function renderComments() {
   } catch(err) {
     if (err.message !== 'session_expired') {
       const el = document.getElementById('cp-content');
-      if (el) el.innerHTML = `<div class="error-box">${esc(err.message)}</div>`;
+      if (el) el.innerHTML = infoMsg('Comment period data couldn\'t be loaded at this time. Please contact your project manager if this persists.');
     }
   }
 }
@@ -755,7 +821,7 @@ async function renderTribal() {
   } catch(err) {
     if (err.message !== 'session_expired') {
       const el = document.getElementById('tribal-content');
-      if (el) el.innerHTML = `<div class="error-box">${esc(err.message)}</div>`;
+      if (el) el.innerHTML = infoMsg('Tribal consultation records couldn\'t be loaded at this time. Please contact your project manager if this persists.');
     }
   }
 }

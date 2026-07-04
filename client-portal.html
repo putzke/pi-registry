@@ -121,6 +121,18 @@
     .prog-fill { height: 100%; background: #3b5bdb; border-radius: 4px; }
     .prog-lbl  { font-size: 12px; color: #9ca3af; }
 
+    /* ── Attention panel ─────────────────────────────────────────────── */
+    .attention-panel { background: #fffbeb; border: 1px solid #fcd34d; border-left: 4px solid #f59e0b; border-radius: 10px; padding: 16px 20px; margin-bottom: 20px; }
+    .attn-header { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #92400e; margin-bottom: 12px; }
+    .attn-header svg { width: 15px; height: 15px; flex-shrink: 0; }
+    .attn-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .attn-item { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: #374151; line-height: 1.4; }
+    .attn-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+    .attn-dot-amber { background: #f59e0b; }
+    .attn-dot-red   { background: #ef4444; }
+    .attn-dot-blue  { background: #3b5bdb; }
+    .attn-tag { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: #9ca3af; white-space: nowrap; padding-top: 1px; flex-shrink: 0; min-width: 80px; }
+
     /* ── Recent activity list ─────────────────────────────────────────── */
     .activity-list { list-style: none; }
     .activity-list li { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f3f4f6; }
@@ -560,6 +572,7 @@ async function renderOverview() {
     .slice(0, 5);
 
   setContent(`${projCardsGrid()}${projBanner()}
+    <div id="ov-attention"></div>
     <div class="stat-row">
       <div class="stat-tile stat-blue">
         <div class="stat-num">${doneD}/${totalD}</div>
@@ -586,12 +599,14 @@ async function renderOverview() {
     </div>
     <div class="card" id="ov-activity"><div class="loading-state" style="padding:24px">Loading recent activity&hellip;</div></div>`);
 
-  // Fetch stats + recent activity in parallel
+  // Fetch stats + recent activity + attention items in parallel
   try {
-    const [issues, meetings, interactions] = await Promise.all([
-      sbFetch(`pi_issues?project_id=eq.${_projId}&select=id,status`),
+    const [issues, meetings, interactions, commitments, commentPeriods] = await Promise.all([
+      sbFetch(`pi_issues?project_id=eq.${_projId}&select=id,status,title,priority`),
       sbFetch(`pi_meetings?project_id=eq.${_projId}&select=id,meeting_date,title,meeting_type&order=meeting_date.desc&limit=5`),
-      sbFetch(`pi_interactions?project_id=eq.${_projId}&select=id,interaction_date,channel,subject,summary&order=interaction_date.desc&limit=5`)
+      sbFetch(`pi_interactions?project_id=eq.${_projId}&select=id,interaction_date,channel,subject,summary&order=interaction_date.desc&limit=5`),
+      sbFetch(`pi_commitments?project_id=eq.${_projId}&select=id,commitment,due_date,status`),
+      sbFetch(`pi_comment_periods?project_id=eq.${_projId}&select=id,title,status,end_date`)
     ]);
     const openIssues = issues.filter(i => !isComplete(i.status)).length;
 
@@ -599,6 +614,38 @@ async function renderOverview() {
     if (t('tile-issues'))   t('tile-issues').innerHTML   = `<div class="stat-num${openIssues > 0 ? ' ' : ''}" style="${openIssues>0?'color:#b45309':''}">${openIssues}</div><div class="stat-lbl">Open Issues</div>`;
     if (t('tile-meetings'))  t('tile-meetings').innerHTML  = `<div class="stat-num">${meetings.length}</div><div class="stat-lbl">Recent Meetings</div>`;
     if (t('tile-outreach'))  t('tile-outreach').innerHTML  = `<div class="stat-num">${interactions.length}</div><div class="stat-lbl">Recent Outreach</div>`;
+
+    // ── Needs Attention panel ───────────────────────────────────────────
+    const today = isoDate(new Date());
+    const in14  = isoDate(new Date(Date.now() + 14*86400000));
+    const attnItems = [];
+
+    issues.filter(i => !isComplete(i.status) && i.priority && /high|critical/i.test(i.priority))
+      .forEach(i => attnItems.push({ dot: 'amber', tag: 'Issue', text: i.title || 'Untitled issue' }));
+
+    commitments.filter(c => !isComplete(c.status) && c.due_date && c.due_date < today)
+      .forEach(c => attnItems.push({ dot: 'red', tag: 'Commitment', text: clip(c.commitment || 'Untitled commitment', 90) + ' — past due' }));
+
+    commentPeriods.filter(p => {
+        const sl = (p.status||'').toLowerCase();
+        return (sl.includes('open')||sl.includes('active')) && p.end_date && p.end_date >= today && p.end_date <= in14;
+      })
+      .forEach(p => attnItems.push({ dot: 'blue', tag: 'Comment Period', text: `"${p.title || 'Untitled'}" closes ${fmt(p.end_date)}` }));
+
+    const attnEl = t('ov-attention');
+    if (attnEl && attnItems.length) {
+      const warnIcon = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1L1.5 13.5h13L8 1z"/><line x1="8" y1="6" x2="8" y2="9.5"/><circle cx="8" cy="11.5" r="0.6" fill="currentColor" stroke="none"/></svg>';
+      attnEl.innerHTML = `<div class="attention-panel">
+        <div class="attn-header">${warnIcon} Heads Up</div>
+        <ul class="attn-list">${attnItems.map(a => `
+          <li class="attn-item">
+            <div class="attn-dot attn-dot-${a.dot}"></div>
+            <span class="attn-tag">${esc(a.tag)}</span>
+            <span>${esc(a.text)}</span>
+          </li>`).join('')}
+        </ul>
+      </div>`;
+    }
 
     // Recent activity merged list
     const acts = [

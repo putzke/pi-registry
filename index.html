@@ -6066,8 +6066,8 @@ function openDelModal(id){
     <div class="fr"><label>Contracted quantity</label><input type="number" id="f-dcq" min="0" value="${d.contractedQty||''}"></div>
     <div class="fr"><label>Delivered count</label><input type="number" id="f-ddc" min="0" value="${d.deliveredCount||0}"></div>
   </div>
-  <div id="f-freq" style="${(d.scopeType||'')==='recurring'?'':'display:none'}"><div class="fr"><label>Frequency</label><select id="f-dfr">${FREQS.map(f=>`<option${d.freq===f?' selected':''}>${f}</option>`).join('')}</select></div><div style="font-size:11px;color:var(--sky-lt);margin:-4px 0 8px 0;font-style:italic">&#x2139;&#xFE0E; Next Due date is calculated from this frequency and the project start date.</div></div>
-  <div id="f-ms" style="${['milestone','recurring'].includes(d.scopeType||'')?'':'display:none'}"><div class="fgrid fg2f">
+  <div id="f-freq" style="${(d.scopeType||'')==='recurring'?'':'display:none'}"><div class="fr"><label>Frequency</label><select id="f-dfr">${FREQS.map(f=>`<option${d.freq===f?' selected':''}>${f}</option>`).join('')}</select></div><div style="font-size:11px;color:var(--sky-lt);margin:-4px 0 8px 0;font-style:italic">&#x2139;&#xFE0E; Next Due date is calculated from this frequency and the project's precon date (if set) or start date.</div></div>
+  <div id="f-ms" style="${(d.scopeType||'')==='milestone'?'':'display:none'}"><div class="fgrid fg2f">
     <div class="fr"><label>Start / trigger milestone</label><select id="f-dm1"><option value="">— none —</option>${MILESTONES.map(m=>`<option${d.milestoneStart===m?' selected':''}>${m}</option>`).join('')}</select></div>
     <div class="fr"><label>End milestone (recurring)</label><select id="f-dm2"><option value="">— none —</option>${MILESTONES.map(m=>`<option${d.milestoneEnd===m?' selected':''}>${m}</option>`).join('')}</select></div>
   </div></div>
@@ -6084,7 +6084,7 @@ function openDelModal(id){
 function toggleDelFields(){
   const v=document.getElementById('f-ds')?.value;
   document.getElementById('f-freq').style.display=v==='recurring'?'':'none';
-  document.getElementById('f-ms').style.display=['milestone','recurring'].includes(v)?'':'none';
+  document.getElementById('f-ms').style.display=v==='milestone'?'':'none';
 }
 function saveDel(){
   const v=id=>document.getElementById(id)?.value||'';

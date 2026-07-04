@@ -4713,36 +4713,40 @@ function renderDelScope(pF){
           const isOver2=d.contractedQty>0&&(d.deliveredCount||0)>d.contractedQty;
           const overAmt2=isOver2?((d.deliveredCount||0)-d.contractedQty):0;
           // ── Pace algorithm (wrapped in try/catch — falls back to '—' on any error) ──
+          // Only recurring deliverables with a known fixed cadence get a Next Due calculation.
+          // fixed → no implied schedule; milestone → already excluded; Per phase/As needed → no interval.
           var _paceHTML='—';var _dueHTML=d.dueDate?fmt(d.dueDate):'—';
           try{
-            var _projStart=proj.preconDate||proj.startDate;
-            var _endDate=d.dueDate||proj.endDate;
-            if(d.contractedQty>0&&_endDate&&_projStart&&d.status!=='Complete'&&d.status!=='Cancelled'&&d.scopeType!=='milestone'){
-              var _start=new Date(_projStart+'T00:00:00');
-              var _end=new Date(_endDate+'T00:00:00');
-              var _now=new Date();
-              var _totalDays=(_end-_start)/(86400000);
-              var _elapsedDays=(_now-_start)/(86400000);
-              var _remaining=d.contractedQty-(d.deliveredCount||0);
-              if(_totalDays>0&&_remaining>0){
-                var _expectedByNow=Math.floor((_elapsedDays/_totalDays)*d.contractedQty);
-                var _delivered=d.deliveredCount||0;
-                var _interval=_totalDays/d.contractedQty;
-                var _nextDueDate=new Date(_start.getTime()+((_delivered+1)*_interval*86400000));
-                var _daysToNext=Math.round((_nextDueDate-_now)/86400000);
-                var _nextDueFmt=_nextDueDate.toLocaleDateString('en-US',{month:'short',day:'numeric'});
-                var _behind=_delivered<_expectedByNow-1;
-                var _ahead=_delivered>_expectedByNow;
-                var _paceColor=_behind?'var(--red)':_daysToNext<14?'var(--amber)':'var(--green)';
-                var _paceLabel=_behind?'Behind':_ahead?'Ahead':'On pace';
-                _paceHTML='<div style="font-size:11px;color:'+_paceColor+';font-weight:500">'+_nextDueFmt+'</div>'
-                  +'<div style="font-size:10px;color:'+_paceColor+'">'+_paceLabel+'</div>';
-              } else if(_remaining<=0){
-                _paceHTML='<span style="font-size:11px;color:var(--green)">Done</span>';
-              }
-            } else if(d.status==='Complete'){
+            if(d.status==='Complete'){
               _paceHTML='<span style="font-size:11px;color:var(--green)">✓ Complete</span>';
+            } else if(d.status!=='Cancelled'&&d.scopeType==='recurring'&&d.contractedQty>0){
+              var _freqDays={'Weekly':7,'Bi-weekly':14,'Monthly':30,'Quarterly':91}[d.freq]||0;
+              var _projStart=proj.preconDate||proj.startDate;
+              if(_freqDays>0&&_projStart){
+                var _start=new Date(_projStart+'T00:00:00');
+                var _now=new Date();
+                var _delivered=d.deliveredCount||0;
+                var _remaining=d.contractedQty-_delivered;
+                if(_remaining<=0){
+                  _paceHTML='<span style="font-size:11px;color:var(--green)">Done</span>';
+                } else {
+                  var _nextDueDate=new Date(_start.getTime()+((_delivered+1)*_freqDays*86400000));
+                  var _daysToNext=Math.round((_nextDueDate-_now)/86400000);
+                  var _elapsedDays=(_now-_start)/86400000;
+                  var _expectedByNow=Math.floor(_elapsedDays/_freqDays);
+                  var _behind=_delivered<_expectedByNow-1;
+                  var _ahead=_delivered>_expectedByNow;
+                  var _pastDue=_daysToNext<0;
+                  var _paceColor=(_behind||_pastDue)?'var(--red)':_daysToNext<14?'var(--amber)':'var(--green)';
+                  var _paceLabel=(_behind||_pastDue)?'Past due':_ahead?'Ahead':'On pace';
+                  var _nextDueFmt=_nextDueDate.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+                  _paceHTML='<div style="font-size:11px;color:'+_paceColor+';font-weight:500">'+_nextDueFmt+'</div>'
+                    +'<div style="font-size:10px;color:'+_paceColor+'">'+_paceLabel+'</div>';
+                }
+              }
+              // Per phase / As needed / unrecognised freq → stays '—'
             }
+            // fixed and milestone → stay '—'
           } catch(e){ _paceHTML='—'; }
           return`<tr>
             <td><div style="display:flex;align-items:center;gap:6px"><span style="color:var(--sky-lt);flex-shrink:0">${delGroupIcon(d.type)}</span><span class="badge b-dark" style="font-size:11px">${d.type}</span></div></td>

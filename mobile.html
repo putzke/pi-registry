@@ -925,6 +925,7 @@ const SB_TO_INT = {
   },
   pi_interactions: {
     id:'id', projectId:'project_id', stakeholderId:'stakeholder_id',
+    anonLabel:'anon_label', nepaStage:'nepa_stage', equityFormSubmitted:'equity_form_submitted',
     date:'interaction_date', channel:'channel', subject:'subject',
     nature:'nature', direction:'direction', summary:'summary',
     loggedBy:'logged_by', followUp:'follow_up', followUpDue:'follow_up_due',
@@ -1004,7 +1005,7 @@ function fromSB(table, row) {
     result[intKey] = row[sbCol] !== undefined ? row[sbCol] : (intKey.startsWith('is') ? false : '');
   }
   // Normalize booleans
-  ['isMaster','followUp','followUpDone','isArchived'].forEach(f => {
+  ['isMaster','followUp','followUpDone','isArchived','equityFormSubmitted'].forEach(f => {
     if (result[f] !== undefined) result[f] = result[f] === true || result[f] === 1;
   });
   return result;

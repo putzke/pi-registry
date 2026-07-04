@@ -3465,10 +3465,10 @@ function renderIssuesPanel(projectId){
   if(linkedInts.length){
     linkedInts.forEach(function(i){
       const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
+      const cName=s?dispName(s):(i.anonLabel||'Anonymous');
       det+='<div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:12px">';
-      det+='<div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--sky-lt);font-weight:600">'+fmt(i.date)+'</span><span style="color:var(--slate)">'+i.channel+'</span></div>';
+      det+='<div style="display:flex;justify-content:space-between;margin-bottom:3px"><span><span style="color:var(--sky-lt);font-weight:600">'+fmt(i.date)+'</span><span style="color:var(--mist);margin-left:8px">'+cName+'</span></span><span style="color:var(--slate)">'+i.channel+'</span></div>';
       det+='<div style="color:var(--mist)">'+(i.summary||'')+'</div>';
-      if(s) det+='<div style="color:var(--slate);margin-top:2px">'+(s.firstName||'')+' '+(s.lastName||'')+'</div>';
       det+='</div>';
     });
   } else {
@@ -3591,9 +3591,14 @@ async function saveIssue(projectId){
   }
 
   S.selIssue=realId;
+  S.selIssueView=realId;
   closeM();
-  S.skView='issues';
-  renderStakeholders(document.getElementById('main'));
+  if(S.view==='issues'){
+    renderIssuesView(document.getElementById('main'));
+  } else {
+    S.skView='issues';
+    renderStakeholders(document.getElementById('main'));
+  }
 }
 
 async function deleteIssue(id, projectId){
@@ -6344,7 +6349,7 @@ function renderIssuesView(el){
             </div>
             <div style="display:flex;gap:6px">
               <button class="btn btn-sm" onclick="exportIssueSingleDocx('${selIss.id}')" title="Export this issue as Word doc"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px;margin-right:3px;vertical-align:-1px"><path d="M9 2H4a1 1 0 00-1 1v10a1 1 0 001 1h8a1 1 0 001-1V6L9 2z"/><path d="M9 2v4h4"/></svg>Word</button>
-              <button class="btn btn-sm" onclick="filterByProject('${selIss.projectId}');S.skView='issues';S.selIssue='${selIss.id}';setView('stakeholders')">Edit</button>
+              <button class="btn btn-sm" onclick="openIssueModal('${selIss.id}','${selIss.projectId}')">Edit</button>
             </div>
           </div>
           ${selIss.description?`<div style="font-size:13px;color:var(--mist);line-height:1.6;margin-bottom:16px">${selIss.description}</div>`:''}
@@ -6359,10 +6364,13 @@ function renderIssuesView(el){
           <div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Linked interactions (${linkedInts.length})</div>
           ${linkedInts.length?linkedInts.map(i=>{
             const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
+            const cName=s?dispName(s):(i.anonLabel||'Anonymous');
             return`<div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:12px">
-              <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--sky-lt);font-weight:600">${fmt(i.date)}</span><span style="color:var(--slate)">${i.channel}</span></div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+                <span><span style="color:var(--sky-lt);font-weight:600">${fmt(i.date)}</span><span style="color:var(--mist);margin-left:8px">${cName}</span></span>
+                <span style="color:var(--slate)">${i.channel}</span>
+              </div>
               <div style="color:var(--mist)">${i.summary||''}</div>
-              ${s?`<div style="color:var(--slate);margin-top:2px">${s.firstName||''} ${s.lastName||''}</div>`:''}
             </div>`;
           }).join(''):`<div style="color:var(--slate);font-size:12px;font-style:italic">No interactions linked yet.</div>`}
         </div>`;

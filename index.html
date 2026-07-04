@@ -6153,8 +6153,8 @@ function openProjModal(id){
   <div class="fsec" style="cursor:pointer;user-select:none" onclick="var b=document.getElementById('nepa-section');var a=document.getElementById('nepa-arrow');b.style.display=b.style.display==='none'?'':'none';a.textContent=b.style.display===''?'▾':'▸'"><span id="nepa-arrow">${(p.nepaClassification&&p.nepaClassification!=='N/A')?'▾':'▸'}</span> NEPA / Compliance <span style="font-weight:400;font-size:11px;color:var(--fog);text-transform:none;letter-spacing:0">(optional)</span></div>
   <div id="nepa-section" style="${(p.nepaClassification&&p.nepaClassification!=='N/A')?'':'display:none'}">
     <div class="fgrid fg2f">
-      <div class="fr"><label>NEPA Classification</label><select id="f-pnc" onchange="document.getElementById('nepa-stage-wrap').style.display=this.value&&this.value!=='N/A'?'':'none'">${['N/A','CE','EA','EIS'].map(t=>`<option${(p.nepaClassification||'N/A')===t?' selected':''}>${t}</option>`).join('')}</select></div>
-      <div class="fr" id="nepa-stage-wrap" style="${(p.nepaClassification&&p.nepaClassification!=='N/A')?'':'display:none'}"><label>Current NEPA Stage</label><select id="f-pns">${['Pre-NEPA','CE','EA - Scoping','EA - Draft','EA - Final / FONSI','EIS - Scoping','EIS - DEIS','EIS - FEIS','EIS - ROD','Post-NEPA / Construction','N/A'].map(t=>`<option${(p.nepaStage||'Pre-NEPA')===t?' selected':''}>${t}</option>`).join('')}</select></div>
+      <div class="fr"><label>NEPA Classification</label><select id="f-pnc" onchange="_updateNepaStages(this.value)">${['N/A','CE','EA','EIS'].map(t=>`<option${(p.nepaClassification||'N/A')===t?' selected':''}>${t}</option>`).join('')}</select></div>
+      <div class="fr" id="nepa-stage-wrap" style="${(p.nepaClassification&&p.nepaClassification!=='N/A')?'':'display:none'}"><label>Current NEPA Stage</label><select id="f-pns">${(()=>{const ST={CE:['Pre-NEPA','CE','Post-NEPA / Construction','N/A'],EA:['Pre-NEPA','EA - Scoping','EA - Draft','EA - Final / FONSI','Post-NEPA / Construction','N/A'],EIS:['Pre-NEPA','EIS - Scoping','EIS - DEIS','EIS - FEIS','EIS - ROD','Post-NEPA / Construction','N/A']};const opts=ST[p.nepaClassification]||['Pre-NEPA','CE','EA - Scoping','EA - Draft','EA - Final / FONSI','EIS - Scoping','EIS - DEIS','EIS - FEIS','EIS - ROD','Post-NEPA / Construction','N/A'];return opts.map(t=>`<option${(p.nepaStage||'Pre-NEPA')===t?' selected':''}>${t}</option>`).join('');})()}</select></div>
     </div>
   </div>
   <div class="fr"><label>Notes</label><textarea id="f-pno">${p.notes||''}</textarea></div>
@@ -6162,6 +6162,20 @@ function openProjModal(id){
   `${id?`<button class="btn btn-danger btn-sm" onclick="delProj('${id}')">Delete</button>`:''}
   <button class="btn" onclick="closeM()">Cancel</button>
   <button class="btn btn-primary" onclick="saveProj()">Save project</button>`,true);
+}
+function _updateNepaStages(cls){
+  const ST={
+    CE:['Pre-NEPA','CE','Post-NEPA / Construction','N/A'],
+    EA:['Pre-NEPA','EA - Scoping','EA - Draft','EA - Final / FONSI','Post-NEPA / Construction','N/A'],
+    EIS:['Pre-NEPA','EIS - Scoping','EIS - DEIS','EIS - FEIS','EIS - ROD','Post-NEPA / Construction','N/A']
+  };
+  const wrap=document.getElementById('nepa-stage-wrap');
+  const sel=document.getElementById('f-pns');
+  if(!wrap||!sel) return;
+  if(!cls||cls==='N/A'){wrap.style.display='none';return;}
+  wrap.style.display='';
+  const opts=ST[cls]||[];
+  sel.innerHTML=opts.map(s=>`<option>${s}</option>`).join('');
 }
 async function saveProj(){
   const v=id=>document.getElementById(id)?.value||'';

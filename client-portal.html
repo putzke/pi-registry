@@ -6,95 +6,187 @@
   <title>Horizon COMPASS — Client Portal</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f6fa; color: #1a1a2e; min-height: 100vh; }
+    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f6fa; color: #1a1a2e; }
 
-    /* ── Login ── */
-    #login-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
-    .login-card-wrap { width: 100%; max-width: 420px; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 32px rgba(0,0,0,0.16); }
+    /* ── Login ────────────────────────────────────────────────────────── */
+    #login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; background: #0B1929; }
+    .login-card-wrap { width: 100%; max-width: 420px; border-radius: 16px; overflow: hidden; box-shadow: 0 8px 48px rgba(0,0,0,0.4); }
     .login-hero { background: #112236; padding: 40px 24px 32px; text-align: center; }
     .login-hero svg { display: block; margin: 0 auto; }
-    .client-label { margin-top: 14px; font-size: 12px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; color: #A8C2D8; }
-    .login-card { background: white; padding: 32px 36px 36px; }
-    .login-card h2 { font-size: 19px; font-weight: 600; margin-bottom: 8px; }
-    .login-card p { font-size: 14px; color: #666; margin-bottom: 24px; line-height: 1.5; }
-    .login-card input[type="email"] { width: 100%; padding: 11px 14px; border: 1.5px solid #dde1ea; border-radius: 8px; font-size: 15px; outline: none; margin-bottom: 12px; transition: border-color 0.15s; font-family: inherit; }
-    .login-card input[type="email"]:focus { border-color: #3b5bdb; }
+    .client-label { margin-top: 14px; font-size: 11px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; color: #A8C2D8; }
+    .login-body { background: white; padding: 32px 36px 36px; }
+    .login-body h2 { font-size: 19px; font-weight: 600; margin-bottom: 8px; }
+    .login-body p { font-size: 14px; color: #666; margin-bottom: 24px; line-height: 1.55; }
+    .login-body input[type="email"] { width: 100%; padding: 11px 14px; border: 1.5px solid #dde1ea; border-radius: 8px; font-size: 15px; outline: none; margin-bottom: 12px; transition: border-color 0.15s; font-family: inherit; }
+    .login-body input[type="email"]:focus { border-color: #3b5bdb; }
     .btn-primary { width: 100%; padding: 12px; background: #3b5bdb; color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.15s; font-family: inherit; }
     .btn-primary:hover { background: #2f4ac0; }
     .btn-primary:disabled { background: #a5b4fc; cursor: not-allowed; }
-    #login-msg { margin-top: 16px; font-size: 14px; text-align: center; line-height: 1.5; }
+    #login-msg { margin-top: 16px; font-size: 14px; text-align: center; line-height: 1.5; min-height: 20px; }
     #login-msg.success { color: #2e7d32; }
     #login-msg.error { color: #c62828; }
 
-    /* ── App shell ── */
-    #app { display: none; }
-    .topbar { background: #0B1929; border-bottom: 1px solid #1a2e45; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; height: 52px; position: sticky; top: 0; z-index: 100; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
-    .topbar .brand-name { font-size: 16px; font-weight: 700; color: #fff; letter-spacing: -0.3px; }
-    .topbar .brand-sub { font-size: 9px; color: #A8C2D8; margin-top: 2px; text-transform: uppercase; letter-spacing: 1.4px; }
-    .btn-signout { padding: 7px 16px; border: 1.5px solid #2a4060; border-radius: 7px; background: transparent; font-size: 13px; cursor: pointer; color: #A8C2D8; font-family: inherit; transition: border-color 0.15s, color 0.15s; }
+    /* ── App shell ────────────────────────────────────────────────────── */
+    #app { display: none; height: 100%; flex-direction: column; }
+    #app.visible { display: flex; }
+
+    .topbar { flex-shrink: 0; background: #0B1929; height: 52px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 200; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+    .tb-brand { display: flex; flex-direction: column; line-height: 1; }
+    .tb-name { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: -0.3px; }
+    .tb-sub  { font-size: 9px; color: #A8C2D8; margin-top: 3px; text-transform: uppercase; letter-spacing: 1.4px; }
+    .tb-actions { display: flex; align-items: center; gap: 8px; }
+    .btn-icon-tb { display: flex; align-items: center; gap: 5px; padding: 6px 12px; border: 1.5px solid #2a4060; border-radius: 7px; background: transparent; color: #A8C2D8; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; transition: border-color 0.15s, color 0.15s; }
+    .btn-icon-tb svg { width: 14px; height: 14px; flex-shrink: 0; }
+    .btn-icon-tb:hover { border-color: #A8C2D8; color: #fff; }
+    .btn-signout { padding: 6px 14px; border: 1.5px solid #2a4060; border-radius: 7px; background: transparent; font-size: 12px; font-weight: 600; cursor: pointer; color: #A8C2D8; font-family: inherit; transition: border-color 0.15s, color 0.15s; }
     .btn-signout:hover { border-color: #A8C2D8; color: #fff; }
-    .main { max-width: 980px; margin: 0 auto; padding: 32px 24px; }
 
-    /* ── Project header ── */
-    .project-header { background: white; border-radius: 10px; padding: 24px 28px; margin-bottom: 20px; box-shadow: 0 1px 6px rgba(0,0,0,0.06); border-left: 4px solid #3b5bdb; }
-    .project-header h1 { font-size: 20px; font-weight: 700; margin-bottom: 10px; }
-    .project-meta { display: flex; gap: 24px; flex-wrap: wrap; }
-    .project-meta span { font-size: 13px; color: #666; }
-    .project-meta strong { color: #333; }
+    /* ── Mobile chip strip ────────────────────────────────────────────── */
+    .chip-strip { flex-shrink: 0; display: none; background: #fff; border-bottom: 1px solid #e8eaf0; overflow-x: auto; white-space: nowrap; padding: 10px 16px; gap: 8px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .chip-strip::-webkit-scrollbar { display: none; }
+    .chip { display: inline-flex; align-items: center; gap: 5px; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1.5px solid #e0e3ef; color: #555; background: #f8f9fc; transition: all 0.15s; white-space: nowrap; font-family: inherit; }
+    .chip svg { width: 13px; height: 13px; }
+    .chip.active { background: #3b5bdb; color: #fff; border-color: #3b5bdb; }
+    .chip:hover:not(.active) { border-color: #b0b8d8; color: #333; }
 
-    /* ── Cards ── */
-    .card { background: white; border-radius: 10px; padding: 24px 28px; box-shadow: 0 1px 6px rgba(0,0,0,0.06); margin-bottom: 20px; }
-    .section-title { font-size: 15px; font-weight: 600; margin-bottom: 16px; color: #1a1a2e; }
-    .project-block { margin-bottom: 40px; }
+    /* ── App layout ───────────────────────────────────────────────────── */
+    .app-layout { flex: 1; display: flex; overflow: hidden; }
 
-    /* ── Table ── */
-    .tbl-wrap { overflow-x: auto; }
+    /* ── Sidebar ──────────────────────────────────────────────────────── */
+    .sidebar { width: 220px; flex-shrink: 0; background: #091525; display: flex; flex-direction: column; overflow-y: auto; }
+    .sidebar-proj { padding: 16px 16px 12px; border-bottom: 1px solid #162030; }
+    .sidebar-proj-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #4d7a9e; margin-bottom: 6px; }
+    .sidebar-proj-name { font-size: 13px; font-weight: 600; color: #d0e4f5; line-height: 1.3; }
+    .proj-select { width: 100%; background: #112236; border: 1px solid #1e3a5f; border-radius: 6px; color: #d0e4f5; font-size: 13px; padding: 6px 8px; font-family: inherit; cursor: pointer; outline: none; }
+    .proj-select:focus { border-color: #3b5bdb; }
+    .nav-section { padding: 10px 0 6px; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; cursor: pointer; color: #7a9ebb; font-size: 13px; font-weight: 500; border-left: 3px solid transparent; transition: all 0.12s; user-select: none; }
+    .nav-item svg { width: 15px; height: 15px; flex-shrink: 0; }
+    .nav-item:hover { background: rgba(255,255,255,0.05); color: #c0d8ef; }
+    .nav-item.active { background: rgba(59,91,219,0.15); color: #fff; border-left-color: #3b5bdb; font-weight: 600; }
+    .sidebar-footer { margin-top: auto; padding: 16px; border-top: 1px solid #162030; }
+
+    /* ── Content ──────────────────────────────────────────────────────── */
+    .content { flex: 1; overflow-y: auto; background: #f5f6fa; }
+    .content-inner { max-width: 860px; margin: 0 auto; padding: 28px 24px; }
+
+    /* ── Section header ───────────────────────────────────────────────── */
+    .section-header { margin-bottom: 24px; }
+    .section-header h2 { font-size: 20px; font-weight: 700; color: #111827; }
+    .section-header p  { font-size: 13px; color: #6b7280; margin-top: 4px; }
+
+    /* ── Project banner ───────────────────────────────────────────────── */
+    .proj-banner { background: white; border-radius: 10px; padding: 20px 24px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); border-left: 4px solid #3b5bdb; }
+    .proj-banner h1 { font-size: 19px; font-weight: 700; margin-bottom: 10px; }
+    .proj-meta { display: flex; flex-wrap: wrap; gap: 16px 28px; }
+    .proj-meta span { font-size: 13px; color: #6b7280; }
+    .proj-meta strong { color: #374151; }
+
+    /* ── Stat tiles ───────────────────────────────────────────────────── */
+    .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+    .stat-tile { background: white; border-radius: 10px; padding: 18px 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+    .stat-tile .stat-num { font-size: 28px; font-weight: 700; color: #111827; line-height: 1; margin-bottom: 6px; }
+    .stat-tile .stat-lbl { font-size: 12px; color: #6b7280; font-weight: 500; }
+    .stat-tile .stat-sub { font-size: 11px; color: #9ca3af; margin-top: 2px; }
+    .stat-tile.stat-blue .stat-num { color: #3b5bdb; }
+    .stat-tile.stat-green .stat-num { color: #2e7d32; }
+    .stat-tile.stat-amber .stat-num { color: #b45309; }
+
+    /* ── Cards ────────────────────────────────────────────────────────── */
+    .card { background: white; border-radius: 10px; padding: 22px 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); margin-bottom: 16px; }
+    .card-title { font-size: 14px; font-weight: 700; color: #374151; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* ── Tables ───────────────────────────────────────────────────────── */
+    .tbl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     table { width: 100%; border-collapse: collapse; }
-    th { text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #999; padding: 0 16px 11px 0; border-bottom: 1.5px solid #f0f1f5; white-space: nowrap; }
-    td { padding: 13px 16px 13px 0; border-bottom: 1px solid #f5f6fa; font-size: 14px; vertical-align: middle; }
+    th { text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #9ca3af; padding: 0 12px 10px 0; border-bottom: 1.5px solid #f3f4f6; white-space: nowrap; }
+    td { padding: 12px 12px 12px 0; border-bottom: 1px solid #f9fafb; font-size: 13.5px; vertical-align: top; }
     tr:last-child td { border-bottom: none; }
-    td.title-col { font-weight: 500; max-width: 280px; }
+    .col-main { font-weight: 500; }
 
-    /* ── Status badges ── */
-    .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; white-space: nowrap; }
-    .badge-complete { background: #e8f5e9; color: #2e7d32; }
-    .badge-progress { background: #e3f2fd; color: #1565c0; }
-    .badge-notstarted { background: #f5f5f5; color: #757575; }
-    .badge-onhold { background: #fff3e0; color: #e65100; }
+    /* ── Badges ───────────────────────────────────────────────────────── */
+    .badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+    .badge-green  { background: #dcfce7; color: #166534; }
+    .badge-blue   { background: #dbeafe; color: #1d4ed8; }
+    .badge-amber  { background: #fef3c7; color: #92400e; }
+    .badge-gray   { background: #f3f4f6; color: #6b7280; }
+    .badge-red    { background: #fee2e2; color: #991b1b; }
+    .badge-purple { background: #ede9fe; color: #5b21b6; }
 
-    /* ── Progress bar ── */
-    .prog-wrap { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
-    .prog-bar { background: #eef0f7; border-radius: 4px; height: 6px; width: 80px; overflow: hidden; flex-shrink: 0; }
+    /* ── Progress bar ─────────────────────────────────────────────────── */
+    .prog-wrap { display: flex; align-items: center; gap: 8px; }
+    .prog-bar  { background: #e5e7eb; border-radius: 4px; height: 6px; width: 72px; overflow: hidden; flex-shrink: 0; }
     .prog-fill { height: 100%; background: #3b5bdb; border-radius: 4px; }
-    .prog-label { font-size: 12px; color: #888; }
+    .prog-lbl  { font-size: 12px; color: #9ca3af; }
 
-    /* ── Engagement Activity ── */
-    .activity-card { background: white; border-radius: 10px; padding: 24px 28px; box-shadow: 0 1px 6px rgba(0,0,0,0.06); margin-bottom: 20px; }
-    .activity-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
-    .activity-header .section-title { margin-bottom: 0; }
-    .date-range-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .date-range-bar label { font-size: 12px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
-    .date-range-bar input[type="date"] { padding: 6px 10px; border: 1.5px solid #dde1ea; border-radius: 7px; font-size: 13px; font-family: inherit; color: #333; outline: none; transition: border-color 0.15s; }
-    .date-range-bar input[type="date"]:focus { border-color: #3b5bdb; }
-    .btn-refresh { padding: 6px 14px; background: #f0f2fa; border: 1.5px solid #dde1ea; border-radius: 7px; font-size: 13px; font-weight: 600; color: #3b5bdb; cursor: pointer; font-family: inherit; transition: background 0.15s; white-space: nowrap; }
-    .btn-refresh:hover { background: #e3e8f7; }
-    .activity-subsection { margin-bottom: 24px; }
-    .activity-subsection:last-child { margin-bottom: 0; }
-    .activity-sub-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #888; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1.5px solid #f0f1f5; }
-    .activity-loading { text-align: center; padding: 28px; color: #bbb; font-size: 14px; }
+    /* ── Recent activity list ─────────────────────────────────────────── */
+    .activity-list { list-style: none; }
+    .activity-list li { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f3f4f6; }
+    .activity-list li:last-child { border-bottom: none; }
+    .act-icon { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+    .act-icon svg { width: 13px; height: 13px; }
+    .act-icon.mtg { background: #dbeafe; color: #1d4ed8; }
+    .act-icon.int { background: #dcfce7; color: #166534; }
+    .act-body { flex: 1; min-width: 0; }
+    .act-body strong { font-size: 13px; font-weight: 600; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .act-body span { font-size: 12px; color: #9ca3af; }
 
-    /* ── States ── */
-    .empty { text-align: center; padding: 36px; color: #bbb; font-size: 14px; }
-    .loading { text-align: center; padding: 80px; color: #aaa; font-size: 15px; }
-    .error-box { background: #fff5f5; border: 1px solid #ffcdd2; border-radius: 8px; padding: 18px 20px; color: #c62828; font-size: 14px; line-height: 1.5; }
+    /* ── Upcoming list ────────────────────────────────────────────────── */
+    .upcoming-list { list-style: none; }
+    .upcoming-list li { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f3f4f6; gap: 12px; }
+    .upcoming-list li:last-child { border-bottom: none; }
+    .upcoming-title { font-size: 13px; font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .upcoming-due { font-size: 12px; color: #9ca3af; white-space: nowrap; }
+    .due-soon { color: #b45309; font-weight: 600; }
 
-    @media (max-width: 600px) {
-      .main { padding: 16px; }
-      .project-header { padding: 18px; }
-      .card, .activity-card { padding: 18px; }
-      .topbar { padding: 0 16px; }
-      td.title-col { max-width: 160px; }
-      .activity-header { flex-direction: column; align-items: flex-start; }
+    /* ── Date range bar ───────────────────────────────────────────────── */
+    .date-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; padding: 14px 16px; background: #f8f9fc; border-radius: 8px; border: 1px solid #e5e7eb; }
+    .date-bar label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; }
+    .date-bar input[type="date"] { padding: 6px 10px; border: 1.5px solid #d1d5db; border-radius: 7px; font-size: 13px; font-family: inherit; color: #374151; outline: none; transition: border-color 0.15s; background: white; }
+    .date-bar input[type="date"]:focus { border-color: #3b5bdb; }
+    .btn-update { padding: 6px 16px; background: #3b5bdb; color: white; border: none; border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background 0.15s; }
+    .btn-update:hover { background: #2f4ac0; }
+
+    /* ── Activity subsection ──────────────────────────────────────────── */
+    .sub-heading { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: #9ca3af; margin: 20px 0 10px; padding-bottom: 8px; border-bottom: 1.5px solid #f3f4f6; }
+    .sub-heading:first-child { margin-top: 0; }
+
+    /* ── States ───────────────────────────────────────────────────────── */
+    .empty-state { text-align: center; padding: 40px 20px; color: #9ca3af; font-size: 14px; }
+    .loading-state { text-align: center; padding: 60px 20px; color: #9ca3af; font-size: 14px; }
+    .error-box { background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px 18px; color: #991b1b; font-size: 13.5px; line-height: 1.5; margin-bottom: 16px; }
+
+    /* ── Print ────────────────────────────────────────────────────────── */
+    @media print {
+      html, body { height: auto; overflow: auto; background: white; }
+      #login-screen { display: none !important; }
+      #app { display: block !important; height: auto; }
+      .topbar, .chip-strip, .sidebar, .btn-print-label, .btn-icon-tb, .btn-signout, .btn-update, .date-bar label ~ *, .proj-select { display: none !important; }
+      .date-bar { display: none !important; }
+      .app-layout { display: block; overflow: visible; }
+      .content { overflow: visible; }
+      .content-inner { padding: 0; max-width: none; }
+      .card, .stat-tile, .proj-banner { box-shadow: none; border: 1px solid #e5e7eb; break-inside: avoid; }
+      .stat-row { grid-template-columns: repeat(4, 1fr); }
+    }
+
+    /* ── Responsive ───────────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      html, body { height: auto; }
+      #app.visible { height: auto; min-height: 100vh; }
+      .app-layout { overflow: visible; flex-direction: column; }
+      .sidebar { display: none !important; }
+      .chip-strip { display: flex; }
+      .content { overflow: visible; flex: none; }
+      .content-inner { padding: 16px; }
+      .stat-row { grid-template-columns: repeat(2, 1fr); }
+      .topbar { padding: 0 14px; }
+      .btn-print-label { display: none; }
+    }
+    @media (max-width: 480px) {
+      .stat-row { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+      .proj-meta { gap: 10px 20px; }
+      td, th { padding-right: 8px; }
     }
   </style>
 </head>
@@ -107,9 +199,9 @@
       <svg xmlns="http://www.w3.org/2000/svg" width="150" height="116" viewBox="164.86 102.45 270.37 208.58" role="img" aria-label="Horizon COMPASS"><g transform="translate(242.50,91.50) scale(1.15)"><circle cx="50" cy="50" r="37" fill="none" stroke="#ffffff" stroke-width="3"></circle><line x1="14" y1="50" x2="86" y2="50" stroke="#ffffff" stroke-width="2.4" opacity="0.32"></line><path d="M50 13 A37 37 0 0 1 87 50" fill="none" stroke="#1F7A9C" stroke-width="7.5" stroke-linecap="round"></path><polygon points="65.6,34.4 52.97,52.97 47.03,47.03" fill="#C24A42"></polygon><polygon points="38,62 52.97,52.97 47.03,47.03" fill="#C2C8D2"></polygon><circle cx="50" cy="50" r="4" fill="#ffffff"></circle></g><path d="M190.15 266.50L186.96 266.50L186.96 241L190.15 241L190.15 252.16L213.52 252.16L213.52 241L216.71 241L216.71 266.50L213.52 266.50L213.52 254.81L190.15 254.81L190.15 266.50ZM242.51 267.03L235.82 267.03Q232.09 267.03 229.68 266.52Q227.27 266.02 225.92 264.66Q224.57 263.30 224.03 260.74Q223.49 258.18 223.49 254.08L223.49 254.08L223.49 253.42Q223.49 250.03 223.82 247.73Q224.15 245.43 224.97 243.99Q225.78 242.54 227.18 241.78Q228.59 241.02 230.71 240.74Q232.84 240.47 235.82 240.47L235.82 240.47L242.51 240.47Q245.50 240.47 247.63 240.74Q249.75 241.02 251.16 241.78Q252.56 242.54 253.37 243.99Q254.19 245.43 254.52 247.73Q254.85 250.03 254.85 253.42L254.85 253.42L254.85 254.08Q254.85 258.18 254.31 260.74Q253.77 263.30 252.42 264.66Q251.06 266.02 248.66 266.52Q246.25 267.03 242.51 267.03L242.51 267.03ZM235.82 264.28L235.82 264.28L242.51 264.28Q244.89 264.28 246.52 264.11Q248.14 263.94 249.16 263.40Q250.18 262.85 250.72 261.74Q251.26 260.62 251.46 258.76Q251.66 256.90 251.66 254.08L251.66 254.08L251.66 253.42Q251.66 250.50 251.46 248.60Q251.26 246.71 250.72 245.62Q250.18 244.52 249.16 244.01Q248.14 243.51 246.52 243.37Q244.89 243.22 242.51 243.22L242.51 243.22L235.82 243.22Q233.45 243.22 231.82 243.37Q230.20 243.51 229.18 244.01Q228.15 244.52 227.61 245.62Q227.08 246.71 226.88 248.60Q226.68 250.50 226.68 253.42L226.68 253.42L226.68 254.08Q226.68 256.90 226.88 258.76Q227.08 260.62 227.61 261.74Q228.15 262.85 229.18 263.40Q230.20 263.94 231.82 264.11Q233.45 264.28 235.82 264.28ZM261.63 266.50L261.63 241L278.69 241Q282.43 241 284.71 241.33Q287.00 241.66 288.17 242.48Q289.35 243.29 289.77 244.70Q290.18 246.11 290.18 248.27L290.18 248.27L290.18 248.94Q290.18 250.93 289.71 252.36Q289.24 253.80 287.89 254.69Q286.55 255.58 283.91 255.94L283.91 255.94L289.45 266.50L286.27 266.50L280.84 256.17Q280.50 256.19 280.15 256.19Q279.79 256.19 279.41 256.19L279.41 256.19L264.82 256.19L264.82 266.50L261.63 266.50ZM264.82 243.76L264.82 253.43L278.91 253.43Q281.75 253.43 283.38 253.24Q285.02 253.05 285.79 252.57Q286.56 252.09 286.78 251.21Q287.00 250.33 287.00 248.94L287.00 248.94L287.00 248.27Q287.00 246.69 286.70 245.78Q286.40 244.87 285.50 244.44Q284.60 244.00 282.83 243.88Q281.05 243.76 278.08 243.76L278.08 243.76L264.82 243.76ZM300.80 266.50L297.61 266.50L297.61 241L300.80 241L300.80 266.50ZM337.26 266.50L307.51 266.50L307.51 263.84L332.18 243.66L308.57 243.66L308.57 241L336.73 241L336.73 243.66L311.93 263.84L337.26 263.84L337.26 266.50ZM361.90 267.03L355.21 267.03Q351.48 267.03 349.07 266.52Q346.66 266.02 345.31 264.66Q343.96 263.30 343.42 260.74Q342.88 258.18 342.88 254.08L342.88 254.08L342.88 253.42Q342.88 250.03 343.21 247.73Q343.54 245.43 344.35 243.99Q345.17 242.54 346.57 241.78Q347.97 241.02 350.10 240.74Q352.22 240.47 355.21 240.47L355.21 240.47L361.90 240.47Q364.89 240.47 367.01 240.74Q369.14 241.02 370.54 241.78Q371.95 242.54 372.76 243.99Q373.57 245.43 373.90 247.73Q374.24 250.03 374.24 253.42L374.24 253.42L374.24 254.08Q374.24 258.18 373.70 260.74Q373.16 263.30 371.80 264.66Q370.45 266.02 368.04 266.52Q365.64 267.03 361.90 267.03L361.90 267.03ZM355.21 264.28L355.21 264.28L361.90 264.28Q364.28 264.28 365.90 264.11Q367.53 263.94 368.55 263.40Q369.57 262.85 370.11 261.74Q370.65 260.62 370.85 258.76Q371.05 256.90 371.05 254.08L371.05 254.08L371.05 253.42Q371.05 250.50 370.85 248.60Q370.65 246.71 370.11 245.62Q369.57 244.52 368.55 244.01Q367.53 243.51 365.90 243.37Q364.28 243.22 361.90 243.22L361.90 243.22L355.21 243.22Q352.84 243.22 351.21 243.37Q349.58 243.51 348.56 244.01Q347.54 244.52 347.00 245.62Q346.46 246.71 346.26 248.60Q346.06 250.50 346.06 253.42L346.06 253.42L346.06 254.08Q346.06 256.90 346.26 258.76Q346.46 260.62 347.00 261.74Q347.54 262.85 348.56 263.40Q349.58 263.94 351.21 264.11Q352.84 264.28 355.21 264.28ZM384.14 266.50L380.95 266.50L380.95 241L384.27 241L409.89 262.57L409.92 262.57L409.92 241L413.11 241L413.11 266.50L409.79 266.50L384.17 244.75L384.14 244.75L384.14 266.50Z" fill="#ffffff"></path><path d="M168.86 296.08L168.86 296.08L168.86 295.42Q168.86 292.03 169.19 289.73Q169.52 287.43 170.33 285.99Q171.15 284.54 172.55 283.78Q173.95 283.02 176.08 282.74Q178.20 282.47 181.19 282.47L181.19 282.47L187.88 282.47Q191.30 282.47 193.65 282.79Q196.00 283.12 197.44 284.07Q198.87 285.03 199.52 286.88Q200.17 288.73 200.17 291.78L200.17 291.78L196.98 291.78Q196.98 289.38 196.55 288.04Q196.12 286.70 195.09 286.10Q194.07 285.51 192.31 285.37Q190.55 285.22 187.88 285.22L187.88 285.22L181.19 285.22Q178.82 285.22 177.19 285.37Q175.56 285.51 174.54 286.01Q173.52 286.52 172.98 287.62Q172.44 288.71 172.24 290.60Q172.04 292.50 172.04 295.42L172.04 295.42L172.04 296.08Q172.04 298.90 172.24 300.76Q172.44 302.62 172.98 303.74Q173.52 304.85 174.54 305.40Q175.56 305.94 177.19 306.11Q178.82 306.28 181.19 306.28L181.19 306.28L187.88 306.28Q190.55 306.28 192.31 306.16Q194.07 306.04 195.09 305.48Q196.12 304.91 196.55 303.59Q196.98 302.27 196.98 299.88L196.98 299.88L200.17 299.88Q200.17 302.94 199.52 304.76Q198.87 306.59 197.44 307.51Q196.00 308.43 193.65 308.73Q191.30 309.03 187.88 309.03L187.88 309.03L181.19 309.03Q177.46 309.03 175.05 308.52Q172.64 308.02 171.29 306.66Q169.94 305.30 169.40 302.74Q168.86 300.18 168.86 296.08ZM224.89 309.03L218.20 309.03Q214.47 309.03 212.06 308.52Q209.65 308.02 208.30 306.66Q206.95 305.30 206.41 302.74Q205.87 300.18 205.87 296.08L205.87 296.08L205.87 295.42Q205.87 292.03 206.20 289.73Q206.53 287.43 207.34 285.99Q208.16 284.54 209.56 283.78Q210.96 283.02 213.09 282.74Q215.21 282.47 218.20 282.47L218.20 282.47L224.89 282.47Q227.88 282.47 230.01 282.74Q232.13 283.02 233.53 283.78Q234.94 284.54 235.75 285.99Q236.56 287.43 236.89 289.73Q237.23 292.03 237.23 295.42L237.23 295.42L237.23 296.08Q237.23 300.18 236.69 302.74Q236.15 305.30 234.79 306.66Q233.44 308.02 231.03 308.52Q228.63 309.03 224.89 309.03L224.89 309.03ZM218.20 306.28L218.20 306.28L224.89 306.28Q227.27 306.28 228.89 306.11Q230.52 305.94 231.54 305.40Q232.56 304.85 233.10 303.74Q233.64 302.62 233.84 300.76Q234.04 298.90 234.04 296.08L234.04 296.08L234.04 295.42Q234.04 292.50 233.84 290.60Q233.64 288.71 233.10 287.62Q232.56 286.52 231.54 286.01Q230.52 285.51 228.89 285.37Q227.27 285.22 224.89 285.22L224.89 285.22L218.20 285.22Q215.83 285.22 214.20 285.37Q212.57 285.51 211.55 286.01Q210.53 286.52 209.99 287.62Q209.45 288.71 209.25 290.60Q209.05 292.50 209.05 295.42L209.05 295.42L209.05 296.08Q209.05 298.90 209.25 300.76Q209.45 302.62 209.99 303.74Q210.53 304.85 211.55 305.40Q212.57 305.94 214.20 306.11Q215.83 306.28 218.20 306.28ZM247.19 308.50L244.01 308.50L244.01 283L248.75 283L264.18 303.80L279.37 283L284.12 283L284.12 308.50L280.93 308.50L280.93 285.89L265.70 306.82L262.82 306.82L247.19 285.89L247.19 308.50ZM295.21 308.50L292.02 308.50L292.02 283L309.09 283Q312.82 283 315.11 283.37Q317.39 283.73 318.57 284.59Q319.75 285.44 320.16 286.89Q320.58 288.35 320.58 290.50L320.58 290.50L320.58 291.17Q320.58 293.23 320.15 294.66Q319.73 296.10 318.52 296.98Q317.31 297.86 315.02 298.27Q312.73 298.67 308.99 298.67L308.99 298.67L295.21 298.67L295.21 308.50ZM317.39 291.17L317.39 290.50Q317.39 288.93 317.09 287.98Q316.79 287.03 315.90 286.55Q315.00 286.07 313.22 285.91Q311.45 285.76 308.48 285.76L308.48 285.76L295.21 285.76L295.21 295.92L308.48 295.92Q311.45 295.92 313.22 295.73Q315.00 295.53 315.90 295.03Q316.79 294.52 317.09 293.58Q317.39 292.65 317.39 291.17L317.39 291.17ZM328.00 308.50L324.29 308.50L339.16 283L343.41 283L358.29 308.50L354.57 308.50L351.38 302.66L331.19 302.66L328.00 308.50ZM341.29 285.13L332.79 300L349.79 300L341.29 285.13ZM391.08 301.13L391.08 301.13Q391.08 299.65 390.85 298.80Q390.61 297.96 389.80 297.55Q388.99 297.14 387.28 297.02Q385.57 296.90 382.60 296.85L382.60 296.85L373.36 296.71Q369.95 296.66 367.87 296.30Q365.79 295.93 364.73 295.14Q363.67 294.36 363.31 293.03Q362.96 291.70 362.96 289.71L362.96 289.71Q362.96 287.53 363.45 286.12Q363.94 284.71 365.22 283.91Q366.51 283.12 368.87 282.79Q371.22 282.47 374.96 282.47L374.96 282.47L382.06 282.47Q385.45 282.47 387.71 282.68Q389.97 282.90 391.29 283.68Q392.62 284.46 393.20 286.10Q393.77 287.75 393.77 290.62L393.77 290.62L390.58 290.62Q390.58 288.40 390.16 287.26Q389.73 286.12 388.76 285.71Q387.79 285.29 386.15 285.26Q384.50 285.22 382.06 285.22L382.06 285.22L375.12 285.22Q372.15 285.22 370.37 285.34Q368.58 285.46 367.67 285.87Q366.76 286.29 366.45 287.20Q366.14 288.11 366.14 289.71L366.14 289.71Q366.14 291.05 366.36 291.87Q366.57 292.68 367.33 293.10Q368.09 293.53 369.66 293.68Q371.24 293.84 373.96 293.87L373.96 293.87L383.86 294.01Q387.34 294.06 389.43 294.41Q391.51 294.77 392.55 295.57Q393.59 296.36 393.93 297.72Q394.27 299.07 394.27 301.13L394.27 301.13Q394.27 303.37 393.84 304.89Q393.42 306.41 392.21 307.32Q391.00 308.23 388.70 308.63Q386.41 309.03 382.68 309.03L382.68 309.03L374.91 309.03Q371.51 309.03 369.20 308.73Q366.89 308.43 365.52 307.53Q364.15 306.62 363.55 304.83Q362.96 303.04 362.96 300.05L362.96 300.05L366.14 300.05Q366.14 302.39 366.53 303.67Q366.91 304.95 367.86 305.50Q368.82 306.06 370.53 306.17Q372.25 306.28 374.91 306.28L374.91 306.28L382.51 306.28Q385.48 306.28 387.21 306.08Q388.94 305.89 389.77 305.35Q390.60 304.81 390.84 303.80Q391.08 302.79 391.08 301.13ZM428.04 301.13L428.04 301.13Q428.04 299.65 427.81 298.80Q427.57 297.96 426.76 297.55Q425.95 297.14 424.24 297.02Q422.53 296.90 419.56 296.85L419.56 296.85L410.33 296.71Q406.91 296.66 404.83 296.30Q402.76 295.93 401.69 295.14Q400.63 294.36 400.27 293.03Q399.92 291.70 399.92 289.71L399.92 289.71Q399.92 287.53 400.41 286.12Q400.90 284.71 402.18 283.91Q403.47 283.12 405.83 282.79Q408.18 282.47 411.92 282.47L411.92 282.47L419.02 282.47Q422.41 282.47 424.67 282.68Q426.93 282.90 428.26 283.68Q429.58 284.46 430.16 286.10Q430.73 287.75 430.73 290.62L430.73 290.62L427.54 290.62Q427.54 288.40 427.12 287.26Q426.69 286.12 425.72 285.71Q424.75 285.29 423.11 285.26Q421.47 285.22 419.02 285.22L419.02 285.22L412.09 285.22Q409.11 285.22 407.33 285.34Q405.54 285.46 404.63 285.87Q403.72 286.29 403.41 287.20Q403.10 288.11 403.10 289.71L403.10 289.71Q403.10 291.05 403.32 291.87Q403.54 292.68 404.29 293.10Q405.05 293.53 406.62 293.68Q408.20 293.84 410.92 293.87L410.92 293.87L420.82 294.01Q424.30 294.06 426.39 294.41Q428.47 294.77 429.51 295.57Q430.55 296.36 430.89 297.72Q431.23 299.07 431.23 301.13L431.23 301.13Q431.23 303.37 430.80 304.89Q430.38 306.41 429.17 307.32Q427.96 308.23 425.67 308.63Q423.37 309.03 419.64 309.03L419.64 309.03L411.87 309.03Q408.47 309.03 406.16 308.73Q403.85 308.43 402.48 307.53Q401.11 306.62 400.51 304.83Q399.92 303.04 399.92 300.05L399.92 300.05L403.10 300.05Q403.10 302.39 403.49 303.67Q403.87 304.95 404.82 305.50Q405.78 306.06 407.49 306.17Q409.21 306.28 411.87 306.28L411.87 306.28L419.47 306.28Q422.44 306.28 424.17 306.08Q425.90 305.89 426.73 305.35Q427.56 304.81 427.80 303.80Q428.04 302.79 428.04 301.13Z" fill="#35A6C9"></path></svg>
       <div class="client-label">Client Login</div>
     </div>
-    <div class="login-card">
+    <div class="login-body">
       <h2>Sign in</h2>
-      <p>Enter the email address your project manager used to invite you. We'll send you a one-click login link — no password needed.</p>
+      <p>Enter the email address your project manager used to invite you. We'll send you a secure one-click login link — no password needed.</p>
       <form id="login-form">
         <input type="email" id="email-input" placeholder="your@email.com" required autocomplete="email">
         <button type="submit" class="btn-primary" id="login-btn">Send login link</button>
@@ -121,53 +213,79 @@
 
 <!-- ── App Shell ─────────────────────────────────────────────────────── -->
 <div id="app">
-  <div class="topbar">
-    <div class="brand">
-      <div class="brand-name">Horizon COMPASS</div>
-      <div class="brand-sub">Client Portal</div>
+  <header class="topbar">
+    <div class="tb-brand">
+      <span class="tb-name">Horizon COMPASS</span>
+      <span class="tb-sub">Client Portal</span>
     </div>
-    <button class="btn-signout" onclick="signOut()">Sign out</button>
-  </div>
-  <div class="main" id="main-content">
-    <div class="loading">Loading your project&hellip;</div>
+    <div class="tb-actions">
+      <button class="btn-icon-tb" onclick="window.print()" title="Print current view">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6V1h8v5"/><rect x="1" y="6" width="14" height="7" rx="1"/><path d="M4 10h8M4 13h5"/><circle cx="12" cy="9" r="0.75" fill="currentColor" stroke="none"/></svg>
+        <span class="btn-print-label">Print</span>
+      </button>
+      <button class="btn-signout" onclick="signOut()">Sign out</button>
+    </div>
+  </header>
+  <div id="chip-strip" class="chip-strip"></div>
+  <div class="app-layout">
+    <nav id="sidebar" class="sidebar"></nav>
+    <main id="content" class="content">
+      <div class="content-inner"><div class="loading-state">Loading your project&hellip;</div></div>
+    </main>
   </div>
 </div>
 
 <script>
-const SUPA_URL = 'https://ncfbblhlsiglxkoiounv.supabase.co';
-const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5jZmJibGhsc2lnbHhrb2lvdW52Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0MTUzOTMsImV4cCI6MjA5NDk5MTM5M30.-fRI1QGkr1teN0sFvl25Uq7U38Jq1SAc6heIJvOud2Q';
+const SUPA_URL  = 'https://ncfbblhlsiglxkoiounv.supabase.co';
+const SUPA_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5jZmJibGhsc2lnbHhrb2lvdW52Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0MTUzOTMsImV4cCI6MjA5NDk5MTM5M30.-fRI1QGkr1teN0sFvl25Uq7U38Jq1SAc6heIJvOud2Q';
 const PORTAL_URL = 'https://putzke.github.io/pi-registry/client-portal.html';
 const SESSION_KEY = 'cp_session_v1';
 
-// ── Session ───────────────────────────────────────────────────────────────────
-function saveSession(data) { try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(data)); } catch (_) {} }
-function loadSession() { try { return JSON.parse(sessionStorage.getItem(SESSION_KEY)); } catch (_) { return null; } }
-function clearSession() { sessionStorage.removeItem(SESSION_KEY); }
+// ── Nav definition ────────────────────────────────────────────────────────────
+const NAV = [
+  { id:'overview',     label:'Overview',        icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>' },
+  { id:'deliverables', label:'Deliverables',    icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 1h8l3 3v10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z"/><path d="M4 1v4h8"/><path d="M4 9h8M4 12h5"/></svg>' },
+  { id:'activity',     label:'Engagement',      icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 3H2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h3l2 2 2-2h5a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1z"/></svg>' },
+  { id:'issues',       label:'Issues',          icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1L1.5 13.5h13L8 1z"/><line x1="8" y1="6" x2="8" y2="9.5"/><circle cx="8" cy="11.5" r="0.6" fill="currentColor" stroke="none"/></svg>' },
+  { id:'commitments',  label:'Commitments',     icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M5 8l2 2 4-4"/></svg>' },
+  { id:'comments',     label:'Comment Periods', icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2v12L5 11H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10z"/><path d="M5 13.5l.7 1.5"/></svg>' },
+  { id:'tribal',       label:'Tribal',          icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5.5" cy="4" r="2.5"/><path d="M1 14c0-2.76 2.01-4 4.5-4s4.5 1.24 4.5 4"/><circle cx="13" cy="5" r="2"/><path d="M11 14c0-1.86 1.34-3 3-3"/></svg>' },
+];
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let _view = 'overview';
+let _projId = null;
+let _projects = [];
+let _deliverables = [];
+let _actFrom = dfltFrom();
+let _actTo   = dfltTo();
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 function isoDate(d) {
-  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
-  return `${y}-${m}-${day}`;
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-function defaultFrom() { const d = new Date(); d.setDate(d.getDate()-30); return isoDate(d); }
-function defaultTo()   { return isoDate(new Date()); }
+function dfltFrom() { const d = new Date(); d.setDate(d.getDate()-30); return isoDate(d); }
+function dfltTo()   { return isoDate(new Date()); }
+
+// ── Session ───────────────────────────────────────────────────────────────────
+function saveSession(data) { try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(data)); } catch(_) {} }
+function loadSession()     { try { return JSON.parse(sessionStorage.getItem(SESSION_KEY)); } catch(_) { return null; } }
+function clearSession()    { sessionStorage.removeItem(SESSION_KEY); }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
   const hash = window.location.hash;
   if (hash && hash.includes('access_token=')) {
-    const params = new URLSearchParams(hash.slice(1));
-    const access_token = params.get('access_token');
-    const refresh_token = params.get('refresh_token');
-    if (access_token) {
-      saveSession({ access_token, refresh_token });
+    const p = new URLSearchParams(hash.slice(1));
+    const tok = p.get('access_token');
+    if (tok) {
+      saveSession({ access_token: tok, refresh_token: p.get('refresh_token') });
       history.replaceState(null, '', window.location.pathname);
-      showApp();
-      return;
+      bootApp(); return;
     }
   }
-  const session = loadSession();
-  if (session && session.access_token) { showApp(); return; }
+  const s = loadSession();
+  if (s && s.access_token) { bootApp(); return; }
   showLogin();
 });
 
@@ -177,11 +295,8 @@ document.getElementById('login-form').addEventListener('submit', async e => {
   const email = document.getElementById('email-input').value.trim();
   const btn = document.getElementById('login-btn');
   const msg = document.getElementById('login-msg');
-  btn.disabled = true;
-  btn.textContent = 'Sending…';
-  msg.textContent = '';
-  msg.className = '';
-
+  btn.disabled = true; btn.textContent = 'Sending…';
+  msg.textContent = ''; msg.className = '';
   try {
     const res = await fetch(`${SUPA_URL}/auth/v1/otp?redirect_to=${encodeURIComponent(PORTAL_URL)}`, {
       method: 'POST',
@@ -196,237 +311,523 @@ document.getElementById('login-form').addEventListener('submit', async e => {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.msg || err.error_description || `Error ${res.status}`);
     }
-  } catch (err) {
+  } catch(err) {
     msg.className = 'error';
     msg.textContent = err.message || 'Something went wrong. Please try again.';
-    btn.disabled = false;
-    btn.textContent = 'Send login link';
+    btn.disabled = false; btn.textContent = 'Send login link';
   }
 });
-
-// ── Sign out ──────────────────────────────────────────────────────────────────
-function signOut() { clearSession(); showLogin(); }
 
 // ── Screen switching ──────────────────────────────────────────────────────────
 function showLogin() {
   document.getElementById('login-screen').style.display = 'flex';
-  document.getElementById('app').style.display = 'none';
+  document.getElementById('app').classList.remove('visible');
 }
 function showApp() {
   document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('app').style.display = 'block';
-  loadDashboard();
+  document.getElementById('app').classList.add('visible');
 }
+function signOut() { clearSession(); showLogin(); }
 
 // ── API helpers ───────────────────────────────────────────────────────────────
-function authHeaders() {
+function authHdrs() {
   const s = loadSession();
   return { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${s.access_token}`, 'Accept': 'application/json' };
 }
-
 async function sbFetch(path) {
-  const res = await fetch(`${SUPA_URL}/rest/v1/${path}`, { headers: authHeaders() });
+  const res = await fetch(`${SUPA_URL}/rest/v1/${path}`, { headers: authHdrs() });
   if (res.status === 401) { clearSession(); showLogin(); throw new Error('session_expired'); }
   if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || `API ${res.status}`); }
   return res.json();
 }
 
-// ── Dashboard ─────────────────────────────────────────────────────────────────
-async function loadDashboard() {
-  const el = document.getElementById('main-content');
+// ── App boot ──────────────────────────────────────────────────────────────────
+async function bootApp() {
+  showApp();
   try {
     const access = await sbFetch('pi_client_access?select=project_id');
     if (!access.length) {
-      el.innerHTML = '<div class="error-box">No projects have been assigned to your account yet. Please contact your project manager.</div>';
+      setContent('<div class="error-box">No projects have been assigned to your account yet. Please contact your project manager.</div>');
       return;
     }
-
     const ids = access.map(r => r.project_id).join(',');
-
     const [projects, deliverables] = await Promise.all([
       sbFetch(`pi_projects?id=in.(${ids})&select=id,name,pid,client,phase,status,start_date,end_date&order=name.asc`),
       sbFetch(`pi_deliverables?project_id=in.(${ids})&select=id,project_id,title,deliverable_type,status,progress,due_date,milestone_end&order=due_date.asc.nullslast`)
     ]);
-
     if (!projects.length) {
-      el.innerHTML = '<div class="error-box">No projects found. Please contact your project manager.</div>';
+      setContent('<div class="error-box">No projects found. Please contact your project manager.</div>');
       return;
     }
-
-    el.innerHTML = projects.map(p =>
-      renderProject(p, deliverables.filter(d => String(d.project_id) === String(p.id)))
-    ).join('');
-
-    // Kick off engagement activity loads after DOM is set
-    projects.forEach(p => loadEngagementActivity(p.id, defaultFrom(), defaultTo()));
-
-  } catch (err) {
+    _projects = projects;
+    _deliverables = deliverables;
+    _projId = projects[0].id;
+    buildNav();
+    setView('overview');
+  } catch(err) {
     if (err.message !== 'session_expired') {
-      el.innerHTML = `<div class="error-box">Unable to load your project data: <strong>${err.message}</strong><br>Please refresh the page, or <a href="#" onclick="signOut();return false;">sign in again</a> if the problem persists.</div>`;
+      setContent(`<div class="error-box">Unable to load your project data: <strong>${esc(err.message)}</strong><br>Please refresh, or <a href="#" onclick="signOut();return false;">sign in again</a>.</div>`);
     }
   }
+}
+
+// ── Nav shell ─────────────────────────────────────────────────────────────────
+function buildNav() {
+  const sb = document.getElementById('sidebar');
+  const cs = document.getElementById('chip-strip');
+
+  // Project selector
+  const projHtml = _projects.length === 1
+    ? `<div class="sidebar-proj-label">Project</div><div class="sidebar-proj-name">${esc(_projects[0].name)}</div>`
+    : `<div class="sidebar-proj-label">Project</div>
+       <select class="proj-select" onchange="switchProject(this.value)">
+         ${_projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}
+       </select>`;
+
+  sb.innerHTML = `
+    <div class="sidebar-proj">${projHtml}</div>
+    <div class="nav-section">
+      ${NAV.map(n => `<div class="nav-item" id="nav-${n.id}" data-view="${n.id}" onclick="setView('${n.id}')">${n.icon}${esc(n.label)}</div>`).join('')}
+    </div>`;
+
+  cs.innerHTML = NAV.map(n =>
+    `<button class="chip" id="chip-${n.id}" onclick="setView('${n.id}')">${n.icon}${esc(n.label)}</button>`
+  ).join('');
+}
+
+function setView(view) {
+  _view = view;
+  NAV.forEach(n => {
+    document.getElementById(`nav-${n.id}`)?.classList.toggle('active', n.id === view);
+    document.getElementById(`chip-${n.id}`)?.classList.toggle('active', n.id === view);
+  });
+  // Scroll active chip into view on mobile
+  const chip = document.getElementById(`chip-${view}`);
+  chip?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
+  renderSection(view);
+}
+
+function switchProject(id) {
+  _projId = Number(id);
+  renderSection(_view);
+}
+
+function setContent(html) {
+  document.getElementById('content').innerHTML = `<div class="content-inner">${html}</div>`;
+}
+
+// ── Project banner (reused across sections) ───────────────────────────────────
+function projBanner() {
+  const p = _projects.find(x => x.id === _projId);
+  if (!p) return '';
+  const meta = [
+    p.pid        ? `<span><strong>Project #</strong> ${esc(p.pid)}</span>` : '',
+    p.client     ? `<span><strong>Client</strong> ${esc(p.client)}</span>` : '',
+    p.phase      ? `<span><strong>Phase</strong> ${esc(p.phase)}</span>` : '',
+    p.status     ? `<span><strong>Status</strong> ${esc(p.status)}</span>` : '',
+    p.start_date ? `<span><strong>Start</strong> ${fmt(p.start_date)}</span>` : '',
+    p.end_date   ? `<span><strong>End</strong> ${fmt(p.end_date)}</span>` : '',
+  ].filter(Boolean).join('');
+  return `<div class="proj-banner"><h1>${esc(p.name || 'Project')}</h1><div class="proj-meta">${meta}</div></div>`;
+}
+
+// ── Multi-project selector for content area ───────────────────────────────────
+function projSelector() {
+  if (_projects.length < 2) return '';
+  return `<div style="margin-bottom:16px">
+    <select class="proj-select" style="background:#f0f2fa;border-color:#dde1ea;color:#374151;font-size:14px;padding:8px 10px;border-radius:8px;width:auto;max-width:100%" onchange="switchProject(this.value)">
+      ${_projects.map(p => `<option value="${p.id}"${p.id===_projId?' selected':''}>${esc(p.name)}</option>`).join('')}
+    </select>
+  </div>`;
+}
+
+// ── Section dispatcher ────────────────────────────────────────────────────────
+function renderSection(view) {
+  switch(view) {
+    case 'overview':     renderOverview();     break;
+    case 'deliverables': renderDeliverables(); break;
+    case 'activity':     renderActivity();     break;
+    case 'issues':       renderIssues();       break;
+    case 'commitments':  renderCommitments();  break;
+    case 'comments':     renderComments();     break;
+    case 'tribal':       renderTribal();       break;
+  }
+}
+
+// ── Overview ──────────────────────────────────────────────────────────────────
+async function renderOverview() {
+  const projDevs = _deliverables.filter(d => String(d.project_id) === String(_projId));
+  const totalD = projDevs.length;
+  const doneD  = projDevs.filter(d => isComplete(d.status)).length;
+  const pctD   = totalD ? Math.round(doneD / totalD * 100) : 0;
+
+  const today = isoDate(new Date());
+  const upcoming = projDevs
+    .filter(d => !isComplete(d.status) && (d.due_date || d.milestone_end))
+    .sort((a,b) => (a.due_date||a.milestone_end) < (b.due_date||b.milestone_end) ? -1 : 1)
+    .slice(0, 5);
+
+  setContent(`${projSelector()}${projBanner()}
+    <div class="stat-row">
+      <div class="stat-tile stat-blue">
+        <div class="stat-num">${doneD}/${totalD}</div>
+        <div class="stat-lbl">Deliverables Complete</div>
+        <div class="stat-sub">${pctD}% overall</div>
+      </div>
+      <div class="stat-tile" id="tile-issues"><div class="stat-num">—</div><div class="stat-lbl">Open Issues</div></div>
+      <div class="stat-tile" id="tile-meetings"><div class="stat-num">—</div><div class="stat-lbl">Public Meetings</div></div>
+      <div class="stat-tile" id="tile-outreach"><div class="stat-num">—</div><div class="stat-lbl">Outreach Events</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Upcoming Deadlines</div>
+      ${upcoming.length ? `<ul class="upcoming-list">${upcoming.map(d => {
+        const due = d.due_date || d.milestone_end;
+        const daysLeft = Math.ceil((new Date(due+'T12:00:00') - new Date()) / 86400000);
+        const dueCls = daysLeft <= 14 ? ' due-soon' : '';
+        return `<li>
+          <span class="upcoming-title">${esc(d.title||'—')}</span>
+          ${statusBadge(d.status)}
+          <span class="upcoming-due${dueCls}">${fmt(due)}</span>
+        </li>`;
+      }).join('')}</ul>`
+      : '<div class="empty-state">No upcoming deadlines.</div>'}
+    </div>
+    <div class="card" id="ov-activity"><div class="loading-state" style="padding:24px">Loading recent activity&hellip;</div></div>`);
+
+  // Fetch stats + recent activity in parallel
+  try {
+    const [issues, meetings, interactions] = await Promise.all([
+      sbFetch(`pi_issues?project_id=eq.${_projId}&select=id,status`),
+      sbFetch(`pi_meetings?project_id=eq.${_projId}&select=id,meeting_date,title,meeting_type&order=meeting_date.desc&limit=5`),
+      sbFetch(`pi_interactions?project_id=eq.${_projId}&select=id,interaction_date,channel,subject&order=interaction_date.desc&limit=5`)
+    ]);
+    const openIssues = issues.filter(i => !isComplete(i.status)).length;
+
+    const t = id => document.getElementById(id);
+    if (t('tile-issues'))   t('tile-issues').innerHTML   = `<div class="stat-num${openIssues > 0 ? ' ' : ''}" style="${openIssues>0?'color:#b45309':''}">${openIssues}</div><div class="stat-lbl">Open Issues</div>`;
+    if (t('tile-meetings'))  t('tile-meetings').innerHTML  = `<div class="stat-num">${meetings.length}</div><div class="stat-lbl">Recent Meetings</div>`;
+    if (t('tile-outreach'))  t('tile-outreach').innerHTML  = `<div class="stat-num">${interactions.length}</div><div class="stat-lbl">Recent Outreach</div>`;
+
+    // Recent activity merged list
+    const acts = [
+      ...meetings.map(m => ({ date: m.meeting_date, type: 'mtg', label: m.title || 'Meeting', sub: m.meeting_type || '' })),
+      ...interactions.map(i => ({ date: i.interaction_date, type: 'int', label: i.subject || 'Interaction', sub: i.channel || '' }))
+    ].sort((a,b) => a.date < b.date ? 1 : -1).slice(0, 8);
+
+    const mtgIcon = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="7" r="4"/><path d="M2 15c0-3 2.7-5 6-5s6 2 6 5"/></svg>';
+    const intIcon = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 3H2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h3l2 2 2-2h5a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1z"/></svg>';
+
+    const actHtml = acts.length
+      ? `<ul class="activity-list">${acts.map(a => `
+          <li>
+            <div class="act-icon ${a.type}">${a.type === 'mtg' ? mtgIcon : intIcon}</div>
+            <div class="act-body">
+              <strong>${esc(a.label)}</strong>
+              <span>${fmt(a.date)}${a.sub ? ' · ' + esc(a.sub) : ''}</span>
+            </div>
+          </li>`).join('')}</ul>`
+      : '<div class="empty-state">No recent activity on record.</div>';
+
+    if (t('ov-activity')) t('ov-activity').innerHTML = `<div class="card-title">Recent Activity</div>${actHtml}`;
+  } catch(err) {
+    if (err.message !== 'session_expired') {
+      ['tile-issues','tile-meetings','tile-outreach'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '<div class="stat-num">—</div><div class="stat-lbl" style="color:#c62828">Error</div>';
+      });
+    }
+  }
+}
+
+// ── Deliverables ──────────────────────────────────────────────────────────────
+function renderDeliverables() {
+  const devs = _deliverables.filter(d => String(d.project_id) === String(_projId));
+  const rows = devs.length
+    ? devs.map(d => `<tr>
+        <td class="col-main">${esc(d.title||'—')}</td>
+        <td>${esc(d.deliverable_type||'—')}</td>
+        <td>${statusBadge(d.status)}</td>
+        <td>${progCell(d)}</td>
+        <td style="white-space:nowrap">${fmt(d.due_date||d.milestone_end)}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="5" class="empty-state">No deliverables on record yet.</td></tr>';
+
+  setContent(`${projSelector()}${projBanner()}
+    <div class="card">
+      <div class="card-title">Deliverable Progress</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Deliverable</th><th>Type</th><th>Status</th><th>Progress</th><th>Due Date</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+    </div>`);
 }
 
 // ── Engagement Activity ───────────────────────────────────────────────────────
-async function loadEngagementActivity(projId, fromDate, toDate) {
-  const container = document.getElementById(`activity-${projId}`);
-  if (!container) return;
-  container.innerHTML = '<div class="activity-loading">Loading activity&hellip;</div>';
+function renderActivity() {
+  setContent(`${projSelector()}${projBanner()}
+    <div class="card">
+      <div class="card-title">Engagement Activity</div>
+      <div class="date-bar">
+        <label>From</label>
+        <input type="date" id="act-from" value="${_actFrom}">
+        <label>To</label>
+        <input type="date" id="act-to" value="${_actTo}">
+        <button class="btn-update" onclick="refreshActivity()">Update</button>
+      </div>
+      <div id="activity-content"><div class="loading-state">Loading&hellip;</div></div>
+    </div>`);
+  loadActivityData();
+}
 
+async function refreshActivity() {
+  _actFrom = document.getElementById('act-from')?.value || _actFrom;
+  _actTo   = document.getElementById('act-to')?.value   || _actTo;
+  const el = document.getElementById('activity-content');
+  if (el) { el.innerHTML = '<div class="loading-state">Loading&hellip;</div>'; }
+  loadActivityData();
+}
+
+async function loadActivityData() {
   try {
     const [meetings, interactions] = await Promise.all([
-      sbFetch(`pi_meetings?project_id=eq.${projId}&meeting_date=gte.${fromDate}&meeting_date=lte.${toDate}&select=id,meeting_date,title,meeting_type,location,attendance_count&order=meeting_date.desc`),
-      sbFetch(`pi_interactions?project_id=eq.${projId}&interaction_date=gte.${fromDate}&interaction_date=lte.${toDate}&select=id,interaction_date,channel,subject,summary&order=interaction_date.desc`)
+      sbFetch(`pi_meetings?project_id=eq.${_projId}&meeting_date=gte.${_actFrom}&meeting_date=lte.${_actTo}&select=id,meeting_date,title,meeting_type,location,attendance_count&order=meeting_date.desc`),
+      sbFetch(`pi_interactions?project_id=eq.${_projId}&interaction_date=gte.${_actFrom}&interaction_date=lte.${_actTo}&select=id,interaction_date,channel,subject,summary&order=interaction_date.desc`)
     ]);
-    container.innerHTML = renderActivityContent(meetings, interactions);
-  } catch (err) {
+    const el = document.getElementById('activity-content');
+    if (!el) return;
+
+    const mtgRows = meetings.length
+      ? meetings.map(m => `<tr>
+          <td style="white-space:nowrap">${fmt(m.meeting_date)}</td>
+          <td class="col-main">${esc(m.title||'—')}</td>
+          <td>${esc(m.meeting_type||'—')}</td>
+          <td>${esc(m.location||'—')}</td>
+          <td style="text-align:right">${m.attendance_count??'—'}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="5" class="empty-state">No public meetings in this period.</td></tr>';
+
+    const intRows = interactions.length
+      ? interactions.map(i => `<tr>
+          <td style="white-space:nowrap">${fmt(i.interaction_date)}</td>
+          <td>${esc(i.channel||'—')}</td>
+          <td class="col-main">${esc(i.subject||'—')}</td>
+          <td style="max-width:320px;color:#6b7280">${esc(i.summary||'—')}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="4" class="empty-state">No outreach events in this period.</td></tr>';
+
+    el.innerHTML = `
+      <div class="sub-heading">Public Meetings</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Date</th><th>Meeting</th><th>Type</th><th>Location</th><th style="text-align:right">Attendance</th></tr></thead>
+        <tbody>${mtgRows}</tbody>
+      </table></div>
+      <div class="sub-heading">Stakeholder Outreach</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Date</th><th>Channel</th><th>Subject</th><th>Summary</th></tr></thead>
+        <tbody>${intRows}</tbody>
+      </table></div>`;
+  } catch(err) {
     if (err.message !== 'session_expired') {
-      container.innerHTML = `<div class="error-box" style="font-size:13px">Unable to load activity: ${esc(err.message)}</div>`;
+      const el = document.getElementById('activity-content');
+      if (el) el.innerHTML = `<div class="error-box">Unable to load activity: ${esc(err.message)}</div>`;
     }
   }
 }
 
-function refreshActivity(projId) {
-  const from = document.getElementById(`from-${projId}`).value;
-  const to   = document.getElementById(`to-${projId}`).value;
-  if (from && to) loadEngagementActivity(projId, from, to);
+// ── Issues ────────────────────────────────────────────────────────────────────
+async function renderIssues() {
+  setContent(`${projSelector()}${projBanner()}
+    <div class="card"><div class="card-title">Issues &amp; Concerns</div>
+      <div id="issues-content"><div class="loading-state">Loading&hellip;</div></div>
+    </div>`);
+  try {
+    const issues = await sbFetch(`pi_issues?project_id=eq.${_projId}&select=id,title,category,status,priority,date_raised,date_resolved&order=date_raised.desc`);
+    const el = document.getElementById('issues-content');
+    if (!el) return;
+    if (!issues.length) { el.innerHTML = '<div class="empty-state">No issues on record for this project.</div>'; return; }
+    el.innerHTML = `<div class="tbl-wrap"><table>
+      <thead><tr><th>Issue</th><th>Category</th><th>Status</th><th>Date Raised</th><th>Resolved</th></tr></thead>
+      <tbody>${issues.map(i => `<tr>
+        <td class="col-main">${esc(i.title||'—')}</td>
+        <td>${esc(i.category||'—')}</td>
+        <td>${issueBadge(i.status)}</td>
+        <td style="white-space:nowrap">${fmt(i.date_raised)}</td>
+        <td style="white-space:nowrap">${fmt(i.date_resolved)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  } catch(err) {
+    if (err.message !== 'session_expired') {
+      const el = document.getElementById('issues-content');
+      if (el) el.innerHTML = `<div class="error-box">${esc(err.message)}</div>`;
+    }
+  }
 }
 
-function renderActivityContent(meetings, interactions) {
-  // Meetings subsection
-  const meetRows = meetings.length
-    ? meetings.map(m => `
-        <tr>
-          <td style="white-space:nowrap">${fmt(m.meeting_date)}</td>
-          <td class="title-col">${esc(m.title || '—')}</td>
-          <td>${esc(m.meeting_type || '—')}</td>
-          <td>${esc(m.location || '—')}</td>
-          <td style="text-align:right">${m.attendance_count != null ? m.attendance_count : '—'}</td>
-        </tr>`).join('')
-    : '<tr><td colspan="5" class="empty" style="padding:20px">No public meetings in this period.</td></tr>';
-
-  // Interactions subsection
-  const intRows = interactions.length
-    ? interactions.map(i => `
-        <tr>
-          <td style="white-space:nowrap">${fmt(i.interaction_date)}</td>
-          <td>${esc(i.channel || '—')}</td>
-          <td class="title-col">${esc(i.subject || '—')}</td>
-          <td style="max-width:360px;color:#555">${esc(i.summary || '—')}</td>
-        </tr>`).join('')
-    : '<tr><td colspan="4" class="empty" style="padding:20px">No engagement activity in this period.</td></tr>';
-
-  return `
-    <div class="activity-subsection">
-      <div class="activity-sub-title">Public Meetings</div>
-      <div class="tbl-wrap">
-        <table>
-          <thead><tr>
-            <th>Date</th><th>Meeting</th><th>Type</th><th>Location</th><th style="text-align:right">Attendance</th>
-          </tr></thead>
-          <tbody>${meetRows}</tbody>
-        </table>
-      </div>
-    </div>
-    <div class="activity-subsection">
-      <div class="activity-sub-title">Stakeholder Outreach</div>
-      <div class="tbl-wrap">
-        <table>
-          <thead><tr>
-            <th>Date</th><th>Channel</th><th>Subject</th><th>Summary</th>
-          </tr></thead>
-          <tbody>${intRows}</tbody>
-        </table>
-      </div>
-    </div>`;
+// ── Commitments ───────────────────────────────────────────────────────────────
+async function renderCommitments() {
+  setContent(`${projSelector()}${projBanner()}
+    <div class="card"><div class="card-title">Commitments</div>
+      <div id="comm-content"><div class="loading-state">Loading&hellip;</div></div>
+    </div>`);
+  try {
+    const comms = await sbFetch(`pi_commitments?project_id=eq.${_projId}&select=id,commitment,made_to,date_made,due_date,category,status,fulfilled_date&order=date_made.desc`);
+    const el = document.getElementById('comm-content');
+    if (!el) return;
+    if (!comms.length) { el.innerHTML = '<div class="empty-state">No commitments on record for this project.</div>'; return; }
+    el.innerHTML = `<div class="tbl-wrap"><table>
+      <thead><tr><th>Commitment</th><th>Category</th><th>Status</th><th>Made</th><th>Due</th><th>Fulfilled</th></tr></thead>
+      <tbody>${comms.map(c => `<tr>
+        <td class="col-main" style="max-width:280px">${esc(c.commitment||'—')}</td>
+        <td>${esc(c.category||'—')}</td>
+        <td>${commBadge(c.status)}</td>
+        <td style="white-space:nowrap">${fmt(c.date_made)}</td>
+        <td style="white-space:nowrap">${fmt(c.due_date)}</td>
+        <td style="white-space:nowrap">${fmt(c.fulfilled_date)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  } catch(err) {
+    if (err.message !== 'session_expired') {
+      const el = document.getElementById('comm-content');
+      if (el) el.innerHTML = `<div class="error-box">${esc(err.message)}</div>`;
+    }
+  }
 }
 
-// ── Render ────────────────────────────────────────────────────────────────────
+// ── Comment Periods ───────────────────────────────────────────────────────────
+async function renderComments() {
+  setContent(`${projSelector()}${projBanner()}
+    <div class="card"><div class="card-title">Public Comment Periods</div>
+      <div id="cp-content"><div class="loading-state">Loading&hellip;</div></div>
+    </div>`);
+  try {
+    const [periods, pubComments] = await Promise.all([
+      sbFetch(`pi_comment_periods?project_id=eq.${_projId}&select=id,title,period_type,start_date,end_date,status,hearing_date&order=start_date.desc`),
+      sbFetch(`pi_public_comments?project_id=eq.${_projId}&select=period_id`)
+    ]);
+    const el = document.getElementById('cp-content');
+    if (!el) return;
+    if (!periods.length) { el.innerHTML = '<div class="empty-state">No comment periods on record for this project.</div>'; return; }
+    const countMap = {};
+    pubComments.forEach(c => { countMap[c.period_id] = (countMap[c.period_id]||0)+1; });
+    el.innerHTML = `<div class="tbl-wrap"><table>
+      <thead><tr><th>Period</th><th>Type</th><th>Start</th><th>End</th><th>Hearing</th><th style="text-align:right">Comments</th><th>Status</th></tr></thead>
+      <tbody>${periods.map(p => `<tr>
+        <td class="col-main">${esc(p.title||'—')}</td>
+        <td>${esc(p.period_type||'—')}</td>
+        <td style="white-space:nowrap">${fmt(p.start_date)}</td>
+        <td style="white-space:nowrap">${fmt(p.end_date)}</td>
+        <td style="white-space:nowrap">${fmt(p.hearing_date)}</td>
+        <td style="text-align:right">${countMap[p.id]||0}</td>
+        <td>${commentPeriodBadge(p.status)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  } catch(err) {
+    if (err.message !== 'session_expired') {
+      const el = document.getElementById('cp-content');
+      if (el) el.innerHTML = `<div class="error-box">${esc(err.message)}</div>`;
+    }
+  }
+}
+
+// ── Tribal ────────────────────────────────────────────────────────────────────
+async function renderTribal() {
+  setContent(`${projSelector()}${projBanner()}
+    <div class="card"><div class="card-title">Tribal Consultation</div>
+      <div id="tribal-content"><div class="loading-state">Loading&hellip;</div></div>
+    </div>`);
+  try {
+    const rows = await sbFetch(`pi_tribal_consultations?project_id=eq.${_projId}&select=id,tribe_name,tribe_type,consultation_type,phase,notification_date,response_deadline,response_date,response_status&order=notification_date.desc`);
+    const el = document.getElementById('tribal-content');
+    if (!el) return;
+    if (!rows.length) { el.innerHTML = '<div class="empty-state">No tribal consultation records for this project.</div>'; return; }
+    el.innerHTML = `<div class="tbl-wrap"><table>
+      <thead><tr><th>Tribe</th><th>Type</th><th>Phase</th><th>Notified</th><th>Deadline</th><th>Response Date</th><th>Status</th></tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td class="col-main">${esc(r.tribe_name||'—')}</td>
+        <td>${esc(r.consultation_type||'—')}</td>
+        <td>${esc(r.phase||'—')}</td>
+        <td style="white-space:nowrap">${fmt(r.notification_date)}</td>
+        <td style="white-space:nowrap">${fmt(r.response_deadline)}</td>
+        <td style="white-space:nowrap">${fmt(r.response_date)}</td>
+        <td>${tribalBadge(r.response_status)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  } catch(err) {
+    if (err.message !== 'session_expired') {
+      const el = document.getElementById('tribal-content');
+      if (el) el.innerHTML = `<div class="error-box">${esc(err.message)}</div>`;
+    }
+  }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(d) {
   if (!d) return '—';
-  return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-function statusBadge(s) {
-  if (!s) return '<span class="badge badge-notstarted">—</span>';
-  const sl = s.toLowerCase();
-  if (sl.includes('complet') || sl === 'done' || sl === 'closed') return `<span class="badge badge-complete">${s}</span>`;
-  if (sl.includes('progress') || sl === 'active' || sl.includes('review')) return `<span class="badge badge-progress">${s}</span>`;
-  if (sl.includes('hold') || sl.includes('delay') || sl.includes('pend')) return `<span class="badge badge-onhold">${s}</span>`;
-  return `<span class="badge badge-notstarted">${s}</span>`;
-}
-
-function progressCell(d) {
-  const pct = parseInt(d.progress, 10);
-  if (!isNaN(pct)) {
-    return `<div class="prog-wrap"><div class="prog-bar"><div class="prog-fill" style="width:${Math.min(100,Math.max(0,pct))}%"></div></div><span class="prog-label">${pct}%</span></div>`;
-  }
-  return d.progress ? String(d.progress) : '—';
-}
-
-function renderProject(proj, deliverables) {
-  const rows = deliverables.length
-    ? deliverables.map(d => `
-        <tr>
-          <td class="title-col">${esc(d.title || '—')}</td>
-          <td>${esc(d.deliverable_type || '—')}</td>
-          <td>${statusBadge(d.status)}</td>
-          <td>${progressCell(d)}</td>
-          <td style="white-space:nowrap">${fmt(d.due_date || d.milestone_end)}</td>
-        </tr>`).join('')
-    : '<tr><td colspan="5" class="empty">No deliverables on record yet.</td></tr>';
-
-  const meta = [
-    proj.pid    ? `<span><strong>Project #</strong> ${esc(proj.pid)}</span>` : '',
-    proj.client ? `<span><strong>Client</strong> ${esc(proj.client)}</span>` : '',
-    proj.phase  ? `<span><strong>Phase</strong> ${esc(proj.phase)}</span>` : '',
-    proj.status ? `<span><strong>Status</strong> ${esc(proj.status)}</span>` : '',
-    proj.start_date ? `<span><strong>Start</strong> ${fmt(proj.start_date)}</span>` : '',
-    proj.end_date   ? `<span><strong>End</strong> ${fmt(proj.end_date)}</span>` : '',
-  ].filter(Boolean).join('');
-
-  const from = defaultFrom();
-  const to   = defaultTo();
-
-  return `
-    <div class="project-block">
-      <div class="project-header">
-        <h1>${esc(proj.name || 'Unnamed Project')}</h1>
-        <div class="project-meta">${meta}</div>
-      </div>
-      <div class="card">
-        <div class="section-title">Deliverable Progress</div>
-        <div class="tbl-wrap">
-          <table>
-            <thead><tr>
-              <th>Deliverable</th><th>Type</th><th>Status</th><th>Progress</th><th>Due Date</th>
-            </tr></thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>
-      </div>
-      <div class="activity-card">
-        <div class="activity-header">
-          <div class="section-title">Engagement Activity</div>
-          <div class="date-range-bar">
-            <label>From</label>
-            <input type="date" id="from-${proj.id}" value="${from}">
-            <label>To</label>
-            <input type="date" id="to-${proj.id}" value="${to}">
-            <button class="btn-refresh" onclick="refreshActivity(${proj.id})">Update</button>
-          </div>
-        </div>
-        <div id="activity-${proj.id}">
-          <div class="activity-loading">Loading activity&hellip;</div>
-        </div>
-      </div>
-    </div>`;
+  return new Date(d+'T12:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
 }
 
 function esc(s) {
-  return String(s ?? '')
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function isComplete(s) {
+  if (!s) return false;
+  const sl = s.toLowerCase();
+  return sl.includes('complet') || sl === 'done' || sl === 'closed' || sl === 'fulfilled';
+}
+
+function statusBadge(s) {
+  if (!s) return '<span class="badge badge-gray">—</span>';
+  const sl = s.toLowerCase();
+  if (isComplete(sl))                                        return `<span class="badge badge-green">${esc(s)}</span>`;
+  if (sl.includes('progress')||sl==='active'||sl.includes('review')) return `<span class="badge badge-blue">${esc(s)}</span>`;
+  if (sl.includes('hold')||sl.includes('delay')||sl.includes('pend')) return `<span class="badge badge-amber">${esc(s)}</span>`;
+  return `<span class="badge badge-gray">${esc(s)}</span>`;
+}
+
+function issueBadge(s) {
+  if (!s) return '<span class="badge badge-gray">—</span>';
+  const sl = s.toLowerCase();
+  if (sl.includes('resolv')||sl.includes('closed')||sl.includes('done')) return `<span class="badge badge-green">${esc(s)}</span>`;
+  if (sl.includes('open')||sl.includes('active')) return `<span class="badge badge-amber">${esc(s)}</span>`;
+  if (sl.includes('progress')) return `<span class="badge badge-blue">${esc(s)}</span>`;
+  return `<span class="badge badge-gray">${esc(s)}</span>`;
+}
+
+function commBadge(s) {
+  if (!s) return '<span class="badge badge-gray">—</span>';
+  const sl = s.toLowerCase();
+  if (sl.includes('fulfill')||sl.includes('complet')||sl.includes('done')) return `<span class="badge badge-green">${esc(s)}</span>`;
+  if (sl.includes('pending')||sl.includes('open')) return `<span class="badge badge-blue">${esc(s)}</span>`;
+  if (sl.includes('overdue')) return `<span class="badge badge-red">${esc(s)}</span>`;
+  return `<span class="badge badge-gray">${esc(s)}</span>`;
+}
+
+function commentPeriodBadge(s) {
+  if (!s) return '<span class="badge badge-gray">—</span>';
+  const sl = s.toLowerCase();
+  if (sl.includes('open')||sl.includes('active')) return `<span class="badge badge-blue">${esc(s)}</span>`;
+  if (sl.includes('closed')||sl.includes('complet')) return `<span class="badge badge-gray">${esc(s)}</span>`;
+  if (sl.includes('schedul')||sl.includes('upcoming')) return `<span class="badge badge-amber">${esc(s)}</span>`;
+  return `<span class="badge badge-gray">${esc(s)}</span>`;
+}
+
+function tribalBadge(s) {
+  if (!s) return '<span class="badge badge-gray">—</span>';
+  const sl = s.toLowerCase();
+  if (sl.includes('respond')||sl.includes('complet')) return `<span class="badge badge-green">${esc(s)}</span>`;
+  if (sl.includes('no response')||sl.includes('no_response')) return `<span class="badge badge-gray">No Response</span>`;
+  if (sl.includes('pending')||sl.includes('await')) return `<span class="badge badge-amber">${esc(s)}</span>`;
+  if (sl.includes('consult')) return `<span class="badge badge-blue">${esc(s)}</span>`;
+  return `<span class="badge badge-gray">${esc(s)}</span>`;
+}
+
+function progCell(d) {
+  const pct = parseInt(d.progress, 10);
+  if (!isNaN(pct)) {
+    return `<div class="prog-wrap"><div class="prog-bar"><div class="prog-fill" style="width:${Math.min(100,Math.max(0,pct))}%"></div></div><span class="prog-lbl">${pct}%</span></div>`;
+  }
+  return d.progress ? esc(String(d.progress)) : '—';
 }
 </script>
 </body>

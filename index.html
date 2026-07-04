@@ -971,6 +971,23 @@ const DB = {
             const mainEl = document.getElementById('main');
             if (mainEl && (S.view === 'master' || S.view === 'stakeholders')) render();
           }
+          // Fix issue_interactions links referencing this tmp interaction ID and retry insert
+          if (table === 'interactions') {
+            const toRetry = [];
+            (_syncCache['issue_interactions'] || []).forEach((lnk, i) => {
+              if (String(lnk.interactionId) === String(oldTmpId)) {
+                _syncCache['issue_interactions'][i] = {..._syncCache['issue_interactions'][i], interactionId: newId};
+                toRetry.push(_syncCache['issue_interactions'][i]);
+              }
+            });
+            for (const lnk of toRetry) {
+              const retryId = await sbAdd('issue_interactions', lnk);
+              if (retryId) {
+                const idx2 = _syncCache['issue_interactions'].findIndex(x => x.id === lnk.id);
+                if (idx2 > -1) _syncCache['issue_interactions'][idx2].id = retryId;
+              }
+            }
+          }
         }
       } else if (JSON.stringify(oldMap[item.id]) !== JSON.stringify(item) && isNumeric) {
         await sbUpdate(table, item.id, item);

@@ -418,6 +418,13 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
         <option value="">All projects</option>
       </select>
     </div>
+    <div class="proj-selector">
+      <span class="proj-selector-label">Showing</span>
+      <select id="fu-user" onchange="renderFollowupsList()">
+        <option value="mine">My follow-ups</option>
+        <option value="all">All follow-ups</option>
+      </select>
+    </div>
 
     <div style="overflow-y:auto;flex:1">
       <div id="fu-list"></div>
@@ -1656,10 +1663,13 @@ function setFuTab(tab){
 }
 function renderFollowupsList(){
   const pF=document.getElementById('fu-proj').value;
+  const myLoggedBy=getLoggedBy();
+  const userF=(document.getElementById('fu-user')||{}).value||'mine';
   const stakes=DB.getActive('stakeholders');
   const projs=DB.get('projects');
   let ints=DB.get('interactions').filter(i=>i.followUp&&!i.followUpDone);
   if(pF) ints=ints.filter(i=>i.projectId===pF);
+  if(userF==='mine'&&myLoggedBy) ints=ints.filter(i=>i.loggedBy===myLoggedBy);
 
   ints.sort((a,b)=>{
     const aOd=isOverdue(a.followUpDue),bOd=isOverdue(b.followUpDue);

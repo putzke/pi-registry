@@ -4392,12 +4392,15 @@ function renderFollowups(el){
   const statusF=S.fuStatus||'open';
   const projF=S.fuProj||(S.projectFilter||'');
   const search=(S.fuSearch||'').toLowerCase();
+  const myLoggedBy=getLoggedBy();
+  const userF=S.fuUser||'mine';
   const now=new Date();
 
   if(statusF==='open')ints=ints.filter(i=>!i.followUpDone);
   else if(statusF==='overdue')ints=ints.filter(i=>!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<now);
   else if(statusF==='resolved')ints=ints.filter(i=>i.followUpDone);
   if(projF)ints=ints.filter(i=>String(i.projectId)===String(projF));
+  if(userF==='mine'&&myLoggedBy)ints=ints.filter(i=>i.loggedBy===myLoggedBy);
   if(search)ints=ints.filter(i=>{
     const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
     return(i.followUpNote||'').toLowerCase().includes(search)||(s&&(s.firstName+' '+s.lastName).toLowerCase().includes(search));
@@ -4407,7 +4410,7 @@ function renderFollowups(el){
   const stakes_fu=DB.getActive('stakeholders');
   ints=sortFollowups(ints,stakes_fu);
 
-  const allFU=DB.get('interactions').filter(i=>i.followUp&&(!projF||String(i.projectId)===String(projF)));
+  const allFU=DB.get('interactions').filter(i=>i.followUp&&(!projF||String(i.projectId)===String(projF))&&(userF!=='mine'||!myLoggedBy||i.loggedBy===myLoggedBy));
   const openCt=allFU.filter(i=>!i.followUpDone).length;
   const overdueCt=allFU.filter(i=>!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<now).length;
   const resolvedCt=allFU.filter(i=>i.followUpDone).length;
@@ -4445,7 +4448,10 @@ function renderFollowups(el){
     <div style="flex:1"></div>
     <div class="srch" style="min-width:260px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4"/><path d="M10 10l3 3"/></svg>
       <input id="fu-search" placeholder="Search action, name…" value="${S.fuSearch||''}" oninput="S.fuSearch=this.value;renderFollowups(document.getElementById('main'))"></div>
-    
+    <select class="fsel" id="fu-user" onchange="S.fuUser=this.value;renderFollowups(document.getElementById('main'))">
+      <option value="mine"${(S.fuUser||'mine')==='mine'?' selected':''}>My follow-ups</option>
+      <option value="all"${(S.fuUser||'')==='all'?' selected':''}>All follow-ups</option>
+    </select>
     <select class="fsel" id="fu-status" onchange="S.fuStatus=this.value;renderFollowups(document.getElementById('main'))">
       <option value="open"${(S.fuStatus||'open')==='open'?' selected':''}>Open</option>
       <option value="overdue"${(S.fuStatus||'')==='overdue'?' selected':''}>Overdue only</option>

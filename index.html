@@ -5270,14 +5270,29 @@ function copyPortalUrl(url, btn) {
   setTimeout(() => { btn.innerHTML = orig; }, 2000);
 }
 async function updatePortalButtons() {
+  // Disable all share buttons while we check which projects already have links
+  document.querySelectorAll('[id^="portal-btn-"]').forEach(c => {
+    const b = c.querySelector('button');
+    if (b && b.textContent.includes('Share')) b.disabled = true;
+  });
   try {
     const res = await fetch(`${SUPA_REST}/pi_portal_links?select=project_id,token`, { headers: getAuthHeaders() });
     if (!res.ok) return;
     const links = await res.json();
+    // Re-enable any that have no link
+    document.querySelectorAll('[id^="portal-btn-"]').forEach(c => {
+      const b = c.querySelector('button');
+      if (b) b.disabled = false;
+    });
     links.forEach(lnk => {
       _renderPortalBtnActive(lnk.project_id, `https://putzke.github.io/pi-registry/client-portal.html?token=${lnk.token}`);
     });
-  } catch(_) {}
+  } catch(_) {
+    document.querySelectorAll('[id^="portal-btn-"]').forEach(c => {
+      const b = c.querySelector('button');
+      if (b) b.disabled = false;
+    });
+  }
 }
 async function sharePortalLink(projId, btn) {
   const orig = btn.innerHTML;
@@ -5290,13 +5305,16 @@ async function sharePortalLink(projId, btn) {
       headers: { ...hdrs, 'Prefer': 'return=representation' },
       body: JSON.stringify({ project_id: Number(projId) })
     });
-    if (res.status === 409) {
-      btn.innerHTML = orig; btn.disabled = false;
-      alert('A portal link already exists for this project. Revoke it first to generate a new URL.');
-      updatePortalButtons();
-      return;
+    if (!res.ok) {
+      const e = await res.json().catch(()=>({}));
+      if (res.status === 409 || e.code === '23505' || String(e.message||'').toLowerCase().includes('unique')) {
+        btn.innerHTML = orig; btn.disabled = false;
+        alert('A portal link already exists for this project. Revoke it first to generate a new URL.');
+        updatePortalButtons();
+        return;
+      }
+      throw new Error(e.message||`API ${res.status}`);
     }
-    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.message||`API ${res.status}`); }
     const rows = await res.json();
     if (!rows.length) throw new Error('Could not create portal link.');
     const token = rows[0].token;

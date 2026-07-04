@@ -4717,7 +4717,7 @@ function renderDelScope(pF){
           try{
             var _projStart=proj.preconDate||proj.startDate;
             var _endDate=d.dueDate||proj.endDate;
-            if(d.contractedQty>0&&_endDate&&_projStart&&d.status!=='Complete'&&d.status!=='Cancelled'){
+            if(d.contractedQty>0&&_endDate&&_projStart&&d.status!=='Complete'&&d.status!=='Cancelled'&&d.scopeType!=='milestone'){
               var _start=new Date(_projStart+'T00:00:00');
               var _end=new Date(_endDate+'T00:00:00');
               var _now=new Date();

@@ -93,6 +93,12 @@ pi_report_archive   -- exported report snapshots (up to 50 per project)
 - CSP `connect-src` includes `https://api.anthropic.com`
 - Confirmation dialog required before bulk AI calls (cost estimate shown)
 
+## Cross-app consistency rule
+After every change to `index.html`, always check whether the same change (feature, bug fix, data field, SB_TO_INT mapping, etc.) should also be applied to `mobile.html` and/or `importer.html`. Explicitly state the assessment — even if the answer is "not applicable here" — so Jeff can confirm before closing the task. Do not silently skip this check.
+
+- **`mobile.html`** — field companion for logging interactions, managing contacts, follow-ups, and issues. Apply data field changes (new columns, SB_TO_INT mappings) and interaction/stakeholder bug fixes if the same flow exists in mobile.
+- **`importer.html`** — bulk CSV import for stakeholders and interactions. Apply new stakeholder/interaction field mappings and AUTO_MAP entries if the field is importable.
+
 ## Important conventions
 - **No `fmtDate()`** — use `fmt(d)` (defined ~line 1311)
 - **No build step** — edit `index.html` directly, syntax-check with:

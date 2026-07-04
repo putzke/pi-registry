@@ -5287,15 +5287,17 @@ async function sharePortalLink(projId, btn) {
     const hdrs = getAuthHeaders();
     const res = await fetch(`${SUPA_REST}/pi_portal_links`, {
       method: 'POST',
-      headers: { ...hdrs, 'Prefer': 'return=representation,resolution=ignore-duplicates' },
+      headers: { ...hdrs, 'Prefer': 'return=representation' },
       body: JSON.stringify({ project_id: Number(projId) })
     });
-    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.message||`API ${res.status}`); }
-    let rows = await res.json();
-    if (!rows.length) {
-      const get = await fetch(`${SUPA_REST}/pi_portal_links?project_id=eq.${projId}&select=token`, { headers: hdrs });
-      rows = await get.json();
+    if (res.status === 409) {
+      btn.innerHTML = orig; btn.disabled = false;
+      alert('A portal link already exists for this project. Revoke it first to generate a new URL.');
+      updatePortalButtons();
+      return;
     }
+    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.message||`API ${res.status}`); }
+    const rows = await res.json();
     if (!rows.length) throw new Error('Could not create portal link.');
     const token = rows[0].token;
     const url = `https://putzke.github.io/pi-registry/client-portal.html?token=${token}`;

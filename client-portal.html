@@ -181,13 +181,26 @@
       html, body { height: auto; overflow: auto; background: white; }
       #login-screen { display: none !important; }
       #app { display: block !important; height: auto; }
-      .topbar, .chip-strip, .sidebar, .btn-print-label, .btn-icon-tb, .btn-signout, .btn-update, .date-bar label ~ *, .proj-select { display: none !important; }
+      .topbar, .mob-proj-bar, .chip-strip, .sidebar, .btn-print-label, .btn-icon-tb, .btn-signout, .btn-update, .proj-cards, .proj-select { display: none !important; }
       .date-bar { display: none !important; }
       .app-layout { display: block; overflow: visible; }
       .content { overflow: visible; }
       .content-inner { padding: 0; max-width: none; }
-      .card, .stat-tile, .proj-banner { box-shadow: none; border: 1px solid #e5e7eb; break-inside: avoid; }
-      .stat-row { grid-template-columns: repeat(4, 1fr); }
+      /* Strip shadows; DON'T set break-inside:avoid on .card — large cards can't
+         fit on one page and the browser will leave a big gap trying to honor it */
+      .card, .stat-tile, .proj-banner { box-shadow: none; border: 1px solid #e5e7eb; }
+      /* Small self-contained elements: keep together */
+      .proj-banner, .stat-tile { break-inside: avoid; }
+      .stat-row { grid-template-columns: repeat(4, 1fr); break-inside: avoid; }
+      /* Keep section / card headings glued to the content that follows */
+      .card-title  { break-after: avoid; }
+      .sub-heading { break-after: avoid; }
+      /* Prevent mid-row page breaks in tables */
+      thead { break-inside: avoid; break-after: avoid; }
+      tr { break-inside: avoid; }
+      /* Tighten card spacing for print */
+      .card { margin-bottom: 12px; padding: 16px 20px; }
+      .tbl-wrap { overflow-x: visible; }
     }
 
     /* ── Responsive ───────────────────────────────────────────────────── */
@@ -829,7 +842,9 @@ async function renderTribal() {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(d) {
   if (!d) return '—';
-  return new Date(d+'T12:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+  const dt = new Date(d+'T12:00:00');
+  if (isNaN(dt.getTime())) return '—';
+  return dt.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
 }
 
 function esc(s) {

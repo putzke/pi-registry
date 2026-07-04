@@ -31,7 +31,9 @@
     #app.visible { display: flex; }
 
     .topbar { flex-shrink: 0; background: #0B1929; height: 52px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 200; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
-    .tb-brand { display: flex; flex-direction: column; line-height: 1; }
+    .tb-brand { display: flex; align-items: center; gap: 10px; line-height: 1; }
+    .tb-logo  { flex-shrink: 0; }
+    .tb-text  { display: flex; flex-direction: column; }
     .tb-name { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: -0.3px; }
     .tb-sub  { font-size: 9px; color: #A8C2D8; margin-top: 3px; text-transform: uppercase; letter-spacing: 1.4px; }
     .tb-actions { display: flex; align-items: center; gap: 8px; }
@@ -130,6 +132,7 @@
     .act-body { flex: 1; min-width: 0; }
     .act-body strong { font-size: 13px; font-weight: 600; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .act-body span { font-size: 12px; color: #9ca3af; }
+    .act-note { font-size: 12px; color: #6b7280; margin-top: 3px; display: block; line-height: 1.45; }
 
     /* ── Upcoming list ────────────────────────────────────────────────── */
     .upcoming-list { list-style: none; }
@@ -248,8 +251,18 @@
 <div id="app">
   <header class="topbar">
     <div class="tb-brand">
-      <span class="tb-name">Horizon COMPASS</span>
-      <span class="tb-sub">Client Portal</span>
+      <svg class="tb-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="30" height="30" aria-hidden="true">
+        <circle cx="50" cy="50" r="37" fill="none" stroke="rgba(255,255,255,0.75)" stroke-width="3.5"/>
+        <line x1="13" y1="50" x2="87" y2="50" stroke="rgba(255,255,255,0.28)" stroke-width="2.4"/>
+        <path d="M50 13 A37 37 0 0 1 87 50" fill="none" stroke="#1F7A9C" stroke-width="8" stroke-linecap="round"/>
+        <polygon points="65.6,34.4 52.97,52.97 47.03,47.03" fill="#C24A42"/>
+        <polygon points="38,62 52.97,52.97 47.03,47.03" fill="#C2C8D2"/>
+        <circle cx="50" cy="50" r="4.5" fill="rgba(255,255,255,0.9)"/>
+      </svg>
+      <div class="tb-text">
+        <span class="tb-name">Horizon COMPASS</span>
+        <span class="tb-sub">Client Portal</span>
+      </div>
     </div>
     <div class="tb-actions">
       <button class="btn-icon-tb" onclick="window.print()" title="Print current view">
@@ -578,7 +591,7 @@ async function renderOverview() {
     const [issues, meetings, interactions] = await Promise.all([
       sbFetch(`pi_issues?project_id=eq.${_projId}&select=id,status`),
       sbFetch(`pi_meetings?project_id=eq.${_projId}&select=id,meeting_date,title,meeting_type&order=meeting_date.desc&limit=5`),
-      sbFetch(`pi_interactions?project_id=eq.${_projId}&select=id,interaction_date,channel,subject&order=interaction_date.desc&limit=5`)
+      sbFetch(`pi_interactions?project_id=eq.${_projId}&select=id,interaction_date,channel,subject,summary&order=interaction_date.desc&limit=5`)
     ]);
     const openIssues = issues.filter(i => !isComplete(i.status)).length;
 
@@ -590,7 +603,7 @@ async function renderOverview() {
     // Recent activity merged list
     const acts = [
       ...meetings.map(m => ({ date: m.meeting_date, type: 'mtg', label: m.title || 'Meeting', sub: m.meeting_type || '' })),
-      ...interactions.map(i => ({ date: i.interaction_date, type: 'int', label: i.subject || 'Interaction', sub: i.channel || '' }))
+      ...interactions.map(i => ({ date: i.interaction_date, type: 'int', label: i.subject || 'Interaction', sub: i.channel || '', note: i.summary || '' }))
     ].sort((a,b) => a.date < b.date ? 1 : -1).slice(0, 8);
 
     const mtgIcon = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="7" r="4"/><path d="M2 15c0-3 2.7-5 6-5s6 2 6 5"/></svg>';
@@ -603,6 +616,7 @@ async function renderOverview() {
             <div class="act-body">
               <strong>${esc(a.label)}</strong>
               <span>${fmt(a.date)}${a.sub ? ' · ' + esc(a.sub) : ''}</span>
+              ${a.note ? `<span class="act-note">${esc(clip(a.note, 120))}</span>` : ''}
             </div>
           </li>`).join('')}</ul>`
       : '<div class="empty-state">No recent activity on record.</div>';
@@ -849,6 +863,11 @@ function fmt(d) {
 
 function esc(s) {
   return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function clip(s, n=120) {
+  s = String(s??'').trim();
+  return s.length > n ? s.slice(0, n).trimEnd() + '…' : s;
 }
 
 function isComplete(s) {

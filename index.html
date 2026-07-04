@@ -5806,11 +5806,14 @@ function updateIntIssues(){
 }
 
 function updateIntStakeholders(){
-  // Reset the hidden value and search box when project changes
   const hid=document.getElementById('f-is');
   const search=document.getElementById('f-is-search');
   if(hid) hid.value='';
-  if(search){ search.value=''; search.placeholder='Search by name or org...'; }
+  if(search){
+    search.value='';
+    const projId=document.getElementById('f-ip')?.value||'';
+    search.placeholder = getAnonLabel(projId) + ' — search to select a specific contact';
+  }
   const lst=document.getElementById('f-is-list');
   if(lst) lst.style.display='none';
 }
@@ -5933,7 +5936,7 @@ function openEditIntModal(id){
   openM('Edit interaction',
   `<div class="fgrid fg2f">
     <div class="fr"><label>Project</label><select id="f-ip">${projs.map(p=>`<option value="${p.id}"${i.projectId===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
-    <div class="fr"><label>Stakeholder</label><select id="f-is">${stakes.map(s=>`<option value="${s.id}"${String(i.stakeholderId)===String(s.id)?' selected':''}>${dispName(s)}${(s.firstName||s.lastName)&&s.org?' — '+s.org:''}</option>`).join('')}</select></div>
+    <div class="fr"><label>Stakeholder</label><select id="f-is"><option value=""${!i.stakeholderId?' selected':''}>— ${i.anonLabel||'Anonymous'} —</option>${stakes.map(s=>`<option value="${s.id}"${String(i.stakeholderId)===String(s.id)?' selected':''}>${dispName(s)}${(s.firstName||s.lastName)&&s.org?' — '+s.org:''}</option>`).join('')}</select></div>
     <div class="fr"><label>Date</label><input type="date" id="f-id" value="${i.date||''}"></div>
     <div class="fr"><label>Channel</label><select id="f-ic" onchange="_toggleEquityWrap(this.value)">${['Phone','Email','In-person','Public meeting','Public event','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'].map(c=>`<option${i.channel===c?' selected':''}>${c}</option>`).join('')}</select></div>
   </div>

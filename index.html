@@ -9317,12 +9317,67 @@ function _buildArchiveHTML(projF) {
       +'</div>'
       +(r.overallSummary?'<div style="font-size:11px;color:var(--slate);margin-top:4px;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:480px">'+r.overallSummary+'</div>':'')
       +'</div>'
+      +'<button class="btn btn-xs" style="flex-shrink:0" onclick="previewArchivedReport(\''+r.id+'\')">Preview</button>'
       +'<button class="btn btn-xs" style="color:var(--red);border-color:rgba(220,80,80,.3);background:rgba(220,80,80,.08);flex-shrink:0" '
       +'onclick="deleteArchivedReport(\''+r.id+'\')">Delete</button>'
       +'</div>';
   });
 
   html += '</div>';
+  return html;
+}
+
+function previewArchivedReport(archiveId) {
+  var rec = (_syncCache['report_archive']||[]).find(function(r){ return String(r.id)===String(archiveId); });
+  if (!rec) { showToast('Archive record not found', 'error'); return; }
+  var proj = (DB.get('projects')||[]).find(function(p){ return String(p.id)===String(rec.projectId); }) || {};
+  showInlineReport(_buildArchivedPreviewHTML(rec, proj), (rec.reportTitle||'Archived Report')+(rec.reportNum?' #'+rec.reportNum:''));
+}
+
+function _buildArchivedPreviewHTML(rec, proj) {
+  var sections = rec.sections || [];
+  var periodStr = (rec.periodStart||rec.periodEnd)
+    ? ((rec.periodStart?fmt(rec.periodStart):'?')+' – '+(rec.periodEnd?fmt(rec.periodEnd):'?')) : '';
+  var dateStr = rec.archivedAt ? new Date(rec.archivedAt).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}) : '—';
+  var html = '';
+
+  // Header
+  html += '<div style="border-bottom:3px solid #1e3a5f;padding-bottom:16px;margin-bottom:20px">';
+  html += '<div style="font-size:9px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Public Involvement Progress Report</div>';
+  html += '<div style="font-size:20px;font-weight:700;color:#1e3a5f;line-height:1.2">'+escHtml(rec.reportTitle||'PI Progress Report')+(rec.reportNum?' <span style="font-size:14px;color:#555">#'+escHtml(rec.reportNum)+'</span>':'')+'</div>';
+  if (rec.reportSubtitle) html += '<div style="font-size:13px;color:#444;margin-top:3px">'+escHtml(rec.reportSubtitle)+'</div>';
+  html += '<div style="font-size:11px;color:#666;margin-top:6px">'+escHtml(proj.name||'')+(proj.pid?' &nbsp;&middot;&nbsp; '+escHtml(proj.pid):'')+'</div>';
+  if (periodStr) html += '<div style="font-size:11px;color:#666">Report period: '+escHtml(periodStr)+'</div>';
+  html += '<div style="font-size:11px;color:#999;margin-top:3px">Archived: '+dateStr+'</div>';
+  html += '</div>';
+
+  // Overall summary
+  if ((rec.overallSummary||'').trim()) {
+    html += '<div style="background:#f0f4f8;border-left:3px solid #4a9be8;padding:10px 14px;margin-bottom:18px;font-size:13px;color:#222;line-height:1.6">'+escHtml(rec.overallSummary)+'</div>';
+  }
+
+  // Sections
+  sections.forEach(function(sec) {
+    var isAuto = sec.type && sec.type !== 'manual';
+    html += '<div style="margin-bottom:22px">';
+    html += '<div style="font-size:13px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #cdd4dc;padding-bottom:4px;margin-bottom:10px">'+escHtml(sec.title||'')+'</div>';
+    if (isAuto) {
+      html += '<div style="font-size:11px;color:#888;font-style:italic;background:#f0f0f0;border-radius:4px;padding:5px 10px;margin-bottom:8px">Auto-populated section (snapshot)</div>';
+    } else if (sec.content) {
+      html += '<ul style="margin:0 0 8px 0;padding-left:20px">';
+      sec.content.split('\n').forEach(function(line){ if(line.trim()) html += '<li style="margin-bottom:4px;font-size:13px;color:#222">'+escHtml(line.trim())+'</li>'; });
+      html += '</ul>';
+    }
+    if (sec.summary) {
+      html += '<div style="font-size:12px;color:#444;font-style:italic;margin-top:6px;border-left:2px solid #9ab;padding-left:10px;line-height:1.6">'+escHtml(sec.summary)+'</div>';
+    } else if (isAuto) {
+      html += '<div style="font-size:11px;color:#bbb;font-style:italic">No narrative captured for this section.</div>';
+    }
+    html += '</div>';
+  });
+
+  if (!sections.length) html += '<div style="color:#aaa;font-style:italic;text-align:center;padding:30px 0">No sections in this archived report.</div>';
+  html += '<div style="border-top:1px solid #cdd4dc;margin-top:24px;padding-top:12px;font-size:10px;color:#aaa">*Stakeholder registry can be provided on request.</div>';
   return html;
 }
 

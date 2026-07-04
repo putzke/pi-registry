@@ -42,6 +42,7 @@
     .btn-icon-tb:hover { border-color: #A8C2D8; color: #fff; }
     .btn-signout { padding: 6px 14px; border: 1.5px solid #2a4060; border-radius: 7px; background: transparent; font-size: 12px; font-weight: 600; cursor: pointer; color: #A8C2D8; font-family: inherit; transition: border-color 0.15s, color 0.15s; }
     .btn-signout:hover { border-color: #A8C2D8; color: #fff; }
+    .shared-label { font-size: 11px; color: #A8C2D8; font-style: italic; padding: 0 4px; }
 
     /* ── Mobile chip strip ────────────────────────────────────────────── */
     .chip-strip { flex-shrink: 0; display: none; background: #fff; border-bottom: 1px solid #e8eaf0; overflow-x: auto; white-space: nowrap; padding: 10px 16px; gap: 8px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
@@ -281,7 +282,8 @@
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6V1h8v5"/><rect x="1" y="6" width="14" height="7" rx="1"/><path d="M4 10h8M4 13h5"/><circle cx="12" cy="9" r="0.75" fill="currentColor" stroke="none"/></svg>
         <span class="btn-print-label">Print</span>
       </button>
-      <button class="btn-signout" onclick="signOut()">Sign out</button>
+      <button id="btn-signout" class="btn-signout" onclick="signOut()">Sign out</button>
+      <span id="shared-label" class="shared-label" style="display:none">This is a shared view</span>
     </div>
   </header>
   <div id="mob-proj-bar" class="mob-proj-bar"></div>
@@ -318,6 +320,7 @@ let _projects = [];
 let _deliverables = [];
 let _actFrom = dfltFrom();
 let _actTo   = dfltTo();
+let _tokenMode = false;
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 function isoDate(d) {
@@ -333,6 +336,10 @@ function clearSession()    { sessionStorage.removeItem(SESSION_KEY); }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('token');
+  if (token) { _tokenMode = true; bootFromToken(token); return; }
+
   const hash = window.location.hash;
   if (hash && hash.includes('access_token=')) {
     const p = new URLSearchParams(hash.slice(1));
@@ -393,9 +400,13 @@ function authHdrs() {
   const s = loadSession();
   return { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${s.access_token}`, 'Accept': 'application/json' };
 }
+function anonHdrs() {
+  return { 'apikey': SUPA_KEY, 'Accept': 'application/json' };
+}
 async function sbFetch(path) {
-  const res = await fetch(`${SUPA_URL}/rest/v1/${path}`, { headers: authHdrs() });
-  if (res.status === 401) { clearSession(); showLogin(); throw new Error('session_expired'); }
+  const headers = _tokenMode ? anonHdrs() : authHdrs();
+  const res = await fetch(`${SUPA_URL}/rest/v1/${path}`, { headers });
+  if (!_tokenMode && res.status === 401) { clearSession(); showLogin(); throw new Error('session_expired'); }
   if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || `API ${res.status}`); }
   return res.json();
 }
@@ -428,6 +439,42 @@ async function bootApp() {
       setContent(`<div class="error-box">Unable to load your project data: <strong>${esc(err.message)}</strong><br>Please refresh, or <a href="#" onclick="signOut();return false;">sign in again</a>.</div>`);
     }
   }
+}
+
+// ── Token-based anonymous boot ────────────────────────────────────────────────
+async function bootFromToken(token) {
+  showApp();
+  setTopbarMode(true);
+  try {
+    const rows = await sbFetch(`pi_portal_links?token=eq.${encodeURIComponent(token)}&select=project_id`);
+    if (!rows.length) {
+      setContent('<div class="error-box">This portal link is not valid or has been revoked. Please contact your project manager.</div>');
+      return;
+    }
+    const projId = rows[0].project_id;
+    const [projects, deliverables] = await Promise.all([
+      sbFetch(`pi_projects?id=eq.${projId}&select=id,name,pid,client,phase,status,start_date,end_date`),
+      sbFetch(`pi_deliverables?project_id=eq.${projId}&select=id,project_id,title,deliverable_type,status,progress,due_date,milestone_end&order=due_date.asc.nullslast`)
+    ]);
+    if (!projects.length) {
+      setContent('<div class="error-box">Project not found. Please contact your project manager.</div>');
+      return;
+    }
+    _projects = projects;
+    _deliverables = deliverables;
+    _projId = projects[0].id;
+    buildNav();
+    setView('overview');
+  } catch(err) {
+    setContent(`<div class="error-box">Unable to load project data: <strong>${esc(err.message)}</strong></div>`);
+  }
+}
+
+function setTopbarMode(isToken) {
+  const btn = document.getElementById('btn-signout');
+  const lbl = document.getElementById('shared-label');
+  if (btn) btn.style.display = isToken ? 'none' : '';
+  if (lbl) lbl.style.display = isToken ? '' : 'none';
 }
 
 // ── Nav shell ─────────────────────────────────────────────────────────────────

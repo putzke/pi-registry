@@ -5227,6 +5227,11 @@ function renderProjects(el){
                 <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg> Export
               </button>
             </div>
+            <div style="margin-top:6px">
+              <button class="btn btn-sm" style="width:100%;justify-content:center;color:#60a5fa;border-color:rgba(96,165,250,.4)" onclick="sharePortalLink('${p.id}',this)">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px"><circle cx="12" cy="4" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="12" r="2"/><path d="M6 7.5l4-2M6 8.5l4 2"/></svg> Share client portal link
+              </button>
+            </div>
           </div>
         </div>`;
       }).join('')}
@@ -5234,6 +5239,38 @@ function renderProjects(el){
     }
     </div>
   </div>`;
+}
+
+// ── SHARE PORTAL LINK ─────────────────────────
+async function sharePortalLink(projId, btn) {
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = 'Working…';
+  try {
+    const hdrs = getAuthHeaders();
+    // Upsert: insert if not exists, else return existing row (no change)
+    const res = await fetch(`${SUPA_REST}/pi_portal_links`, {
+      method: 'POST',
+      headers: { ...hdrs, 'Prefer': 'return=representation,resolution=ignore-duplicates' },
+      body: JSON.stringify({ project_id: Number(projId) })
+    });
+    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.message||`API ${res.status}`); }
+    let rows = await res.json();
+    // If the row already existed, ignore-duplicates returns empty — fetch it
+    if (!rows.length) {
+      const get = await fetch(`${SUPA_REST}/pi_portal_links?project_id=eq.${projId}&select=token`, { headers: hdrs });
+      rows = await get.json();
+    }
+    if (!rows.length) throw new Error('Could not create portal link.');
+    const token = rows[0].token;
+    const url = `https://putzke.github.io/pi-registry/client-portal.html?token=${token}`;
+    await navigator.clipboard.writeText(url).catch(() => { prompt('Copy this link:', url); });
+    btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px"><path d="M2 8l4 4 8-8"/></svg> Copied!';
+    setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
+  } catch(err) {
+    btn.innerHTML = orig; btn.disabled = false;
+    alert('Error: ' + err.message);
+  }
 }
 
 // ── MODALS ────────────────────────────────────

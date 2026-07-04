@@ -8906,7 +8906,12 @@ function openPIReport(){
     +'</div></div>'
     +'</div>';
   // Trigger initial preview render after DOM is set
-  setTimeout(renderLivePreview, 50);
+  setTimeout(function(){
+    renderLivePreview();
+    // Delegated listener catches section title/content/summary inputs (including dynamically added ones)
+    var edPane=document.getElementById('rpt-editor-pane');
+    if(edPane) edPane.addEventListener('input',schedulePreview);
+  },50);
 }
 
 // ── Live preview debouncer ──────────────────────────────────────────────────

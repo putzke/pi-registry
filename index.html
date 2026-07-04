@@ -7475,7 +7475,8 @@ function generateNepaComplianceReport(){
         else if(req.maxDays&&days>req.maxDays){compStatus='Exceeds maximum ('+days+' of '+req.maxDays+'d)';compColor='#D9A544';}
         else if(req.minDays){compStatus='Compliant ('+days+'d)';compColor='#28A870';}
       } else if(!per.startDate||!per.endDate){compStatus='Dates missing';compColor='#D9A544';}
-      var frFlag=req&&req.frRequired?'<span style="color:#b36b00;font-weight:600">FR required</span>':'';
+      var frFlag=req?(req.frRequired?'<span style="color:#b36b00;font-weight:600">FR required</span>':'<span style="color:#7a95a8">Not required</span>'):'';
+
       return '<tr>'
         +'<td style="padding:6px 10px;border-bottom:1px solid #e8eef4;font-size:11px">'+per.name+'</td>'
         +'<td style="padding:6px 10px;border-bottom:1px solid #e8eef4;font-size:11px">'+getPeriodLabel(per.periodType||'')+'</td>'

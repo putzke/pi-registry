@@ -12834,12 +12834,16 @@ function saveTribal(){
   const _emailOk=e=>!e||/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
   // Phone validation — digits, spaces, dashes, dots, parens, +; 7–11 digits total
   const _phoneOk=p=>{if(!p)return true;if(!/^[0-9\s\-().+]+$/.test(p))return false;const d=(p.match(/\d/g)||[]).length;return d>=7&&d<=11;};
-  const _errs=[];
-  if(!_emailOk(v('f-toffemail').trim()))_errs.push('Official email is not valid (e.g. name@domain.com)');
-  if(!_emailOk(v('f-temail').trim()))_errs.push('THPO email is not valid (e.g. name@domain.com)');
-  if(!_phoneOk(v('f-toffphone').trim()))_errs.push('Official phone is not valid — use digits, dashes, parens; 7–11 digits');
-  if(!_phoneOk(v('f-tphone').trim()))_errs.push('THPO phone is not valid — use digits, dashes, parens; 7–11 digits');
-  if(_errs.length){showToast(_errs.join(' · '),'error',6000);return;}
+  const _markField=(id,ok)=>{const el=document.getElementById(id);if(el)el.style.background=ok?'':'rgba(220,60,60,.18)';if(el&&!ok)el.style.borderColor='rgba(220,60,60,.7)';if(el&&ok){el.style.borderColor='';}};
+  const _offEmailOk=_emailOk(v('f-toffemail').trim());
+  const _thpoEmailOk=_emailOk(v('f-temail').trim());
+  const _offPhoneOk=_phoneOk(v('f-toffphone').trim());
+  const _thpoPhoneOk=_phoneOk(v('f-tphone').trim());
+  _markField('f-toffemail',_offEmailOk);
+  _markField('f-temail',_thpoEmailOk);
+  _markField('f-toffphone',_offPhoneOk);
+  _markField('f-tphone',_thpoPhoneOk);
+  if(!_offEmailOk||!_thpoEmailOk||!_offPhoneOk||!_thpoPhoneOk)return;
   const data={
     id:S.editTribalId||DB.uid(),
     tribeName:name,

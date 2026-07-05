@@ -6442,14 +6442,14 @@ function renderIssuesView(el){
 
 // ─ Shared XML helpers (reuse same style tokens as the PI Report) ─
 function _issXml_helpers(){
-  var bodyRpr='<w:rPr><w:rFonts w:cstheme="minorHAnsi"/><w:color w:val="3B3838" w:themeColor="background2" w:themeShade="40"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>';
+  var bodyRpr='<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:color w:val="3B3838" w:themeColor="background2" w:themeShade="40"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>';
   var bodyPpr='<w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/>'+bodyRpr+'</w:pPr>';
-  var boldRpr='<w:rPr><w:rFonts w:cstheme="minorHAnsi"/><w:b/><w:color w:val="3B3838" w:themeColor="background2" w:themeShade="40"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>';
-  var headingRpr='<w:rPr><w:rFonts w:cstheme="minorHAnsi"/><w:b/><w:color w:val="1F4E79"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>';
-  var titleRpr='<w:rPr><w:rFonts w:cstheme="minorHAnsi"/><w:b/><w:color w:val="1F4E79"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr>';
-  var grayRpr='<w:rPr><w:rFonts w:cstheme="minorHAnsi"/><w:color w:val="808080"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>';
-  var smallRpr='<w:rPr><w:rFonts w:cstheme="minorHAnsi"/><w:color w:val="555555"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr>';
-  var italicGrayRpr='<w:rPr><w:rFonts w:cstheme="minorHAnsi"/><w:i/><w:color w:val="808080"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr>';
+  var boldRpr='<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:b/><w:color w:val="3B3838" w:themeColor="background2" w:themeShade="40"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>';
+  var headingRpr='<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:b/><w:color w:val="1F4E79"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>';
+  var titleRpr='<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:b/><w:color w:val="1F4E79"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr>';
+  var grayRpr='<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:color w:val="808080"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>';
+  var smallRpr='<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:color w:val="555555"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr>';
+  var italicGrayRpr='<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:i/><w:color w:val="808080"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr>';
 
   function para(text,rpr){ rpr=rpr||bodyRpr; return'<w:p>'+bodyPpr+'<w:r>'+rpr+'<w:t xml:space="preserve">'+escXml(text)+'</w:t></w:r></w:p>'; }
   function spacer(){ return'<w:p>'+bodyPpr+'</w:p>'; }
@@ -10067,13 +10067,13 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
   var includeInternal=!!(( document.getElementById('rpt-ed-include-internal')||document.getElementById('rpt-include-internal')||{}).checked);
 
   // Common paragraph properties matching the template style
-  var bodyRpr='<w:rPr><w:rFonts w:cstheme="minorHAnsi"/><w:color w:val="3B3838" w:themeColor="background2" w:themeShade="40"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>';
+  var bodyRpr='<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:color w:val="3B3838" w:themeColor="background2" w:themeShade="40"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>';
   var bodyPpr='<w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/>'+bodyRpr+'</w:pPr>';
-  var boldRpr='<w:rPr><w:rFonts w:cstheme="minorHAnsi"/><w:b/><w:color w:val="3B3838" w:themeColor="background2" w:themeShade="40"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>';
-  var headingRpr='<w:rPr><w:rFonts w:cstheme="minorHAnsi"/><w:b/><w:color w:val="1F4E79"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>';
-  var titleRpr='<w:rPr><w:rFonts w:cstheme="minorHAnsi"/><w:b/><w:color w:val="1F4E79"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr>';
-  var grayRpr='<w:rPr><w:rFonts w:cstheme="minorHAnsi"/><w:color w:val="808080"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>';
-  var italicGrayRpr='<w:rPr><w:rFonts w:cstheme="minorHAnsi"/><w:i/><w:color w:val="808080"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr>';
+  var boldRpr='<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:b/><w:color w:val="3B3838" w:themeColor="background2" w:themeShade="40"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>';
+  var headingRpr='<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:b/><w:color w:val="1F4E79"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>';
+  var titleRpr='<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:b/><w:color w:val="1F4E79"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr>';
+  var grayRpr='<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:color w:val="808080"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>';
+  var italicGrayRpr='<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:i/><w:color w:val="808080"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr>';
 
   // Helper: simple paragraph
   function para(text,rpr){

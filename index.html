@@ -689,7 +689,7 @@ const SB_TO_INT = {
     title:'title', email:'email', phone:'phone', address:'address',
     parcelId:'parcel_id', type:'stakeholder_type', influenceTier:'influence_tier',
     prefContact:'pref_contact', isMaster:'is_master',
-    isArchived:'is_archived', isLEP:'is_lep', isEJ:'is_ej',
+    isArchived:'is_archived', lep:'lep', underserved:'underserved',
     stakeholderRole:'stakeholder_role',
     notes:'notes'
   },
@@ -853,7 +853,7 @@ function fromSB(table, row) {
     result[intKey] = row[sbCol] !== undefined ? row[sbCol] : (intKey.startsWith('is') ? false : '');
   }
   // Normalize booleans
-  ['isMaster','isAnonymous','followUp','followUpDone','isArchived','equityFormSubmitted'].forEach(f => {
+  ['isMaster','isAnonymous','followUp','followUpDone','isArchived','equityFormSubmitted','lep','underserved'].forEach(f => {
     if (result[f] !== undefined) result[f] = result[f] === true || result[f] === 1;
   });
   return result;

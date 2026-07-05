@@ -921,7 +921,7 @@ const SB_TO_INT = {
     title:'title', email:'email', phone:'phone', address:'address',
     parcelId:'parcel_id', type:'stakeholder_type', influenceTier:'influence_tier',
     prefContact:'pref_contact', isMaster:'is_master',
-    isArchived:'is_archived',
+    isArchived:'is_archived', lep:'lep', underserved:'underserved',
     notes:'notes'
   },
   pi_project_stakeholders: {
@@ -1012,7 +1012,7 @@ function fromSB(table, row) {
     result[intKey] = row[sbCol] !== undefined ? row[sbCol] : (intKey.startsWith('is') ? false : '');
   }
   // Normalize booleans
-  ['isMaster','followUp','followUpDone','isArchived','equityFormSubmitted'].forEach(f => {
+  ['isMaster','followUp','followUpDone','isArchived','equityFormSubmitted','lep','underserved'].forEach(f => {
     if (result[f] !== undefined) result[f] = result[f] === true || result[f] === 1;
   });
   return result;
@@ -2133,7 +2133,9 @@ async function updateStakeholder(){
       phone:stakes[idx].phone||null,
       parcel_id:stakes[idx].parcelId||null,
       stakeholder_type:stakes[idx].type||null,
-      is_master:stakes[idx].isMaster
+      is_master:stakes[idx].isMaster,
+      lep:stakes[idx].lep||false,
+      underserved:stakes[idx].underserved||false
     };
     const resp=await fetch(SUPA_URL+'/rest/v1/pi_stakeholders?id=eq.'+id,{
       method:'PATCH',

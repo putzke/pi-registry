@@ -8039,6 +8039,9 @@ function saveAsPdf(){
   _openRptPopup(outputClone.innerHTML, rptTitle, rptProjLabel, dateStr, summaryTxt);
 }
 
+// Section types that have row-based data eligible for table output
+var TABLE_ELIGIBLE_TYPES = ['auto-concerns','auto-intlog','auto-del','auto-events','auto-followups','auto-comments','auto-commitments','auto-issues'];
+
 function getDefaultSections(){
   return[
     {id:'concerns',title:'Recent public concerns and inquiries',type:'auto-concerns',content:''},
@@ -8805,6 +8808,12 @@ function openPIReport(){
       +'</div>'
       +(isAuto?'<div style="font-size:12px;color:var(--fog);line-height:1.5;margin-left:62px">'+getSectionDesc(sec.type)+'</div>'
         :'<textarea class="rpt-sec-content" data-idx="'+idx+'" style="width:100%;min-height:100px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;color:var(--mist);font-family:var(--font);font-size:13px;padding:10px 12px;outline:none;resize:vertical;line-height:1.6" placeholder="Each line becomes a bullet. Indent with spaces for sub-bullets.">'+(sec.content||'')+'</textarea>')
+      +(isAuto && TABLE_ELIGIBLE_TYPES.indexOf(sec.type) >= 0
+        ? '<label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-top:8px;margin-left:62px">'
+          +'<input type="checkbox" class="rpt-sec-table" data-idx="'+idx+'"'+(sec.showTable?' checked':'')+' style="accent-color:var(--sky);width:13px;height:13px" onchange="schedulePreview()">'
+          +'<span style="font-size:11px;color:var(--slate)">Include data table in report</span>'
+          +'</label>'
+        : '')
       +'<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.07)">'      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">'      +'<div style="font-size:11px;color:var(--slate);font-style:italic">Section summary <span style="color:var(--fog)">(optional — prints after section data in Word export)</span></div>'      +(isAuto?'<button id="sec-draft-btn-'+idx+'" class="btn btn-xs" style="background:rgba(74,155,232,.15);border-color:rgba(74,155,232,.4);color:var(--sky-lt);font-size:10px;padding:2px 8px;white-space:nowrap" onclick="generateSectionDraft(\''+sec.type+'\','+idx+')">'+(_getClaudeKey()?'✦ AI Draft':'✦ Draft')+'</button>':'')      +'</div>'      +'<textarea class="rpt-sec-summary" data-idx="'+idx+'" data-sectype="'+sec.type+'" style="width:100%;min-height:60px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;color:var(--mist);font-family:var(--font);font-size:12px;padding:8px 12px;outline:none;resize:vertical;line-height:1.6" placeholder="Optional narrative or summary for this section...">'+(sec.summary||'')+'</textarea>'      +'</div>'      +'</div>';
   });
 
@@ -8912,6 +8921,152 @@ function schedulePreview() {
   _previewTimer = setTimeout(renderLivePreview, 350);
 }
 
+// Returns an HTML table for a section type when "Include data table" is checked.
+// Light-mode styles so it renders correctly in the preview pane and archived preview.
+function _buildSectionPreviewTable(secType, projF, pstart, pend, includeInternal) {
+  var allStakes = DB.get('stakeholders');
+  var ps = DB.get('project_stakeholders').filter(function(lk){ return String(lk.projectId)===String(projF); });
+  var externalPS = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; });
+  var externalIds = externalPS.map(function(lk){ return lk.stakeholderId; });
+  var ints = DB.get('interactions').filter(function(i){ return String(i.projectId)===String(projF); });
+
+  var thStyle = 'padding:5px 8px;background:#1a3a5c;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.4px;text-align:left;white-space:nowrap';
+  var tdStyle = 'padding:6px 8px;border-bottom:1px solid #e0e0e0;font-size:11px;vertical-align:top';
+  var tbl = '<table style="width:100%;border-collapse:collapse;margin-top:8px;table-layout:fixed">';
+
+  if (secType === 'auto-concerns' || secType === 'auto-intlog') {
+    var logInts = ints.filter(function(i){
+      if (!includeInternal && externalIds.indexOf(i.stakeholderId) < 0) return false;
+      if (secType === 'auto-concerns') {
+        if (pstart && i.date < pstart) return false;
+        if (pend   && i.date > pend)   return false;
+      } else {
+        if (pstart && i.date >= pstart) return false; // past only
+      }
+      return true;
+    }).sort(function(a,b){ return b.date.localeCompare(a.date); });
+    tbl += '<colgroup><col style="width:11%"><col style="width:20%"><col style="width:13%"><col style="width:56%"></colgroup>'
+      +'<thead><tr><th style="'+thStyle+'">Date</th><th style="'+thStyle+'">Stakeholder</th><th style="'+thStyle+'">Channel</th><th style="'+thStyle+'">Summary</th></tr></thead><tbody>';
+    if (!logInts.length) { tbl += '<tr><td colspan="4" style="'+tdStyle+';color:#aaa;font-style:italic">No interactions for this period.</td></tr>'; }
+    logInts.forEach(function(i){
+      var s = allStakes.find(function(x){ return String(x.id)===String(i.stakeholderId); });
+      tbl += '<tr><td style="'+tdStyle+';white-space:nowrap">'+escHtml(i.date)+'</td>'
+        +'<td style="'+tdStyle+'"><strong>'+escHtml(s ? dispName(s) : (i.anonLabel||'Anonymous'))+'</strong>'
+        +(s&&s.org?'<div style="font-size:10px;color:#888">'+escHtml(s.org)+'</div>':'')+'</td>'
+        +'<td style="'+tdStyle+'">'+escHtml(i.channel||'—')+'</td>'
+        +'<td style="'+tdStyle+'">'+escHtml(i.summary||'—')+'</td></tr>';
+    });
+
+  } else if (secType === 'auto-del') {
+    var dels = DB.get('deliverables').filter(function(d){ return String(d.projectId)===String(projF); });
+    tbl += '<colgroup><col style="width:16%"><col style="width:30%"><col style="width:13%"><col style="width:13%"><col style="width:10%"><col style="width:18%"></colgroup>'
+      +'<thead><tr><th style="'+thStyle+'">Type</th><th style="'+thStyle+'">Title</th><th style="'+thStyle+'">Contracted</th><th style="'+thStyle+'">Delivered</th><th style="'+thStyle+'">%</th><th style="'+thStyle+'">Status</th></tr></thead><tbody>';
+    if (!dels.length) { tbl += '<tr><td colspan="6" style="'+tdStyle+';color:#aaa;font-style:italic">No deliverables tracked.</td></tr>'; }
+    dels.forEach(function(d){
+      var pct = d.contractedQty > 0 ? Math.min(100, Math.round((d.deliveredCount||0)/d.contractedQty*100)) : (d.progress||0);
+      tbl += '<tr><td style="'+tdStyle+'">'+escHtml(d.type||'—')+'</td>'
+        +'<td style="'+tdStyle+'">'+escHtml(d.title||d.type||'—')+'</td>'
+        +'<td style="'+tdStyle+';text-align:center">'+escHtml(String(d.contractedQty||'—'))+'</td>'
+        +'<td style="'+tdStyle+';text-align:center">'+escHtml(String(d.deliveredCount||0))+'</td>'
+        +'<td style="'+tdStyle+';text-align:center">'+pct+'%</td>'
+        +'<td style="'+tdStyle+'">'+escHtml(d.status||'—')+'</td></tr>';
+    });
+
+  } else if (secType === 'auto-events') {
+    var evts = (DB.get('meetings')||[]).filter(function(m){ return String(m.projectId)===String(projF); })
+      .sort(function(a,b){ return b.date.localeCompare(a.date); });
+    tbl += '<colgroup><col style="width:11%"><col style="width:28%"><col style="width:14%"><col style="width:12%"><col style="width:8%"><col style="width:27%"></colgroup>'
+      +'<thead><tr><th style="'+thStyle+'">Date</th><th style="'+thStyle+'">Event</th><th style="'+thStyle+'">Type</th><th style="'+thStyle+'">Status</th><th style="'+thStyle+'">Attend.</th><th style="'+thStyle+'">Notes</th></tr></thead><tbody>';
+    if (!evts.length) { tbl += '<tr><td colspan="6" style="'+tdStyle+';color:#aaa;font-style:italic">No events logged.</td></tr>'; }
+    evts.forEach(function(m){
+      tbl += '<tr><td style="'+tdStyle+';white-space:nowrap">'+escHtml(m.date)+'</td>'
+        +'<td style="'+tdStyle+'">'+escHtml(m.title||'—')+'<div style="font-size:10px;color:#888">'+escHtml(m.location||'')+'</div></td>'
+        +'<td style="'+tdStyle+'">'+escHtml(m.type||'Other')+'</td>'
+        +'<td style="'+tdStyle+'">'+escHtml(m.status||'Planned')+'</td>'
+        +'<td style="'+tdStyle+';text-align:center">'+escHtml(String(m.attendanceCount||'—'))+'</td>'
+        +'<td style="'+tdStyle+'">'+escHtml((m.notes||'—').slice(0,120))+'</td></tr>';
+    });
+
+  } else if (secType === 'auto-followups') {
+    var allInts = DB.get('interactions').filter(function(i){ return String(i.projectId)===String(projF); });
+    var fuItems = allInts.filter(function(i){ return i.followUp; })
+      .sort(function(a,b){ if(!a.followUpDone&&b.followUpDone)return -1; if(a.followUpDone&&!b.followUpDone)return 1; return(a.followUpDue||'9999').localeCompare(b.followUpDue||'9999'); });
+    var nowStr = new Date().toISOString().slice(0,10);
+    tbl += '<colgroup><col style="width:13%"><col style="width:35%"><col style="width:24%"><col style="width:28%"></colgroup>'
+      +'<thead><tr><th style="'+thStyle+'">Due Date</th><th style="'+thStyle+'">Action</th><th style="'+thStyle+'">Stakeholder</th><th style="'+thStyle+'">Status</th></tr></thead><tbody>';
+    if (!fuItems.length) { tbl += '<tr><td colspan="4" style="'+tdStyle+';color:#aaa;font-style:italic">No follow-up items.</td></tr>'; }
+    fuItems.forEach(function(i){
+      var s = allStakes.find(function(x){ return String(x.id)===String(i.stakeholderId); });
+      var od = !i.followUpDone && i.followUpDue && i.followUpDue < nowStr;
+      var statusTxt = i.followUpDone ? 'Resolved' : (od ? 'OVERDUE' : 'Open');
+      var statusColor = i.followUpDone ? '#1a7a50' : (od ? '#c0392b' : '#b36b00');
+      tbl += '<tr><td style="'+tdStyle+';white-space:nowrap;color:'+statusColor+';font-weight:600">'+escHtml(i.followUpDue||'No date')+'</td>'
+        +'<td style="'+tdStyle+'">'+escHtml(i.followUpNote||'—')+'</td>'
+        +'<td style="'+tdStyle+'">'+escHtml(s ? dispName(s) : (i.anonLabel||'Anonymous'))+'</td>'
+        +'<td style="'+tdStyle+';color:'+statusColor+';font-weight:600">'+statusTxt+'</td></tr>';
+    });
+
+  } else if (secType === 'auto-comments') {
+    var comments = ints.filter(function(i){
+      return externalIds.indexOf(i.stakeholderId) >= 0
+        && ['Comment card','Public meeting','Mail','In-person'].indexOf(i.channel) >= 0;
+    }).sort(function(a,b){ return b.date.localeCompare(a.date); });
+    tbl += '<colgroup><col style="width:11%"><col style="width:18%"><col style="width:14%"><col style="width:30%"><col style="width:27%"></colgroup>'
+      +'<thead><tr><th style="'+thStyle+'">Date</th><th style="'+thStyle+'">Name</th><th style="'+thStyle+'">Channel</th><th style="'+thStyle+'">Summary</th><th style="'+thStyle+'">Response</th></tr></thead><tbody>';
+    if (!comments.length) { tbl += '<tr><td colspan="5" style="'+tdStyle+';color:#aaa;font-style:italic">No public comments.</td></tr>'; }
+    comments.forEach(function(i){
+      var s = allStakes.find(function(x){ return String(x.id)===String(i.stakeholderId); });
+      tbl += '<tr><td style="'+tdStyle+';white-space:nowrap">'+escHtml(i.date)+'</td>'
+        +'<td style="'+tdStyle+'">'+escHtml(s ? dispName(s) : (i.anonLabel||'Anonymous'))+'</td>'
+        +'<td style="'+tdStyle+'">'+escHtml(i.channel||'—')+'</td>'
+        +'<td style="'+tdStyle+'">'+escHtml((i.summary||'—').slice(0,150))+'</td>'
+        +'<td style="'+tdStyle+'"><strong style="color:'+(i.followUpDone?'#1a7a50':'#b36b00')+'">'+escHtml(i.followUpDone?'Responded':'Pending')+'</strong>'
+        +(i.followUpNote?'<div style="font-size:10px;color:#888">'+escHtml(i.followUpNote.slice(0,80))+'</div>':'')+'</td></tr>';
+    });
+
+  } else if (secType === 'auto-commitments') {
+    var comms = (DB.get('commitments')||[]).filter(function(c){ return String(c.projectId)===String(projF); })
+      .sort(function(a,b){ if(a.status==='Fulfilled'&&b.status!=='Fulfilled')return 1; if(a.status!=='Fulfilled'&&b.status==='Fulfilled')return -1; return 0; });
+    tbl += '<colgroup><col style="width:14%"><col style="width:34%"><col style="width:20%"><col style="width:14%"><col style="width:18%"></colgroup>'
+      +'<thead><tr><th style="'+thStyle+'">Category</th><th style="'+thStyle+'">Commitment</th><th style="'+thStyle+'">Made To</th><th style="'+thStyle+'">Due</th><th style="'+thStyle+'">Status</th></tr></thead><tbody>';
+    if (!comms.length) { tbl += '<tr><td colspan="5" style="'+tdStyle+';color:#aaa;font-style:italic">No commitments recorded.</td></tr>'; }
+    comms.forEach(function(c){
+      var sk = c.stakeholderId ? allStakes.find(function(x){ return String(x.id)===String(c.stakeholderId); }) : null;
+      var madeTo = sk ? dispName(sk) : (c.madeTo||'—');
+      var statusColor = c.status==='Fulfilled' ? '#1a7a50' : c.status==='Overdue' ? '#c0392b' : '#b36b00';
+      tbl += '<tr><td style="'+tdStyle+'">'+escHtml(c.category||'—')+'</td>'
+        +'<td style="'+tdStyle+'">'+escHtml((c.commitment||'—').slice(0,100))+'</td>'
+        +'<td style="'+tdStyle+'">'+escHtml(madeTo.slice(0,40))+'</td>'
+        +'<td style="'+tdStyle+';white-space:nowrap">'+escHtml(c.dueDate||'—')+'</td>'
+        +'<td style="'+tdStyle+';color:'+statusColor+';font-weight:600">'+escHtml(c.status||'Open')+'</td></tr>';
+    });
+
+  } else if (secType === 'auto-issues') {
+    var issues = (DB.get('issues')||[]).filter(function(i){ return String(i.projectId)===String(projF); })
+      .sort(function(a,b){
+        var so = {'Open':0,'In Progress':1,'Monitoring':2,'Resolved':3,'Closed':4};
+        return (so[a.status]||0) - (so[b.status]||0);
+      });
+    tbl += '<colgroup><col style="width:35%"><col style="width:14%"><col style="width:18%"><col style="width:33%"></colgroup>'
+      +'<thead><tr><th style="'+thStyle+'">Title</th><th style="'+thStyle+'">Priority</th><th style="'+thStyle+'">Category</th><th style="'+thStyle+'">Status</th></tr></thead><tbody>';
+    if (!issues.length) { tbl += '<tr><td colspan="4" style="'+tdStyle+';color:#aaa;font-style:italic">No issues logged.</td></tr>'; }
+    issues.forEach(function(iss){
+      var priColor = iss.priority==='High' ? '#c0392b' : iss.priority==='Medium' ? '#b36b00' : '#555';
+      var statusColor = (iss.status==='Resolved'||iss.status==='Closed') ? '#1a7a50' : (iss.status==='Open'||iss.status==='In Progress') ? '#b36b00' : '#555';
+      tbl += '<tr><td style="'+tdStyle+';font-weight:600">'+escHtml(iss.title||'—')+'</td>'
+        +'<td style="'+tdStyle+';color:'+priColor+';font-weight:600">'+escHtml(iss.priority||'—')+'</td>'
+        +'<td style="'+tdStyle+'">'+escHtml(iss.category||'—')+'</td>'
+        +'<td style="'+tdStyle+';color:'+statusColor+';font-weight:600">'+escHtml(iss.status||'—')+'</td></tr>';
+    });
+
+  } else {
+    return '';
+  }
+
+  tbl += '</tbody></table>';
+  return tbl;
+}
+
 function renderLivePreview() {
   var pane = document.getElementById('rpt-live-preview');
   if (!pane) return;
@@ -8935,14 +9090,16 @@ function renderLivePreview() {
   var sections = [];
   document.querySelectorAll('.rpt-sec-title').forEach(function(inp, i) {
     var idx = parseInt(inp.getAttribute('data-idx'));
-    var summaryEl = document.querySelector('.rpt-sec-summary[data-idx="'+idx+'"]');
-    var contentEl = document.querySelector('.rpt-sec-content[data-idx="'+idx+'"]');
-    var typeEl    = summaryEl ? summaryEl.getAttribute('data-sectype') : 'manual';
+    var summaryEl   = document.querySelector('.rpt-sec-summary[data-idx="'+idx+'"]');
+    var contentEl   = document.querySelector('.rpt-sec-content[data-idx="'+idx+'"]');
+    var tableEl     = document.querySelector('.rpt-sec-table[data-idx="'+idx+'"]');
+    var typeEl      = summaryEl ? summaryEl.getAttribute('data-sectype') : 'manual';
     sections[idx] = {
-      title:   inp.value || ('Section ' + (idx+1)),
-      summary: summaryEl ? summaryEl.value : '',
-      content: contentEl ? contentEl.value : '',
-      type:    typeEl || 'manual'
+      title:     inp.value || ('Section ' + (idx+1)),
+      summary:   summaryEl ? summaryEl.value : '',
+      content:   contentEl ? contentEl.value : '',
+      type:      typeEl || 'manual',
+      showTable: tableEl ? tableEl.checked : false
     };
   });
   sections = sections.filter(Boolean);
@@ -9012,6 +9169,7 @@ function renderLivePreview() {
     html += '<div style="font-size:13px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #cdd4dc;padding-bottom:4px;margin-bottom:10px">' + escHtml(sec.title) + '</div>';
 
     var isAuto = sec.type && sec.type !== 'manual';
+    var includeInternal = !!(( document.getElementById('rpt-ed-include-internal')||document.getElementById('rpt-include-internal')||{}).checked);
 
     if (isAuto) {
       // Show auto-data summary row counts
@@ -9033,6 +9191,10 @@ function renderLivePreview() {
       }
       if (counts.length) {
         html += '<div style="font-size:11px;color:#888;font-style:italic;background:#f0f0f0;border-radius:4px;padding:5px 10px;margin-bottom:8px">Auto-populated · ' + counts.join(' · ') + '</div>';
+      }
+      // Data table (when toggled on)
+      if (sec.showTable && TABLE_ELIGIBLE_TYPES.indexOf(sec.type) >= 0) {
+        html += _buildSectionPreviewTable(sec.type, projF, pstart, pend, includeInternal);
       }
     } else if (sec.content) {
       // Render manual bullet content
@@ -9086,6 +9248,11 @@ function captureFormState(){
   for(var t=0;t<titleInputs.length;t++){
     var tidx=parseInt(titleInputs[t].getAttribute('data-idx'));
     if(tidx>=0&&tidx<saved.sections.length)saved.sections[tidx].title=titleInputs[t].value;
+  }
+  var tableCbs=document.querySelectorAll('.rpt-sec-table');
+  for(var tc=0;tc<tableCbs.length;tc++){
+    var tcidx=parseInt(tableCbs[tc].getAttribute('data-idx'));
+    if(tcidx>=0&&tcidx<saved.sections.length)saved.sections[tcidx].showTable=tableCbs[tc].checked;
   }
   return saved;
 }
@@ -9694,6 +9861,36 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
     return'<w:p><w:pPr><w:spacing w:before="240" w:after="120" w:line="240" w:lineRule="auto"/><w:pBdr><w:bottom w:val="single" w:sz="4" w:space="4" w:color="1F4E79"/></w:pBdr>'+headingRpr+'</w:pPr><w:r>'+headingRpr+'<w:t xml:space="preserve">'+escXml(text)+'</w:t></w:r></w:p>';
   }
 
+  // Helper: simple docx table (used for section data tables when showTable is on)
+  var _cellBdr='<w:tcBorders><w:top w:val="single" w:sz="4" w:color="CCCCCC"/><w:bottom w:val="single" w:sz="4" w:color="CCCCCC"/><w:left w:val="single" w:sz="4" w:color="CCCCCC"/><w:right w:val="single" w:sz="4" w:color="CCCCCC"/></w:tcBorders>';
+  var _hdrFill='<w:shd w:val="clear" w:color="auto" w:fill="1A3050"/>';
+  var _hdrRpr='<w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr>';
+  var _cellRpr='<w:rPr><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr>';
+
+  function tblHdrRow(hdrs,colWidths){
+    var row='<w:tr><w:trPr><w:tblHeader/></w:trPr>';
+    hdrs.forEach(function(h,ci){
+      row+='<w:tc><w:tcPr><w:tcW w:w="'+colWidths[ci]+'" w:type="dxa"/>'+_cellBdr+_hdrFill+'</w:tcPr>';
+      row+='<w:p><w:pPr><w:spacing w:after="0"/></w:pPr><w:r>'+_hdrRpr+'<w:t xml:space="preserve">'+escXml(h)+'</w:t></w:r></w:p></w:tc>';
+    });
+    return row+'</w:tr>';
+  }
+
+  function tblDataRow(vals,colWidths,shade){
+    var fill=shade?'<w:shd w:val="clear" w:color="auto" w:fill="EEF4FB"/>':'';
+    var row='<w:tr>';
+    vals.forEach(function(v,ci){
+      row+='<w:tc><w:tcPr><w:tcW w:w="'+colWidths[ci]+'" w:type="dxa"/>'+_cellBdr+fill+'</w:tcPr>';
+      row+='<w:p><w:pPr><w:spacing w:after="0"/></w:pPr><w:r>'+_cellRpr+'<w:t xml:space="preserve">'+escXml(String(v||'—'))+'</w:t></w:r></w:p></w:tc>';
+    });
+    return row+'</w:tr>';
+  }
+
+  function tblWrap(totalW,colWidths,rows){
+    var grid='<w:tblGrid>'+colWidths.map(function(w){return'<w:gridCol w:w="'+w+'"/>';}).join('')+'</w:tblGrid>';
+    return'<w:tbl><w:tblPr><w:tblStyle w:val="TableGrid"/><w:tblW w:w="'+totalW+'" w:type="dxa"/><w:tblCellMar><w:top w:w="60" w:type="dxa"/><w:left w:w="100" w:type="dxa"/><w:bottom w:w="60" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr>'+grid+rows+'</w:tbl>';
+  }
+
   // ── PROJECT TITLE LINE ─────────────────────────
   xml+=spacer();
   xml+='<w:p><w:pPr><w:spacing w:after="60" w:line="240" w:lineRule="auto"/>'+titleRpr+'</w:pPr><w:r>'+titleRpr+'<w:t xml:space="preserve">'+escXml('Project PIN: '+proj.pid)+'</w:t></w:r></w:p>';
@@ -9769,7 +9966,19 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
         var pLabel='Report period: '+(saved.periodStart||'—')+' to '+(saved.periodEnd||'—');
         xml+=para(pLabel,italicGrayRpr);
       }
-      if(periodInts.length===0){
+      if(sec.showTable){
+        var cCols=[1400,1900,1300,4860]; var cHdrs=['Date','Stakeholder','Channel','Summary'];
+        var cRows=tblHdrRow(cHdrs,cCols);
+        var cInts2=periodInts.slice().sort(function(a,b){return a.date.localeCompare(b.date)});
+        if(!cInts2.length)cRows+=tblDataRow(['No interactions for this period.','','',''],cCols,false);
+        cInts2.forEach(function(int,ri){
+          var sk=allStakes.find(function(x){return x.id===int.stakeholderId});
+          var nm=sk?sk.firstName+' '+sk.lastName:(int.anonLabel||'Anonymous');
+          var org=sk?sk.org||'':'';
+          cRows+=tblDataRow([int.date,nm+(org?' ('+org+')':''),int.channel||'\u2014',int.summary||'\u2014'],cCols,ri%2!==0);
+        });
+        xml+=tblWrap(9460,cCols,cRows); xml+=spacer();
+      } else if(periodInts.length===0){
         xml+=bullet('None');
       } else {
         periodInts.sort(function(a,b){return a.date.localeCompare(b.date)});
@@ -9848,7 +10057,18 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
         return true;
       });
       var sorted=pastInts.sort(function(a,b){return b.date.localeCompare(a.date)});
-      if(sorted.length===0){
+      if(sec.showTable){
+        var ilCols=[1300,1900,1300,5060]; var ilHdrs=['Date','Stakeholder','Channel','Summary'];
+        var ilRows=tblHdrRow(ilHdrs,ilCols);
+        if(!sorted.length)ilRows+=tblDataRow(['No prior interactions on record.','','',''],ilCols,false);
+        sorted.forEach(function(int,ri){
+          var sk=allStakes.find(function(x){return x.id===int.stakeholderId});
+          var nm=sk?sk.firstName+' '+sk.lastName:(int.anonLabel||'Anonymous');
+          var org=sk?sk.org||'':'';
+          ilRows+=tblDataRow([int.date,nm+(org?' ('+org+')':''),int.channel||'—',int.summary||'—'],ilCols,ri%2!==0);
+        });
+        xml+=tblWrap(9560,ilCols,ilRows); xml+=spacer();
+      } else if(sorted.length===0){
         xml+=bullet('No prior interactions on record.');
       } else {
         sorted.forEach(function(int){
@@ -9869,15 +10089,29 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
       xml+=para('Open: '+openFU.length+' | Resolved: '+resolvedFU.length+' | Total: '+fuItems.length);
       xml+=spacer();
       fuItems.sort(function(a,b){if(!a.followUpDone&&b.followUpDone)return-1;if(a.followUpDone&&!b.followUpDone)return 1;return(a.followUpDue||'9999').localeCompare(b.followUpDue||'9999')});
-      fuItems.forEach(function(i){
-        var sk=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
-        var name=sk?sk.firstName+' '+sk.lastName:(i.anonLabel||'Anonymous');
-        var status=i.followUpDone?'RESOLVED':'OPEN';
-        var od=!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<now;
-        if(od)status='OVERDUE';
-        xml+=bulletRuns([{text:'['+status+'] '+(i.followUpDue||'No date')+' \u2014 '+name,bold:true},{text:': '+(i.followUpNote||'No description'),bold:false}]);
-      });
-      if(fuItems.length===0)xml+=bullet('No follow-up items.');
+      if(sec.showTable){
+        var fuCols=[1400,3600,2260,2300]; var fuHdrs=['Due Date','Action','Stakeholder','Status'];
+        var fuRows=tblHdrRow(fuHdrs,fuCols);
+        if(!fuItems.length)fuRows+=tblDataRow(['No follow-up items.','','',''],fuCols,false);
+        fuItems.forEach(function(i,ri){
+          var sk=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
+          var nm=sk?sk.firstName+' '+sk.lastName:(i.anonLabel||'Anonymous');
+          var od=!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<now;
+          var st=i.followUpDone?'Resolved':(od?'OVERDUE':'Open');
+          fuRows+=tblDataRow([i.followUpDue||'No date',i.followUpNote||'\u2014',nm,st],fuCols,ri%2!==0);
+        });
+        xml+=tblWrap(9560,fuCols,fuRows); xml+=spacer();
+      } else {
+        fuItems.forEach(function(i){
+          var sk=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
+          var name=sk?sk.firstName+' '+sk.lastName:(i.anonLabel||'Anonymous');
+          var status=i.followUpDone?'RESOLVED':'OPEN';
+          var od=!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<now;
+          if(od)status='OVERDUE';
+          xml+=bulletRuns([{text:'['+status+'] '+(i.followUpDue||'No date')+' \u2014 '+name,bold:true},{text:': '+(i.followUpNote||'No description'),bold:false}]);
+        });
+        if(fuItems.length===0)xml+=bullet('No follow-up items.');
+      }
 
     } else if(sec.type==='auto-sentiment'){
       // ── 3x3 Engagement Matrix (all project stakeholders) ──────
@@ -9948,11 +10182,21 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
         var notStartedDels=dels.filter(function(d){return d.status==='Not started'}).length;
         xml+=para('Summary: '+completeDels+' of '+totalDels+' complete, '+inProgDels+' in progress, '+notStartedDels+' not started');
         xml+=spacer();
-        dels.forEach(function(d){
-          var pct=d.contractedQty>0?Math.min(100,Math.round((d.deliveredCount||0)/d.contractedQty*100)):d.progress;
-          var line=d.type+' \u2014 '+(d.deliveredCount||0)+' of '+(d.contractedQty||0)+' delivered ('+pct+'%) \u2014 '+d.status;
-          xml+=bullet(line);
-        });
+        if(sec.showTable){
+          var dCols=[1600,2860,1300,1300,700,1800]; var dHdrs=['Type','Title','Contracted','Delivered','%','Status'];
+          var dRows=tblHdrRow(dHdrs,dCols);
+          dels.forEach(function(d,ri){
+            var pct=d.contractedQty>0?Math.min(100,Math.round((d.deliveredCount||0)/d.contractedQty*100)):(d.progress||0);
+            dRows+=tblDataRow([d.type||'\u2014',d.title||d.type||'\u2014',String(d.contractedQty||'\u2014'),String(d.deliveredCount||0),pct+'%',d.status||'\u2014'],dCols,ri%2!==0);
+          });
+          xml+=tblWrap(9560,dCols,dRows); xml+=spacer();
+        } else {
+          dels.forEach(function(d){
+            var pct=d.contractedQty>0?Math.min(100,Math.round((d.deliveredCount||0)/d.contractedQty*100)):d.progress;
+            var line=d.type+' \u2014 '+(d.deliveredCount||0)+' of '+(d.contractedQty||0)+' delivered ('+pct+'%) \u2014 '+d.status;
+            xml+=bullet(line);
+          });
+        }
       } else {
         xml+=bullet('No deliverables tracked for this project.');
       }
@@ -9967,13 +10211,26 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
       } else {
         xml+=para(comments.length+' public comment(s) received:');
         xml+=spacer();
-        comments.forEach(function(i){
-          var sk=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
-          var name=sk?sk.firstName+' '+sk.lastName:(i.anonLabel||'Anonymous');
-          var org=sk?sk.org||'':'';
-          var status=i.followUpDone?'Responded':'Pending';
-          xml+=bulletRuns([{text:i.date+' — '+name+(org?' ('+org+')':''),bold:true},{text:' | '+i.channel+' | '+i.summary+' | Response: '+status,bold:false}]);
-        });
+        if(sec.showTable){
+          var pcCols=[1300,1800,1400,1200,2460,1400]; var pcHdrs=['Date','Name','Organization','Channel','Summary','Response'];
+          var pcRows=tblHdrRow(pcHdrs,pcCols);
+          comments.forEach(function(i,ri){
+            var sk=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
+            var nm=sk?sk.firstName+' '+sk.lastName:(i.anonLabel||'Anonymous');
+            var org=sk?sk.org||'':'';
+            var st=i.followUpDone?'Responded':'Pending';
+            pcRows+=tblDataRow([i.date,nm,org,i.channel||'—',(i.summary||'—').slice(0,200),st],pcCols,ri%2!==0);
+          });
+          xml+=tblWrap(9560,pcCols,pcRows); xml+=spacer();
+        } else {
+          comments.forEach(function(i){
+            var sk=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
+            var name=sk?sk.firstName+' '+sk.lastName:(i.anonLabel||'Anonymous');
+            var org=sk?sk.org||'':'';
+            var status=i.followUpDone?'Responded':'Pending';
+            xml+=bulletRuns([{text:i.date+' — '+name+(org?' ('+org+')':''),bold:true},{text:' | '+i.channel+' | '+i.summary+' | Response: '+status,bold:false}]);
+          });
+        }
       }
 
     } else if(sec.type==='auto-events'){
@@ -9982,15 +10239,24 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
       if(projEvts.length===0){
         xml+=bullet('No events logged for this project.');
       } else {
-        xml+=bullet(projEvts.length+' event'+(projEvts.length!==1?'s':'')+' logged:');
+        xml+=para(projEvts.length+' event'+(projEvts.length!==1?'s':'')+' logged');
         xml+=spacer();
-        projEvts.forEach(function(m){
-          var evtRest=' | '+(m.type||'Other')+' | Status: '+(m.status||'Planned');
-          if(m.attendanceCount) evtRest+=' | Attendance: '+m.attendanceCount;
-          if(m.commentCards) evtRest+=' | Comment cards: '+m.commentCards;
-          if(m.notes) evtRest+=' | Notes: '+m.notes.replace(/\n/g,' ');
-          xml+=bulletRuns([{text:m.date+' | '+m.title,bold:true},{text:evtRest,bold:false}]);
-        });
+        if(sec.showTable){
+          var evCols=[1300,2900,1400,1200,900,1860]; var evHdrs=['Date','Event','Type','Status','Attend.','Notes'];
+          var evRows=tblHdrRow(evHdrs,evCols);
+          projEvts.forEach(function(m,ri){
+            evRows+=tblDataRow([m.date,m.title+(m.location?' — '+m.location:''),m.type||'Other',m.status||'Planned',String(m.attendanceCount||'—'),(m.notes||'—').slice(0,100)],evCols,ri%2!==0);
+          });
+          xml+=tblWrap(9560,evCols,evRows); xml+=spacer();
+        } else {
+          projEvts.forEach(function(m){
+            var evtRest=' | '+(m.type||'Other')+' | Status: '+(m.status||'Planned');
+            if(m.attendanceCount) evtRest+=' | Attendance: '+m.attendanceCount;
+            if(m.commentCards) evtRest+=' | Comment cards: '+m.commentCards;
+            if(m.notes) evtRest+=' | Notes: '+m.notes.replace(/\n/g,' ');
+            xml+=bulletRuns([{text:m.date+' | '+m.title,bold:true},{text:evtRest,bold:false}]);
+          });
+        }
       }
 
     } else if(sec.type==='auto-commitments'){
@@ -10002,6 +10268,16 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
       xml+=spacer();
       if(projComm.length===0){
         xml+=bullet('No commitments recorded for this project.');
+      } else if(sec.showTable){
+        var comCols=[1400,3400,1900,1260,1600]; var comHdrs=['Category','Commitment','Made To','Due','Status'];
+        var comRows=tblHdrRow(comHdrs,comCols);
+        var sortedComm=projComm.slice().sort(function(a,b){if(a.status==='Fulfilled'&&b.status!=='Fulfilled')return 1;if(a.status!=='Fulfilled'&&b.status==='Fulfilled')return -1;return 0;});
+        sortedComm.forEach(function(c,ri){
+          var sk=c.stakeholderId?allStakesC.find(function(s){return String(s.id)===String(c.stakeholderId)}):null;
+          var madeTo=sk?((sk.firstName||'')+' '+(sk.lastName||'')).trim()||(sk.org||''):(c.madeTo||'—');
+          comRows+=tblDataRow([c.category||'—',(c.commitment||'—').slice(0,120),madeTo.slice(0,40),c.dueDate||'—',c.status||'Open'],comCols,ri%2!==0);
+        });
+        xml+=tblWrap(9560,comCols,comRows); xml+=spacer();
       } else {
         // Open/Overdue first
         if(openComm.length>0){
@@ -10074,6 +10350,16 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
       var openI=projIssues.filter(function(x){return x.status==='Open'||x.status==='In Progress';}).length;
       if(projIssues.length===0){
         xml+=bullet('No issues logged for this project.');
+      } else if(sec.showTable){
+        xml+=para(projIssues.length+' issue'+(projIssues.length!==1?'s':'')+' total · '+openI+' open');
+        xml+=spacer();
+        var issCols=[3200,1400,1800,3160]; var issHdrs=['Title','Priority','Category','Status'];
+        var issRows=tblHdrRow(issHdrs,issCols);
+        var sortedIss=projIssues.slice().sort(function(a,b){var so={'Open':0,'In Progress':1,'Monitoring':2,'Resolved':3,'Closed':4};return (so[a.status||'Open']||0)-(so[b.status||'Open']||0);});
+        sortedIss.forEach(function(iss,ri){
+          issRows+=tblDataRow([(iss.title||'Untitled').slice(0,80),iss.priority||'Medium',iss.category||'General',iss.status||'Open'],issCols,ri%2!==0);
+        });
+        xml+=tblWrap(9560,issCols,issRows); xml+=spacer();
       } else {
         xml+=para(projIssues.length+' issue'+(projIssues.length!==1?'s':'')+' total · '+openI+' open');
         xml+=spacer();

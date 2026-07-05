@@ -4829,11 +4829,18 @@ function renderDelScope(pF){
               if(!(colKey in window._nepaCollapsed))window._nepaCollapsed[colKey]=allDone&&collapsible;
               var collapsed=collapsible&&window._nepaCollapsed[colKey];
               var hdrCol=allDone?'var(--green)':'var(--sky-lt)';
-              var hdr='<div style="margin-top:10px;margin-bottom:2px;display:flex;align-items:center;justify-content:space-between;padding:3px 8px;border-left:2px solid '+hdrCol+'">'
-                +'<span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:'+hdrCol+'">'+g.name+'</span>'
+              var hdr='<div style="margin-top:10px;margin-bottom:2px">'
                 +(collapsible
-                  ?'<button onclick="_toggleNepaGroup(\''+colKey+'\',\''+bodyId+'\',this)" style="background:none;border:none;cursor:pointer;color:var(--slate);font-size:11px;padding:2px 6px;display:flex;align-items:center;gap:3px"><span>'+doneCt+'/'+g.items.length+' '+(collapsed?'▸':'▾')+'</span></button>'
-                  :'<span style="font-size:11px;color:var(--fog)">'+doneCt+'/'+g.items.length+'</span>')
+                  ?'<button onclick="_toggleNepaGroup(\''+colKey+'\',\''+bodyId+'\',this)" style="width:100%;background:rgba(255,255,255,.03);border:none;border-left:3px solid '+hdrCol+';cursor:pointer;display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:0 5px 5px 0;text-align:left">'
+                    +'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" style="width:16px;height:16px;color:'+hdrCol+';flex-shrink:0;transform:rotate('+(collapsed?'0':'90')+'deg)">'
+                    +'<path d="M6 4l4 4-4 4"/></svg>'
+                    +'<span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:'+hdrCol+';flex:1">'+g.name+'</span>'
+                    +'<span style="font-size:11px;color:var(--fog)">'+doneCt+'/'+g.items.length+'</span>'
+                    +'</button>'
+                  :'<div style="display:flex;align-items:center;gap:9px;padding:7px 10px;border-left:3px solid '+hdrCol+'">'
+                    +'<span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:'+hdrCol+';flex:1">'+g.name+'</span>'
+                    +'<span style="font-size:11px;color:var(--fog)">'+doneCt+'/'+g.items.length+'</span>'
+                    +'</div>')
                 +'</div>';
               var items=g.items.map(function(x){
                 var item=x.item,idx=x.idx;
@@ -4860,8 +4867,8 @@ function _toggleNepaGroup(key, bodyId, btn) {
   window._nepaCollapsed[key]=!window._nepaCollapsed[key];
   const el=document.getElementById(bodyId);
   if(el)el.style.display=window._nepaCollapsed[key]?'none':'block';
-  const sp=btn&&btn.querySelector('span');
-  if(sp){const parts=sp.textContent.split(' ');parts[parts.length-1]=window._nepaCollapsed[key]?'▸':'▾';sp.textContent=parts.join(' ');}
+  const svg=btn&&btn.querySelector('svg');
+  if(svg)svg.style.transform='rotate('+(window._nepaCollapsed[key]?'0':'90')+'deg)';
 }
 function toggleNepaCheck(projId,idx){
   const all=DB.get('projects');

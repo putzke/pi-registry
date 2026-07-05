@@ -9195,7 +9195,7 @@ async function resetPIReportDraft(){
 
 
 // ── Report Archive ──────────────────────────────────────────────────────────
-const ARCHIVE_LIMIT = 50;
+const ARCHIVE_LIMIT = 10;
 
 async function manualArchiveReport() {
   var projF = S.projectFilter;
@@ -9217,14 +9217,14 @@ async function _archiveReport(projF) {
   var saved = JSON.parse(localStorage.getItem('pir4_pi_reports_'+projF)||'{}');
   if (!saved.reportTitle && !saved.sections) return; // nothing to archive
 
-  // Enforce limit: warn at 40, block at 50
+  // Enforce limit: warn at 2 slots remaining, block at 10
   var existing = (_syncCache['report_archive']||[]).filter(function(r){ return String(r.projectId)===String(projF); });
   if (existing.length >= ARCHIVE_LIMIT) {
     showToast('Archive limit ('+ARCHIVE_LIMIT+') reached for this project. Delete old reports to continue archiving.', 'warn', 5000);
     return;
   }
-  if (existing.length >= ARCHIVE_LIMIT - 10) {
-    showToast('Archive approaching limit: '+(ARCHIVE_LIMIT-existing.length)+' slots remaining.', 'warn', 4000);
+  if (existing.length >= ARCHIVE_LIMIT - 2) {
+    showToast('Archive approaching limit: '+(ARCHIVE_LIMIT-existing.length)+' slot'+(ARCHIVE_LIMIT-existing.length===1?'':'s')+' remaining.', 'warn', 4000);
   }
 
   var payload = {
@@ -9280,10 +9280,19 @@ function _buildArchiveHTML(projF) {
   }
 
   var limit = ARCHIVE_LIMIT;
-  var countColor = archives.length >= limit ? 'var(--red)' : archives.length >= limit-10 ? 'var(--amber)' : 'var(--fog)';
+  var atLimit = archives.length >= limit;
+  var nearLimit = !atLimit && archives.length >= limit - 2;
+  var countColor = atLimit ? 'var(--red)' : nearLimit ? 'var(--amber)' : 'var(--fog)';
   var hasKey = !!_getClaudeKey();
 
-  var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
+  var html = '';
+  if (atLimit) {
+    html += '<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(220,60,60,.12);border:1px solid rgba(220,60,60,.35);border-radius:8px;margin-bottom:12px">'
+      +'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:14px;height:14px;flex-shrink:0;color:var(--red)"><path d="M8 2L14 13H2L8 2z"/><line x1="8" y1="7" x2="8" y2="10"/><circle cx="8" cy="12" r=".5" fill="currentColor"/></svg>'
+      +'<span style="font-size:12px;color:var(--red)"><strong>Archive limit reached ('+limit+' of '+limit+').</strong> Delete old snapshots below to save new ones.</span>'
+      +'</div>';
+  }
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
     +'<span style="font-size:11px;color:'+countColor+'">'+archives.length+' of '+limit+' archived</span>'
     +(hasKey && archives.length >= 2
       ? '<button class="btn btn-sm" id="trend-btn" onclick="generateTrendSummary()" style="background:linear-gradient(135deg,#1e3a5f,#0f4c75);border-color:var(--sky-lt);color:var(--sky-lt);gap:6px">'

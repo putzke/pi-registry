@@ -5499,9 +5499,11 @@ function saveStake(){
   const v=id=>document.getElementById(id)?.value||'';
   const rawPhone=v('f-ph');
   const phoneErr=validatePhone(rawPhone);
-  if(phoneErr){alert(phoneErr);return;}
   const emailErr=validateEmail(v('f-em'));
-  if(emailErr){alert(emailErr);return;}
+  const _markF=(id,err)=>{const el=document.getElementById(id);if(!el)return;el.style.background=err?'rgba(220,60,60,.18)':'';el.style.borderColor=err?'rgba(220,60,60,.7)':'';};
+  _markF('f-ph',phoneErr);
+  _markF('f-em',emailErr);
+  if(phoneErr||emailErr)return;
   const data={id:S.editId||DB.uid(),firstName:document.getElementById('f-fn')?.value||'',lastName:document.getElementById('f-ln')?.value||'',org:v('f-org'),title:v('f-ti'),email:v('f-em'),phone:rawPhone.trim()?formatPhone(cleanPhone(rawPhone)):'',address:v('f-ad'),parcelId:v('f-parc'),type:v('f-st'),lep:!!(document.getElementById('f-slep')?.checked),underserved:!!(document.getElementById('f-sund')?.checked),isMaster:!!(document.getElementById('f-smaster')?.checked),notes:v('f-no'),isAnonymous:false};
   if(!data.firstName&&!data.lastName&&!data.org){alert('First and last name, or Organization name required.');return}
 

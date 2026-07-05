@@ -4812,23 +4812,42 @@ function renderDelScope(pF){
               <div class="pbar" style="width:80px"><div class="pfill ${pctN===100?'green':''}" style="width:${pctN}%"></div></div>
             </div>
           </div>
-          <div style="display:flex;flex-direction:column;gap:2px">
-            ${(()=>{
-              let lastGroup='';
-              return cl.map((item,idx)=>{
-                const groupHdr=item.group&&item.group!==lastGroup?(lastGroup=item.group,
-                  `<div style="margin-top:10px;margin-bottom:4px;padding:3px 8px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--fog);border-left:2px solid var(--border)">${item.group}</div>`
-                ):(lastGroup=item.group||lastGroup,'');
-                return groupHdr+`<div style="display:flex;align-items:flex-start;gap:10px;padding:6px 8px;border-radius:5px;background:${item.checked?'rgba(34,197,94,.07)':'rgba(255,255,255,.03)'};cursor:pointer" onclick="toggleNepaCheck('${proj.id}',${idx})">
-                  <div style="flex-shrink:0;margin-top:1px;width:16px;height:16px;border-radius:3px;border:1.5px solid ${item.checked?'var(--green)':'rgba(255,255,255,.25)'};background:${item.checked?'var(--green)':'transparent'};display:flex;align-items:center;justify-content:center">
-                    ${item.checked?'<svg viewBox="0 0 10 10" fill="none" stroke="white" stroke-width="2" style="width:9px;height:9px"><path d="M2 5l2.5 2.5L8 3"/></svg>':''}
-                  </div>
-                  <div style="flex:1;font-size:13px;color:${item.checked?'var(--slate)':'var(--mist)'}${item.checked?';text-decoration:line-through':''}">${item.label}</div>
-                  ${item.checked?`<div style="font-size:11px;color:var(--fog);white-space:nowrap;flex-shrink:0">${item.checkedDate?fmt(item.checkedDate):''} ${item.checkedBy?'· '+item.checkedBy:''}</div>`:''}
-                </div>`;
+          ${(()=>{
+            if(!window._nepaCollapsed)window._nepaCollapsed={};
+            var groups=[],gIdx={};
+            cl.forEach(function(item,idx){
+              var gName=item.group||'';
+              if(gIdx[gName]===undefined){gIdx[gName]=groups.length;groups.push({name:gName,items:[]});}
+              groups[gIdx[gName]].items.push({item:item,idx:idx});
+            });
+            return groups.map(function(g,gi){
+              var collapsible=g.items.length>4;
+              var allDone=g.items.every(function(x){return x.item.checked;});
+              var doneCt=g.items.filter(function(x){return x.item.checked;}).length;
+              var bodyId='nepa-grp-'+proj.id+'-'+gi;
+              var colKey=proj.id+':'+gi;
+              if(!(colKey in window._nepaCollapsed))window._nepaCollapsed[colKey]=allDone&&collapsible;
+              var collapsed=collapsible&&window._nepaCollapsed[colKey];
+              var hdrCol=allDone?'var(--green)':'var(--sky-lt)';
+              var hdr='<div style="margin-top:10px;margin-bottom:2px;display:flex;align-items:center;justify-content:space-between;padding:3px 8px;border-left:2px solid '+hdrCol+'">'
+                +'<span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:'+hdrCol+'">'+g.name+'</span>'
+                +(collapsible
+                  ?'<button onclick="_toggleNepaGroup(\''+colKey+'\',\''+bodyId+'\',this)" style="background:none;border:none;cursor:pointer;color:var(--slate);font-size:11px;padding:2px 6px;display:flex;align-items:center;gap:3px"><span>'+doneCt+'/'+g.items.length+' '+(collapsed?'▸':'▾')+'</span></button>'
+                  :'<span style="font-size:11px;color:var(--fog)">'+doneCt+'/'+g.items.length+'</span>')
+                +'</div>';
+              var items=g.items.map(function(x){
+                var item=x.item,idx=x.idx;
+                return '<div style="display:flex;align-items:flex-start;gap:10px;padding:6px 8px;border-radius:5px;background:'+(item.checked?'rgba(34,197,94,.07)':'rgba(255,255,255,.03)')+';cursor:pointer" onclick="toggleNepaCheck(\''+proj.id+'\','+idx+')">'
+                  +'<div style="flex-shrink:0;margin-top:1px;width:16px;height:16px;border-radius:3px;border:1.5px solid '+(item.checked?'var(--green)':'rgba(255,255,255,.25)')+';background:'+(item.checked?'var(--green)':'transparent')+';display:flex;align-items:center;justify-content:center">'
+                  +(item.checked?'<svg viewBox="0 0 10 10" fill="none" stroke="white" stroke-width="2" style="width:9px;height:9px"><path d="M2 5l2.5 2.5L8 3"/></svg>':'')
+                  +'</div>'
+                  +'<div style="flex:1;font-size:13px;color:'+(item.checked?'var(--slate)':'var(--mist)')+(item.checked?';text-decoration:line-through':'')+'">'+(item.label||'')+'</div>'
+                  +(item.checked?'<div style="font-size:11px;color:var(--fog);white-space:nowrap;flex-shrink:0">'+(item.checkedDate?fmt(item.checkedDate):'')+' '+(item.checkedBy?'· '+item.checkedBy:'')+'</div>':'')
+                  +'</div>';
               }).join('');
-            })()}
-          </div>
+              return hdr+'<div id="'+bodyId+'"'+(collapsed?' style="display:none"':'')+'>'+items+'</div>';
+            }).join('');
+          })()}
           ${pctN===100?`<div style="margin-top:10px;padding:8px 12px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:6px;font-size:12px;color:var(--green);font-weight:500">✓ All NEPA PI compliance items complete for this ${nc} project.</div>`:''}
         </div>`;
       })()}
@@ -4836,6 +4855,14 @@ function renderDelScope(pF){
   }).join('')+'</div>';
 }
 
+function _toggleNepaGroup(key, bodyId, btn) {
+  if(!window._nepaCollapsed)window._nepaCollapsed={};
+  window._nepaCollapsed[key]=!window._nepaCollapsed[key];
+  const el=document.getElementById(bodyId);
+  if(el)el.style.display=window._nepaCollapsed[key]?'none':'block';
+  const sp=btn&&btn.querySelector('span');
+  if(sp){const parts=sp.textContent.split(' ');parts[parts.length-1]=window._nepaCollapsed[key]?'▸':'▾';sp.textContent=parts.join(' ');}
+}
 function toggleNepaCheck(projId,idx){
   const all=DB.get('projects');
   const proj=all.find(x=>x.id===projId);

@@ -13406,6 +13406,12 @@ function saveComment(){
   if(!projId){alert('Please select a project.');return;}
   const text=v('f-cmttext').trim();
   if(!text){alert('Comment text is required.');return;}
+  const _emailOk=e=>!e||/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e);
+  const _markF=(id,err)=>{const el=document.getElementById(id);if(!el)return;el.style.background=err?'rgba(220,60,60,.18)':'';el.style.borderColor=err?'rgba(220,60,60,.7)':'';};
+  const rawEmail=v('f-cmtemail').trim();
+  const emailErr=!_emailOk(rawEmail);
+  _markF('f-cmtemail',emailErr);
+  if(emailErr)return;
   const data={
     id:S.editId||DB.uid(),
     projectId:projId,

@@ -701,7 +701,7 @@ const SB_TO_INT = {
   },
   pi_interactions: {
     id:'id', projectId:'project_id', stakeholderId:'stakeholder_id',
-    anonLabel:'anon_label', nepaStage:'nepa_stage', equityFormSubmitted:'equity_form_submitted',
+    anonLabel:'anon_label', nepaStage:'nepa_stage',
     date:'interaction_date', channel:'channel', subject:'subject',
     nature:'nature', direction:'direction', summary:'summary',
     loggedBy:'logged_by', followUp:'follow_up', followUpDue:'follow_up_due',
@@ -721,6 +721,7 @@ const SB_TO_INT = {
     keyConcerns:'key_concerns', actionItems:'action_items',
     attendeeIds:'attendee_ids',
     additionalAttendees:'additional_attendees',
+    equityFormSubmitted:'equity_form_submitted',
     notes:'notes', createdAt:'created_at'
   },
   pi_issues: {
@@ -4227,7 +4228,6 @@ function renderStakeDetail(s,link){
         <div class="log-hdr">
           <span class="badge ${i.direction==='Incoming'?'b-sky':'b-green'}">${i.direction}</span>
           <span class="badge b-gray">${i.channel}</span>
-          ${i.equityFormSubmitted?'<span class="badge" style="font-size:10px;background:rgba(40,168,112,.15);color:var(--green);border:1px solid rgba(40,168,112,.3)">✓ Equity form</span>':''}
           <span style="font-size:12px;color:var(--slate)">${i.loggedBy}</span>
           ${(function(){if(link)return '';var _p=projs.find(function(x){return String(x.id)===String(i.projectId);});return _p?'<span class="badge b-dark" style="font-size:10px;color:var(--sky-lt);border-color:rgba(45,125,210,.3)">'+_p.name+'</span>':'';}())}
           <span class="log-date">${fmt(i.date)} <span style="color:var(--fog)">${ago(i.date)}</span></span>
@@ -4637,7 +4637,7 @@ function renderInteractions(el){
               <td class="td-mono" style="white-space:nowrap">${fmt(i.date)}</td>
               <td><span class="badge b-dark td-mono">${p?p.pid:'?'}</span></td>
               <td><div class="td-link" onclick="selectStake('${i.stakeholderId}');setView('stakeholders')">${s?dispName(s):(i.anonLabel||'Anonymous')}</div><div style="font-size:11px;color:var(--fog)">${s?s.org||s.type||'':''}</div></td>
-              <td><span class="badge ${chCls(i.channel)}">${i.channel}</span>${i.equityFormSubmitted?'<span class="badge" style="font-size:9px;margin-left:3px;background:rgba(40,168,112,.15);color:var(--green);border:1px solid rgba(40,168,112,.3)">✓ EQ</span>':''}</td>
+              <td><span class="badge ${chCls(i.channel)}">${i.channel}</span></td>
               <td><span class="badge ${i.direction==='Incoming'?'b-sky':'b-green'}">${i.direction}</span></td>
               <td style="font-size:12px;color:var(--mist)">${i.subject||'General'}</td>
               <td><span class="badge ${(i.nature||'Inquiry')==='Complaint'?'b-red':(i.nature||'Inquiry')==='Compliment'?'b-green':'b-sky'}" style="font-size:11px">${i.nature||'Inquiry'}</span></td>
@@ -5914,7 +5914,7 @@ function openIntModal(preStake){
       <div id="f-is-list" style="display:none;position:absolute;z-index:99999;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;max-height:220px;overflow-y:auto;width:100%;left:0;top:100%;margin-top:2px;box-shadow:0 4px 16px rgba(0,0,0,.6)"></div>
     </div>
     <div class="fr"><label>Date *</label><input type="date" id="f-id" value="${localToday()}"></div>
-    <div class="fr"><label>Channel</label><select id="f-ic" onchange="_toggleEquityWrap(this.value)">${['Phone','Email','In-person','Public meeting','Public event','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'].map(c=>`<option>${c}</option>`).join('')}</select></div>
+    <div class="fr"><label>Channel</label><select id="f-ic">${['Phone','Email','In-person','Public meeting','Public event','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'].map(c=>`<option>${c}</option>`).join('')}</select></div>
   </div>
   <div class="fgrid fg3f">
     <div class="fr"><label>Direction</label><select id="f-idr">${['Incoming','Outgoing','In-person'].map(d=>`<option>${d}</option>`).join('')}</select></div>
@@ -5929,9 +5929,6 @@ function openIntModal(preStake){
     </div>
   </div>
   <input type="hidden" id="f-inepastage">
-  <div id="f-equity-wrap" style="display:none;margin-top:4px">
-    <div class="fcheck"><input type="checkbox" id="f-iequity"><label for="f-iequity">Equity / civil rights compliance form submitted <span style="font-size:11px;font-weight:400;color:var(--fog)">(e.g. Title VI summary, sign-in sheet sent to coordinator)</span></label></div>
-  </div>
   <div class="fsec">Follow-up</div>
   <div class="fr"><div class="fcheck"><input type="checkbox" id="f-ifu" onchange="document.getElementById('fu-f').style.display=this.checked?'':'none'"><label for="f-ifu">This interaction requires a follow-up action</label></div></div>
   <div id="fu-f" style="display:none"><div class="fgrid fg2f">
@@ -5961,12 +5958,6 @@ function updateIntNepaStage(){
   const proj=(DB.get('projects')||[]).find(x=>x.id===projId);
   h.value=(proj&&proj.nepaStage)||'';
 }
-function _toggleEquityWrap(channel){
-  const wrap=document.getElementById('f-equity-wrap');
-  if(!wrap) return;
-  const show=channel==='Public meeting'||channel==='Public event';
-  wrap.style.display=show?'':'none';
-}
 function openEditIntModal(id){
   S.editId=id;
   const i=DB.get('interactions').find(x=>String(x.id)===String(id))||{};
@@ -5976,7 +5967,7 @@ function openEditIntModal(id){
     <div class="fr"><label>Project</label><select id="f-ip">${projs.map(p=>`<option value="${p.id}"${i.projectId===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
     <div class="fr"><label>Stakeholder</label><select id="f-is"><option value=""${!i.stakeholderId?' selected':''}>— ${i.anonLabel||'Anonymous'} —</option>${stakes.map(s=>`<option value="${s.id}"${String(i.stakeholderId)===String(s.id)?' selected':''}>${dispName(s)}${(s.firstName||s.lastName)&&s.org?' — '+s.org:''}</option>`).join('')}</select></div>
     <div class="fr"><label>Date</label><input type="date" id="f-id" value="${i.date||''}"></div>
-    <div class="fr"><label>Channel</label><select id="f-ic" onchange="_toggleEquityWrap(this.value)">${['Phone','Email','In-person','Public meeting','Public event','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'].map(c=>`<option${i.channel===c?' selected':''}>${c}</option>`).join('')}</select></div>
+    <div class="fr"><label>Channel</label><select id="f-ic">${['Phone','Email','In-person','Public meeting','Public event','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'].map(c=>`<option${i.channel===c?' selected':''}>${c}</option>`).join('')}</select></div>
   </div>
   <div class="fgrid fg3f">
     <div class="fr"><label>Direction</label><select id="f-idr">${['Incoming','Outgoing','In-person'].map(d=>`<option${i.direction===d?' selected':''}>${d}</option>`).join('')}</select></div>
@@ -5992,9 +5983,6 @@ function openEditIntModal(id){
       const linkedIssueId=existingLink?String(existingLink.issueId):'';
       return '<option value="">— None —</option>'+projIssues.map(iss=>`<option value="${iss.id}"${String(iss.id)===linkedIssueId?' selected':''}>[${iss.status}] ${iss.title}</option>`).join('');
     })()}</select>
-  </div>
-  <div id="f-equity-wrap" style="${(i.channel==='Public meeting'||i.channel==='Public event')?'':'display:none'};margin-top:4px">
-    <div class="fcheck"><input type="checkbox" id="f-iequity"${i.equityFormSubmitted?' checked':''}><label for="f-iequity">Equity / civil rights compliance form submitted <span style="font-size:11px;font-weight:400;color:var(--fog)">(e.g. Title VI summary, sign-in sheet sent to coordinator)</span></label></div>
   </div>
   <div class="fsec">Follow-up</div>
   <div class="fr"><div style="display:flex;gap:20px;flex-wrap:wrap">
@@ -6023,7 +6011,7 @@ function saveInt(){
   const anonLbl = !stakeId ? getAnonLabel(projId, S.editId||null) : '';
   const _existingInt=S.editId?(DB.get('interactions')||[]).find(x=>x.id===S.editId):null;
   const _nepaStageVal=S.editId?(_existingInt?.nepaStage||''):v('f-inepastage');
-  const data={id:S.editId||DB.uid(),projectId:projId,stakeholderId:stakeId,anonLabel:anonLbl,date:vDate('f-id'),channel:v('f-ic'),direction:v('f-idr'),subject:v('f-isub')||'General',nature:v('f-inat')||'Inquiry',summary:v('f-isu'),loggedBy:v('f-il'),nepaStage:_nepaStageVal,equityFormSubmitted:document.getElementById('f-iequity')?.checked||false,followUp:document.getElementById('f-ifu')?.checked||false,followUpNote:v('f-ifun'),followUpDue:vDate('f-ifud'),followUpDone:fuDone,followUpResolved:fuResolved};
+  const data={id:S.editId||DB.uid(),projectId:projId,stakeholderId:stakeId,anonLabel:anonLbl,date:vDate('f-id'),channel:v('f-ic'),direction:v('f-idr'),subject:v('f-isub')||'General',nature:v('f-inat')||'Inquiry',summary:v('f-isu'),loggedBy:v('f-il'),nepaStage:_nepaStageVal,followUp:document.getElementById('f-ifu')?.checked||false,followUpNote:v('f-ifun'),followUpDue:vDate('f-ifud'),followUpDone:fuDone,followUpResolved:fuResolved};
   const psAll=DB.get('project_stakeholders');
   if(stakeId&&!psAll.find(x=>x.projectId===projId&&x.stakeholderId===stakeId)){
     psAll.push({id:DB.uid(),projectId:projId,stakeholderId:stakeId,support:'Neutral',issueTags:'',addedDate:data.date,notes:'Auto-linked via interaction log.',distributionGroups:'',stakeholderRole:'External'});
@@ -7208,7 +7196,7 @@ function generatePISummary(){
   // ── Public meetings / events ──────────────────────────────────────
   var pubMeets=ints.filter(function(i){return i.channel==='Public meeting'||i.channel==='Public event';});
   var pubMeetMeetings=meetings.filter(function(m){return m.type==='Public meeting'||m.type==='Public event';});
-  var equityMeets=pubMeets.filter(function(i){return i.equityFormSubmitted;});
+  var equityMeets=pubMeetMeetings.filter(function(m){return m.equityFormSubmitted;});
 
   // ── Comments ──────────────────────────────────────────────────────
   var pendingCmts=pcomms.filter(function(c){return c.responseStatus==='Pending';}).length;
@@ -7286,7 +7274,7 @@ function generatePISummary(){
   }).join(''):'<tr><td colspan="4" style="padding:10px;color:#7a95a8;font-style:italic">No NEPA classification set for this project.</td></tr>';
 
   // Public meetings list
-  var pmRows=pubMeets.concat(pubMeetMeetings.map(function(m){return{date:m.date,channel:m.type,summary:m.title,location:m.location,equityFormSubmitted:false};}))
+  var pmRows=pubMeets.concat(pubMeetMeetings.map(function(m){return{date:m.date,channel:m.type,summary:m.title,location:m.location,equityFormSubmitted:m.equityFormSubmitted||false};}))
     .sort(function(a,b){return(a.date||'').localeCompare(b.date||'');})
     .slice(0,20)
     .map(function(i){
@@ -11007,6 +10995,7 @@ function renderMeetings(el){
             ${addAtt?`<div style="font-size:11px;color:var(--mist);margin-top:2px">${addAtt}</div>`:''}
             ${!hasAnyAtt?`<div style="font-size:11px;color:var(--fog);font-style:italic;margin-top:2px">Named attendees not recorded</div>`:''}
             ${actionItems>0?`<div style="margin-top:3px"><span class="badge b-amber" style="font-size:10px">${actionItems} open action${actionItems!==1?'s':''}</span></div>`:''}
+            ${m.equityFormSubmitted?`<div style="margin-top:3px"><span class="badge" style="font-size:10px;background:rgba(40,168,112,.15);color:var(--green);border:1px solid rgba(40,168,112,.3)">✓ Equity form</span></div>`:''}
           </td>
           <td><span class="badge b-dark" style="font-size:11px">${m.type||'—'}</span></td>
           <td style="text-align:center;font-weight:600;color:var(--white)">${m.attendanceCount||'—'}</td>
@@ -11112,34 +11101,54 @@ function openMeetingModal(id){
   </div>
   <div class="fr"><label>Linked attendees <span style="font-weight:400;color:var(--fog)">(stakeholders from this project)</span></label>
     <input id="f-matt-search" placeholder="Filter by name…" oninput="filterMeetingAttendees(this.value)" style="margin-bottom:6px;font-size:12px;padding:4px 8px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:6px;color:var(--white);width:100%;box-sizing:border-box">
-    <div id="f-matt-wrap" style="display:flex;flex-wrap:wrap;gap:6px;padding:8px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:6px;max-height:150px;overflow-y:auto">
+    <div id="f-matt-wrap" style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:6px;max-height:200px;overflow-y:auto">
     ${(function(){
       var projId=(document.getElementById('f-mp')||{}).value||pF;
       var ps=DB.get('project_stakeholders')||[];
       var linked=projId?ps.filter(function(x){return String(x.projectId)===String(projId);}):[];
       var stakes=DB.getActive('stakeholders')||[];
       var existingIds=Array.isArray(m.attendeeIds)?m.attendeeIds.map(String):[];
-      if(!projId||linked.length===0) return '<span style="font-size:12px;color:var(--fog);padding:4px 2px">Select a project above to pick linked stakeholders.</span>';
+      if(!projId||linked.length===0) return '<div style="padding:8px 10px;font-size:12px;color:var(--fog)">Select a project above to pick linked stakeholders.</div>';
       var sortedLinked=linked.slice().sort(function(a,b){
         var sa=stakes.find(function(x){return String(x.id)===String(a.stakeholderId);})||{};
         var sb_=stakes.find(function(x){return String(x.id)===String(b.stakeholderId);})||{};
         return (sa.lastName||'').localeCompare(sb_.lastName||'');
       });
-      return sortedLinked.map(function(lk){
-        var s=stakes.find(function(x){return String(x.id)===String(lk.stakeholderId);});
-        if(!s) return '';
-        var checked=existingIds.includes(String(s.id));
+      function chip(s,checked,isEq){
         var nm=(s.firstName||'')+' '+(s.lastName||'');
-        var bg=checked?'rgba(90,135,198,.2)':'rgba(255,255,255,.05)';
-        var bd=checked?'var(--sky-lt)':'var(--border)';
+        var bg=checked?(isEq?'rgba(232,168,74,.18)':'rgba(90,135,198,.2)'):'rgba(255,255,255,.05)';
+        var bd=checked?(isEq?'rgba(232,168,74,.5)':'var(--sky-lt)'):'var(--border)';
+        var ac=isEq?'#e8a84a':'var(--sky-lt)';
+        var flags='';
+        if(s.lep)flags+='<span style="width:7px;height:7px;border-radius:50%;background:#e8a84a;display:inline-block;flex-shrink:0" title="Limited English Proficiency"></span>';
+        if(s.underserved)flags+='<span style="width:7px;height:7px;border-radius:50%;background:#40a870;display:inline-block;flex-shrink:0" title="Environmental Justice"></span>';
         return '<label style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;background:'+bg+';border:1px solid '+bd+';border-radius:12px;cursor:pointer;font-size:12px;color:var(--mist);white-space:nowrap">'
-          +'<input type="checkbox" value="'+s.id+'" '+(checked?'checked':'')+' style="accent-color:var(--sky-lt);width:12px;height:12px"> '
+          +'<input type="checkbox" value="'+s.id+'" '+(checked?'checked':'')+' style="accent-color:'+ac+';width:12px;height:12px"> '
           +nm.trim()+(s.org?' <span style="color:var(--fog);font-size:10px">('+s.org+')</span>':'')
+          +(flags?' <span style="display:inline-flex;gap:2px;align-items:center">'+flags+'</span>':'')
           +'</label>';
-      }).join('');
+      }
+      var stdLinks=sortedLinked.filter(function(lk){var s=stakes.find(function(x){return String(x.id)===String(lk.stakeholderId);});return s&&!s.lep&&!s.underserved;});
+      var eqLinks=sortedLinked.filter(function(lk){var s=stakes.find(function(x){return String(x.id)===String(lk.stakeholderId);});return s&&(s.lep||s.underserved);});
+      var out='';
+      if(stdLinks.length){
+        out+='<div style="padding:8px 10px 6px"><div style="font-size:10px;font-weight:700;color:var(--sky-lt);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Standard contacts</div>';
+        out+='<div style="display:flex;flex-wrap:wrap;gap:5px">'+stdLinks.map(function(lk){var s=stakes.find(function(x){return String(x.id)===String(lk.stakeholderId);});return s?chip(s,existingIds.includes(String(s.id)),false):'';}).join('')+'</div></div>';
+      }
+      if(eqLinks.length){
+        if(stdLinks.length) out+='<div style="border-top:1px solid var(--border)"></div>';
+        out+='<div style="padding:8px 10px 8px"><div style="font-size:10px;font-weight:700;color:#e8a84a;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">LEP / EJ contacts <span style="font-size:9px;font-weight:400;color:rgba(232,168,74,.7)">— equity form required</span></div>';
+        out+='<div style="font-size:10px;color:rgba(232,168,74,.8);background:rgba(232,168,74,.08);border:1px solid rgba(232,168,74,.2);border-radius:5px;padding:4px 8px;margin-bottom:6px">Check the equity / civil rights compliance checkbox below after submitting the form for this event.</div>';
+        out+='<div style="display:flex;flex-wrap:wrap;gap:5px">'+eqLinks.map(function(lk){var s=stakes.find(function(x){return String(x.id)===String(lk.stakeholderId);});return s?chip(s,existingIds.includes(String(s.id)),true):'';}).join('')+'</div>';
+        out+='<div style="margin-top:6px;font-size:10px;color:var(--fog);display:flex;gap:10px"><span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#e8a84a;margin-right:3px"></span>Limited English Proficiency (LEP)</span><span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#40a870;margin-right:3px"></span>Environmental Justice (EJ)</span></div>';
+        out+='</div>';
+      }
+      if(!stdLinks.length&&!eqLinks.length) out='<div style="padding:8px 10px;font-size:12px;color:var(--fog)">No linked stakeholders found.</div>';
+      return out;
     })()}
     </div>
   </div>
+  <div class="fcheck" style="margin-top:6px"><input type="checkbox" id="f-mequity"${m.equityFormSubmitted?' checked':''}><label for="f-mequity">Equity / civil rights compliance form submitted <span style="font-size:11px;font-weight:400;color:var(--fog)">(Title VI summary, sign-in sheet, or civil rights documentation submitted to coordinator)</span></label></div>
   <div class="fr"><label>Additional attendees <span style="font-weight:400;color:var(--fog)">(not in stakeholder list)</span></label>
     <textarea id="f-madd" style="height:60px" placeholder="One per line or comma-separated — e.g. John Smith, Jane Doe">${m.additionalAttendees||''}</textarea>
   </div>
@@ -11181,6 +11190,7 @@ async function saveMeeting(){
     actionItems:actionItemsText,
     attendeeIds,
     additionalAttendees:v('f-madd'),
+    equityFormSubmitted:document.getElementById('f-mequity')?.checked||false,
     notes:v('f-mno'),
     createdAt:S.editId?(DB.get('meetings')||[]).find(x=>x.id===S.editId)?.createdAt||new Date().toISOString():new Date().toISOString()
   };

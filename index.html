@@ -5274,12 +5274,11 @@ function renderProjects(el){
               <button class="btn btn-sm" style="margin-left:auto;color:var(--green);border-color:rgba(40,168,112,.4)" onclick="exportProject('${p.id}')">
                 <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg> Export
               </button>
-            </div>
-            <div id="portal-btn-${p.id}" style="margin-top:6px">
-              <button class="btn btn-sm" style="width:100%;justify-content:center;color:#60a5fa;border-color:rgba(96,165,250,.4)" onclick="sharePortalLink('${p.id}',this)">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px"><circle cx="12" cy="4" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="12" r="2"/><path d="M6 7.5l4-2M6 8.5l4 2"/></svg> Share client portal link
-              </button>
-            </div>
+              <div class="portal-btn-container" data-proj="${p.id}" data-style="compact">
+                <button class="btn btn-sm" style="color:#60a5fa;border-color:rgba(96,165,250,.4)" onclick="sharePortalLink('${p.id}',this)" title="Generate client portal link">
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:10px;height:10px"><circle cx="12" cy="4" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="12" r="2"/><path d="M6 7.5l4-2M6 8.5l4 2"/></svg> Portal
+                </button>
+              </div>
           </div>
         </div>`;
       }).join('')}
@@ -5292,24 +5291,33 @@ function renderProjects(el){
 
 // ── SHARE PORTAL LINK ─────────────────────────
 function _renderPortalBtnActive(projId, url) {
-  const c = document.getElementById('portal-btn-'+projId);
-  if (!c) return;
-  c.innerHTML = `<div style="display:flex;gap:5px">
-    <button class="btn btn-sm" style="flex:1;justify-content:center;color:#34d399;border-color:rgba(52,211,153,.4)"
-      data-url="${url}" onclick="copyPortalUrl(this.dataset.url,this)">
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px"><path d="M2 8l4 4 8-8"/></svg> Link active · Copy
-    </button>
-    <button class="btn btn-sm" style="color:#f87171;border-color:rgba(248,113,113,.4)"
-      onclick="revokePortalLink(${projId},this)">Revoke</button>
-  </div>`;
+  document.querySelectorAll('.portal-btn-container[data-proj="'+projId+'"]').forEach(function(c){
+    if(c.dataset.style==='full'){
+      c.innerHTML='<div style="background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.25);border-radius:8px;padding:12px 16px">'
+        +'<div style="font-size:12px;font-weight:600;color:#34d399;margin-bottom:8px">✓ Portal link active</div>'
+        +'<div style="font-family:var(--mono);font-size:11px;color:var(--slate);word-break:break-all;margin-bottom:10px;padding:6px 8px;background:rgba(255,255,255,.04);border-radius:5px">'+url+'</div>'
+        +'<div style="display:flex;gap:8px">'
+        +'<button class="btn btn-sm" style="color:#34d399;border-color:rgba(52,211,153,.4)" data-url="'+url+'" onclick="copyPortalUrl(this.dataset.url,this)">Copy link</button>'
+        +'<button class="btn btn-sm" style="color:#f87171;border-color:rgba(248,113,113,.4)" onclick="revokePortalLink('+projId+',this)">Revoke</button>'
+        +'</div></div>';
+    } else {
+      c.innerHTML='<div style="display:flex;gap:3px">'
+        +'<button class="btn btn-sm" style="color:#34d399;border-color:rgba(52,211,153,.4)" data-url="'+url+'" onclick="copyPortalUrl(this.dataset.url,this)" title="Copy client portal link">'
+        +'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px"><path d="M2 8l4 4 8-8"/></svg> Active</button>'
+        +'<button class="btn btn-sm" style="color:#f87171;border-color:rgba(248,113,113,.4);padding:4px 7px" onclick="revokePortalLink('+projId+',this)" title="Revoke portal link">✕</button>'
+        +'</div>';
+    }
+  });
 }
 function _renderPortalBtnInactive(projId) {
-  const c = document.getElementById('portal-btn-'+projId);
-  if (!c) return;
-  c.innerHTML = `<button class="btn btn-sm" style="width:100%;justify-content:center;color:#60a5fa;border-color:rgba(96,165,250,.4)"
-    onclick="sharePortalLink('${projId}',this)">
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px"><circle cx="12" cy="4" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="12" r="2"/><path d="M6 7.5l4-2M6 8.5l4 2"/></svg> Share client portal link
-  </button>`;
+  document.querySelectorAll('.portal-btn-container[data-proj="'+projId+'"]').forEach(function(c){
+    if(c.dataset.style==='full'){
+      c.innerHTML='<button class="btn btn-sm" style="color:#60a5fa;border-color:rgba(96,165,250,.4)" onclick="sharePortalLink(\''+projId+'\',this)">Generate portal link</button>';
+    } else {
+      c.innerHTML='<button class="btn btn-sm" style="color:#60a5fa;border-color:rgba(96,165,250,.4)" onclick="sharePortalLink(\''+projId+'\',this)" title="Generate client portal link">'
+        +'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:10px;height:10px"><circle cx="12" cy="4" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="12" r="2"/><path d="M6 7.5l4-2M6 8.5l4 2"/></svg> Portal</button>';
+    }
+  });
 }
 function copyPortalUrl(url, btn) {
   navigator.clipboard.writeText(url).catch(() => prompt('Copy this link:', url));
@@ -5318,28 +5326,17 @@ function copyPortalUrl(url, btn) {
   setTimeout(() => { btn.innerHTML = orig; }, 2000);
 }
 async function updatePortalButtons() {
-  // Disable all share buttons while we check which projects already have links
-  document.querySelectorAll('[id^="portal-btn-"]').forEach(c => {
-    const b = c.querySelector('button');
-    if (b && b.textContent.includes('Share')) b.disabled = true;
-  });
+  document.querySelectorAll('.portal-btn-container button').forEach(b => { b.disabled = true; });
   try {
     const res = await fetch(`${SUPA_REST}/pi_portal_links?select=project_id,token`, { headers: getAuthHeaders() });
     if (!res.ok) return;
     const links = await res.json();
-    // Re-enable any that have no link
-    document.querySelectorAll('[id^="portal-btn-"]').forEach(c => {
-      const b = c.querySelector('button');
-      if (b) b.disabled = false;
-    });
+    document.querySelectorAll('.portal-btn-container button').forEach(b => { b.disabled = false; });
     links.forEach(lnk => {
       _renderPortalBtnActive(lnk.project_id, `https://putzke.github.io/pi-registry/client-portal.html?token=${lnk.token}`);
     });
   } catch(_) {
-    document.querySelectorAll('[id^="portal-btn-"]').forEach(c => {
-      const b = c.querySelector('button');
-      if (b) b.disabled = false;
-    });
+    document.querySelectorAll('.portal-btn-container button').forEach(b => { b.disabled = false; });
   }
 }
 async function sharePortalLink(projId, btn) {
@@ -5369,7 +5366,7 @@ async function sharePortalLink(projId, btn) {
     const url = `https://putzke.github.io/pi-registry/client-portal.html?token=${token}`;
     await navigator.clipboard.writeText(url).catch(() => prompt('Copy this link:', url));
     _renderPortalBtnActive(projId, url);
-    const copyBtn = document.querySelector(`#portal-btn-${projId} button`);
+    const copyBtn = document.querySelector('.portal-btn-container[data-proj="'+projId+'"] [data-url]');
     if (copyBtn) {
       const ao = copyBtn.innerHTML;
       copyBtn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px"><path d="M2 8l4 4 8-8"/></svg> Copied!';
@@ -7241,6 +7238,11 @@ el.innerHTML=topbar
       +'<button class="btn btn-primary" onclick="publishClientSummary()">✦ Publish to Client Portal</button>'
       +'</div>'
       +'<div id="cs-pub-status" style="margin-top:8px;font-size:12px;color:var(--fog)"></div>'
+      +'<hr style="border:none;border-top:1px solid rgba(255,255,255,.08);margin:18px 0">'
+      +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);margin-bottom:10px">Client Portal Access</div>'
+      +'<div class="portal-btn-container" data-proj="'+projF+'" data-style="full">'
+      +'<button class="btn btn-sm" style="color:#60a5fa;border-color:rgba(96,165,250,.4)" onclick="sharePortalLink(\''+projF+'\',this)">Generate portal link</button>'
+      +'</div>'
       +'</div>'
       +csPrevHtml;
   }
@@ -7250,6 +7252,7 @@ el.innerHTML=topbar
     +tabStrip
     +tabContent
     +'</div></div>';
+  if(rptTab==='client-summary') setTimeout(updatePortalButtons,0);
 }
 
 function generatePISummary(){

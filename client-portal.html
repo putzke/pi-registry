@@ -199,6 +199,10 @@
       #app { display: block !important; height: auto; }
       .topbar, .mob-proj-bar, .chip-strip, .sidebar, .btn-print-label, .btn-icon-tb, .btn-signout, .btn-update, .proj-cards, .proj-select { display: none !important; }
       .date-bar { display: none !important; }
+      .no-print { display: none !important; }
+      .print-header { display: block !important; margin-bottom: 16px; }
+      .sum-toggle { background: #f9fafb; }
+      .sum-item { border-color: #d1d5db; }
       .app-layout { display: block; overflow: visible; }
       .content { overflow: visible; }
       .content-inner { padding: 0; max-width: none; }
@@ -218,6 +222,17 @@
       .card { margin-bottom: 12px; padding: 16px 20px; }
       .tbl-wrap { overflow-x: visible; }
     }
+
+    /* ── AI Summary ───────────────────────────────────────────────────── */
+    .sum-text { font-size: 14px; color: #374151; line-height: 1.75; white-space: pre-wrap; }
+    .sum-section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #6b7280; margin-bottom: 6px; }
+    .sum-list { display: flex; flex-direction: column; gap: 4px; }
+    .sum-item { border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+    .sum-toggle { width: 100%; text-align: left; background: #f9fafb; border: none; padding: 10px 14px; cursor: pointer; font-size: 13px; color: #374151; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .sum-toggle:hover { background: #f3f4f6; }
+    .sum-period { color: #6b7280; font-size: 12px; white-space: nowrap; }
+    .sum-body { padding: 14px 16px; border-top: 1px solid #e5e7eb; }
+    .print-header { display: none; }
 
     /* ── Responsive ───────────────────────────────────────────────────── */
     @media (max-width: 768px) {
@@ -310,6 +325,7 @@ const NAV = [
   { id:'issues',       label:'Issues',          icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1L1.5 13.5h13L8 1z"/><line x1="8" y1="6" x2="8" y2="9.5"/><circle cx="8" cy="11.5" r="0.6" fill="currentColor" stroke="none"/></svg>' },
   { id:'commitments',  label:'Commitments',     icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M5 8l2 2 4-4"/></svg>' },
   { id:'comments',     label:'Comment Periods', icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2v12L5 11H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10z"/><path d="M5 13.5l.7 1.5"/></svg>' },
+  { id:'summary',      label:'✦ AI Summary',    icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M5 8h6M5 5.5h6M5 10.5h4"/></svg>' },
 ];
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -317,6 +333,7 @@ let _view = 'overview';
 let _projId = null;
 let _projects = [];
 let _deliverables = [];
+let _clientSummaries = [];
 let _actFrom = dfltFrom();
 let _actTo   = dfltTo();
 let _tokenMode = false;
@@ -420,9 +437,10 @@ async function bootApp() {
       return;
     }
     const ids = access.map(r => r.project_id).join(',');
-    const [projects, deliverables] = await Promise.all([
+    const [projects, deliverables, clientSummaries] = await Promise.all([
       sbFetch(`pi_projects?id=in.(${ids})&select=id,name,pid,client,phase,status,start_date,end_date&order=name.asc`),
-      sbFetch(`pi_deliverables?project_id=in.(${ids})&select=id,project_id,title,deliverable_type,status,progress,due_date,milestone_end&order=due_date.asc.nullslast`)
+      sbFetch(`pi_deliverables?project_id=in.(${ids})&select=id,project_id,title,deliverable_type,status,progress,due_date,milestone_end&order=due_date.asc.nullslast`),
+      sbFetch(`pi_client_summaries?project_id=in.(${ids})&select=id,project_id,content_recent,content_full,period_start,period_end,published_at,published_by&order=published_at.desc`)
     ]);
     if (!projects.length) {
       setContent('<div class="error-box">No projects found. Please contact your project manager.</div>');
@@ -430,6 +448,7 @@ async function bootApp() {
     }
     _projects = projects;
     _deliverables = deliverables;
+    _clientSummaries = clientSummaries;
     _projId = projects[0].id;
     buildNav();
     setView('overview');
@@ -451,9 +470,10 @@ async function bootFromToken(token) {
       return;
     }
     const projId = rows[0].project_id;
-    const [projects, deliverables] = await Promise.all([
+    const [projects, deliverables, clientSummaries] = await Promise.all([
       sbFetch(`pi_projects?id=eq.${projId}&select=id,name,pid,client,phase,status,start_date,end_date`),
-      sbFetch(`pi_deliverables?project_id=eq.${projId}&select=id,project_id,title,deliverable_type,status,progress,due_date,milestone_end&order=due_date.asc.nullslast`)
+      sbFetch(`pi_deliverables?project_id=eq.${projId}&select=id,project_id,title,deliverable_type,status,progress,due_date,milestone_end&order=due_date.asc.nullslast`),
+      sbFetch(`pi_client_summaries?project_id=eq.${projId}&select=id,project_id,content_recent,content_full,period_start,period_end,published_at,published_by&order=published_at.desc`)
     ]);
     if (!projects.length) {
       setContent('<div class="error-box">Project not found. Please contact your project manager.</div>');
@@ -461,6 +481,7 @@ async function bootFromToken(token) {
     }
     _projects = projects;
     _deliverables = deliverables;
+    _clientSummaries = clientSummaries;
     _projId = projects[0].id;
     buildNav();
     setView('overview');
@@ -600,6 +621,7 @@ function renderSection(view) {
     case 'issues':       renderIssues();       break;
     case 'commitments':  renderCommitments();  break;
     case 'comments':     renderComments();     break;
+    case 'summary':      renderSummary();      break;
   }
 }
 
@@ -1020,6 +1042,76 @@ function progCell(d) {
     return `<div class="prog-wrap"><div class="prog-bar"><div class="prog-fill" style="width:${Math.min(100,Math.max(0,pct))}%"></div></div><span class="prog-lbl">${pct}%</span></div>`;
   }
   return d.progress ? esc(String(d.progress)) : '—';
+}
+
+// ── AI Summary ────────────────────────────────────────────────────────────────
+function renderSummary() {
+  const sums = _clientSummaries.filter(s => String(s.project_id) === String(_projId));
+  sums.sort((a,b) => a.published_at > b.published_at ? -1 : 1);
+  const latest = sums[0];
+
+  if (!latest) {
+    setContent(`${projSelector()}${projBanner()}
+      <div class="card">
+        <div class="card-title">✦ AI Project Summary</div>
+        <div class="empty-state">No summary has been published for this project yet. Your project manager will publish one soon.</div>
+      </div>`);
+    return;
+  }
+
+  const periodLabel = `${fmt(latest.period_start)} – ${fmt(latest.period_end)}`;
+  const pubDate = fmt(latest.published_at ? latest.published_at.slice(0,10) : '');
+  const pubByStr = latest.published_by ? `Published by ${esc(latest.published_by)}` : 'Published';
+
+  // Previous summaries
+  let prevHtml = '';
+  if (sums.length > 1) {
+    const prevItems = sums.slice(1).map((s, i) => {
+      const pl = `${fmt(s.period_start)} – ${fmt(s.period_end)}`;
+      const pd = fmt(s.published_at ? s.published_at.slice(0,10) : '');
+      return `<div class="sum-item" id="sum-prev-wrap-${i}">
+        <button class="sum-toggle" onclick="var b=document.getElementById('sum-prev-${i}');b.style.display=b.style.display==='none'?'block':'none'">
+          <span>${pd}${s.published_by ? ' · ' + esc(s.published_by) : ''}</span>
+          <span class="sum-period">${pl}</span>
+        </button>
+        <div id="sum-prev-${i}" style="display:none" class="sum-body">
+          <div class="sum-section-label">Recent Activity (${pl})</div>
+          <div class="sum-text">${esc(s.content_recent || '—')}</div>
+          <div class="sum-section-label" style="margin-top:14px">Full Project Summary</div>
+          <div class="sum-text">${esc(s.content_full || '—')}</div>
+        </div>
+      </div>`;
+    }).join('');
+    prevHtml = `<div class="card" style="margin-top:16px">
+      <div class="card-title">Previous Summaries</div>
+      <div class="sum-list">${prevItems}</div>
+    </div>`;
+  }
+
+  setContent(`${projSelector()}${projBanner()}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px" class="no-print">
+      <div>
+        <div style="font-size:11px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:.6px">✦ AI Project Summary</div>
+        <div style="font-size:12px;color:#9ca3af;margin-top:2px">${pubByStr} · ${pubDate} · Covers ${periodLabel}</div>
+      </div>
+      <button onclick="window.print()" style="padding:7px 16px;border-radius:7px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:14px;height:14px"><path d="M4 5V2h8v3"/><rect x="1" y="5" width="14" height="7" rx="1"/><path d="M4 9h8v5H4z"/></svg>
+        Print
+      </button>
+    </div>
+    <div class="print-header" style="display:none">
+      <div style="font-size:18px;font-weight:700;margin-bottom:4px">${esc((_projects.find(p => p.id === _projId)||{}).name||'Project')}</div>
+      <div style="font-size:13px;color:#6b7280">✦ AI Project Summary — ${pubByStr} · ${pubDate} · Covers ${periodLabel}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Recent Activity <span style="font-size:12px;font-weight:400;color:#9ca3af">(${periodLabel})</span></div>
+      <div class="sum-text">${esc(latest.content_recent || 'No recent summary available.')}</div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">Full Project Summary</div>
+      <div class="sum-text">${esc(latest.content_full || 'No full summary available.')}</div>
+    </div>
+    ${prevHtml}`);
 }
 </script>
 </body>

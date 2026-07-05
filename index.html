@@ -671,7 +671,8 @@ const SB_TABLES = {
   public_comments:      'pi_public_comments',
   tribal_consultations: 'pi_tribal_consultations',
   reports:              'pi_reports',
-  report_archive:       'pi_report_archive'
+  report_archive:       'pi_report_archive',
+  client_summaries:     'pi_client_summaries'
 };
 
 // Map our internal field names to Supabase column names
@@ -795,6 +796,11 @@ const SB_TO_INT = {
     reportSubtitle:'report_subtitle', periodStart:'period_start', periodEnd:'period_end',
     overallSummary:'overall_summary', sections:'sections',
     archivedAt:'archived_at', archivedBy:'archived_by'
+  },
+  pi_client_summaries: {
+    id:'id', projectId:'project_id', contentRecent:'content_recent',
+    contentFull:'content_full', periodStart:'period_start', periodEnd:'period_end',
+    publishedAt:'published_at', publishedBy:'published_by'
   }
 };
 
@@ -941,7 +947,7 @@ function cacheClear(k) { delete _cache[k]; delete _cacheTime[k]; }
 const _syncCache = {};
 
 async function loadAllData() {
-  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments','comment_periods','tribal_consultations','reports','report_archive'];
+  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments','comment_periods','tribal_consultations','reports','report_archive','client_summaries'];
   await Promise.all(tables.map(async t => { _syncCache[t] = await sbGet(t); }));
   // Load dismissed_pairs separately so a 403 doesn't block everything else
   try { _syncCache['dismissed_pairs'] = await sbGet('dismissed_pairs'); }
@@ -1595,6 +1601,7 @@ function renderDash(el){
   const nepaProjs=projs.filter(p=>p.nepaChecklist&&p.nepaChecklist.length>0);
   const avgNepaPct=nepaProjs.length>0?Math.round(nepaProjs.reduce((sum,p)=>{const cl=p.nepaChecklist||[];return sum+(cl.length>0?cl.filter(x=>x.checked).length/cl.length:0);},0)/nepaProjs.length*100):null;
   const active=projs.filter(p=>p.status==='Active');
+  const clientSums=DB.get('client_summaries')||[];
   function projCard(p){
     const psSt=ps.filter(x=>x.projectId===p.id);
     const champ=psSt.filter(x=>x.support==='Champion').length;
@@ -1615,6 +1622,10 @@ function renderDash(el){
     var champPct=Math.round(champ/sentTot*100);
     var neutPct=Math.round(neutCt/sentTot*100);
     var oppPct=100-champPct-neutPct;
+    var pSums=clientSums.filter(function(s){return String(s.projectId)===String(p.id);});
+    pSums.sort(function(a,b){return a.publishedAt>b.publishedAt?-1:1;});
+    var lastSum=pSums[0];
+    var portalChip=lastSum?'<span style="color:var(--teal);font-size:11px;font-weight:600;margin-left:auto">✦ Portal: '+fmt(lastSum.publishedAt.slice(0,10))+'</span>':'';
     card.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
       <div><div style="font-weight:600;font-size:14px;margin-bottom:2px">${p.name}</div>
       <div style="font-size:12px;color:var(--fog);font-family:var(--mono)">${p.pid} · ${p.client}</div></div>
@@ -1625,12 +1636,13 @@ function renderDash(el){
         <div style="width:${oppPct}%;background:var(--red)"></div>
       </div>
       ${(()=>{const cl=p.nepaChecklist||[];if(!cl.length)return'';const done=cl.filter(x=>x.checked).length;const pct=Math.round(done/cl.length*100);const col=pct===100?'var(--green)':pct>=60?'#4db6ac':'var(--sky-lt)';return'<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px"><span style="font-size:10px;color:var(--fog);font-weight:600;text-transform:uppercase;letter-spacing:.4px">NEPA checklist</span><span style="font-size:10px;color:'+col+';font-weight:700">'+done+'/'+cl.length+' ('+pct+'%)</span></div><div style="height:3px;border-radius:2px;overflow:hidden;background:rgba(255,255,255,.06)"><div style="width:'+pct+'%;height:100%;background:'+col+';border-radius:2px;transition:width .3s"></div></div></div>';})()}
-      <div style="display:flex;gap:12px;font-size:12px;flex-wrap:wrap;padding-top:8px;border-top:1px solid var(--border)">
+      <div style="display:flex;gap:12px;font-size:12px;flex-wrap:wrap;padding-top:8px;border-top:1px solid var(--border);align-items:center">
         <span style="color:var(--mist)">${psSt.length} contacts</span>
         <span style="color:var(--green)">${champ} champ.</span>
         ${oppTag}
         <span style="color:var(--slate)">${ints2} interactions</span>
         ${fuTag}
+        ${portalChip}
       </div>`;
     return card.outerHTML;
   }
@@ -7126,6 +7138,7 @@ el.innerHTML=topbar
     +tabBtn('reports','Quick Reports')
     +tabBtn('pi-editor','PI Report Editor')
     +tabBtn('archive','Report Archive',archiveCt||'')
+    +tabBtn('client-summary','✦ Client Summary')
     +'</div>';
 
   // tab content
@@ -7151,12 +7164,85 @@ el.innerHTML=topbar
       +'Use AI Draft buttons to generate narrative summaries for each section. Save your draft to Supabase and resume later on any device. '
       +'When you export to .docx, the report is automatically archived in the <strong>Report Archive</strong> tab.'
       +'</div>';
-  } else {
+  } else if(rptTab==='archive'){
     tabContent='<div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">'
       +'<div><div style="font-size:15px;font-weight:600;color:var(--white)">Report Archive</div>'
       +'<div style="font-size:12px;color:var(--slate);margin-top:2px">Snapshots automatically created each time you export a PI Report. Limit: '+ARCHIVE_LIMIT+' per project.</div></div>'
       +'</div>'
       +'<div id="rpt-archive-panel">'+archiveHtml+'</div>';
+  } else {
+    // client-summary tab
+    var allSums=(DB.get('client_summaries')||[]).filter(function(r){return String(r.projectId)===String(projF);});
+    allSums.sort(function(a,b){return a.publishedAt>b.publishedAt?-1:1;});
+    var latestSum=allSums[0]||null;
+    var csProj=((DB.get('projects')||[]).find(function(p){return String(p.id)===String(projF);})||{});
+    var recentFrom=latestSum?latestSum.publishedAt.slice(0,10):(csProj.startDate||localToday());
+    var todayStr=localToday();
+
+    var csStatusCard='';
+    if(latestSum){
+      csStatusCard='<div style="background:linear-gradient(135deg,rgba(0,160,140,.12),rgba(0,160,140,.06));border:1px solid rgba(0,160,140,.3);border-radius:10px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:flex-start;gap:16px">'
+        +'<span style="font-size:22px;line-height:1">✦</span>'
+        +'<div><div style="font-size:14px;font-weight:600;color:var(--teal);margin-bottom:4px">Last Published to Client Portal</div>'
+        +'<div style="font-size:13px;color:var(--mist)">'+(latestSum.publishedBy?'By '+esc(latestSum.publishedBy)+' · ':'')+fmt(latestSum.publishedAt.slice(0,10))+'</div>'
+        +'<div style="font-size:12px;color:var(--slate);margin-top:2px">Period: '+fmt(latestSum.periodStart)+' – '+fmt(latestSum.periodEnd)+'</div>'
+        +'</div></div>';
+    } else {
+      csStatusCard='<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:14px 18px;margin-bottom:20px">'
+        +'<span style="color:var(--fog);font-size:13px">No client summary published yet. Generate drafts below, review and edit, then publish to the client portal.</span>'
+        +'</div>';
+    }
+
+    var csPrevHtml='';
+    if(allSums.length>1){
+      csPrevHtml='<div style="margin-top:24px"><div style="font-size:13px;font-weight:600;color:var(--mist);margin-bottom:10px">Previous Summaries</div>';
+      allSums.slice(1,6).forEach(function(s,i){
+        csPrevHtml+='<div style="border:1px solid rgba(255,255,255,.08);border-radius:8px;margin-bottom:8px;overflow:hidden">'
+          +'<button onclick="var el=document.getElementById(\'cs-prev-'+i+'\');el.style.display=el.style.display===\'none\'?\'block\':\'none\'" '
+          +'style="width:100%;text-align:left;background:transparent;border:none;color:var(--mist);padding:10px 16px;cursor:pointer;font-size:13px;display:flex;justify-content:space-between;align-items:center">'
+          +'<span>Published '+fmt(s.publishedAt.slice(0,10))+(s.publishedBy?' · '+esc(s.publishedBy):'')+'</span>'
+          +'<span style="color:var(--fog);font-size:12px">'+fmt(s.periodStart)+' – '+fmt(s.periodEnd)+'</span>'
+          +'</button>'
+          +'<div id="cs-prev-'+i+'" style="display:none;padding:14px 16px;border-top:1px solid rgba(255,255,255,.08)">'
+          +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--teal);margin-bottom:6px">Recent Activity</div>'
+          +'<div style="font-size:13px;color:var(--mist);white-space:pre-wrap;line-height:1.6;margin-bottom:14px">'+esc(s.contentRecent||'—')+'</div>'
+          +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--teal);margin-bottom:6px">Full Project Summary</div>'
+          +'<div style="font-size:13px;color:var(--mist);white-space:pre-wrap;line-height:1.6">'+esc(s.contentFull||'—')+'</div>'
+          +'</div></div>';
+      });
+      csPrevHtml+='</div>';
+    }
+
+    var csInitRecent=latestSum?esc(latestSum.contentRecent||''):'';
+    var csInitFull=latestSum?esc(latestSum.contentFull||''):'';
+
+    tabContent=csStatusCard
+      +'<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:20px">'
+      +'<div style="font-size:15px;font-weight:600;color:var(--white);margin-bottom:18px">✦ Draft &amp; Publish Client Summary</div>'
+      // Recent summary
+      +'<div style="margin-bottom:18px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+      +'<label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--teal)">Recent Activity Summary <span style="color:var(--fog);text-transform:none;font-weight:400;font-size:11px">('+fmt(recentFrom)+' → '+fmt(todayStr)+')</span></label>'
+      +'<button class="btn btn-sm" id="btn-gen-recent" onclick="generateClientSummaryDraft(\'recent\')">AI Draft</button>'
+      +'</div>'
+      +'<textarea id="cs-recent" rows="7" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:var(--white);padding:10px 12px;font-size:13px;line-height:1.6;resize:vertical" placeholder="AI-generated or hand-written recent activity summary for the client…">'+csInitRecent+'</textarea>'
+      +'</div>'
+      // Full summary
+      +'<div style="margin-bottom:18px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+      +'<label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--teal)">Full Project Summary <span style="color:var(--fog);text-transform:none;font-weight:400;font-size:11px">(since '+fmt(csProj.startDate||todayStr)+')</span></label>'
+      +'<button class="btn btn-sm" id="btn-gen-full" onclick="generateClientSummaryDraft(\'full\')">AI Draft</button>'
+      +'</div>'
+      +'<textarea id="cs-full" rows="9" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:var(--white);padding:10px 12px;font-size:13px;line-height:1.6;resize:vertical" placeholder="AI-generated or hand-written full project summary for the client…">'+csInitFull+'</textarea>'
+      +'</div>'
+      // Published by + publish button
+      +'<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">'
+      +'<input id="cs-pub-by" type="text" placeholder="Published by (your name)" style="flex:1;min-width:180px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:var(--white);padding:9px 12px;font-size:13px">'
+      +'<button class="btn btn-primary" onclick="publishClientSummary()">✦ Publish to Client Portal</button>'
+      +'</div>'
+      +'<div id="cs-pub-status" style="margin-top:8px;font-size:12px;color:var(--fog)"></div>'
+      +'</div>'
+      +csPrevHtml;
   }
 
   el.innerHTML=topbar
@@ -8176,7 +8262,7 @@ function _setClaudeKey(key) {
   localStorage.removeItem('compass_claude_api_key'); // remove any legacy plain-text copy
 }
 
-async function _claudeNarrative(systemPrompt, userContent) {
+async function _claudeNarrative(systemPrompt, userContent, maxTokens) {
   var key = _getClaudeKey();
   if (!key) return null;
   try {
@@ -8190,7 +8276,7 @@ async function _claudeNarrative(systemPrompt, userContent) {
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 400,
+        max_tokens: maxTokens || 400,
         system: systemPrompt,
         messages: [{ role: 'user', content: userContent }]
       })
@@ -8214,6 +8300,129 @@ function _claudeSystemPrompt() {
     + 'Use plain, factual language. Do not use headers, bullet points, or markdown. '
     + 'Do not invent data — only summarize the facts provided. '
     + 'Write in third person past or present tense as appropriate.';
+}
+
+async function generateClientSummaryDraft(mode) {
+  var projF=S.projectFilter;
+  if(!projF){alert('Please select a project first.');return;}
+  var key=_getClaudeKey();
+  if(!key){alert('No Claude API key configured. Set one in Settings → AI Configuration.');return;}
+  var proj=(DB.get('projects')||[]).find(function(p){return String(p.id)===String(projF);});
+  if(!proj)return;
+  var allSums=(DB.get('client_summaries')||[]).filter(function(r){return String(r.projectId)===String(projF);});
+  allSums.sort(function(a,b){return a.publishedAt>b.publishedAt?-1:1;});
+  var latestSum=allSums[0]||null;
+  var recentFrom=latestSum?latestSum.publishedAt.slice(0,10):(proj.startDate||localToday());
+  var todayStr=localToday();
+  var allInts=(DB.get('interactions')||[]).filter(function(i){return String(i.projectId)===String(projF);});
+  var allIssues=(DB.get('issues')||[]).filter(function(i){return String(i.projectId)===String(projF);});
+  var allComms=(DB.get('commitments')||[]).filter(function(c){return String(c.projectId)===String(projF);});
+  var allMtgs=(DB.get('meetings')||[]).filter(function(m){return String(m.projectId)===String(projF);});
+  var allDels=(DB.get('deliverables')||[]).filter(function(d){return String(d.projectId)===String(projF);});
+  var allPS=DB.get('project_stakeholders').filter(function(x){return String(x.projectId)===String(projF);});
+  var btnId=mode==='recent'?'btn-gen-recent':'btn-gen-full';
+  var taId=mode==='recent'?'cs-recent':'cs-full';
+  var btn=document.getElementById(btnId);
+  var ta=document.getElementById(taId);
+  if(!ta)return;
+  if(ta.value.trim()){if(!confirm('Replace current draft with AI-generated content?'))return;}
+  if(btn){btn.disabled=true;btn.textContent='…';}
+  var sysPr,userContent,tokens;
+  if(mode==='recent'){
+    var recentInts=allInts.filter(function(i){return i.date>=recentFrom;});
+    var recentMtgs=allMtgs.filter(function(m){return m.date>=recentFrom;});
+    var openIssues=allIssues.filter(function(i){return i.status==='Open'||i.status==='In Progress';});
+    var openComms=allComms.filter(function(c){return c.status==='Open'||c.status==='Overdue';});
+    sysPr='You are a public involvement consultant generating a client-facing project update. '
+      +'Write a concise narrative (150–220 words) summarizing recent public engagement activity. '
+      +'Be factual, professional, and client-appropriate. Do not reveal internal process details. '
+      +'Do not use markdown, headers, or bullet points. Write in flowing prose. '
+      +'Do not invent data — only summarize what is provided.';
+    userContent='Project: '+proj.name+' ('+proj.pid+')\nClient: '+(proj.client||'—')+'\n'
+      +'Reporting period: '+recentFrom+' to '+todayStr+'\n\n'
+      +'Interactions this period: '+recentInts.length+'\n'
+      +(recentInts.length>0?recentInts.slice(0,8).map(function(i){return'- '+(i.date||'')+': '+(i.channel||'')+' — '+(i.subject||'')+(i.summary?' ('+i.summary.slice(0,80)+')':'');}).join('\n'):'')+'\n\n'
+      +'Public meetings: '+recentMtgs.length+(recentMtgs.length>0?' — '+recentMtgs.map(function(m){return(m.title||'Meeting')+(m.attendanceCount?' ('+m.attendanceCount+' att.)':'');}).join('; '):'')+'\n'
+      +'Open issues: '+openIssues.length+(openIssues.length>0?' — '+openIssues.slice(0,3).map(function(i){return i.title;}).join('; '):'')+'\n'
+      +'Open commitments: '+openComms.length+'\n'
+      +'Generate a concise recent activity summary for the client.';
+    tokens=450;
+  } else {
+    var extPS=allPS.filter(function(x){return(x.stakeholderRole||'External')==='External';});
+    var champCt=extPS.filter(function(x){return x.support==='Champion';}).length;
+    var oppCt=extPS.filter(function(x){return x.support==='Opponent';}).length;
+    var openIssuesFull=allIssues.filter(function(i){return i.status==='Open'||i.status==='In Progress';});
+    var resolvedIssues=allIssues.filter(function(i){return i.status==='Resolved'||i.status==='Closed';});
+    var doneDels=allDels.filter(function(d){return d.status==='Complete';});
+    var totalMtgAtt=allMtgs.reduce(function(s,m){return s+(parseInt(m.attendanceCount,10)||0);},0);
+    sysPr='You are a public involvement consultant generating a comprehensive client-facing project summary. '
+      +'Write a narrative (250–320 words) covering the full scope of public involvement to date. '
+      +'Highlight key milestones, stakeholder engagement levels, and compliance progress. '
+      +'Be factual, professional, and client-appropriate. '
+      +'Do not use markdown, headers, or bullet points. Write in flowing prose. '
+      +'Do not invent data — only summarize what is provided.';
+    userContent='Project: '+proj.name+' ('+proj.pid+')\nClient: '+(proj.client||'—')+'\nPhase: '+(proj.phase||'—')+'\n'
+      +'NEPA classification: '+(proj.nepaClassification||'—')+'\nProject start: '+(proj.startDate||'—')+'\nSummary through: '+todayStr+'\n\n'
+      +'Stakeholders: '+allPS.length+' total ('+extPS.length+' external, '+champCt+' champions, '+oppCt+' opponents)\n'
+      +'Total interactions logged: '+allInts.length+'\n'
+      +'Public meetings: '+allMtgs.length+(totalMtgAtt>0?' ('+totalMtgAtt+' total attendees)':'')+'\n'
+      +'Deliverables: '+doneDels.length+'/'+allDels.length+' complete\n'
+      +'Issues: '+allIssues.length+' total ('+openIssuesFull.length+' open, '+resolvedIssues.length+' resolved)\n'
+      +(allIssues.length>0?'Key issues: '+allIssues.slice(0,4).map(function(i){return i.title+' ['+i.status+']';}).join('; ')+'\n':'')
+      +'Open commitments: '+allComms.filter(function(c){return c.status==='Open'||c.status==='Overdue';}).length+'\n'
+      +'Generate a comprehensive full project summary for the client.';
+    tokens=650;
+  }
+  try {
+    var text=await _claudeNarrative(sysPr,userContent,tokens);
+    if(text)ta.value=text;
+  } finally {
+    if(btn){btn.disabled=false;btn.textContent='AI Draft';}
+  }
+}
+
+async function publishClientSummary() {
+  var projF=S.projectFilter;
+  if(!projF){alert('Please select a project first.');return;}
+  var ta1=document.getElementById('cs-recent');
+  var ta2=document.getElementById('cs-full');
+  var pubByEl=document.getElementById('cs-pub-by');
+  var statusEl=document.getElementById('cs-pub-status');
+  if(!ta1||!ta2)return;
+  var recentText=(ta1.value||'').trim();
+  var fullText=(ta2.value||'').trim();
+  if(!recentText&&!fullText){alert('Please enter at least one summary before publishing.');return;}
+  var proj=(DB.get('projects')||[]).find(function(p){return String(p.id)===String(projF);});
+  if(!proj)return;
+  var allSums=(DB.get('client_summaries')||[]).filter(function(r){return String(r.projectId)===String(projF);});
+  allSums.sort(function(a,b){return a.publishedAt>b.publishedAt?-1:1;});
+  var latestSum=allSums[0]||null;
+  var periodStart=latestSum?latestSum.publishedAt.slice(0,10):(proj.startDate||localToday());
+  var periodEnd=localToday();
+  var newRow={
+    projectId:projF,
+    contentRecent:recentText||null,
+    contentFull:fullText||null,
+    periodStart:periodStart,
+    periodEnd:periodEnd,
+    publishedBy:(pubByEl?pubByEl.value.trim():'')||null
+  };
+  if(statusEl){statusEl.textContent='Publishing…';statusEl.style.color='var(--fog)';}
+  try {
+    var newId=await sbAdd('client_summaries',newRow);
+    if(newId){
+      newRow.id=newId;
+      newRow.publishedAt=new Date().toISOString();
+      _syncCache['client_summaries']=(_syncCache['client_summaries']||[]).concat([newRow]);
+      S.rptTab='client-summary';
+      renderReports(document.getElementById('main'));
+    } else {
+      if(statusEl){statusEl.textContent='Publish failed — see console.';statusEl.style.color='var(--red)';}
+    }
+  } catch(e) {
+    console.error('publishClientSummary error:',e);
+    if(statusEl){statusEl.textContent='Error: '+e.message;statusEl.style.color='var(--red)';}
+  }
 }
 
 async function generateSectionDraft(secType, textareaIdx) {

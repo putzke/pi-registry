@@ -9434,7 +9434,9 @@ function renderLivePreview() {
         if (_perCt) counts.push(_perCt + ' comment period' + (_perCt !== 1 ? 's' : ''));
       }
       if (counts.length) {
-        html += '<div style="font-size:11px;color:#888;font-style:italic;background:#f0f0f0;border-radius:4px;padding:5px 10px;margin-bottom:8px">Auto-populated · ' + counts.join(' · ') + '</div>';
+        var _days = (pstart && pend) ? Math.round((new Date(pend) - new Date(pstart)) / 86400000) + 1 : null;
+        var _dayLabel = _days ? _days + '-day report period · ' : '';
+        html += '<div style="font-size:11px;color:#888;font-style:italic;background:#f0f0f0;border-radius:4px;padding:5px 10px;margin-bottom:8px">' + _dayLabel + counts.join(' · ') + '</div>';
       }
       // Data table (when toggled on)
       if (sec.showTable && TABLE_ELIGIBLE_TYPES.indexOf(sec.type) >= 0) {
@@ -9773,7 +9775,8 @@ function _buildArchivedPreviewHTML(rec, proj) {
     html += '<div style="margin-bottom:22px">';
     html += '<div style="font-size:13px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #cdd4dc;padding-bottom:4px;margin-bottom:10px">'+escHtml(sec.title||'')+'</div>';
     if (isAuto) {
-      html += '<div style="font-size:11px;color:#888;font-style:italic;background:#f0f0f0;border-radius:4px;padding:5px 10px;margin-bottom:8px">Auto-populated section (snapshot)</div>';
+      var _snapDays = (rec.periodStart && rec.periodEnd) ? Math.round((new Date(rec.periodEnd) - new Date(rec.periodStart)) / 86400000) + 1 : null;
+      html += '<div style="font-size:11px;color:#888;font-style:italic;background:#f0f0f0;border-radius:4px;padding:5px 10px;margin-bottom:8px">'+(_snapDays ? _snapDays+'-day report period · data snapshot' : 'Data snapshot')+'</div>';
     } else if (sec.content) {
       html += '<ul style="margin:0 0 8px 0;padding-left:20px">';
       sec.content.split('\n').forEach(function(line){ if(line.trim()) html += '<li style="margin-bottom:4px;font-size:13px;color:#222">'+escHtml(line.trim())+'</li>'; });

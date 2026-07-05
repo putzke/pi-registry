@@ -5231,7 +5231,7 @@ function renderProjects(el){
     <div style="padding:20px">
     ${projs.length===0
       ? `<div style="text-align:center;padding:60px;color:var(--fog);font-size:14px">${tab==='active'?'No active projects. Create one to get started.':'No archived projects yet.'}</div>`
-      : `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+      : `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:start">
       ${projs.map(p=>{
         const psSt=ps.filter(x=>x.projectId===p.id);
         const champ=psSt.filter(x=>x.support==='Champion').length;

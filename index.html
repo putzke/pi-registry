@@ -12830,6 +12830,14 @@ function saveTribal(){
   if(!projId){alert('Please select a project.');return;}
   const ctype=v('f-tctype');
   if(!ctype){alert('Please select a consultation type.');return;}
+  // Email validation
+  const _emailOk=e=>!e||/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+  if(!_emailOk(v('f-toffemail').trim())){alert('Official email address is not valid.');return;}
+  if(!_emailOk(v('f-temail').trim())){alert('THPO email address is not valid.');return;}
+  // Phone validation — digits, spaces, dashes, dots, parens, +; 7–15 digits total
+  const _phoneOk=p=>{if(!p)return true;if(!/^[0-9\s\-().+]+$/.test(p))return false;const d=(p.match(/\d/g)||[]).length;return d>=7&&d<=15;};
+  if(!_phoneOk(v('f-toffphone').trim())){alert('Official phone number is not valid. Use digits, spaces, dashes, or parentheses (7–15 digits).');return;}
+  if(!_phoneOk(v('f-tphone').trim())){alert('THPO phone number is not valid. Use digits, spaces, dashes, or parentheses (7–15 digits).');return;}
   const data={
     id:S.editTribalId||DB.uid(),
     tribeName:name,

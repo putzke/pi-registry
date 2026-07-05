@@ -995,8 +995,9 @@ const DB = {
         await sbUpdate(table, item.id, item);
       }
     }
+    const _textPKTables = new Set(['comment_periods','public_comments','tribal_consultations']);
     for (const item of oldArr) {
-      if (item.id && !newMap[item.id] && /^\d+$/.test(item.id)) {
+      if (item.id && !newMap[item.id] && (/^\d+$/.test(item.id) || _textPKTables.has(table))) {
         await sbDelete(table, item.id);
       }
     }

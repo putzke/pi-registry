@@ -5301,7 +5301,7 @@ function renderProjects(el){
               <button class="btn btn-sm" style="margin-left:auto;color:var(--green);border-color:rgba(40,168,112,.4)" onclick="exportProject('${p.id}')">
                 <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg> Export
               </button>
-              <div class="portal-btn-container" data-proj="${p.id}" data-style="compact">
+              <div class="portal-btn-container" data-proj="${p.id}" data-style="compact" style="display:flex;align-items:center;gap:3px">
                 <button class="btn btn-sm" style="color:#60a5fa;border-color:rgba(96,165,250,.4)" onclick="sharePortalLink('${p.id}',this)" title="Generate client portal link">
                   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:10px;height:10px"><circle cx="12" cy="4" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="12" r="2"/><path d="M6 7.5l4-2M6 8.5l4 2"/></svg> Portal
                 </button>
@@ -5328,11 +5328,9 @@ function _renderPortalBtnActive(projId, url) {
         +'<button class="btn btn-sm" style="color:#f87171;border-color:rgba(248,113,113,.4)" onclick="revokePortalLink('+projId+',this)">Revoke</button>'
         +'</div></div>';
     } else {
-      c.innerHTML='<div style="display:flex;gap:3px">'
-        +'<button class="btn btn-sm" style="color:#34d399;border-color:rgba(52,211,153,.4)" data-url="'+url+'" onclick="copyPortalUrl(this.dataset.url,this)" title="Copy client portal link">'
+      c.innerHTML='<button class="btn btn-sm" style="color:#34d399;border-color:rgba(52,211,153,.4)" data-url="'+url+'" onclick="copyPortalUrl(this.dataset.url,this)" title="Copy client portal link">'
         +'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px"><path d="M2 8l4 4 8-8"/></svg> Active</button>'
-        +'<button class="btn btn-sm" style="color:#f87171;border-color:rgba(248,113,113,.4);padding:4px 7px" onclick="revokePortalLink('+projId+',this)" title="Revoke portal link">✕</button>'
-        +'</div>';
+        +'<button class="btn btn-sm" style="color:#f87171;border-color:rgba(248,113,113,.4);padding:4px 7px" onclick="revokePortalLink('+projId+',this)" title="Revoke portal link">✕</button>';
     }
   });
 }

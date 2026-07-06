@@ -255,6 +255,50 @@ drafting already planned, rather than requiring a separate dev track.
 internal-only fields/views, design the Client Viewer role and login flow,
 and validate with one or two friendly DOT/municipal contacts first.
 
+## FUTURE — Dialpad Hotline Capture Integration (identified July 6, 2026)
+
+**Strategic note:** Acknowledged as a workflow efficiency feature rather than a
+core differentiator. Teams Phone voicemail has no usable API; this replaces it
+with a platform that exposes full transcript and call metadata programmatically.
+Useful, but validate against other PI firms' hotline workflows before investing
+— this may be Sunrise-specific friction rather than an industry-wide PI pain point.
+
+**What:** Replace Teams Phone ring groups with Dialpad Connect Pro. Use Dialpad's
+webhook + REST API to automatically capture voicemail transcripts, caller ID, call
+metadata, and AI call transcripts into COMPASS. Build a "Hotline Capture" UI panel
+for reviewing, editing, and converting captures into logged `pi_interactions`.
+
+**Why Teams Phone can't work:** No usable API for voicemail transcript extraction.
+Dialpad exposes `transcription_text`, `contact.phone`, `contact.name`,
+`voicemail_link`, `internal_number`, and full AI call transcripts via webhook
+events and GET endpoints (Call GET, Call Transcript GET at 1,200 req/min).
+
+**Platform cost:** Dialpad Connect Pro, 3 users ($25/user/mo annual) + 6–7
+additional local hotline numbers ($5/number/mo) = ~$95–110/month total.
+Numbers can be ported from Teams via 10-digit porting PIN.
+
+**Architecture:**
+
+New Supabase table `pi_hotline_captures`:
+```
+call_id, caller_phone, caller_name, hotline_number, direction, call_type,
+transcript_text, voicemail_url, call_duration, call_timestamp,
+status, converted_interaction_id, project_id, notes, reviewed_by
+```
+
+- Supabase Edge Function as webhook receiver (Dialpad → Edge Function → `pi_hotline_captures`)
+- Hotline-to-project mapping table (maps each hotline number to a `pi_projects` row)
+- New nav view or Settings panel: **Hotline Capture inbox** — list of unreviewed captures
+- Per-capture review card: edit transcript, assign project, fill in interaction fields
+- "Convert to Interaction" button: creates `pi_interactions` row, sets `converted_interaction_id`, marks capture as converted
+
+**Dependencies before building:**
+- Dialpad account + API OAuth credentials
+- Supabase Edge Functions enabled on project
+- New `connect-src` entry in CSP (line ~6) for Dialpad webhook/API domain
+- Design session to define inbox UI, mapping UI, and conversion flow
+- Decision: new nav view vs. embedded in Interactions view vs. Settings panel
+
 ## Supabase project
 - URL: `https://ncfbblhlsiglxkoiounv.supabase.co`
 - Anon key in `index.html` line ~505 (`SUPA_KEY`)

@@ -8165,7 +8165,7 @@ function saveAsPdf(){
 }
 
 // Section types that have row-based data eligible for table output
-var TABLE_ELIGIBLE_TYPES = ['auto-concerns','auto-intlog','auto-del','auto-events','auto-followups','auto-comments','auto-commitments','auto-issues'];
+var TABLE_ELIGIBLE_TYPES = ['auto-concerns','auto-intlog','auto-del','auto-events','auto-followups','auto-comments','auto-commitments','auto-issues','auto-comment-matrix'];
 
 function getDefaultSections(){
   return[
@@ -8184,7 +8184,7 @@ function getAvailableSections(){
     {id:'followup-status',title:'Follow-up status',type:'auto-followups'},
     {id:'sentiment',title:'Sentiment & engagement matrix',type:'auto-sentiment'},
     {id:'deliverables',title:'Deliverable / scope status',type:'auto-del'},
-    {id:'comment-matrix',title:'Public comment matrix',type:'auto-comments'},
+    {id:'comment-response-matrix',title:'Public Comment Response Matrix',type:'auto-comment-matrix'},
     {id:'events-log',title:'Events & outreach log',type:'auto-events'},
     {id:'issues',title:'Issues tracker',type:'auto-issues'},
     {id:'commitments',title:'Commitments tracker',type:'auto-commitments'},
@@ -8249,6 +8249,7 @@ function getSectionDesc(type){
     'auto-sentiment':'Auto-populates a 3x3 stakeholder engagement matrix plus stakeholder positions grouped by Champion, Neutral, and Opponent.',
     'auto-del':'Auto-populates deliverable progress showing contracted vs delivered counts.',
     'auto-comments':'Auto-populates public comments received with response status for formal documentation.',
+    'auto-comment-matrix':'Auto-populates formal public comments grouped by topic/category with response status — formatted as a response matrix for FHWA/NEPA documentation.',
     'auto-events':'Auto-populates all logged public events and outreach activities with attendance counts and notes.',
     'auto-issues':'Auto-populates open and resolved issues with priority, status, category, and linked interaction details.',
     'auto-commitments':'Auto-populates open and fulfilled commitments made to stakeholders, grouped by category and status.',
@@ -8769,6 +8770,27 @@ function _buildSectionDraft(secType) {
     return txt10;
   }
 
+  if (secType === 'auto-comment-matrix') {
+    var pcAll = (DB.get('public_comments')||[]).filter(function(c){ return String(c.projectId)===String(projF); });
+    if (pcAll.length === 0) return null;
+    var pcCats = {};
+    pcAll.forEach(function(c){
+      var k = c.category || 'Uncategorized';
+      if (!pcCats[k]) pcCats[k] = {total:0, responded:0, pending:0, summaries:[]};
+      pcCats[k].total++;
+      if (c.responseStatus === 'Responded' || c.responseStatus === 'No response needed') pcCats[k].responded++;
+      else pcCats[k].pending++;
+      if (c.summary) pcCats[k].summaries.push(c.summary.slice(0,120));
+    });
+    var pcPending = pcAll.filter(function(c){ return c.responseStatus !== 'Responded' && c.responseStatus !== 'No response needed'; }).length;
+    var lines = Object.keys(pcCats).map(function(cat){
+      var g = pcCats[cat];
+      return cat+' ('+g.total+' comment'+(g.total!==1?'s':'')+', '+g.responded+' responded, '+g.pending+' pending): '+g.summaries.slice(0,3).join('; ');
+    });
+    var txt_pc = pcAll.length+' formal public comment'+(pcAll.length!==1?'s':'')+' received across '+Object.keys(pcCats).length+' topic'+(Object.keys(pcCats).length!==1?'s':'')+'. '+pcPending+' pending response. Categories: '+lines.join(' | ');
+    return txt_pc;
+  }
+
   if (secType === 'auto-nepa-compliance') {
     var cl_n = proj.nepaChecklist || [];
     if (cl_n.length === 0) return null;
@@ -9272,6 +9294,52 @@ function _buildSectionPreviewTable(secType, projF, pstart, pend, includeInternal
         +(i.followUpNote?'<div style="font-size:10px;color:#595959">'+escHtml(i.followUpNote.slice(0,80))+'</div>':'')+'</td></tr>';
     });
 
+  } else if (secType === 'auto-comment-matrix') {
+    var pcMat = (DB.get('public_comments')||[]).filter(function(c){ return String(c.projectId)===String(projF); });
+    var allStakesMat = DB.get('stakeholders');
+    var pcMatCats = {};
+    pcMat.forEach(function(c){
+      var k = c.category || 'Uncategorized';
+      if (!pcMatCats[k]) pcMatCats[k] = [];
+      pcMatCats[k].push(c);
+    });
+    tbl += '<colgroup><col style="width:18%"><col style="width:6%"><col style="width:6%"><col style="width:35%"><col style="width:35%"></colgroup>'
+      +'<thead><tr>'
+      +'<th style="'+thStyle+'">Topic / Category</th>'
+      +'<th style="'+thStyle+'">#</th>'
+      +'<th style="'+thStyle+'">EJ/LEP</th>'
+      +'<th style="'+thStyle+'">Comment summaries</th>'
+      +'<th style="'+thStyle+'">Response &amp; disposition</th>'
+      +'</tr></thead><tbody>';
+    if (!pcMat.length) {
+      tbl += '<tr><td colspan="5" style="'+tdStyle+';color:#aaa;font-style:italic">No formal public comments on record for this project.</td></tr>';
+    } else {
+      Object.keys(pcMatCats).forEach(function(cat, ri){
+        var grp = pcMatCats[cat];
+        var ejCt = grp.filter(function(c){
+          if (!c.linkedStakeholderId) return false;
+          var sk = allStakesMat.find(function(x){ return String(x.id)===String(c.linkedStakeholderId); });
+          return sk && (sk.underserved || sk.lep || sk.ejCommunity);
+        }).length;
+        var summaries = grp.map(function(c){ return escHtml((c.summary||'').slice(0,100)); }).join('<br>');
+        var responded = grp.filter(function(c){ return c.responseStatus==='Responded'||c.responseStatus==='No response needed'; }).length;
+        var pending = grp.length - responded;
+        var dispColor = pending > 0 ? '#b36b00' : '#1a7a50';
+        var dispTxt = responded > 0 ? responded+' responded' : '';
+        if (pending > 0) dispTxt += (dispTxt?', ':'')+pending+' pending';
+        var respTexts = grp.filter(function(c){ return c.responseText; }).map(function(c){ return escHtml(c.responseText.slice(0,120)); }).join('<br>');
+        tbl += '<tr style="background:'+(ri%2===0?'#fff':'#f7f9fb')+'">'
+          +'<td style="'+tdStyle+';font-weight:600">'+escHtml(cat)+'</td>'
+          +'<td style="'+tdStyle+';text-align:center">'+grp.length+'</td>'
+          +'<td style="'+tdStyle+';text-align:center;color:'+(ejCt>0?'#b36b00':'#aaa')+'">'+ejCt+'</td>'
+          +'<td style="'+tdStyle+'">'+summaries+'</td>'
+          +'<td style="'+tdStyle+'">'
+          +'<div style="font-weight:600;color:'+dispColor+';margin-bottom:3px">'+dispTxt+'</div>'
+          +(respTexts?'<div style="font-size:10px;color:#595959">'+respTexts+'</div>':'')
+          +'</td></tr>';
+      });
+    }
+
   } else if (secType === 'auto-commitments') {
     var comms = (DB.get('commitments')||[]).filter(function(c){ return String(c.projectId)===String(projF); })
       .sort(function(a,b){ if(a.status==='Fulfilled'&&b.status!=='Fulfilled')return 1; if(a.status!=='Fulfilled'&&b.status==='Fulfilled')return -1; return 0; });
@@ -9425,6 +9493,7 @@ function renderLivePreview() {
       if (sec.type === 'auto-concerns' || sec.type === 'auto-intlog') counts.push(filteredInts.length + ' interaction' + (filteredInts.length !== 1 ? 's' : '') + ' in period');
       if (sec.type === 'auto-del') counts.push(dels.length + ' deliverable' + (dels.length !== 1 ? 's' : ''));
       if (sec.type === 'auto-comments') counts.push(pcomms.length + ' public comment' + (pcomms.length !== 1 ? 's' : ''));
+      if (sec.type === 'auto-comment-matrix') counts.push(pcomms.length + ' public comment' + (pcomms.length !== 1 ? 's' : '') + ' across ' + (function(){ var cats={}; pcomms.forEach(function(c){ var k=c.category||'Uncategorized'; cats[k]=1; }); return Object.keys(cats).length; })() + ' topic' + (pcomms.length !== 1 ? 's' : ''));
       if (sec.type === 'auto-contacts') {
         var extCt = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; }).length;
         counts.push(extCt + ' external contact' + (extCt !== 1 ? 's' : ''));
@@ -10480,6 +10549,49 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
             var org=sk?sk.org||'':'';
             var status=i.followUpDone?'Responded':'Pending';
             xml+=bulletRuns([{text:i.date+' — '+name+(org?' ('+org+')':''),bold:true},{text:' | '+i.channel+' | '+i.summary+' | Response: '+status,bold:false}]);
+          });
+        }
+      }
+
+    } else if(sec.type==='auto-comment-matrix'){
+      var pcMx=(DB.get('public_comments')||[]).filter(function(c){return String(c.projectId)===String(proj.id);});
+      var pcMxStakes=DB.get('stakeholders');
+      if(pcMx.length===0){
+        xml+=bullet('No formal public comments on record for this project.');
+      } else {
+        var pcMxCats={};
+        pcMx.forEach(function(c){ var k=c.category||'Uncategorized'; if(!pcMxCats[k])pcMxCats[k]=[]; pcMxCats[k].push(c); });
+        var pcPend=pcMx.filter(function(c){return c.responseStatus!=='Responded'&&c.responseStatus!=='No response needed';}).length;
+        xml+=para(pcMx.length+' formal public comment'+(pcMx.length!==1?'s':'')+' received across '+Object.keys(pcMxCats).length+' topic'+(Object.keys(pcMxCats).length!==1?'s':'')+'. '+pcPend+' pending response.');
+        xml+=spacer();
+        if(sec.showTable){
+          var mxCols=[2200,500,500,3560,2800]; var mxHdrs=['Topic / Category','#','EJ/LEP','Comment Summaries','Response & Disposition'];
+          var mxRows=tblHdrRow(mxHdrs,mxCols);
+          Object.keys(pcMxCats).forEach(function(cat,ri){
+            var grp=pcMxCats[cat];
+            var ejCt=grp.filter(function(c){
+              if(!c.linkedStakeholderId)return false;
+              var sk=pcMxStakes.find(function(x){return String(x.id)===String(c.linkedStakeholderId);});
+              return sk&&(sk.underserved||sk.lep||sk.ejCommunity);
+            }).length;
+            var summTxt=grp.map(function(c){return(c.summary||'').slice(0,150);}).join('; ');
+            var responded=grp.filter(function(c){return c.responseStatus==='Responded'||c.responseStatus==='No response needed';}).length;
+            var pending=grp.length-responded;
+            var dispTxt=(responded>0?responded+' responded':'')+(pending>0?(responded>0?', ':'')+pending+' pending':'');
+            var respTxt=grp.filter(function(c){return c.responseText;}).map(function(c){return c.responseText.slice(0,150);}).join(' | ');
+            mxRows+=tblDataRow([cat,String(grp.length),ejCt>0?String(ejCt):'—',summTxt.slice(0,300),(dispTxt+(respTxt?' — '+respTxt:'')).slice(0,300)],mxCols,ri%2!==0);
+          });
+          xml+=tblWrap(9560,mxCols,mxRows); xml+=spacer();
+        } else {
+          Object.keys(pcMxCats).forEach(function(cat){
+            var grp=pcMxCats[cat];
+            var responded=grp.filter(function(c){return c.responseStatus==='Responded'||c.responseStatus==='No response needed';}).length;
+            xml+=bulletRuns([{text:cat+' ('+grp.length+' comment'+(grp.length!==1?'s':'')+', '+responded+' responded)',bold:true}]);
+            grp.forEach(function(c){ if(c.summary)xml+=bulletRuns([{text:'  • '+(c.summary||'').slice(0,200),bold:false}]); });
+            if(grp.some(function(c){return c.responseText;})){
+              var rt=grp.filter(function(c){return c.responseText;}).map(function(c){return c.responseText.slice(0,150);}).join('; ');
+              xml+=bulletRuns([{text:'  Response: '+rt.slice(0,300),bold:false}]);
+            }
           });
         }
       }

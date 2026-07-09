@@ -93,12 +93,6 @@ pi_report_archive   -- exported report snapshots (up to 50 per project)
 - CSP `connect-src` includes `https://api.anthropic.com`
 - Confirmation dialog required before bulk AI calls (cost estimate shown)
 
-## Cross-app consistency rule
-After every change to `index.html`, always check whether the same change (feature, bug fix, data field, SB_TO_INT mapping, etc.) should also be applied to `mobile.html` and/or `importer.html`. Explicitly state the assessment — even if the answer is "not applicable here" — so Jeff can confirm before closing the task. Do not silently skip this check.
-
-- **`mobile.html`** — field companion for logging interactions, managing contacts, follow-ups, and issues. Apply data field changes (new columns, SB_TO_INT mappings) and interaction/stakeholder bug fixes if the same flow exists in mobile.
-- **`importer.html`** — bulk CSV import for stakeholders and interactions. Apply new stakeholder/interaction field mappings and AUTO_MAP entries if the field is importable.
-
 ## Important conventions
 - **No `fmtDate()`** — use `fmt(d)` (defined ~line 1311)
 - **No build step** — edit `index.html` directly, syntax-check with:
@@ -131,15 +125,12 @@ Bulk CSV import wizard for stakeholders and interactions. ~2,420 lines.
 - `sbAdd()` at line ~746 calls `r.json()` directly — safe because it uses plain POST (not upsert), so body is never empty
 
 ## Pending / next tasks
-**Done this session:**
-- ~~Manual "Save to archive" button~~ — built: `manualArchiveReport()` (line ~9041), wired to the "Save to archive" button in `openPIReport()` toolbar. Saves draft, checkpoints to `pi_report_archive`, enforces `ARCHIVE_LIMIT`, refreshes archive panel in place.
-- ~~NEPA Compliance section in PI Report Editor~~ — built: section type `'nepa-compliance'` in Add Section dropdown, auto-populates with live checklist group progress + comment period compliance, AI Draft button via `_claudeNarrative()`.
-- ~~Absorb popup report windows~~ — built: new `showInlineReport(html, title)` helper (~line 10000) renders an in-app overlay with an iframe + Print/Close buttons instead of `window.open()`. All 8 report generators (`exportIssuesPdf`, `generatePISummary`, `generateNepaComplianceReport`, `_openRptPopup`, `_portfolioPrintWin`, `printStakeholderMap`, `printEngagementMatrix`, `_mapPrint`) now call it. The bulk-import tool popup (`openImportTool`) intentionally still uses `window.open()` — it's a separate app window, not a report.
-- ~~NEPA checklist progress bar on project cards~~ — verified working, no bug. Confirmed via headless-browser test (injected a synthetic project with a CE checklist directly into `_syncCache`, since this sandbox has no network path to Supabase): the progress bar on Dashboard row 4 (`renderDash`, ~line 2007), the Projects view card (`renderProjects`, ~line 5161), and the full checklist detail in the Deliverables view (~line 4754) all read `p.nepaChecklist` fresh off `DB.get('projects')` and agreed exactly (e.g. `2/33 · 6%`) after calling the real `toggleNepaCheck()` — including immediately after toggling, with no reload needed. This relies on last session's deep-clone fix in `DB.get`/`DB.set`, which is doing its job.
-
-**Still open:**
-1. **AI cross-report trend summary testing** — needs 2+ real exports to test fully
-2. **Continue testing** stakeholders LEP/EJ checkboxes, public meeting equity toggle, public comments nav/form
+1. **Manual "Save to archive" button** — checkpoint a draft without exporting (discussed, not yet built)
+2. **Absorb popup report windows** — currently `generateReport()`, `generatePISummary()`, `generateIssuesReport()` open `window.open()` popups; absorb into inline output panel (deferred by user)
+3. **AI cross-report trend summary testing** — needs 2+ real exports to test fully
+4. **NEPA checklist progress bar on project cards** — may be partially implemented, needs verification
+5. **Continue testing** stakeholders LEP/EJ checkboxes, public meeting equity toggle, public comments nav/form
+6. **NEPA Compliance section in PI Report Editor** — new section type `'nepa-compliance'` in the Add Section dropdown; auto-populates with live checklist group progress + comment period compliance for the project; includes an "AI Draft" button that calls `_claudeNarrative()` to generate a professional narrative paragraph from the compliance snapshot, written into the section text field like other AI-drafted sections. High priority — good AI use case.
 
 ## Competitive positioning (researched June 29, 2026)
 
@@ -254,50 +245,6 @@ drafting already planned, rather than requiring a separate dev track.
 **Before building:** design session to define exact client-visible vs.
 internal-only fields/views, design the Client Viewer role and login flow,
 and validate with one or two friendly DOT/municipal contacts first.
-
-## FUTURE — Dialpad Hotline Capture Integration (identified July 6, 2026)
-
-**Strategic note:** Acknowledged as a workflow efficiency feature rather than a
-core differentiator. Teams Phone voicemail has no usable API; this replaces it
-with a platform that exposes full transcript and call metadata programmatically.
-Useful, but validate against other PI firms' hotline workflows before investing
-— this may be Sunrise-specific friction rather than an industry-wide PI pain point.
-
-**What:** Replace Teams Phone ring groups with Dialpad Connect Pro. Use Dialpad's
-webhook + REST API to automatically capture voicemail transcripts, caller ID, call
-metadata, and AI call transcripts into COMPASS. Build a "Hotline Capture" UI panel
-for reviewing, editing, and converting captures into logged `pi_interactions`.
-
-**Why Teams Phone can't work:** No usable API for voicemail transcript extraction.
-Dialpad exposes `transcription_text`, `contact.phone`, `contact.name`,
-`voicemail_link`, `internal_number`, and full AI call transcripts via webhook
-events and GET endpoints (Call GET, Call Transcript GET at 1,200 req/min).
-
-**Platform cost:** Dialpad Connect Pro, 3 users ($25/user/mo annual) + 6–7
-additional local hotline numbers ($5/number/mo) = ~$95–110/month total.
-Numbers can be ported from Teams via 10-digit porting PIN.
-
-**Architecture:**
-
-New Supabase table `pi_hotline_captures`:
-```
-call_id, caller_phone, caller_name, hotline_number, direction, call_type,
-transcript_text, voicemail_url, call_duration, call_timestamp,
-status, converted_interaction_id, project_id, notes, reviewed_by
-```
-
-- Supabase Edge Function as webhook receiver (Dialpad → Edge Function → `pi_hotline_captures`)
-- Hotline-to-project mapping table (maps each hotline number to a `pi_projects` row)
-- New nav view or Settings panel: **Hotline Capture inbox** — list of unreviewed captures
-- Per-capture review card: edit transcript, assign project, fill in interaction fields
-- "Convert to Interaction" button: creates `pi_interactions` row, sets `converted_interaction_id`, marks capture as converted
-
-**Dependencies before building:**
-- Dialpad account + API OAuth credentials
-- Supabase Edge Functions enabled on project
-- New `connect-src` entry in CSP (line ~6) for Dialpad webhook/API domain
-- Design session to define inbox UI, mapping UI, and conversion flow
-- Decision: new nav view vs. embedded in Interactions view vs. Settings panel
 
 ## Supabase project
 - URL: `https://ncfbblhlsiglxkoiounv.supabase.co`

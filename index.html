@@ -7217,7 +7217,7 @@ el.innerHTML=topbar
       csStatusCard='<div style="background:linear-gradient(135deg,rgba(0,160,140,.12),rgba(0,160,140,.06));border:1px solid rgba(0,160,140,.3);border-radius:10px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:flex-start;gap:16px">'
         +'<span style="font-size:22px;line-height:1">✦</span>'
         +'<div><div style="font-size:14px;font-weight:600;color:var(--teal);margin-bottom:4px">Last Published to Client Portal</div>'
-        +'<div style="font-size:13px;color:var(--mist)">'+(latestSum.publishedBy?'By '+esc(latestSum.publishedBy)+' · ':'')+fmt(latestSum.publishedAt.slice(0,10))+'</div>'
+        +'<div style="font-size:13px;color:var(--mist)">'+(latestSum.publishedBy?'By '+escHtml(latestSum.publishedBy)+' · ':'')+fmt(latestSum.publishedAt.slice(0,10))+'</div>'
         +'<div style="font-size:12px;color:var(--slate);margin-top:2px">Period: '+fmt(latestSum.periodStart)+' – '+fmt(latestSum.periodEnd)+'</div>'
         +'</div></div>';
     } else {
@@ -7233,21 +7233,21 @@ el.innerHTML=topbar
         csPrevHtml+='<div style="border:1px solid rgba(255,255,255,.08);border-radius:8px;margin-bottom:8px;overflow:hidden">'
           +'<button onclick="var el=document.getElementById(\'cs-prev-'+i+'\');el.style.display=el.style.display===\'none\'?\'block\':\'none\'" '
           +'style="width:100%;text-align:left;background:transparent;border:none;color:var(--mist);padding:10px 16px;cursor:pointer;font-size:13px;display:flex;justify-content:space-between;align-items:center">'
-          +'<span>Published '+fmt(s.publishedAt.slice(0,10))+(s.publishedBy?' · '+esc(s.publishedBy):'')+'</span>'
+          +'<span>Published '+fmt(s.publishedAt.slice(0,10))+(s.publishedBy?' · '+escHtml(s.publishedBy):'')+'</span>'
           +'<span style="color:var(--fog);font-size:12px">'+fmt(s.periodStart)+' – '+fmt(s.periodEnd)+'</span>'
           +'</button>'
           +'<div id="cs-prev-'+i+'" style="display:none;padding:14px 16px;border-top:1px solid rgba(255,255,255,.08)">'
           +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--teal);margin-bottom:6px">Recent Activity</div>'
-          +'<div style="font-size:13px;color:var(--mist);white-space:pre-wrap;line-height:1.6;margin-bottom:14px">'+esc(s.contentRecent||'—')+'</div>'
+          +'<div style="font-size:13px;color:var(--mist);white-space:pre-wrap;line-height:1.6;margin-bottom:14px">'+escHtml(s.contentRecent||'—')+'</div>'
           +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--teal);margin-bottom:6px">Full Project Summary</div>'
-          +'<div style="font-size:13px;color:var(--mist);white-space:pre-wrap;line-height:1.6">'+esc(s.contentFull||'—')+'</div>'
+          +'<div style="font-size:13px;color:var(--mist);white-space:pre-wrap;line-height:1.6">'+escHtml(s.contentFull||'—')+'</div>'
           +'</div></div>';
       });
       csPrevHtml+='</div>';
     }
 
-    var csInitRecent=latestSum?esc(latestSum.contentRecent||''):'';
-    var csInitFull=latestSum?esc(latestSum.contentFull||''):'';
+    var csInitRecent=latestSum?escHtml(latestSum.contentRecent||''):'';
+    var csInitFull=latestSum?escHtml(latestSum.contentFull||''):'';
 
     tabContent=csStatusCard
       +'<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:20px">'

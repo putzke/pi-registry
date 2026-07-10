@@ -9576,6 +9576,28 @@ function captureFormState(){
   return saved;
 }
 
+// Persist an in-editor structural edit (add / move / remove section, or any
+// captured form state) so it survives the next openPIReport() re-render.
+// openPIReport() -> loadReportSections() reads _syncCache['reports'] FIRST and
+// only falls back to localStorage, so writing localStorage alone gets clobbered
+// by the cached Supabase copy once a draft has been saved. Keep both in sync.
+function _persistReportEdit(saved){
+  var projF=S.projectFilter;
+  localStorage.setItem('pir4_pi_reports_'+projF,JSON.stringify(saved));
+  if(_syncCache['reports']){
+    var rec=_syncCache['reports'].find(function(r){return String(r.projectId)===String(projF);});
+    if(rec){
+      rec.reportNum=saved.reportNum;
+      rec.reportTitle=saved.reportTitle;
+      rec.reportSubtitle=saved.reportSubtitle;
+      rec.periodStart=saved.periodStart;
+      rec.periodEnd=saved.periodEnd;
+      rec.overallSummary=saved.overallSummary;
+      rec.sections=saved.sections;
+    }
+  }
+}
+
 function movePISection(idx,dir){
   try{
     var saved=captureFormState();if(!saved)return;
@@ -9584,7 +9606,7 @@ function movePISection(idx,dir){
     var temp=saved.sections[idx];
     saved.sections[idx]=saved.sections[newIdx];
     saved.sections[newIdx]=temp;
-    localStorage.setItem('pir4_pi_reports_'+S.projectFilter,JSON.stringify(saved));
+    _persistReportEdit(saved);
     openPIReport();
   }catch(e){console.error('movePISection error:',e);}
 }
@@ -9596,7 +9618,7 @@ function addPISection(){
     var saved=captureFormState();if(!saved)return;
     if(!saved.sections)saved.sections=getDefaultSections();
     saved.sections.push({id:'custom_'+Date.now(),title:name,type:'manual',content:''});
-    localStorage.setItem('pir4_pi_reports_'+S.projectFilter,JSON.stringify(saved));
+    _persistReportEdit(saved);
     openPIReport();
   }catch(e){console.error('addPISection error:',e);alert('Error: '+e.message);}
 }
@@ -9606,7 +9628,7 @@ function addAutoSection(id,title,type){
     var saved=captureFormState();if(!saved)return;
     if(!saved.sections)saved.sections=getDefaultSections();
     saved.sections.push({id:id,title:title,type:type,content:''});
-    localStorage.setItem('pir4_pi_reports_'+S.projectFilter,JSON.stringify(saved));
+    _persistReportEdit(saved);
     openPIReport();
   }catch(e){console.error('addAutoSection error:',e);}
 }
@@ -9617,7 +9639,7 @@ function removePISection(idx){
     if(!saved||!saved.sections)return;
     if(idx>=0&&idx<saved.sections.length){
       saved.sections.splice(idx,1);
-      localStorage.setItem('pir4_pi_reports_'+S.projectFilter,JSON.stringify(saved));
+      _persistReportEdit(saved);
       openPIReport();
     }
   }catch(e){console.error('removePISection error:',e);}

@@ -29,3 +29,10 @@ create policy "anon update pi_client_summaries"
 
 create policy "anon delete pi_client_summaries"
   on pi_client_summaries for delete using (true);
+
+-- Table-level privileges. REQUIRED: policies alone are not enough — Postgres
+-- checks the GRANT before RLS, so without these the anon/authenticated roles
+-- get "permission denied for table pi_client_summaries". (These were missing
+-- in the original version of this file; see 2026-07-06_client_summaries_grant_fix.sql.)
+grant select, insert, update, delete on pi_client_summaries to anon;
+grant select, insert, update, delete on pi_client_summaries to authenticated;

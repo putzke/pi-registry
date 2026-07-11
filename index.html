@@ -9397,6 +9397,19 @@ function _persistReportEdit(saved){
   }
 }
 
+// Re-render the editor after a structural change while preserving the left
+// pane's scroll position, so add/move/remove don't jump the view to the top.
+function _reopenPIReportKeepScroll(){
+  var pane=document.getElementById('rpt-editor-pane');
+  var sc=pane?pane.scrollTop:0;
+  openPIReport();
+  var np=document.getElementById('rpt-editor-pane');
+  if(np){
+    np.scrollTop=sc;
+    requestAnimationFrame(function(){ var p2=document.getElementById('rpt-editor-pane'); if(p2)p2.scrollTop=sc; });
+  }
+}
+
 function movePISection(idx,dir){
   try{
     var saved=captureFormState();if(!saved)return;
@@ -9406,7 +9419,7 @@ function movePISection(idx,dir){
     saved.sections[idx]=saved.sections[newIdx];
     saved.sections[newIdx]=temp;
     _persistReportEdit(saved);
-    openPIReport();
+    _reopenPIReportKeepScroll();
   }catch(e){console.error('movePISection error:',e);}
 }
 
@@ -9418,7 +9431,7 @@ function addPISection(){
     if(!saved.sections)saved.sections=getDefaultSections();
     saved.sections.push({id:'custom_'+Date.now(),title:name,type:'manual',content:''});
     _persistReportEdit(saved);
-    openPIReport();
+    _reopenPIReportKeepScroll();
   }catch(e){console.error('addPISection error:',e);alert('Error: '+e.message);}
 }
 
@@ -9428,7 +9441,7 @@ function addAutoSection(id,title,type){
     if(!saved.sections)saved.sections=getDefaultSections();
     saved.sections.push({id:id,title:title,type:type,content:''});
     _persistReportEdit(saved);
-    openPIReport();
+    _reopenPIReportKeepScroll();
   }catch(e){console.error('addAutoSection error:',e);}
 }
 
@@ -9439,7 +9452,7 @@ function removePISection(idx){
     if(idx>=0&&idx<saved.sections.length){
       saved.sections.splice(idx,1);
       _persistReportEdit(saved);
-      openPIReport();
+      _reopenPIReportKeepScroll();
     }
   }catch(e){console.error('removePISection error:',e);}
 }

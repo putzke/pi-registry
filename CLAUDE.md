@@ -209,42 +209,75 @@ group/coalition management. Do NOT build mass public engagement tooling
 that's PublicInput/Granicus/EngagementHQ territory; Horizon COMPASS stays
 internal-facing.
 
-## FUTURE — PI Client Portal (identified June 29, 2026, high strategic priority)
+## PI Client Portal — BUILT (`client-portal.html`, ~1,120 lines)
 
-**The differentiator no competitor has:** every competitor researched is
-either a public-facing engagement platform (talks to residents) or an
-internal stakeholder CRM (talks to the PI team). Nobody builds the third
-leg — keeping the PI firm's actual client (DOT, city, county leadership)
-continuously informed without a manual reporting cycle. This is especially
-valuable during construction, when physical impacts are greatest and the
-client most wants visibility without waiting for a periodic report. Also
-strengthens the FHWA compliance story — DOTs/FHWA already require
-documented continuous PI communication; this gives the client a live
-window into that record instead of a static quarterly PDF.
+**Status: shipped and working.** The strategic bet (the "third leg" no
+competitor has — keeping the PI firm's client continuously informed) is live.
+`client-portal.html` is a standalone read-only client app.
 
-**Goal:** a client contact (e.g., Logan City Engineering) logs in and sees
-ONLY the public engagement activity and deliverable progress for their
-specific project — nothing else in the system.
+**Two access paths:**
+- **Token link (primary)** — Projects view → "Portal" button → `sharePortalLink()`
+  creates a `pi_portal_links` row (UUID token) → URL
+  `client-portal.html?token=XXX`. `bootFromToken()` resolves the token to a
+  project and renders. No client login. Copy/Revoke wired via
+  `_renderPortalBtnActive/Inactive()` on `.portal-btn-container[data-proj][data-style]`.
+- **Magic-link login** (`pi_client_access` + Supabase OTP) for multi-project
+  clients — built but has NO admin UI (grants are hand-inserted in Supabase).
 
-**Requirements:**
-- New role: Client Viewer — read-only, scoped to one project or a defined
-  set of projects (e.g., a DOT region office overseeing multiple projects)
-- Curated client-facing dashboard, distinct from internal PI team
-  interface — likely: engagement activity summary, deliverable progress,
-  recent outreach events, high-level issue status (open/resolved). Probably
-  NOT full interaction-level detail, internal notes, or raw sentiment scores
-- RLS scoping in Supabase so client logins only see their own project data
-  — dovetails directly with the multi-tenant org_id work already on roadmap
-- Field-level curation layer controlling exactly what surfaces externally
+**Portal sections (NAV):** Overview (stats + "Needs Attention" panel),
+Deliverables, Engagement (date-ranged), Issues, Commitments, Comment Periods,
+and the AI Summary tab. Field curation is done per-fetch (only client-safe
+columns queried).
 
-**Why this matters strategically:** not incremental feature parity — a
-structurally different category move, and it fits naturally alongside
-(not in competition with) the multi-tenant org layer and AI report
-drafting already planned, rather than requiring a separate dev track.
+**Security note (unchanged / known):** token isolation is client-side; the
+anon key is public and RLS is permissive (blanket anon read on portal tables).
+Server-side token-scoped RLS is the separate hardening project (ties to
+multi-tenant org_id work). Reminder learned the hard way: new portal tables
+need an explicit `grant ... to anon;` — RLS policies alone give "permission
+denied for table" (see sql/2026-07-06_client_summaries_grant_fix.sql).
 
-**Before building:** design session to define exact client-visible vs.
-internal-only fields/views, design the Client Viewer role and login flow,
-and validate with one or two friendly DOT/municipal contacts first.
+## IN PROGRESS — Client reporting redesign (locked plan, July 2026)
+
+**Problem being fixed:** the standalone **Client Summary tab** (in Reports)
+regenerated "recent" + "full" AI narratives from raw project data — a second
+pipeline parallel to the PI Report Editor, redundant with the reports the
+consultant already emails clients, and redundant with the Report Archive's
+"AI: Summarize PI trend". Confusing for consultant and client.
+
+**New model (simpler):** the portal's summary area = (1) ONE current curated
+**trend narrative** (consultant edits before publish) + (2) a list of **shared
+PI reports** (consultant toggles which archived reports are client-visible),
+rendered in-portal + downloadable. No section suppression — full transparency
+(sentiment matrix, interaction notes all OK per Jeff). Kill the Client Summary
+tab and its raw-data regeneration entirely.
+
+**Locked decisions:** (1) reports both render in-portal AND download; (2) no
+section-level curation — everything a report contains is client-safe; (3)
+single current trend, prior ones kept as history.
+
+**Data model:**
+- `pi_report_archive` → add `client_visible boolean default false`; portal reads
+  rows where true. (Remember the GRANT.)
+- `pi_client_summaries` → repurposed with NO schema change: trend text in
+  `content_full`, `content_recent` unused, latest `published_at` = current
+  trend, older rows = history.
+
+**Build order:**
+1. Migration: `sql/2026-07-06_portal_shared_reports.sql` — add `client_visible`
+   + idempotent grants. (Jeff runs in Supabase.)
+2. COMPASS Report Archive: "Share with client" toggle per archived report
+   (flips `client_visible`); trend button → generate → editable textarea →
+   "Publish trend to client portal" (`publishClientTrend()`, keeps human gate).
+3. Remove Client Summary tab + `generateClientSummaryDraft()` + rework
+   `publishClientSummary()`.
+4. Portal (`client-portal.html`): rename "AI Summary" nav → "Project Updates";
+   `bootFromToken` fetches `pi_report_archive?client_visible=eq.true`;
+   `renderSummary()` → current trend + trend history + shared-reports list with
+   in-portal section renderer + Print/Save-as-PDF as the v1 "download" (true
+   .docx would require porting exportPIDocx — deferred).
+5. End-to-end test: share a report, publish a trend, open portal link.
+
+**Cross-app:** reports module is desktop-only — mobile/importer unaffected.
 
 ## Supabase project
 - URL: `https://ncfbblhlsiglxkoiounv.supabase.co`

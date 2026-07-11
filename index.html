@@ -8087,7 +8087,7 @@ function saveAsPdf(){
 }
 
 // Section types that have row-based data eligible for table output
-var TABLE_ELIGIBLE_TYPES = ['auto-concerns','auto-intlog','auto-del','auto-events','auto-followups','auto-comments','auto-commitments','auto-issues','auto-comment-matrix'];
+var TABLE_ELIGIBLE_TYPES = ['auto-concerns','auto-intlog','auto-del','auto-events','auto-followups','auto-comments','auto-commitments','auto-issues','auto-comment-matrix','auto-contacts'];
 
 function getDefaultSections(){
   return[
@@ -9174,6 +9174,34 @@ function _buildSectionPreviewTable(secType, projF, pstart, pend, includeInternal
         +'<td style="'+tdStyle+';color:'+statusColor+';font-weight:600">'+escHtml(iss.status||'—')+'</td></tr>';
     });
 
+  } else if (secType === 'auto-contacts') {
+    // Roster mirrors the Word export: Internal first, then External, alpha within each.
+    var cRows = ps.slice().sort(function(a,b){
+      var aInt=(a.stakeholderRole||'External')==='Internal'?0:1;
+      var bInt=(b.stakeholderRole||'External')==='Internal'?0:1;
+      if(aInt!==bInt)return aInt-bInt;
+      var aSk=allStakes.find(function(x){return String(x.id)===String(a.stakeholderId);});
+      var bSk=allStakes.find(function(x){return String(x.id)===String(b.stakeholderId);});
+      var aName=(aSk?(aSk.lastName||'')+(aSk.firstName||''):'').toLowerCase();
+      var bName=(bSk?(bSk.lastName||'')+(bSk.firstName||''):'').toLowerCase();
+      return aName.localeCompare(bName);
+    });
+    tbl += '<colgroup><col style="width:16%"><col style="width:20%"><col style="width:15%"><col style="width:24%"><col style="width:13%"><col style="width:12%"></colgroup>'
+      +'<thead><tr><th style="'+thStyle+'">Name</th><th style="'+thStyle+'">Organization</th><th style="'+thStyle+'">Title</th><th style="'+thStyle+'">Email</th><th style="'+thStyle+'">Phone</th><th style="'+thStyle+'">Type</th></tr></thead><tbody>';
+    var cAny = false;
+    cRows.forEach(function(lk){
+      var sk = allStakes.find(function(x){ return String(x.id)===String(lk.stakeholderId); });
+      if (!sk) return;
+      cAny = true;
+      tbl += '<tr><td style="'+tdStyle+'">'+escHtml(((sk.firstName||'')+' '+(sk.lastName||'')).trim()||'—')+'</td>'
+        +'<td style="'+tdStyle+'">'+escHtml(sk.org||'—')+'</td>'
+        +'<td style="'+tdStyle+'">'+escHtml(sk.title||'—')+'</td>'
+        +'<td style="'+tdStyle+'">'+escHtml(sk.email||'—')+'</td>'
+        +'<td style="'+tdStyle+'">'+escHtml(sk.phone||'—')+'</td>'
+        +'<td style="'+tdStyle+'">'+escHtml(sk.type||'—')+'</td></tr>';
+    });
+    if (!cAny) { tbl += '<tr><td colspan="6" style="'+tdStyle+';color:#aaa;font-style:italic">No stakeholders linked to this project.</td></tr>'; }
+
   } else {
     return '';
   }
@@ -10236,6 +10264,8 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
       }
 
     } else if(sec.type==='auto-contacts'){
+      // Roster only prints when "Include data table" is checked (default off).
+      if(sec.showTable){
       // Sort: Internal first, then External, alphabetically within each group
       var contactPS=ps.slice().sort(function(a,b){
         var aInt=(a.stakeholderRole||'External')==='Internal'?0:1;
@@ -10287,6 +10317,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
         });
         xml+='</w:tbl>';
         xml+=spacer();
+      }
       }
 
     } else if(sec.type==='auto-intlog'){

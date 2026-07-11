@@ -12,14 +12,16 @@
 alter table pi_report_archive
   add column if not exists client_visible boolean not null default false;
 
--- ── Grant (the piece that bites if forgotten) ───────────────────────────────
--- The internal app already reads pi_report_archive with the anon key, so anon
--- access exists; this re-asserts it idempotently so the portal's anon read of
--- shared reports is guaranteed. GRANT is checked before RLS — without it you get
--- "permission denied for table pi_report_archive" (cf. the pi_client_summaries
--- incident, sql/2026-07-06_client_summaries_grant_fix.sql).
-grant select on pi_report_archive to anon;
-grant select on pi_report_archive to authenticated;
+-- ── Grants (the piece that bites if forgotten) ──────────────────────────────
+-- SELECT: the portal reads shared reports (anon key).
+-- UPDATE: the desktop "Share with client" toggle PATCHes client_visible (also
+--   anon key). This was the missing grant — without UPDATE the toggle's write
+--   is silently rejected, the desktop optimistically shows "Shared", but the DB
+--   never changes and the portal finds nothing.
+-- INSERT/DELETE: the app already archives (INSERT) and deletes (DELETE) reports;
+--   re-asserted here idempotently.
+grant select, insert, update, delete on pi_report_archive to anon;
+grant select, insert, update, delete on pi_report_archive to authenticated;
 
 -- NOTE: RLS is intentionally left as-is. The internal app relies on reading ALL
 -- archive rows via anon; enabling RLS here with only a project-scoped policy

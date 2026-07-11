@@ -9593,7 +9593,13 @@ async function toggleReportShared(archiveId) {
   if (!rec) { showToast('Archive record not found', 'error'); return; }
   var newVal = !rec.clientVisible;
   try {
-    await sbUpdate('report_archive', archiveId, { clientVisible: newVal });
+    // sbUpdate returns false (does not throw) on a rejected write — check it so a
+    // failed DB update can't silently look "Shared" in the UI.
+    var ok = await sbUpdate('report_archive', archiveId, { clientVisible: newVal });
+    if (ok === false) {
+      showToast('Could not save share state. Run sql/2026-07-06_portal_shared_reports.sql (client_visible column + UPDATE grant) in Supabase, then retry.', 'error', 7000);
+      return;
+    }
     rec.clientVisible = newVal;
     var panel = document.getElementById('rpt-archive-panel');
     if (panel) panel.innerHTML = _buildArchiveHTML(S.projectFilter);

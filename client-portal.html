@@ -67,6 +67,9 @@
     .nav-item svg { width: 15px; height: 15px; flex-shrink: 0; }
     .nav-item:hover { background: rgba(255,255,255,0.05); color: #c0d8ef; }
     .nav-item.active { background: rgba(59,91,219,0.15); color: #fff; border-left-color: #3b5bdb; font-weight: 600; }
+    .nav-badge { background: #3b5bdb; color: #fff; font-size: 11px; font-weight: 700; min-width: 18px; height: 18px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; padding: 0 5px; }
+    .nav-item .nav-badge { margin-left: auto; }
+    .chip .nav-badge { min-width: 16px; height: 16px; }
     .sidebar-footer { margin-top: auto; padding: 16px; border-top: 1px solid #162030; }
 
     /* ── Content ──────────────────────────────────────────────────────── */
@@ -519,12 +522,14 @@ function buildNav() {
   sb.innerHTML = `
     <div class="sidebar-proj">${projHtml}</div>
     <div class="nav-section">
-      ${NAV.map(n => `<div class="nav-item" id="nav-${n.id}" data-view="${n.id}" onclick="setView('${n.id}')">${n.icon}${esc(n.label)}</div>`).join('')}
+      ${NAV.map(n => `<div class="nav-item" id="nav-${n.id}" data-view="${n.id}" onclick="setView('${n.id}')">${n.icon}${esc(n.label)}${n.id==='summary'?'<span class="nav-badge" id="nav-badge-summary" style="display:none"></span>':''}</div>`).join('')}
     </div>`;
 
   cs.innerHTML = NAV.map(n =>
-    `<button class="chip" id="chip-${n.id}" onclick="setView('${n.id}')">${n.icon}${esc(n.label)}</button>`
+    `<button class="chip" id="chip-${n.id}" onclick="setView('${n.id}')">${n.icon}${esc(n.label)}${n.id==='summary'?'<span class="nav-badge" id="chip-badge-summary" style="display:none"></span>':''}</button>`
   ).join('');
+
+  updateNavBadge();
 
   // Mobile project bar — only shown when 2+ projects
   if (mpb) {
@@ -558,7 +563,17 @@ function switchProject(id) {
     const el = document.getElementById(sid);
     if (el) el.value = String(id);
   });
+  updateNavBadge();
   renderSection(_view);
+}
+
+// Shared-reports count badge on the Project Updates nav item / chip.
+function updateNavBadge() {
+  const c = _sharedReports.filter(r => String(r.project_id) === String(_projId)).length;
+  ['nav-badge-summary','chip-badge-summary'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.textContent = c; el.style.display = c > 0 ? '' : 'none'; }
+  });
 }
 
 function setContent(html) {

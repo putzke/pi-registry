@@ -23,8 +23,22 @@ alter table pi_report_archive
 grant select, insert, update, delete on pi_report_archive to anon;
 grant select, insert, update, delete on pi_report_archive to authenticated;
 
--- NOTE: RLS is intentionally left as-is. The internal app relies on reading ALL
--- archive rows via anon; enabling RLS here with only a project-scoped policy
--- would break that. Token-scoped, server-side isolation for the portal is the
--- separate hardening project (tracked with the multi-tenant / org_id work).
--- Portal-side, the shared-reports query filters client_visible = true.
+-- ── Anon RLS read policy (the OTHER piece that bites if forgotten) ──────────
+-- With RLS enabled and no anon policy, a GRANT alone still yields ZERO rows for
+-- the anon role — Postgres lets anon touch the table but RLS filters every row
+-- out (no error, just empty). The portal uses the anon key, so it needs an
+-- explicit SELECT policy, exactly like the sibling portal tables got in
+-- 2026-07-04_portal_links.sql. Scoped to projects that have an active portal
+-- link. (The internal app reads the archive as the authenticated role, which is
+-- why the desktop list works even without this — but the portal did not.)
+do $$ begin
+  if not exists (select 1 from pg_policies where policyname='anon_portal_read' and tablename='pi_report_archive') then
+    create policy "anon_portal_read" on pi_report_archive
+      for select to anon
+      using (project_id::text in (select project_id::text from pi_portal_links));
+  end if;
+end $$;
+
+-- Token-scoped, server-side isolation (so a tokenholder for project A can't read
+-- project B) remains the separate hardening project with the multi-tenant work.
+-- Portal-side, the shared-reports query additionally filters client_visible = true.

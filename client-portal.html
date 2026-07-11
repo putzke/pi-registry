@@ -325,7 +325,7 @@ const NAV = [
   { id:'issues',       label:'Issues',          icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1L1.5 13.5h13L8 1z"/><line x1="8" y1="6" x2="8" y2="9.5"/><circle cx="8" cy="11.5" r="0.6" fill="currentColor" stroke="none"/></svg>' },
   { id:'commitments',  label:'Commitments',     icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M5 8l2 2 4-4"/></svg>' },
   { id:'comments',     label:'Comment Periods', icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2v12L5 11H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10z"/><path d="M5 13.5l.7 1.5"/></svg>' },
-  { id:'summary',      label:'✦ AI Summary',    icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M5 8h6M5 5.5h6M5 10.5h4"/></svg>' },
+  { id:'summary',      label:'Project Updates', icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M5 8h6M5 5.5h6M5 10.5h4"/></svg>' },
 ];
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -334,6 +334,7 @@ let _projId = null;
 let _projects = [];
 let _deliverables = [];
 let _clientSummaries = [];
+let _sharedReports = [];
 let _actFrom = dfltFrom();
 let _actTo   = dfltTo();
 let _tokenMode = false;
@@ -437,10 +438,11 @@ async function bootApp() {
       return;
     }
     const ids = access.map(r => r.project_id).join(',');
-    const [projects, deliverables, clientSummaries] = await Promise.all([
+    const [projects, deliverables, clientSummaries, sharedReports] = await Promise.all([
       sbFetch(`pi_projects?id=in.(${ids})&select=id,name,pid,client,phase,status,start_date,end_date&order=name.asc`),
       sbFetch(`pi_deliverables?project_id=in.(${ids})&select=id,project_id,title,deliverable_type,status,progress,due_date,milestone_end&order=due_date.asc.nullslast`),
-      sbFetch(`pi_client_summaries?project_id=in.(${ids})&select=id,project_id,content_recent,content_full,period_start,period_end,published_at,published_by&order=published_at.desc`)
+      sbFetch(`pi_client_summaries?project_id=in.(${ids})&select=id,project_id,content_recent,content_full,period_start,period_end,published_at,published_by&order=published_at.desc`),
+      sbFetch(`pi_report_archive?project_id=in.(${ids})&client_visible=eq.true&select=id,project_id,report_num,report_title,report_subtitle,period_start,period_end,overall_summary,sections,archived_at&order=archived_at.desc`)
     ]);
     if (!projects.length) {
       setContent('<div class="error-box">No projects found. Please contact your project manager.</div>');
@@ -449,6 +451,7 @@ async function bootApp() {
     _projects = projects;
     _deliverables = deliverables;
     _clientSummaries = clientSummaries;
+    _sharedReports = sharedReports;
     _projId = projects[0].id;
     buildNav();
     setView('overview');
@@ -470,10 +473,11 @@ async function bootFromToken(token) {
       return;
     }
     const projId = rows[0].project_id;
-    const [projects, deliverables, clientSummaries] = await Promise.all([
+    const [projects, deliverables, clientSummaries, sharedReports] = await Promise.all([
       sbFetch(`pi_projects?id=eq.${projId}&select=id,name,pid,client,phase,status,start_date,end_date`),
       sbFetch(`pi_deliverables?project_id=eq.${projId}&select=id,project_id,title,deliverable_type,status,progress,due_date,milestone_end&order=due_date.asc.nullslast`),
-      sbFetch(`pi_client_summaries?project_id=eq.${projId}&select=id,project_id,content_recent,content_full,period_start,period_end,published_at,published_by&order=published_at.desc`)
+      sbFetch(`pi_client_summaries?project_id=eq.${projId}&select=id,project_id,content_recent,content_full,period_start,period_end,published_at,published_by&order=published_at.desc`),
+      sbFetch(`pi_report_archive?project_id=eq.${projId}&client_visible=eq.true&select=id,project_id,report_num,report_title,report_subtitle,period_start,period_end,overall_summary,sections,archived_at&order=archived_at.desc`)
     ]);
     if (!projects.length) {
       setContent('<div class="error-box">Project not found. Please contact your project manager.</div>');
@@ -482,6 +486,7 @@ async function bootFromToken(token) {
     _projects = projects;
     _deliverables = deliverables;
     _clientSummaries = clientSummaries;
+    _sharedReports = sharedReports;
     _projId = projects[0].id;
     buildNav();
     setView('overview');
@@ -1044,74 +1049,143 @@ function progCell(d) {
   return d.progress ? esc(String(d.progress)) : '—';
 }
 
-// ── AI Summary ────────────────────────────────────────────────────────────────
+// ── Project Updates (current trend + trend history + shared reports) ────────────
 function renderSummary() {
-  const sums = _clientSummaries.filter(s => String(s.project_id) === String(_projId));
-  sums.sort((a,b) => a.published_at > b.published_at ? -1 : 1);
-  const latest = sums[0];
+  const trends = _clientSummaries.filter(s => String(s.project_id) === String(_projId))
+    .sort((a,b) => (a.published_at||'') > (b.published_at||'') ? -1 : 1);
+  const current = trends[0];
+  const reports = _sharedReports.filter(r => String(r.project_id) === String(_projId))
+    .sort((a,b) => (a.archived_at||'') > (b.archived_at||'') ? -1 : 1);
 
-  if (!latest) {
-    setContent(`${projSelector()}${projBanner()}
-      <div class="card">
-        <div class="card-title">✦ AI Project Summary</div>
-        <div class="empty-state">No summary has been published for this project yet. Your project manager will publish one soon.</div>
-      </div>`);
-    return;
+  // ── Current trend ──
+  let trendHtml;
+  if (current) {
+    const pl = (current.period_start||current.period_end) ? `${fmt(current.period_start)} – ${fmt(current.period_end)}` : '';
+    const pd = fmt(current.published_at ? current.published_at.slice(0,10) : '');
+    const pubBy = current.published_by ? `Published by ${esc(current.published_by)}` : 'Published';
+    trendHtml = `<div class="card">
+      <div class="card-title">Project Trend Summary ${pl ? `<span style="font-size:12px;font-weight:400;color:#9ca3af">(${pl})</span>` : ''}</div>
+      <div style="font-size:12px;color:#9ca3af;margin-bottom:10px">${pubBy} · ${pd}</div>
+      <div class="sum-text">${esc(current.content_full || '—')}</div>
+    </div>`;
+  } else {
+    trendHtml = `<div class="card">
+      <div class="card-title">Project Trend Summary</div>
+      <div class="empty-state">No project trend has been published yet. Your project manager will publish one soon.</div>
+    </div>`;
   }
 
-  const periodLabel = `${fmt(latest.period_start)} – ${fmt(latest.period_end)}`;
-  const pubDate = fmt(latest.published_at ? latest.published_at.slice(0,10) : '');
-  const pubByStr = latest.published_by ? `Published by ${esc(latest.published_by)}` : 'Published';
-
-  // Previous summaries
-  let prevHtml = '';
-  if (sums.length > 1) {
-    const prevItems = sums.slice(1).map((s, i) => {
-      const pl = `${fmt(s.period_start)} – ${fmt(s.period_end)}`;
+  // ── Trend history ──
+  let histHtml = '';
+  if (trends.length > 1) {
+    const items = trends.slice(1).map((s, i) => {
+      const pl = (s.period_start||s.period_end) ? `${fmt(s.period_start)} – ${fmt(s.period_end)}` : '';
       const pd = fmt(s.published_at ? s.published_at.slice(0,10) : '');
-      return `<div class="sum-item" id="sum-prev-wrap-${i}">
-        <button class="sum-toggle" onclick="var b=document.getElementById('sum-prev-${i}');b.style.display=b.style.display==='none'?'block':'none'">
+      return `<div class="sum-item">
+        <button class="sum-toggle" onclick="var b=document.getElementById('trend-hist-${i}');b.style.display=b.style.display==='none'?'block':'none'">
           <span>${pd}${s.published_by ? ' · ' + esc(s.published_by) : ''}</span>
           <span class="sum-period">${pl}</span>
         </button>
-        <div id="sum-prev-${i}" style="display:none" class="sum-body">
-          <div class="sum-section-label">Recent Activity (${pl})</div>
-          <div class="sum-text">${esc(s.content_recent || '—')}</div>
-          <div class="sum-section-label" style="margin-top:14px">Full Project Summary</div>
+        <div id="trend-hist-${i}" style="display:none" class="sum-body">
           <div class="sum-text">${esc(s.content_full || '—')}</div>
         </div>
       </div>`;
     }).join('');
-    prevHtml = `<div class="card" style="margin-top:16px">
-      <div class="card-title">Previous Summaries</div>
-      <div class="sum-list">${prevItems}</div>
+    histHtml = `<div class="card" style="margin-top:16px">
+      <div class="card-title">Previous Trend Updates</div>
+      <div class="sum-list">${items}</div>
     </div>`;
   }
 
-  setContent(`${projSelector()}${projBanner()}
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px" class="no-print">
-      <div>
-        <div style="font-size:11px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:.6px">✦ AI Project Summary</div>
-        <div style="font-size:12px;color:#9ca3af;margin-top:2px">${pubByStr} · ${pubDate} · Covers ${periodLabel}</div>
-      </div>
-      <button onclick="window.print()" style="padding:7px 16px;border-radius:7px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:14px;height:14px"><path d="M4 5V2h8v3"/><rect x="1" y="5" width="14" height="7" rx="1"/><path d="M4 9h8v5H4z"/></svg>
-        Print
-      </button>
-    </div>
-    <div class="print-header" style="display:none">
-      <div style="font-size:18px;font-weight:700;margin-bottom:4px">${esc((_projects.find(p => p.id === _projId)||{}).name||'Project')}</div>
-      <div style="font-size:13px;color:#6b7280">✦ AI Project Summary — ${pubByStr} · ${pubDate} · Covers ${periodLabel}</div>
-    </div>
-    <div class="card">
-      <div class="card-title">Recent Activity <span style="font-size:12px;font-weight:400;color:#9ca3af">(${periodLabel})</span></div>
-      <div class="sum-text">${esc(latest.content_recent || 'No recent summary available.')}</div>
-    </div>
-    <div class="card" style="margin-top:16px">
-      <div class="card-title">Full Project Summary</div>
-      <div class="sum-text">${esc(latest.content_full || 'No full summary available.')}</div>
-    </div>
-    ${prevHtml}`);
+  // ── Shared reports ──
+  let reportsHtml;
+  if (reports.length) {
+    const items = reports.map((r, i) => {
+      const pl = (r.period_start||r.period_end) ? `${fmt(r.period_start)} – ${fmt(r.period_end)}` : 'No period set';
+      const ad = fmt(r.archived_at ? r.archived_at.slice(0,10) : '');
+      const title = esc(r.report_title||'PI Report') + (r.report_num ? ` <span style="color:#9ca3af;font-weight:400">#${esc(String(r.report_num))}</span>` : '');
+      return `<div style="border:1px solid #e5e7eb;border-radius:10px;margin-bottom:10px;overflow:hidden">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;background:#fafbfc">
+          <div style="min-width:0">
+            <div style="font-size:14px;font-weight:600;color:#111827">${title}</div>
+            <div style="font-size:12px;color:#6b7280;margin-top:2px">${pl} &middot; shared ${ad}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button onclick="var b=document.getElementById('rpt-body-${i}');b.style.display=b.style.display==='none'?'block':'none'" style="padding:6px 12px;border-radius:6px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:12px;font-weight:500;cursor:pointer">View</button>
+            <button onclick="printSharedReport('${r.id}')" style="padding:6px 12px;border-radius:6px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:12px;font-weight:500;cursor:pointer">Print / PDF</button>
+          </div>
+        </div>
+        <div id="rpt-body-${i}" style="display:none;padding:16px 18px;border-top:1px solid #e5e7eb">${renderArchivedReportHTML(r)}</div>
+      </div>`;
+    }).join('');
+    reportsHtml = `<div class="card" style="margin-top:16px">
+      <div class="card-title">Shared Reports <span style="font-size:12px;font-weight:400;color:#9ca3af">(${reports.length})</span></div>
+      <div style="margin-top:6px">${items}</div>
+    </div>`;
+  } else {
+    reportsHtml = `<div class="card" style="margin-top:16px">
+      <div class="card-title">Shared Reports</div>
+      <div class="empty-state">No reports have been shared yet. Your project manager shares individual PI reports here as they're produced.</div>
+    </div>`;
+  }
+
+  setContent(`${projSelector()}${projBanner()}${trendHtml}${histHtml}${reportsHtml}`);
+}
+
+// Render an archived PI report's sections as read-only HTML (light theme).
+// Mirrors the desktop _buildArchivedPreviewHTML: per-section narrative summaries;
+// auto-data sections point the client to the live tabs for current detail.
+function renderArchivedReportHTML(rec) {
+  const sections = rec.sections || [];
+  let html = '';
+  if ((rec.report_subtitle||'').trim()) {
+    html += `<div style="font-size:13px;color:#4b5563;margin-bottom:10px">${esc(rec.report_subtitle)}</div>`;
+  }
+  if ((rec.overall_summary||'').trim()) {
+    html += `<div style="background:#f0f4f8;border-left:3px solid #4a9be8;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#222;line-height:1.6">${esc(rec.overall_summary)}</div>`;
+  }
+  sections.forEach(sec => {
+    const isAuto = sec.type && sec.type !== 'manual';
+    html += `<div style="margin-bottom:18px">`;
+    html += `<div style="font-size:13px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #cdd4dc;padding-bottom:4px;margin-bottom:8px">${esc(sec.title||'')}</div>`;
+    if (!isAuto && sec.content) {
+      html += '<ul style="margin:0 0 6px 0;padding-left:18px">';
+      String(sec.content).split('\n').forEach(line => { if (line.trim()) html += `<li style="margin-bottom:4px;font-size:13px;color:#222">${esc(line.trim())}</li>`; });
+      html += '</ul>';
+    }
+    if (sec.summary) {
+      html += `<div style="font-size:13px;color:#333;line-height:1.6;white-space:pre-wrap">${esc(sec.summary)}</div>`;
+    } else if (isAuto) {
+      html += `<div style="font-size:12px;color:#9ca3af;font-style:italic">See the Engagement, Deliverables, and Issues tabs for current detail on this section.</div>`;
+    }
+    html += `</div>`;
+  });
+  if (!sections.length) html += `<div style="color:#9ca3af;font-style:italic;padding:12px 0">This report has no sections.</div>`;
+  return html;
+}
+
+// Open a clean print window for a single shared report (the v1 "download").
+function printSharedReport(archiveId) {
+  const rec = _sharedReports.find(r => String(r.id) === String(archiveId));
+  if (!rec) return;
+  const proj = _projects.find(p => p.id === _projId) || {};
+  const pl = (rec.period_start||rec.period_end) ? `${fmt(rec.period_start)} – ${fmt(rec.period_end)}` : '';
+  const win = window.open('', '_blank');
+  if (!win) { alert('Please allow pop-ups to print or save this report as a PDF.'); return; }
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(rec.report_title||'PI Report')}</title>
+    <style>
+      body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a2e;max-width:760px;margin:24px auto;padding:0 24px;line-height:1.5}
+      h1{font-size:20px;color:#1e3a5f;margin:0 0 4px}
+      .meta{font-size:12px;color:#666;margin-bottom:20px;border-bottom:3px solid #1e3a5f;padding-bottom:12px}
+      ul{margin:0 0 6px 0;padding-left:18px}
+    </style></head><body>
+    <h1>${esc(rec.report_title||'PI Report')}${rec.report_num ? ' #'+esc(String(rec.report_num)) : ''}</h1>
+    <div class="meta">${esc(proj.name||'')}${proj.pid ? ' &middot; '+esc(proj.pid) : ''}${pl ? ' &middot; '+esc(pl) : ''}</div>
+    ${renderArchivedReportHTML(rec)}
+    </body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { win.print(); }, 350);
 }
 </script>
 </body>

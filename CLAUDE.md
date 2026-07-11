@@ -262,20 +262,25 @@ single current trend, prior ones kept as history.
   `content_full`, `content_recent` unused, latest `published_at` = current
   trend, older rows = history.
 
-**Build order:**
-1. Migration: `sql/2026-07-06_portal_shared_reports.sql` — add `client_visible`
-   + idempotent grants. (Jeff runs in Supabase.)
-2. COMPASS Report Archive: "Share with client" toggle per archived report
-   (flips `client_visible`); trend button → generate → editable textarea →
-   "Publish trend to client portal" (`publishClientTrend()`, keeps human gate).
-3. Remove Client Summary tab + `generateClientSummaryDraft()` + rework
-   `publishClientSummary()`.
-4. Portal (`client-portal.html`): rename "AI Summary" nav → "Project Updates";
-   `bootFromToken` fetches `pi_report_archive?client_visible=eq.true`;
-   `renderSummary()` → current trend + trend history + shared-reports list with
-   in-portal section renderer + Print/Save-as-PDF as the v1 "download" (true
-   .docx would require porting exportPIDocx — deferred).
-5. End-to-end test: share a report, publish a trend, open portal link.
+**Build order (ALL CODE SHIPPED — migration still needs running):**
+1. ✅ Migration: `sql/2026-07-06_portal_shared_reports.sql` — add `client_visible`
+   + idempotent grants. **Jeff must run this in Supabase** or the Share toggle
+   errors and the portal can't read shared reports.
+2. ✅ COMPASS Report Archive: "Share with client" toggle per archived report
+   (`toggleReportShared()` flips `client_visible`); trend button → generate →
+   editable textarea → "Publish trend to client portal" (`publishClientTrend()`,
+   keeps human gate). Client-portal status line in archive header.
+3. ✅ Removed Client Summary tab + `generateClientSummaryDraft()` +
+   `publishClientSummary()`. Stale `S.rptTab==='client-summary'` normalized to
+   'reports'.
+4. ✅ Portal (`client-portal.html`): "AI Summary" nav → "Project Updates";
+   both boots fetch `pi_report_archive?client_visible=eq.true` into
+   `_sharedReports`; `renderSummary()` → current trend (`content_full`) + trend
+   history + shared-reports list. `renderArchivedReportHTML()` renders sections
+   read-only (mirrors desktop `_buildArchivedPreviewHTML`); `printSharedReport()`
+   opens a clean print window = v1 "download" (true .docx deferred).
+5. ⬜ End-to-end test (after migration is run): share a report, publish a trend,
+   open portal link, confirm both render.
 
 **Cross-app:** reports module is desktop-only — mobile/importer unaffected.
 

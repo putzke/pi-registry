@@ -2274,18 +2274,35 @@ function _emailCopyAll() {
   });
 }
 
+// Issue-based subject: "Re: {PIN} — {issue title}" (PIN carried right after Re:).
+function _emailIssueSubjectLine(iss, proj) {
+  return 'Re: ' + (proj ? proj.pid + ' — ' : '') + iss.title;
+}
+
+// When a related issue is picked, lead the subject with the issue (PIN after
+// "Re:") and move the project name into the body; clearing it reverts to the
+// project-default subject.
+function _emailIssueChanged(val) {
+  S._emailIssue = val;
+  var proj = DB.get('projects').find(function(p){ return p.id===S.projectFilter; });
+  if (val) {
+    var iss = (DB.get('issues')||[]).find(function(i){ return String(i.id)===String(val); });
+    if (iss) S._emailSubject = _emailIssueSubjectLine(iss, proj);
+  } else {
+    S._emailSubject = '';   // back to project default
+  }
+  _emailRerender();
+}
+
 function _emailOpenOutlook() {
   var addrs = _emailGetAddresses();
   if(!addrs.length){ alert('No email addresses selected.'); return; }
   var proj = DB.get('projects').find(function(p){ return p.id===S.projectFilter; });
   var subject = S._emailSubject || (proj ? (proj.pid + ' — ' + proj.name) : '');
   var cc = S._emailCc || (document.getElementById('email-cc-input')||{}).value||'';
-  // Carry the related issue into the email body as a reference line.
+  // With an issue attached, the subject already leads with it — put the project name in the body.
   var body = '';
-  if(S._emailIssue){
-    var iss = (DB.get('issues')||[]).find(function(i){ return String(i.id)===String(S._emailIssue); });
-    if(iss) body = 'Re: [' + (iss.status||'Open') + '] ' + iss.title + '\n\n';
-  }
+  if(S._emailIssue && proj){ body = proj.pid + ' — ' + proj.name + '\n\n'; }
   var uri = 'mailto:' + addrs.join(';');
   var params = [];
   if(subject) params.push('subject=' + encodeURIComponent(subject));
@@ -2437,7 +2454,7 @@ function renderEmailPanel(el) {
     +   '</div>'
     +   '<div style="flex:1;overflow-y:auto;padding:12px 16px;font-size:12px;line-height:1.8">'+emailLines+skippedNote+'</div>'
     +   '<div style="padding:12px 16px;border-top:1px solid var(--border);background:rgba(255,255,255,.02);flex-shrink:0">'
-    +     (function(){ var issues=(DB.get('issues')||[]).filter(function(i){ return String(i.projectId)===String(S.projectFilter) && i.status!=='Resolved' && i.status!=='Closed'; }); if(!issues.length) return ''; return '<div style="margin-bottom:8px"><label style="font-size:11px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;font-weight:600">Related issue <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label><select id="email-issue-select" onchange="S._emailIssue=this.value" style="width:100%;margin-top:4px;font-size:12px;padding:5px 8px;background:var(--navy-mid);border:1px solid var(--border);border-radius:4px;color:var(--white);box-sizing:border-box"><option value=""'+(S._emailIssue?'':' selected')+'>— None —</option>'+issues.map(function(i){ return '<option value="'+i.id+'"'+(String(S._emailIssue)===String(i.id)?' selected':'')+'>['+(i.status||'Open')+'] '+escHtml(i.title)+'</option>'; }).join('')+'</select></div>'; })()
+    +     (function(){ var issues=(DB.get('issues')||[]).filter(function(i){ return String(i.projectId)===String(S.projectFilter) && i.status!=='Resolved' && i.status!=='Closed'; }); if(!issues.length) return ''; return '<div style="margin-bottom:8px"><label style="font-size:11px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;font-weight:600">Related issue <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label><select id="email-issue-select" onchange="_emailIssueChanged(this.value)" style="width:100%;margin-top:4px;font-size:12px;padding:5px 8px;background:var(--navy-mid);border:1px solid var(--border);border-radius:4px;color:var(--white);box-sizing:border-box"><option value=""'+(S._emailIssue?'':' selected')+'>— None —</option>'+issues.map(function(i){ return '<option value="'+i.id+'"'+(String(S._emailIssue)===String(i.id)?' selected':'')+'>['+(i.status||'Open')+'] '+escHtml(i.title)+'</option>'; }).join('')+'</select></div>'; })()
     +     '<div style="margin-bottom:8px"><label style="font-size:11px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;font-weight:600">Subject</label>'
     +       '<input id="email-subj-input" type="text" oninput="S._emailSubject=this.value" value="'+subj.replace(/"/g,'&quot;')+'" style="width:100%;margin-top:4px;font-size:12px;padding:5px 8px;background:var(--navy-mid);border:1px solid var(--border);border-radius:4px;color:var(--white);box-sizing:border-box"></div>'
     +     '<div style="margin-bottom:10px"><label style="font-size:11px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;font-weight:600">CC (optional)</label>'

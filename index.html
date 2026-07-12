@@ -2774,7 +2774,7 @@ function renderBulkAdd(el) {
       +   '<select id="bro'+i+'" style="'+selStyle+';padding-right:14px">'+roleOpts+'</select>'
       +   '<span onclick="bulkApplyRoleDown('+i+')" title="Copy role down to all rows" style="position:absolute;right:-14px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:11px;color:var(--sky-lt)" aria-label="Copy role down">\u21e9</span>'
       + '</div></td>'
-      + '<td style="padding:3px 6px;text-align:center"><input id="bms'+i+'" type="checkbox" checked style="accent-color:var(--sky);width:14px;height:14px"></td>'
+      + '<td style="padding:3px 6px;text-align:center"><input id="bms'+i+'" type="checkbox" style="accent-color:var(--sky);width:14px;height:14px"></td>'
       + '</tr>'
       + '<tr id="bwarnrow'+i+'"><td></td><td colspan="9" style="padding:0 3px 4px"><div id="bwarn'+i+'" style="display:none;font-size:10px;color:var(--amber);padding:2px 0"></div></td></tr>';
   }
@@ -2788,7 +2788,7 @@ function renderBulkAdd(el) {
     + '<div class="toolbar" style="gap:10px;flex-wrap:wrap">'
     +   (proj ? '<span style="font-size:12px;color:var(--mist)">Project:</span><span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:4px;background:rgba(55,138,221,.2);color:#85b7eb">'+proj.pid+' \u2014 '+proj.name+'</span>' : '<span style="font-size:12px;color:var(--fog)">No project selected \u2014 contacts will be added to master list only</span>')
     +   '<div style="flex:1"></div>'
-    +   '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mist);cursor:pointer"><input type="checkbox" id="bulk-master-all" checked onchange="bulkToggleAllMaster(this.checked)" style="accent-color:var(--sky)"> Add all to master list</label>'
+    +   '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mist);cursor:pointer"><input type="checkbox" id="bulk-master-all" onchange="bulkToggleAllMaster(this.checked)" style="accent-color:var(--sky)"> Add all to master list</label>'
     + '</div>'
     + _bulkAIPanelHTML()
     + datalistHtml
@@ -2851,7 +2851,7 @@ function bulkClearRow(i) {
   });
   var ty = document.getElementById('bty'+i); if(ty) ty.selectedIndex=0;
   var ro = document.getElementById('bro'+i); if(ro) ro.value='External';
-  var ms = document.getElementById('bms'+i); if(ms) ms.checked=true;
+  var ms = document.getElementById('bms'+i); if(ms) ms.checked=false;
   var w = document.getElementById('bwarn'+i); if(w){ w.innerHTML=''; w.style.display='none'; }
   _bulkUpdateFooter();
 }
@@ -2865,7 +2865,7 @@ function bulkClearAll() {
     var ty = document.getElementById('bty'+i); if(ty) ty.selectedIndex=0;
     var tr = document.getElementById('btr'+i); if(tr) tr.selectedIndex=0;
     var ro = document.getElementById('bro'+i); if(ro) ro.value='External';
-    var ms = document.getElementById('bms'+i); if(ms) ms.checked=true;
+    var ms = document.getElementById('bms'+i); if(ms) ms.checked=false;
     var w = document.getElementById('bwarn'+i); if(w){w.innerHTML='';w.style.display='none';}
     // Re-lock rows 5+ only in the compact grid
     if (BULK_ROWS <= 10 && i >= 5) {

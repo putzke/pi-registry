@@ -2450,10 +2450,12 @@ function renderEmailPanel(el) {
 // ── BULK ADD CONTACTS ─────────────────────────────────────────────
 const BULK_TYPES = ['Agency','Business','Business Group','Community Group','Contractor','Elected Official','Engineering','Media','Other','Property Owner','Resident','Road Traveler'];
 const BULK_TIERS = ['High','Medium','Low'];
-const BULK_ROWS = 10;
+let BULK_ROWS = 10;              // dynamic — grows to fit AI-extracted contacts or the "+ Add rows" button
+const BULK_ROWS_MAX = 50;        // hard cap per import batch
 
 function openBulkAdd() {
   S.showBulkAdd = true;
+  BULK_ROWS = 10;   // reset to the compact grid each time the panel is opened
   renderStakeholders(document.getElementById('main'));
 }
 
@@ -2752,7 +2754,7 @@ function renderBulkAdd(el) {
 
   var rows = '';
   for (var i = 0; i < BULK_ROWS; i++) {
-    var isLate = i >= 5;
+    var isLate = (BULK_ROWS <= 10 && i >= 5);  // progressive reveal only in the compact grid; expanded grids show all rows
     var rowOp = isLate ? 'opacity:.35;pointer-events:none;' : '';
     rows += '<tr id="brow'+i+'" style="'+rowOp+'">'
       + '<td style="text-align:center;font-size:11px;color:var(--fog);width:22px;padding:3px 2px">'+(i+1)+'</td>'
@@ -2789,6 +2791,7 @@ function renderBulkAdd(el) {
     +   '<div style="flex:1"></div>'
     +   '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mist);cursor:pointer"><input type="checkbox" id="bulk-master-all" checked onchange="bulkToggleAllMaster(this.checked)" style="accent-color:var(--sky)"> Add all to master list</label>'
     + '</div>'
+    + _bulkAIPanelHTML()
     + datalistHtml
     + '<div style="overflow-x:auto;padding:12px 20px">'
     + '<table style="border-collapse:collapse;width:100%;min-width:900px">'
@@ -2817,6 +2820,7 @@ function renderBulkAdd(el) {
     + '<div style="display:flex;align-items:center;gap:8px;padding:12px 20px;border-top:1px solid var(--border);background:var(--navy-mid)">'
     +   '<button id="bulk-save-btn" class="btn btn-primary" onclick="saveBulkContacts()">Save contacts</button>'
     +   '<button class="btn btn-ghost" onclick="bulkClearAll()">Clear all</button>'
+    +   '<button class="btn btn-ghost" onclick="bulkAddMoreRows()" title="Add 10 more empty rows">+ Add rows</button>'
     +   '<div style="flex:1"></div>'
     +   '<span id="bulk-footer-info" style="font-size:12px;color:var(--fog)">0 of '+BULK_ROWS+' rows filled</span>'
     + '</div>';
@@ -2854,12 +2858,207 @@ function bulkClearAll() {
     var ro = document.getElementById('bro'+i); if(ro) ro.value='External';
     var ms = document.getElementById('bms'+i); if(ms) ms.checked=true;
     var w = document.getElementById('bwarn'+i); if(w){w.innerHTML='';w.style.display='none';}
-    // Re-lock rows 5+
-    if (i >= 5) {
+    // Re-lock rows 5+ only in the compact grid
+    if (BULK_ROWS <= 10 && i >= 5) {
       var row = document.getElementById('brow'+i); if(row){row.style.opacity='.35';row.style.pointerEvents='none';}
     }
   }
   _bulkUpdateFooter();
+}
+
+// ── AI CONTACT IMPORT (Phase 1: text path) ────────────────────────
+// Paste messy contact text (roster, email signatures, typed business cards)
+// → Claude Haiku extracts structured contacts → populates the grid above for
+// human review before Save. PII in the paste box is sent to the Anthropic API;
+// the panel carries an explicit notice and nothing saves without user review.
+function _bulkAIPanelHTML() {
+  var hasKey = !!_getClaudeKey();
+  return '<div style="margin:12px 20px 0;padding:12px 14px;border:1px solid var(--border);border-radius:8px;background:linear-gradient(135deg,rgba(30,58,95,.25),rgba(15,76,117,.15))">'
+    + '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;flex-wrap:wrap">'
+    +   '<span style="font-size:13px;font-weight:600;color:var(--sky-lt)">✦ AI import</span>'
+    +   '<span style="font-size:11px;color:var(--fog)">Paste a roster, email signatures, a pasted list, or typed business-card text — Claude fills the grid below for your review.</span>'
+    + '</div>'
+    + '<textarea id="bulk-ai-paste" placeholder="Paste contact text here…\nExample:\nJane Doe, City of Springfield, Planning Director, jane@spring.gov, 801-555-1212\nJohn Smith — Acme Engineering — jsmith@acme.com" style="width:100%;min-height:82px;resize:vertical;font-size:12px;padding:8px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white);box-sizing:border-box;font-family:inherit;line-height:1.5"></textarea>'
+    + '<div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">'
+    +   '<button id="bulk-ai-btn" class="btn btn-primary" onclick="aiExtractContacts()"'+(hasKey?'':' disabled')+' style="background:linear-gradient(135deg,#1e3a5f,#0f4c75);border-color:var(--sky-lt);color:var(--sky-lt)'+(hasKey?'':';opacity:.5;cursor:not-allowed')+'">✦ Extract with AI</button>'
+    +   '<span id="bulk-ai-status" style="font-size:11px;color:var(--fog)"></span>'
+    +   '<div style="flex:1"></div>'
+    +   '<span style="font-size:10px;color:var(--fog);max-width:360px;text-align:right;line-height:1.4">⚠ Pasted text is sent to Anthropic’s Claude API for extraction. Review every row before saving — AI can misread names, emails, and phone numbers.</span>'
+    + '</div>'
+    + (hasKey ? '' : '<div style="font-size:11px;color:var(--amber);margin-top:6px">No Claude API key saved — add one in Settings to enable AI extraction.</div>')
+    + '</div>';
+}
+
+// Calls Claude Haiku with a structured-output (json_schema) contract so the
+// response is guaranteed valid JSON. Returns an array of contact objects.
+async function _aiParseContacts(text) {
+  var key = _getClaudeKey();
+  if (!key) throw new Error('No Claude API key saved.');
+  var schema = {
+    type: 'object',
+    properties: {
+      contacts: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            firstName: { type: 'string' },
+            lastName:  { type: 'string' },
+            org:       { type: 'string' },
+            title:     { type: 'string' },
+            email:     { type: 'string' },
+            phone:     { type: 'string' },
+            type:      { type: 'string', enum: BULK_TYPES.concat(['']) }
+          },
+          required: ['firstName','lastName','org','title','email','phone','type'],
+          additionalProperties: false
+        }
+      }
+    },
+    required: ['contacts'],
+    additionalProperties: false
+  };
+  var sys = 'You extract contact records from messy pasted text: roster spreadsheets, email signatures, '
+    + 'comma/tab lists, or typed-out business cards. Return every distinct person (or standalone organization) '
+    + 'as one contact. Split full names into firstName and lastName. If a field is unknown, return an empty '
+    + 'string — never guess or invent emails, phone numbers, or names. For phone, return the digits you find. '
+    + 'For type, pick the single best match from the allowed list, or an empty string if unclear. '
+    + 'Do not include header rows, notes, or duplicates.';
+  var resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 4096,
+      system: sys,
+      output_config: { format: { type: 'json_schema', schema: schema } },
+      messages: [{ role: 'user', content: text }]
+    })
+  });
+  if (!resp.ok) {
+    var err = await resp.json().catch(function(){ return {}; });
+    throw new Error((err.error && err.error.message) || ('API error ' + resp.status));
+  }
+  var data = await resp.json();
+  var txt = (data.content || []).filter(function(b){ return b.type === 'text'; }).map(function(b){ return b.text; }).join('');
+  var parsed;
+  try {
+    parsed = JSON.parse(txt);
+  } catch(e) {
+    var m = txt.match(/\{[\s\S]*\}/);
+    if (m) { parsed = JSON.parse(m[0]); } else { throw new Error('Could not parse the AI response.'); }
+  }
+  return (parsed && parsed.contacts) || [];
+}
+
+async function aiExtractContacts() {
+  var box = document.getElementById('bulk-ai-paste');
+  var text = ((box && box.value) || '').trim();
+  var btn = document.getElementById('bulk-ai-btn');
+  var status = document.getElementById('bulk-ai-status');
+  if (!text) { if(status){ status.textContent='Paste some contact text first.'; status.style.color='var(--amber)'; } return; }
+  if (!_getClaudeKey()) { alert('Add your Claude API key in Settings first to use AI extraction.'); return; }
+
+  if (btn) { btn.disabled = true; btn.textContent = '✦ Extracting…'; }
+  if (status) { status.textContent = 'Sending to Claude…'; status.style.color = 'var(--fog)'; }
+
+  try {
+    var contacts = await _aiParseContacts(text);
+    if (!contacts.length) {
+      if (status) { status.textContent = 'No contacts found in that text. Try a clearer paste.'; status.style.color = 'var(--amber)'; }
+      if (btn) { btn.disabled = false; btn.textContent = '✦ Extract with AI'; }
+      return;
+    }
+
+    // Preserve any rows already filled in the grid; drop the extracted contacts into empty slots.
+    var existing = _bulkFilledRows();
+    var truncated = 0;
+    var room = BULK_ROWS_MAX - existing.length;
+    if (contacts.length > room) { truncated = contacts.length - room; contacts = contacts.slice(0, Math.max(0, room)); }
+
+    // Grow the grid so every existing row keeps its slot AND there is an empty row per new contact.
+    var emptyNow = BULK_ROWS - existing.length;
+    if (contacts.length > emptyNow) BULK_ROWS = Math.min(BULK_ROWS_MAX, BULK_ROWS + (contacts.length - emptyNow));
+
+    // Re-render the grid at the new size, then repopulate (this clears the paste box — the text was consumed).
+    renderBulkAdd(document.getElementById('main'));
+    _bulkRestoreRows(existing);
+
+    // Fill the extracted contacts into the empty rows, scanning from the top.
+    var filledIdx = {};
+    existing.forEach(function(r){ filledIdx[r.idx] = true; });
+    var slot = 0;
+    for (var i = 0; i < contacts.length; i++) {
+      while (slot < BULK_ROWS && filledIdx[slot]) slot++;
+      if (slot >= BULK_ROWS) break;
+      _bulkSetRow(slot, contacts[i]);
+      filledIdx[slot] = true;
+    }
+    for (var j = 0; j < BULK_ROWS; j++) { bulkCheckDup(j); }
+    _bulkUpdateFooter();
+
+    var newStatus = document.getElementById('bulk-ai-status');
+    if (newStatus) {
+      newStatus.textContent = '✓ Extracted ' + contacts.length + ' contact' + (contacts.length!==1?'s':'')
+        + ' — review below before saving' + (truncated>0 ? ' (' + truncated + ' skipped — ' + BULK_ROWS_MAX + '-row limit)' : '') + '.';
+      newStatus.style.color = truncated>0 ? 'var(--amber)' : 'var(--green)';
+    }
+  } catch(e) {
+    console.error('AI extract error:', e);
+    var s2 = document.getElementById('bulk-ai-status');
+    if (s2) { s2.textContent = 'Error: ' + e.message; s2.style.color = 'var(--red)'; }
+    var b2 = document.getElementById('bulk-ai-btn');
+    if (b2) { b2.disabled = false; b2.textContent = '✦ Extract with AI'; }
+  }
+}
+
+// Fill grid row i from an extracted contact object; unlock the row.
+function _bulkSetRow(i, c) {
+  var set = function(id, v){ var el = document.getElementById(id+i); if (el) el.value = v || ''; };
+  set('bfn', c.firstName); set('bln', c.lastName); set('borg', c.org);
+  set('bti', c.title); set('bem', c.email); set('bph', c.phone);
+  var tyEl = document.getElementById('bty'+i);
+  if (tyEl) {
+    var t = (c.type || '').trim();
+    var match = BULK_TYPES.find(function(x){ return x.toLowerCase() === t.toLowerCase(); });
+    tyEl.value = match || '';
+  }
+  _bulkUnlockRow(i);
+}
+
+// Restore grid rows from _bulkGetRows()-shaped objects (used after a re-render).
+function _bulkRestoreRows(rowsData) {
+  rowsData.forEach(function(r){
+    var i = r.idx;
+    var s = function(id, v){ var el = document.getElementById(id+i); if (el && v) el.value = v; };
+    s('bfn', r.fn); s('bln', r.ln); s('borg', r.org); s('bti', r.ti); s('bem', r.em); s('bph', r.ph);
+    var ty = document.getElementById('bty'+i); if (ty && r.ty) ty.value = r.ty;
+    var tr = document.getElementById('btr'+i); if (tr && r.tr) tr.value = r.tr;
+    var ro = document.getElementById('bro'+i); if (ro && r.ro) ro.value = r.ro;
+    var ms = document.getElementById('bms'+i); if (ms) ms.checked = r.ms;
+    if (r.fn || r.ln || r.org) _bulkUnlockRow(i);
+  });
+  _bulkUpdateFooter();
+}
+
+function _bulkUnlockRow(i) {
+  var row = document.getElementById('brow'+i);
+  if (row) { row.style.opacity = '1'; row.style.pointerEvents = ''; }
+  var wr = document.getElementById('bwarnrow'+i);
+  if (wr) { wr.style.opacity = '1'; wr.style.pointerEvents = ''; }
+}
+
+function bulkAddMoreRows() {
+  if (BULK_ROWS >= BULK_ROWS_MAX) { showToast('Maximum ' + BULK_ROWS_MAX + ' rows per import.', 'warn'); return; }
+  var existing = _bulkGetRows();  // capture all current values (incl. empties) before re-render
+  BULK_ROWS = Math.min(BULK_ROWS_MAX, BULK_ROWS + 10);
+  renderBulkAdd(document.getElementById('main'));
+  _bulkRestoreRows(existing);
 }
 
 

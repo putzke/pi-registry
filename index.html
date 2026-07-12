@@ -203,8 +203,8 @@ hr.div{border:none;border-top:1px solid var(--border);margin:14px 0}
 .td-link:hover{text-decoration:underline}
 
 /* STATS */
-.stat-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px}
-.stat-card{background:linear-gradient(160deg,#1e3a5f 0%,#1A3050 100%);border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:13px 16px;position:relative;overflow:hidden;transition:border-color .2s,transform .15s}
+.stat-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px}
+.stat-card{background:linear-gradient(160deg,#1e3a5f 0%,#1A3050 100%);border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:9px 16px;position:relative;overflow:hidden;transition:border-color .2s,transform .15s}
 .stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:var(--radius-lg) var(--radius-lg) 0 0}
 .stat-card:hover{border-color:rgba(255,255,255,.28);transform:translateY(-2px)}
 .stat-card.sc-sky::before{background:linear-gradient(90deg,var(--sky),var(--sky-lt))}
@@ -217,10 +217,10 @@ hr.div{border:none;border-top:1px solid var(--border);margin:14px 0}
 .stat-card.sc-purple::after{content:'';position:absolute;top:-40px;right:-20px;width:100px;height:100px;border-radius:50%;background:#b39ddb;opacity:.05;pointer-events:none}
 .stat-card.sc-red::before{background:linear-gradient(90deg,#8b1a1a,var(--red))}
 .stat-card.sc-red::after{content:'';position:absolute;top:-40px;right:-20px;width:100px;height:100px;border-radius:50%;background:var(--red);opacity:.05;pointer-events:none}
-.stat-lbl{font-size:13px;color:var(--slate);margin-bottom:6px;text-transform:uppercase;letter-spacing:.6px;font-weight:600}
-.stat-val{font-size:36px;font-weight:700;letter-spacing:-.5px}
+.stat-lbl{font-size:13px;color:var(--slate);margin-bottom:3px;text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+.stat-val{font-size:30px;font-weight:700;letter-spacing:-.5px;line-height:1.05}
 .sv-sky{color:var(--sky-lt)}.sv-green{color:var(--green)}.sv-amber{color:var(--amber)}.sv-red{color:var(--red)}
-.stat-sub{font-size:14px;color:var(--slate);margin-top:4px}
+.stat-sub{font-size:14px;color:var(--slate);margin-top:2px}
 
 /* PROGRESS */
 .pbar{height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;flex-shrink:0}
@@ -1424,7 +1424,7 @@ function toggleDashRow(id){
   try{sessionStorage.setItem('dash_'+id+'_open',collapsed?'1':'0');}catch(e){}
 }
 function initDashRows(){
-  ['row2','row3'].forEach(function(id){
+  ['row2','row3','row4'].forEach(function(id){
     var stored=null;
     try{stored=sessionStorage.getItem('dash_'+id+'_open');}catch(e){}
     // default closed; only open if explicitly stored as '1'

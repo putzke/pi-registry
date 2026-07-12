@@ -40,7 +40,7 @@ body{font-family:var(--font);font-size:13px;background:var(--navy);color:var(--w
 .nav-btn{display:flex;align-items:center;gap:9px;width:100%;padding:7px 10px;border:none;background:transparent;color:var(--mist);font-family:var(--font);font-size:12px;border-radius:var(--radius);cursor:pointer;text-align:left;transition:background .1s,color .1s}
 .nav-btn:hover{background:rgba(255,255,255,.07);color:var(--white)}
 .nav-btn.active{background:var(--sky-dim);color:var(--sky-lt)}
-.nav-btn svg{width:14px;height:14px;flex-shrink:0;opacity:.7}
+.nav-btn svg{width:16px;height:16px;flex-shrink:0;opacity:.8}
 .nav-btn.active svg{opacity:1}
 .nav-badge{margin-left:auto;font-size:11px;font-weight:600;border-radius:10px;padding:1px 6px;min-width:18px;text-align:center;background:var(--sky);color:#fff}
 .nav-badge.warn{background:var(--amber)}
@@ -394,7 +394,7 @@ window.onGoogleMapsReady = function() {
     </button>
     <button class="nav-btn" id="nav-master" onclick="setView('master')">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="3.5"/><path d="M2 14c0-2.761 2.686-5 6-5s6 2.239 6 5"/><path d="M13 8l2 2-3 3"/></svg>
-      Master stakeholders
+      Master List
       <span class="nav-badge" id="nb-master">0</span>
     </button>
     <button class="nav-btn" id="nav-interactions" onclick="setView('interactions')">
@@ -413,12 +413,12 @@ window.onGoogleMapsReady = function() {
     </button>
     <button class="nav-btn" id="nav-comments" onclick="setView('comments')">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H5l-3 2V3a1 1 0 0 1 1-1z"/><path d="M5 6h6M5 9h4"/></svg>
-      Public comments
+      Comments
       <span class="nav-badge warn hide" id="nb-pcomm">0</span>
     </button>
     <button class="nav-btn" id="nav-tribal" onclick="setView('tribal')">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="4" r="2"/><path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5"/><path d="M5 8.5l-2 2M11 8.5l2 2"/></svg>
-      Tribal consultation
+      Tribal
       <span class="nav-badge warn hide" id="nb-tribal">0</span>
     </button>
     <button class="nav-btn" id="nav-deliverables" onclick="setView('deliverables')">
@@ -437,7 +437,7 @@ window.onGoogleMapsReady = function() {
     </button>
     <button class="nav-btn" id="nav-map" onclick="setView('map')">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2C5.791 2 4 3.791 4 6c0 3.5 4 8 4 8s4-4.5 4-8c0-2.209-1.791-4-4-4z"/><circle cx="8" cy="6" r="1.5"/></svg>
-      Stakeholder map
+      Map
     </button>
     <button class="nav-btn" id="nav-reports" onclick="setView('reports')">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="14" height="14" rx="1.5"/><path d="M4 11V8M7 11V5M10 11V7M13 11V4"/></svg>

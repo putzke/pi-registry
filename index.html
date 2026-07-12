@@ -40,7 +40,7 @@ body{font-family:var(--font);font-size:13px;background:var(--navy);color:var(--w
 .nav-btn{display:flex;align-items:center;gap:9px;width:100%;padding:7px 10px;border:none;background:transparent;color:var(--mist);font-family:var(--font);font-size:12px;border-radius:var(--radius);cursor:pointer;text-align:left;transition:background .1s,color .1s}
 .nav-btn:hover{background:rgba(255,255,255,.07);color:var(--white)}
 .nav-btn.active{background:var(--sky-dim);color:var(--sky-lt)}
-.nav-btn svg{width:16px;height:16px;flex-shrink:0;opacity:.8}
+.nav-btn svg{width:18px;height:18px;flex-shrink:0;opacity:.8}
 .nav-btn.active svg{opacity:1}
 .nav-badge{margin-left:auto;font-size:11px;font-weight:600;border-radius:10px;padding:1px 6px;min-width:18px;text-align:center;background:var(--sky);color:#fff}
 .nav-badge.warn{background:var(--amber)}
@@ -2292,28 +2292,31 @@ async function logEmailAsEvent() {
   var addrs = _emailGetAddresses();
   if(!addrs.length){ alert('No email addresses to log.'); return; }
   var subj = (document.getElementById('email-subj-input')||{}).value || (proj.pid+' — '+proj.name);
+  // Resolve the selected recipients to stakeholder records so we can link them as attendees.
+  var contacts = _emailGetContacts();
+  var recipientIds = [];
+  var names = [];
+  Object.keys(S._emailSelected).forEach(function(id){
+    var c = contacts.find(function(x){ return String(x.id)===String(id); });
+    if(!c) return;
+    recipientIds.push(c.id);
+    names.push(((c.firstName||'')+' '+(c.lastName||'')).trim() || c.org || 'Unknown');
+  });
+  var shown = names.slice(0,5);
+  var extra = names.length > 5 ? ' +' + (names.length - 5) + ' others' : '';
+  var sel = document.getElementById('email-issue-select');
+  var issNote = '';
+  if(sel && sel.value){
+    var iss = (DB.get('issues')||[]).find(function(i){ return String(i.id)===String(sel.value); });
+    if(iss) issNote = '\nRelated issue: [' + iss.status + '] ' + iss.title;
+  }
   var evt = {
     id: DB.uid(), projectId: S.projectFilter, title: subj, date: localToday(),
     type: 'Email distribution', status: 'Completed', format: 'Virtual', location: '',
-    attendanceCount: addrs.length, commentCards: 0, handouts: '', attendeeIds: [],
+    attendanceCount: addrs.length, commentCards: 0, handouts: '', attendeeIds: recipientIds,
     agenda: '', keyConcerns: '', actionItems: '',
-    notes: (function(){
-      var contacts = _emailGetContacts();
-      var names = Object.keys(S._emailSelected).map(function(id){
-        var c = contacts.find(function(x){ return String(x.id)===String(id); });
-        if(!c) return null;
-        return ((c.firstName||'')+' '+(c.lastName||'')).trim() || c.org || 'Unknown';
-      }).filter(Boolean);
-      var shown = names.slice(0,5);
-      var extra = names.length > 5 ? ' +' + (names.length - 5) + ' others' : '';
-      var sel = document.getElementById('email-issue-select');
-      var issNote = '';
-      if(sel && sel.value){
-        var iss = (DB.get('issues')||[]).find(function(i){ return String(i.id)===String(sel.value); });
-        if(iss) issNote = '\nRelated issue: [' + iss.status + '] ' + iss.title;
-      }
-      return 'Bulk email distribution — Recipients (' + names.length + '): ' + shown.join(', ') + extra + issNote;
-    })(),    createdAt: new Date().toISOString()
+    notes: 'Bulk email distribution — Recipients (' + names.length + '): ' + shown.join(', ') + extra + issNote,
+    createdAt: new Date().toISOString()
   };
   var all = DB.get('meetings'); all.push(evt);
   await DB.set('meetings', all);
@@ -11979,12 +11982,20 @@ function renderMeetings(el){
         const extraChip=namedAtt.length>3?'<span style="font-size:10px;color:var(--fog);margin-left:2px">+' +(namedAtt.length-3)+' more</span>':'';
         const addAtt=(m.additionalAttendees||'').trim();
         const hasAnyAtt=namedAtt.length>0||addAtt;
+        const isEmailEvt=m.type==='Email distribution';
+        const emailedLine=(isEmailEvt&&namedAtt.length>0)
+          ? '✉ Emailed to '+(namedAtt.length<=5
+              ? namedAtt.map(function(s){return ((s.firstName||'').charAt(0)+'. '+(s.lastName||'')).trim()||s.org||'?';}).join(', ')
+              : 'multiple recipients ('+namedAtt.length+')')
+          : '';
         return`<tr>
           <td class="td-mono" style="white-space:nowrap">${fmt(m.date)}</td>
           <td>
             <div style="font-weight:500;color:var(--white)">${m.title}</div>
             ${m.location?`<div style="font-size:11px;color:var(--fog)">${m.location}</div>`:''}
-            ${namedAtt.length>0?`<div style="margin-top:3px">${attChips}${extraChip}</div>`:''}
+            ${isEmailEvt&&namedAtt.length>0
+              ? `<div style="font-size:11px;color:var(--fog);margin-top:2px">${emailedLine}</div>`
+              : (namedAtt.length>0?`<div style="margin-top:3px">${attChips}${extraChip}</div>`:'')}
             ${addAtt?`<div style="font-size:11px;color:var(--mist);margin-top:2px">${addAtt}</div>`:''}
             ${!hasAnyAtt?`<div style="font-size:11px;color:var(--fog);font-style:italic;margin-top:2px">Named attendees not recorded</div>`:''}
             ${actionItems>0?`<div style="margin-top:3px"><span class="badge b-amber" style="font-size:10px">${actionItems} open action${actionItems!==1?'s':''}</span></div>`:''}

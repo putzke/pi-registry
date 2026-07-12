@@ -132,6 +132,46 @@ Bulk CSV import wizard for stakeholders and interactions. ~2,420 lines.
 5. **Continue testing** stakeholders LEP/EJ checkboxes, public meeting equity toggle, public comments nav/form
 6. **NEPA Compliance section in PI Report Editor** — new section type `'nepa-compliance'` in the Add Section dropdown; auto-populates with live checklist group progress + comment period compliance for the project; includes an "AI Draft" button that calls `_claudeNarrative()` to generate a professional narrative paragraph from the compliance snapshot, written into the section text field like other AI-drafted sections. High priority — good AI use case.
 
+## AI contact importer + interaction-logging scope (LOCKED, July 2026)
+
+**Phase 1 SHIPPED** — text-path AI import built into the Bulk-add contacts grid
+(`renderBulkAdd` in `index.html`). A paste box → `_aiParseContacts()` calls
+Claude Haiku (`claude-haiku-4-5-20251001`) with a `json_schema` structured-output
+contract → `aiExtractContacts()` populates the grid rows for human review before
+Save. `BULK_ROWS` is now dynamic (`let`, cap `BULK_ROWS_MAX = 50`), resets to 10
+on `openBulkAdd()`, grows to fit extracted contacts, plus a "+ Add rows" button
+(`bulkAddMoreRows`). Helpers: `_bulkAIPanelHTML`, `_bulkSetRow`,
+`_bulkRestoreRows`, `_bulkUnlockRow`. Panel carries an explicit PII/API notice;
+extract button disabled with a hint when no Claude key is saved. Nothing saves
+without review.
+
+**Phase 2 (planned, not built)** — vision path for the SAME desktop grid:
+images (screenshots, business-card photos, roster photos) and PDFs via Sonnet 5
+(`claude-sonnet-5`), routed by input type. Still lands in the review grid.
+
+**LOCKED SCOPE BOUNDARIES (do not cross without Jeff's explicit say-so):**
+1. **Image/scan AI import → CONTACTS ONLY, DESKTOP ONLY.** The Bulk-add review
+   grid is the only surface. A contact is just a name — misreads are trivially
+   fixable in the grid, and import is additive/low-stakes.
+2. **Interactions → MANUAL ENTRY ONLY. No AI scan/extract into interactions,
+   ever.** An interaction is a compliance claim (date, who, what, logged-by)
+   that can flow into an FHWA/NEPA report; it must be entered deliberately and
+   attributed, not guessed from a scan. Rationale asymmetry: contact import =
+   onboarding speed (low stakes); interaction logging = compliance integrity
+   (the product itself).
+3. **Mobile stays a logging tool, NOT an import tool.** Do not add scanners or
+   AI importers to `mobile.html`. Field logging in the moment is its job.
+
+**Deferred (decoupled, do NOT entangle with the importer work):** an optional
+desktop **quick-log interaction grid** — a rapid multi-row manual entry surface
+(date · stakeholder typeahead over the project's existing linked stakeholders ·
+channel · summary · logged-by initials) that writes to the same `pi_interactions`
+table with the other fields defaulted (`direction`/`subject`/`category` blank,
+`sentiment` 'Neutral', `followUp` false). Constrained to stakeholders that
+ALREADY exist at the project level — no new-contact creation, no fuzzy matching.
+Build only after the contact importer proves itself; keep it a separate, small,
+desktop-only feature.
+
 ## Competitive positioning (researched June 29, 2026)
 
 **Only direct competitor: PublicInput.com.** Founded by former transportation

@@ -11984,9 +11984,8 @@ function renderMeetings(el){
         const hasAnyAtt=namedAtt.length>0||addAtt;
         const isEmailEvt=m.type==='Email distribution';
         const emailedLine=(isEmailEvt&&namedAtt.length>0)
-          ? '✉ Emailed to '+(namedAtt.length<=5
-              ? namedAtt.map(function(s){return ((s.firstName||'').charAt(0)+'. '+(s.lastName||'')).trim()||s.org||'?';}).join(', ')
-              : 'multiple recipients ('+namedAtt.length+')')
+          ? '✉ Emailed to '+namedAtt.slice(0,12).map(function(s){return ((s.firstName||'').charAt(0)+'. '+(s.lastName||'')).trim()||s.org||'?';}).join(', ')
+              +(namedAtt.length>12?' +'+(namedAtt.length-12)+' more':'')
           : '';
         return`<tr>
           <td class="td-mono" style="white-space:nowrap">${fmt(m.date)}</td>

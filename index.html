@@ -2866,32 +2866,38 @@ function bulkClearAll() {
   _bulkUpdateFooter();
 }
 
-// ── AI CONTACT IMPORT (Phase 1: text path) ────────────────────────
-// Paste messy contact text (roster, email signatures, typed business cards)
-// → Claude Haiku extracts structured contacts → populates the grid above for
-// human review before Save. PII in the paste box is sent to the Anthropic API;
-// the panel carries an explicit notice and nothing saves without user review.
+// ── AI CONTACT IMPORT (Phase 1: text · Phase 2: image/PDF vision) ──
+// Paste messy contact text OR upload photos/screenshots/PDFs of rosters,
+// business cards, or sign-in sheets → Claude extracts structured contacts →
+// populates the grid above for human review before Save. Text uses Haiku;
+// images/PDFs use Sonnet vision (higher accuracy on messy visual input).
+// PII is sent to the Anthropic API; the panel carries an explicit notice and
+// nothing saves without user review. Scope: CONTACTS ONLY, DESKTOP ONLY.
 function _bulkAIPanelHTML() {
   var hasKey = !!_getClaudeKey();
   return '<div style="margin:12px 20px 0;padding:12px 14px;border:1px solid var(--border);border-radius:8px;background:linear-gradient(135deg,rgba(30,58,95,.25),rgba(15,76,117,.15))">'
     + '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;flex-wrap:wrap">'
     +   '<span style="font-size:13px;font-weight:600;color:var(--sky-lt)">✦ AI import</span>'
-    +   '<span style="font-size:11px;color:var(--fog)">Paste a roster, email signatures, a pasted list, or typed business-card text — Claude fills the grid below for your review.</span>'
+    +   '<span style="font-size:11px;color:var(--fog)">Paste text, or upload a photo/screenshot/PDF of a roster, business card, or sign-in sheet — Claude fills the grid below for your review.</span>'
     + '</div>'
     + '<textarea id="bulk-ai-paste" placeholder="Paste contact text here…\nExample:\nJane Doe, City of Springfield, Planning Director, jane@spring.gov, 801-555-1212\nJohn Smith — Acme Engineering — jsmith@acme.com" style="width:100%;min-height:82px;resize:vertical;font-size:12px;padding:8px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white);box-sizing:border-box;font-family:inherit;line-height:1.5"></textarea>'
     + '<div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">'
     +   '<button id="bulk-ai-btn" class="btn btn-primary" onclick="aiExtractContacts()"'+(hasKey?'':' disabled')+' style="background:linear-gradient(135deg,#1e3a5f,#0f4c75);border-color:var(--sky-lt);color:var(--sky-lt)'+(hasKey?'':';opacity:.5;cursor:not-allowed')+'">✦ Extract with AI</button>'
+    +   '<label class="btn btn-ghost" style="cursor:pointer;'+(hasKey?'':'opacity:.5;cursor:not-allowed;pointer-events:none')+'" title="Attach photos, screenshots, or PDFs">📎 Add image / PDF<input type="file" id="bulk-ai-files" accept="image/*,application/pdf" multiple onchange="_bulkFilesChanged()" style="display:none"'+(hasKey?'':' disabled')+'></label>'
+    +   '<span id="bulk-ai-files-status" style="font-size:11px;color:var(--sky-lt)"></span>'
     +   '<span id="bulk-ai-status" style="font-size:11px;color:var(--fog)"></span>'
     +   '<div style="flex:1"></div>'
-    +   '<span style="font-size:10px;color:var(--fog);max-width:360px;text-align:right;line-height:1.4">⚠ Pasted text is sent to Anthropic’s Claude API for extraction. Review every row before saving — AI can misread names, emails, and phone numbers.</span>'
+    +   '<span style="font-size:10px;color:var(--fog);max-width:360px;text-align:right;line-height:1.4">⚠ Pasted text and uploaded images are sent to Anthropic’s Claude API for extraction. Review every row before saving — AI can misread names, emails, and phone numbers.</span>'
     + '</div>'
     + (hasKey ? '' : '<div style="font-size:11px;color:var(--amber);margin-top:6px">No Claude API key saved — add one in Settings to enable AI extraction.</div>')
     + '</div>';
 }
 
-// Calls Claude Haiku with a structured-output (json_schema) contract so the
-// response is guaranteed valid JSON. Returns an array of contact objects.
-async function _aiParseContacts(text) {
+// Calls Claude with a structured-output (json_schema) contract so the response
+// is guaranteed valid JSON. `content` is the user message content — a plain
+// string (text path, Haiku) or an array of blocks incl. image/document (vision
+// path, Sonnet). Returns an array of contact objects.
+async function _aiParseContacts(content, model) {
   var key = _getClaudeKey();
   if (!key) throw new Error('No Claude API key saved.');
   var schema = {
@@ -2918,12 +2924,14 @@ async function _aiParseContacts(text) {
     required: ['contacts'],
     additionalProperties: false
   };
-  var sys = 'You extract contact records from messy pasted text: roster spreadsheets, email signatures, '
-    + 'comma/tab lists, or typed-out business cards. Return every distinct person (or standalone organization) '
-    + 'as one contact. Split full names into firstName and lastName. If a field is unknown, return an empty '
-    + 'string — never guess or invent emails, phone numbers, or names. For phone, return the digits you find. '
-    + 'For type, pick the single best match from the allowed list, or an empty string if unclear. '
-    + 'Do not include header rows, notes, or duplicates.';
+  var sys = 'You extract contact records from messy input: pasted text (roster spreadsheets, email '
+    + 'signatures, comma/tab lists, typed business cards) OR photos, screenshots, and scans of rosters, '
+    + 'business cards, or sign-in sheets, OR PDF documents. Return every distinct person (or standalone '
+    + 'organization) as one contact. Split full names into firstName and lastName. If a field is unknown, '
+    + 'return an empty string — never guess or invent emails, phone numbers, or names. For phone, return the '
+    + 'digits you find. For type, pick the single best match from the allowed list, or an empty string if '
+    + 'unclear. Do not include header rows, notes, or duplicates. When reading images, transcribe exactly '
+    + 'what you see — if handwriting or print is illegible, leave that field blank rather than guessing.';
   var resp = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -2933,11 +2941,11 @@ async function _aiParseContacts(text) {
       'anthropic-dangerous-direct-browser-access': 'true'
     },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
+      model: model || 'claude-haiku-4-5-20251001',
       max_tokens: 4096,
       system: sys,
       output_config: { format: { type: 'json_schema', schema: schema } },
-      messages: [{ role: 'user', content: text }]
+      messages: [{ role: 'user', content: content }]
     })
   });
   if (!resp.ok) {
@@ -2959,18 +2967,47 @@ async function _aiParseContacts(text) {
 async function aiExtractContacts() {
   var box = document.getElementById('bulk-ai-paste');
   var text = ((box && box.value) || '').trim();
+  var fileInput = document.getElementById('bulk-ai-files');
+  var files = (fileInput && fileInput.files) ? Array.prototype.slice.call(fileInput.files) : [];
   var btn = document.getElementById('bulk-ai-btn');
   var status = document.getElementById('bulk-ai-status');
-  if (!text) { if(status){ status.textContent='Paste some contact text first.'; status.style.color='var(--amber)'; } return; }
+  if (!text && !files.length) { if(status){ status.textContent='Paste text or add an image / PDF first.'; status.style.color='var(--amber)'; } return; }
   if (!_getClaudeKey()) { alert('Add your Claude API key in Settings first to use AI extraction.'); return; }
 
   if (btn) { btn.disabled = true; btn.textContent = '✦ Extracting…'; }
-  if (status) { status.textContent = 'Sending to Claude…'; status.style.color = 'var(--fog)'; }
 
   try {
-    var contacts = await _aiParseContacts(text);
+    // Build the request: text-only → Haiku; any image/PDF → Sonnet vision.
+    var content, model;
+    if (files.length) {
+      if (status) { status.textContent = 'Reading ' + files.length + ' file' + (files.length!==1?'s':'') + '…'; status.style.color = 'var(--fog)'; }
+      var blocks = [];
+      for (var f = 0; f < files.length; f++) {
+        var file = files[f];
+        if (file.type && file.type.indexOf('image/') === 0) {
+          var im = await _downscaleImageToBase64(file, 1568);   // downscale so big phone photos stay under the API size limit
+          blocks.push({ type: 'image', source: { type: 'base64', media_type: im.media_type, data: im.data } });
+        } else if (file.type === 'application/pdf') {
+          if (file.size > 20 * 1024 * 1024) throw new Error('"' + file.name + '" is too large (max ~20MB).');
+          var pdfData = await _fileToBase64(file);
+          blocks.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdfData } });
+        } else {
+          throw new Error('Unsupported file type: ' + (file.name || file.type) + '. Use images or PDFs.');
+        }
+      }
+      blocks.push({ type: 'text', text: text || 'Extract every contact you can find in the attached image(s) and document(s). Return one contact per person.' });
+      content = blocks;
+      model = 'claude-sonnet-5';
+      if (status) { status.textContent = 'Sending to Claude (vision)…'; }
+    } else {
+      content = text;
+      model = 'claude-haiku-4-5-20251001';
+      if (status) { status.textContent = 'Sending to Claude…'; status.style.color = 'var(--fog)'; }
+    }
+
+    var contacts = await _aiParseContacts(content, model);
     if (!contacts.length) {
-      if (status) { status.textContent = 'No contacts found in that text. Try a clearer paste.'; status.style.color = 'var(--amber)'; }
+      if (status) { status.textContent = files.length ? 'No contacts found in that image/PDF. Try a clearer scan.' : 'No contacts found in that text. Try a clearer paste.'; status.style.color = 'var(--amber)'; }
       if (btn) { btn.disabled = false; btn.textContent = '✦ Extract with AI'; }
       return;
     }
@@ -3059,6 +3096,54 @@ function bulkAddMoreRows() {
   BULK_ROWS = Math.min(BULK_ROWS_MAX, BULK_ROWS + 10);
   renderBulkAdd(document.getElementById('main'));
   _bulkRestoreRows(existing);
+}
+
+// Show which files are attached for the vision path (Phase 2).
+function _bulkFilesChanged() {
+  var fi = document.getElementById('bulk-ai-files');
+  var st = document.getElementById('bulk-ai-files-status');
+  if (!fi || !st) return;
+  var n = fi.files ? fi.files.length : 0;
+  st.textContent = n ? '📎 ' + n + ' file' + (n!==1?'s':'') + ' attached' : '';
+}
+
+// Read a file as raw base64 (no data: prefix) — used for PDFs.
+function _fileToBase64(file) {
+  return new Promise(function(resolve, reject){
+    var reader = new FileReader();
+    reader.onload = function(){ resolve((reader.result || '').split(',')[1] || ''); };
+    reader.onerror = function(){ reject(new Error('Could not read ' + (file.name || 'file'))); };
+    reader.readAsDataURL(file);
+  });
+}
+
+// Draw an image onto a canvas, scaled so the longest edge ≤ maxDim, and return
+// JPEG base64. Keeps big phone photos comfortably under the API's per-image size
+// limit and matches Anthropic's recommended max resolution for vision. Loads via
+// a data: URL (allowed by the page CSP; blob: is not).
+function _downscaleImageToBase64(file, maxDim) {
+  return new Promise(function(resolve, reject){
+    var reader = new FileReader();
+    reader.onerror = function(){ reject(new Error('Could not read image ' + (file.name || ''))); };
+    reader.onload = function(){
+      var img = new Image();
+      img.onload = function(){
+        try {
+          var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+          var scale = Math.min(1, maxDim / Math.max(w, h));
+          var cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
+          var canvas = document.createElement('canvas');
+          canvas.width = cw; canvas.height = ch;
+          canvas.getContext('2d').drawImage(img, 0, 0, cw, ch);
+          var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          resolve({ media_type: 'image/jpeg', data: dataUrl.split(',')[1] || '' });
+        } catch(e) { reject(e); }
+      };
+      img.onerror = function(){ reject(new Error('Could not read image ' + (file.name || ''))); };
+      img.src = reader.result;   // data: URL
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 

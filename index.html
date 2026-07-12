@@ -2757,7 +2757,7 @@ function renderBulkAdd(el) {
     var isLate = (BULK_ROWS <= 10 && i >= 5);  // progressive reveal only in the compact grid; expanded grids show all rows
     var rowOp = isLate ? 'opacity:.35;pointer-events:none;' : '';
     rows += '<tr id="brow'+i+'" style="'+rowOp+'">'
-      + '<td style="text-align:center;font-size:11px;color:var(--fog);width:22px;padding:3px 2px">'+(i+1)+'</td>'
+      + '<td style="text-align:center;padding:3px 2px;width:38px;white-space:nowrap"><span style="font-size:11px;color:var(--fog)">'+(i+1)+'</span> <span onclick="bulkClearRow('+i+')" title="Clear row '+(i+1)+'" style="cursor:pointer;font-size:14px;color:var(--fog);vertical-align:middle" onmouseover="this.style.color=\'var(--red)\'" onmouseout="this.style.color=\'var(--fog)\'">×</span></td>'
       + '<td style="padding:3px 3px"><input id="bfn'+i+'" type="text" placeholder="First" style="'+inpStyle+'" oninput="bulkRowActivate('+i+');bulkCheckDup('+i+')" onkeydown="bulkTabNext('+i+',\'fn\',event)"></td>'
       + '<td style="padding:3px 3px"><input id="bln'+i+'" type="text" placeholder="Last" style="'+inpStyle+'" oninput="bulkRowActivate('+i+');bulkCheckDup('+i+')"></td>'
       + '<td style="padding:3px 3px"><div style="position:relative">'
@@ -2770,14 +2770,13 @@ function renderBulkAdd(el) {
       + '<td style="padding:3px 3px"><div style="position:relative">'
       +   '<select id="bty'+i+'" style="'+selStyle+';padding-right:14px" onchange="bulkRowActivate('+i+');_bulkUpdateFooter()">'+typeOpts+'</select>'
       + '</div></td>'
-      + '<td style="padding:3px 3px"><select id="btr'+i+'" style="'+selStyle+'">'+tierOpts+'</select></td>'
       + '<td style="padding:3px 3px"><div style="position:relative">'
       +   '<select id="bro'+i+'" style="'+selStyle+';padding-right:14px">'+roleOpts+'</select>'
       +   '<span onclick="bulkApplyRoleDown('+i+')" title="Copy role down to all rows" style="position:absolute;right:-14px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:11px;color:var(--sky-lt)" aria-label="Copy role down">\u21e9</span>'
       + '</div></td>'
       + '<td style="padding:3px 6px;text-align:center"><input id="bms'+i+'" type="checkbox" checked style="accent-color:var(--sky);width:14px;height:14px"></td>'
       + '</tr>'
-      + '<tr id="bwarnrow'+i+'"><td></td><td colspan="10" style="padding:0 3px 4px"><div id="bwarn'+i+'" style="display:none;font-size:10px;color:var(--amber);padding:2px 0"></div></td></tr>';
+      + '<tr id="bwarnrow'+i+'"><td></td><td colspan="9" style="padding:0 3px 4px"><div id="bwarn'+i+'" style="display:none;font-size:10px;color:var(--amber);padding:2px 0"></div></td></tr>';
   }
 
   el.innerHTML = '<div class="topbar">'
@@ -2796,9 +2795,9 @@ function renderBulkAdd(el) {
     + '<div style="overflow-x:auto;padding:12px 20px">'
     + '<table style="border-collapse:collapse;width:100%;min-width:900px">'
     + '<colgroup>'
-    + '<col style="width:24px"><col style="width:88px"><col style="width:88px"><col style="width:130px">'
+    + '<col style="width:38px"><col style="width:88px"><col style="width:88px"><col style="width:130px">'
     + '<col style="width:110px"><col style="width:145px"><col style="width:100px">'
-    + '<col style="width:90px"><col style="width:68px"><col style="width:82px"><col style="width:52px">'
+    + '<col style="width:90px"><col style="width:82px"><col style="width:52px">'
     + '</colgroup>'
     + '<thead><tr style="border-bottom:1px solid var(--border)">'
     + '<th style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--fog);padding:0 2px 6px;text-align:left"></th>'
@@ -2809,7 +2808,6 @@ function renderBulkAdd(el) {
     + '<th style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--fog);padding:0 3px 6px;text-align:left">Email</th>'
     + '<th style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--fog);padding:0 3px 6px;text-align:left">Phone</th>'
     + '<th style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--fog);padding:0 3px 6px;text-align:left">Type</th>'
-    + '<th style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--fog);padding:0 3px 6px;text-align:left">Tier</th>'
     + '<th style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--fog);padding:0 3px 6px;text-align:left">Role <span style="color:var(--sky-lt)" title="Copy role down">\u21e9</span></th>'
     + '<th style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--fog);padding:0 3px 6px;text-align:center">Master</th>'
     + '</tr></thead>'
@@ -2845,6 +2843,17 @@ function bulkToggleAllMaster(checked) {
     var cb = document.getElementById('bms'+i);
     if (cb) cb.checked = checked;
   }
+}
+
+function bulkClearRow(i) {
+  ['bfn','bln','borg','bti','bem','bph'].forEach(function(f){
+    var el = document.getElementById(f+i); if(el){ el.value=''; el.style.borderColor=''; }
+  });
+  var ty = document.getElementById('bty'+i); if(ty) ty.selectedIndex=0;
+  var ro = document.getElementById('bro'+i); if(ro) ro.value='External';
+  var ms = document.getElementById('bms'+i); if(ms) ms.checked=true;
+  var w = document.getElementById('bwarn'+i); if(w){ w.innerHTML=''; w.style.display='none'; }
+  _bulkUpdateFooter();
 }
 
 function bulkClearAll() {

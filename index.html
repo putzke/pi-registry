@@ -2452,10 +2452,12 @@ const BULK_TYPES = ['Agency','Business','Business Group','Community Group','Cont
 const BULK_TIERS = ['High','Medium','Low'];
 let BULK_ROWS = 10;              // dynamic — grows to fit AI-extracted contacts or the "+ Add rows" button
 const BULK_ROWS_MAX = 50;        // hard cap per import batch
+let _bulkLinkRows = {};          // row idx → {id,name}: rows the user chose to LINK to an existing contact instead of creating new
 
 function openBulkAdd() {
   S.showBulkAdd = true;
   BULK_ROWS = 10;   // reset to the compact grid each time the panel is opened
+  _bulkLinkRows = {};
   renderStakeholders(document.getElementById('main'));
 }
 
@@ -2486,20 +2488,44 @@ function _bulkFilledRows() {
   return _bulkGetRows().filter(function(r){ return r.fn||r.ln||r.org; });
 }
 
-function bulkCheckDup(idx) {
+// Find an existing stakeholder that matches this row (email first, then full name) \u2014 global, all projects.
+function _bulkFindDupe(idx) {
   var em = (document.getElementById('bem'+idx)||{}).value||'';
   var fn = (document.getElementById('bfn'+idx)||{}).value||'';
   var ln = (document.getElementById('bln'+idx)||{}).value||'';
-  var warn = document.getElementById('bwarn'+idx);
-  if (!warn) return;
-  var existing = DB.get('stakeholders');
   var norm = function(s){ return (s||'').trim().toLowerCase(); };
+  var existing = DB.get('stakeholders');
   var dupe = null;
   if (em) dupe = existing.find(function(e){ return e.email && norm(e.email)===norm(em); });
   if (!dupe && fn && ln) dupe = existing.find(function(e){ return norm(e.firstName)===norm(fn) && norm(e.lastName)===norm(ln); });
+  return dupe || null;
+}
+
+function bulkCheckDup(idx) {
+  var warn = document.getElementById('bwarn'+idx);
+  if (!warn) return;
+  var linked = _bulkLinkRows[idx];
+  var dupe = _bulkFindDupe(idx);
+  // If this row was set to link but the match no longer holds (row edited / different person), drop link mode.
+  if (linked && (!dupe || String(dupe.id)!==String(linked.id))) { delete _bulkLinkRows[idx]; linked = null; }
+
+  if (linked) {
+    warn.innerHTML = '\u2713 Will link to existing &ldquo;'+escHtml(linked.name)+'&rdquo; for this project \u2014 no new record created. '
+      + '<a onclick="bulkUnlinkExisting('+idx+')" style="color:var(--fog);cursor:pointer;text-decoration:underline">Undo</a>';
+    warn.style.color = 'var(--green)';
+    warn.style.display = 'block';
+    _bulkUpdateFooter();
+    return;
+  }
+
+  warn.style.color = '';  // amber default
   if (dupe) {
     var name = ((dupe.firstName||'')+' '+(dupe.lastName||'')).trim()||dupe.org||'?';
-    warn.innerHTML = '\u26a0 Matches &ldquo;'+name+'&rdquo; &mdash; will save as new contact unless you clear this row';
+    var linkOffer = S.projectFilter
+      ? ' <a onclick="bulkLinkExisting('+idx+')" style="color:var(--sky-lt);cursor:pointer;text-decoration:underline">Link to existing instead \u2192</a>'
+      : '';
+    warn.innerHTML = '\u26a0 Matches &ldquo;'+escHtml(name)+'&rdquo; \u2014 will save as new contact'
+      + (S.projectFilter ? '.' : ' unless you clear this row.') + linkOffer;
     warn.style.display = 'block';
   } else {
     warn.innerHTML = '';
@@ -2508,18 +2534,36 @@ function bulkCheckDup(idx) {
   _bulkUpdateFooter();
 }
 
+// Mark this row to link the matched existing contact into the current project (no new record on save).
+function bulkLinkExisting(idx) {
+  if (!S.projectFilter) { showToast('Select a project first to link an existing contact.', 'warn'); return; }
+  var dupe = _bulkFindDupe(idx);
+  if (!dupe) { bulkCheckDup(idx); return; }
+  var name = ((dupe.firstName||'')+' '+(dupe.lastName||'')).trim()||dupe.org||'?';
+  _bulkLinkRows[idx] = { id: dupe.id, name: name };
+  bulkCheckDup(idx);
+}
+
+function bulkUnlinkExisting(idx) {
+  delete _bulkLinkRows[idx];
+  bulkCheckDup(idx);
+}
+
 function _bulkUpdateFooter() {
   var ct = _bulkFilledRows().length;
   var btn = document.getElementById('bulk-save-btn');
   var info = document.getElementById('bulk-footer-info');
   if (btn) btn.textContent = ct > 0 ? 'Save ' + ct + ' contact' + (ct!==1?'s':'') : 'Save contacts';
   if (info) {
-    var warns = 0;
+    var warns = 0, links = 0;
     for (var i=0; i<BULK_ROWS; i++) {
+      if (_bulkLinkRows[i]) { links++; continue; }
       var w = document.getElementById('bwarn'+i);
       if (w && w.style.display !== 'none' && w.innerHTML) warns++;
     }
-    info.textContent = ct + ' of ' + BULK_ROWS + ' rows filled' + (warns > 0 ? ' \u00b7 ' + warns + ' duplicate warning' + (warns!==1?'s':'') : '');
+    info.textContent = ct + ' of ' + BULK_ROWS + ' rows filled'
+      + (warns > 0 ? ' \u00b7 ' + warns + ' duplicate warning' + (warns!==1?'s':'') : '')
+      + (links > 0 ? ' \u00b7 ' + links + ' to link' : '');
   }
 }
 
@@ -2588,6 +2632,7 @@ async function saveBulkContacts() {
   var rowErrors = [];
   var emailErrors = [];
   rows.forEach(function(r) {
+    if (_bulkLinkRows[r.idx]) return;   // link rows reuse an existing record — no field validation needed
     var hasName = r.fn && r.ln;
     var hasOrg  = !!r.org;
     if (!hasName && !hasOrg) {
@@ -2627,6 +2672,7 @@ async function saveBulkContacts() {
   // Phone validation
   var phoneErrors = [];
   rows.forEach(function(r) {
+    if (_bulkLinkRows[r.idx]) return;
     if (r.ph) {
       var digits = r.ph.replace(/\D/g,'');
       if (digits.length !== 10) {
@@ -2648,6 +2694,7 @@ async function saveBulkContacts() {
 
   // Email format validation
   rows.forEach(function(r) {
+    if (_bulkLinkRows[r.idx]) return;
     if (r.em && !emailRe.test(r.em)) {
       emailErrors.push('Row ' + (r.idx+1) + ': "' + r.em + '" is not a valid email address');
       var el = document.getElementById('bem'+r.idx);
@@ -2666,11 +2713,39 @@ async function saveBulkContacts() {
 
   // Save each row individually via sbAdd to get real Supabase IDs before creating project links
   var saved = 0;
+  var linked = 0;
   var errors = [];
 
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i];
     if (!r.fn && !r.ln && !r.org) continue;
+
+    // LINK rows: attach an existing contact to the project instead of creating a new record.
+    var linkInfo = _bulkLinkRows[r.idx];
+    if (linkInfo) {
+      if (!S.projectFilter) continue;   // nothing to link into without a project
+      var existId = linkInfo.id;
+      var alreadyLinked = (_syncCache['project_stakeholders'] || []).some(function(x){
+        return String(x.stakeholderId)===String(existId) && String(x.projectId)===String(S.projectFilter);
+      });
+      if (alreadyLinked) { errors.push('Row ' + (r.idx+1) + ': "' + linkInfo.name + '" is already linked to this project (skipped)'); continue; }
+      var linkPS = {
+        id: DB.uid(), projectId: S.projectFilter, stakeholderId: existId,
+        support: 'Neutral', issueTags: '', addedDate: localToday(), notes: '',
+        distributionGroups: '', stakeholderRole: r.ro || 'External'
+      };
+      var linkId = await sbAdd('project_stakeholders', linkPS);
+      if (linkId) {
+        linkPS.id = linkId;
+        var allPSL = (_syncCache['project_stakeholders'] || []).slice();
+        allPSL.push(linkPS);
+        _syncCache['project_stakeholders'] = allPSL;
+        linked++;
+      } else {
+        errors.push('Row ' + (r.idx+1) + ': failed to link "' + linkInfo.name + '" to project');
+      }
+      continue;
+    }
 
     var stake = {
       id: DB.uid(),
@@ -2732,10 +2807,15 @@ async function saveBulkContacts() {
   await loadAllData();
 
   S.showBulkAdd = false;
+  _bulkLinkRows = {};
+  var parts = [];
+  if (saved)  parts.push(saved + ' new contact' + (saved!==1?'s':'') + ' saved');
+  if (linked) parts.push(linked + ' existing linked to project');
+  var summary = parts.length ? parts.join(' · ') : 'No changes';
   if (errors.length > 0) {
-    alert(saved + ' contact' + (saved!==1?'s':'') + ' saved.\n\nWarnings:\n' + errors.join('\n'));
+    alert(summary + '.\n\nWarnings:\n' + errors.join('\n'));
   } else {
-    alert(saved + ' contact' + (saved!==1?'s':'') + ' saved successfully.');
+    alert(summary + '.');
   }
   renderStakeholders(document.getElementById('main'));
 }
@@ -2852,12 +2932,14 @@ function bulkClearRow(i) {
   var ty = document.getElementById('bty'+i); if(ty) ty.selectedIndex=0;
   var ro = document.getElementById('bro'+i); if(ro) ro.value='External';
   var ms = document.getElementById('bms'+i); if(ms) ms.checked=false;
-  var w = document.getElementById('bwarn'+i); if(w){ w.innerHTML=''; w.style.display='none'; }
+  delete _bulkLinkRows[i];
+  var w = document.getElementById('bwarn'+i); if(w){ w.innerHTML=''; w.style.display='none'; w.style.color=''; }
   _bulkUpdateFooter();
 }
 
 function bulkClearAll() {
   if (!confirm('Clear all rows?')) return;
+  _bulkLinkRows = {};
   for (var i=0; i<BULK_ROWS; i++) {
     ['bfn','bln','borg','bti','bem','bph'].forEach(function(f){
       var el = document.getElementById(f+i); if(el) el.value='';
@@ -2866,7 +2948,7 @@ function bulkClearAll() {
     var tr = document.getElementById('btr'+i); if(tr) tr.selectedIndex=0;
     var ro = document.getElementById('bro'+i); if(ro) ro.value='External';
     var ms = document.getElementById('bms'+i); if(ms) ms.checked=false;
-    var w = document.getElementById('bwarn'+i); if(w){w.innerHTML='';w.style.display='none';}
+    var w = document.getElementById('bwarn'+i); if(w){w.innerHTML='';w.style.display='none';w.style.color='';}
     // Re-lock rows 5+ only in the compact grid
     if (BULK_ROWS <= 10 && i >= 5) {
       var row = document.getElementById('brow'+i); if(row){row.style.opacity='.35';row.style.pointerEvents='none';}

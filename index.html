@@ -9626,9 +9626,9 @@ function _buildSectionPreviewTable(secType, projF, pstart, pend, includeInternal
       if (pct===null) return '<span style="color:#999">—</span>';
       var f = Math.max(0, Math.min(10, Math.round(pct/10)));
       var col = pct>=100?'#1a7a50':pct>=60?'#1a5fb4':'#b36b00';
-      return '<span style="font-family:monospace;letter-spacing:-1px;color:'+col+'">'+'█'.repeat(f)+'</span>'
-        +'<span style="font-family:monospace;letter-spacing:-1px;color:#d0d0d0">'+'░'.repeat(10-f)+'</span>'
-        +' <strong>'+pct+'%</strong>';
+      return '<strong>'+pct+'%</strong> '
+        +'<span style="font-family:monospace;letter-spacing:1px;color:'+col+'">'+'▮'.repeat(f)+'</span>'
+        +'<span style="font-family:monospace;letter-spacing:1px;color:#d0d0d0">'+'▯'.repeat(10-f)+'</span>';
     };
     var rowsP = [
       ['NEPA PI checklist', clP.length>0?(clDoneP+' / '+clP.length+' items'):'No checklist set', clPctP],
@@ -11168,7 +11168,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
 
       if(sec.showTable){
         // Compact, Word-friendly rollup table (checkbox on): metric · status · progress bar.
-        var _pcBar=function(pct){ if(pct===null) return '—'; var f=Math.max(0,Math.min(10,Math.round(pct/10))); return '█'.repeat(f)+'░'.repeat(10-f)+'  '+pct+'%'; };
+        var _pcBar=function(pct){ if(pct===null) return '—'; var f=Math.max(0,Math.min(10,Math.round(pct/10))); return pct+'%  '+'▮'.repeat(f)+'▯'.repeat(10-f); };
         var _pcRR=_pcomms.length>0?Math.round(_responded/_pcomms.length*100):null;
         var _pcCP=_comms.length>0?Math.round(_fulfilled/_comms.length*100):null;
         var _pcCols=[3400,3400,2760];

@@ -13655,6 +13655,11 @@ function renderTribal(m){
   if(phaseF)recs=recs.filter(c=>c.phase===phaseF);
   if(typeF)recs=recs.filter(c=>c.consultationType===typeF);
 
+  // "Completed" = concurrence received or closed → shown as compact mini-cards below the large active cards.
+  const isDoneTribal=c=>c.phase==='Concurrence received'||c.phase==='Closed — complete'||c.phase==='Closed — no historic properties';
+  const activeRecs=recs.filter(c=>!isDoneTribal(c));
+  const doneRecs=recs.filter(isDoneTribal);
+
   const openCt=all.filter(c=>c.phase!=='Closed — complete'&&c.phase!=='Closed — no historic properties').length;
   const overdueRespCt=all.filter(c=>c.responseDeadline&&c.responseDeadline<today&&!c.responseDate&&c.phase!=='Closed — complete'&&c.phase!=='Closed — no historic properties').length;
   const concurrenceCt=all.filter(c=>c.responseStatus==='Concurrence — no effect'||c.responseStatus==='Concurrence — with conditions').length;
@@ -13674,54 +13679,94 @@ function renderTribal(m){
     return'var(--slate)';
   }
 
+  const tdetail=(label,val)=>val?`<div style="font-size:12.5px;color:var(--mist);padding:3px 0"><span style="color:var(--slate);font-weight:600">${label}:</span> ${val}</div>`:'';
+
+  // Large, emphasized card for an active/in-progress consultation.
   function card(c){
     const proj=allProjs.find(p=>String(p.id)===String(c.projectId));
     const overdue=c.responseDeadline&&c.responseDeadline<today&&!c.responseDate;
     const daysLeft=c.responseDeadline?Math.ceil((new Date(c.responseDeadline+'T00:00:00')-new Date())/86400000):null;
     const isClosed=c.phase&&(c.phase.includes('Closed')||c.phase==='Concurrence received');
     const pc=phaseColor(c.phase);
-    return`<div style="background:#1A3050;border:1px solid rgba(255,255,255,.13);border-left:3px solid ${pc};border-radius:10px;padding:14px 16px;margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
+
+    // Prominent deadline block (was previously a tiny corner label).
+    let deadlineBlock='';
+    if(overdue){
+      deadlineBlock=`<div style="text-align:center;background:rgba(224,82,82,.12);border:1px solid rgba(224,82,82,.45);border-radius:10px;padding:12px 20px;min-width:160px;flex-shrink:0">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--red);font-weight:700;margin-bottom:4px">⚠ Response overdue</div>
+        <div style="font-size:26px;font-weight:800;color:var(--red);line-height:1">${Math.abs(daysLeft)} days</div>
+        <div style="font-size:11px;color:var(--red);margin-top:4px">Was due ${fmt(c.responseDeadline)}</div>
+      </div>`;
+    } else if(daysLeft!==null&&!isClosed){
+      const near=daysLeft<=7;
+      const dcol=near?'var(--amber)':'var(--sky-lt)';
+      const dbg=near?'rgba(232,160,32,.12)':'rgba(74,155,232,.10)';
+      const dbd=near?'rgba(232,160,32,.45)':'rgba(74,155,232,.40)';
+      deadlineBlock=`<div style="text-align:center;background:${dbg};border:1px solid ${dbd};border-radius:10px;padding:12px 20px;min-width:160px;flex-shrink:0">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--slate);font-weight:700;margin-bottom:4px">Response deadline</div>
+        <div style="font-size:20px;font-weight:700;color:${dcol};line-height:1.15">${fmt(c.responseDeadline)}</div>
+        <div style="font-size:12px;color:${dcol};font-weight:600;margin-top:4px">${daysLeft>=0?daysLeft+' days left':Math.abs(daysLeft)+' days ago'}</div>
+      </div>`;
+    }
+
+    return`<div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-left:4px solid ${pc};border-radius:12px;padding:18px 20px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:18px;margin-bottom:14px">
         <div style="flex:1;min-width:0">
-          <div style="font-size:14px;font-weight:600;color:var(--white);margin-bottom:2px">${c.tribeName||'(Unnamed tribe)'}</div>
-          <div style="font-size:11px;color:var(--fog)">${proj?proj.pid+' · '+proj.name:''}</div>
+          <div style="font-size:20px;font-weight:700;color:var(--white);line-height:1.2;margin-bottom:5px">${c.tribeName||'(Unnamed tribe)'}</div>
+          <div style="font-size:12.5px;color:var(--fog);margin-bottom:10px">${proj?proj.pid+' · '+proj.name:'—'}</div>
+          <span style="font-size:12px;font-weight:700;color:${pc};background:${pc}22;border:1px solid ${pc}55;border-radius:12px;padding:5px 14px;white-space:nowrap">${c.phase||'—'}</span>
         </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
-          <span style="font-size:10px;font-weight:700;color:${pc};background:${pc}22;border:1px solid ${pc}44;border-radius:10px;padding:2px 8px;white-space:nowrap">${c.phase||'—'}</span>
-          ${overdue?`<span style="font-size:10px;color:var(--red);font-weight:600">⚠ Response ${Math.abs(daysLeft)}d overdue</span>`:
-            daysLeft!==null&&!isClosed?`<span style="font-size:10px;color:${daysLeft<=7?'var(--amber)':'var(--fog)'}">Deadline: ${c.responseDeadline}${daysLeft<=7?' ('+daysLeft+'d)':''}</span>`:''}
-        </div>
+        ${deadlineBlock}
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
         <span class="badge b-sky">${c.consultationType||'—'}</span>
         ${c.section106Phase?`<span class="badge b-purple">${c.section106Phase}</span>`:''}
         ${c.moaRequired?'<span class="badge b-amber">MOA required</span>':''}
         ${c.responseStatus?`<span class="badge b-dark">${c.responseStatus}</span>`:''}
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
         ${c.languageAccessNeeded?'<span class="badge b-amber">Language access needed</span>':''}
         ${c.nearTribalLands?'<span class="badge b-purple">Near tribal lands</span>':''}
         ${c.cfr710Review?'<span class="badge b-dark">23 CFR 710 review</span>':''}
         ${c.includedInAnnualReport?`<span class="badge b-green">Annual report${c.annualReportYear?' '+c.annualReportYear:''}</span>`:''}
       </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:11px;color:var(--fog);margin-bottom:10px">
-        <div><span style="color:var(--slate)">THPO:</span> ${c.thpoContact||'—'}</div>
-        <div><span style="color:var(--slate)">Notified:</span> ${c.notificationDate||'—'}</div>
-        <div><span style="color:var(--slate)">Response received:</span> ${c.responseDate||'—'}</div>
-        ${c.tribalOfficial?`<div><span style="color:var(--slate)">Tribal official:</span> ${c.tribalOfficial}</div>`:''}
-        ${c.agencyOfficial?`<div><span style="color:var(--slate)">Agency official:</span> ${c.agencyOfficial}</div>`:''}
-        ${c.fhwaLiaison?`<div><span style="color:var(--slate)">FHWA liaison:</span> ${c.fhwaLiaison}</div>`:''}
-        <div><span style="color:var(--slate)">Next action:</span> ${c.nextAction||'—'}</div>
-        <div><span style="color:var(--slate)">BIA involvement:</span> ${c.biaInvolvement?'Yes':'No'}${c.biaApprovalStatus?' · '+c.biaApprovalStatus:''}</div>
-        <div><span style="color:var(--slate)">Follow-up due:</span> ${c.followUpDate||'—'}</div>
-        ${c.certificationStatus?`<div><span style="color:var(--slate)">EO 13175 cert:</span> ${c.certificationStatus}</div>`:''}
-        ${c.utahPARef?`<div><span style="color:var(--slate)">Utah PA:</span> ${c.utahPARef}</div>`:''}
+      ${c.nextAction?`<div style="background:rgba(74,155,232,.08);border-left:3px solid var(--sky);border-radius:0 8px 8px 0;padding:9px 14px;margin-bottom:14px">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--sky-lt);font-weight:700">Next action</div>
+        <div style="font-size:13.5px;color:var(--white);margin-top:3px;line-height:1.4">${c.nextAction}${c.followUpDate?` <span style="color:var(--fog);font-size:12px">· due ${fmt(c.followUpDate)}</span>`:''}</div>
+      </div>`:''}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 24px;padding:12px 14px;background:rgba(255,255,255,.03);border-radius:8px;margin-bottom:14px">
+        ${tdetail('THPO contact',c.thpoContact)}
+        ${tdetail('Notified',c.notificationDate?fmt(c.notificationDate):'')}
+        ${tdetail('Response received',c.responseDate?fmt(c.responseDate):'')}
+        ${tdetail('Tribal official',c.tribalOfficial)}
+        ${tdetail('Agency official',c.agencyOfficial)}
+        ${tdetail('FHWA liaison',c.fhwaLiaison)}
+        ${tdetail('BIA involvement',c.biaInvolvement?('Yes'+(c.biaApprovalStatus?' · '+c.biaApprovalStatus:'')):'No')}
+        ${tdetail('EO 13175 cert',c.certificationStatus)}
+        ${tdetail('Utah PA',c.utahPARef)}
       </div>
-      ${c.notes?`<div style="font-size:12px;color:var(--mist);background:rgba(255,255,255,.04);border-radius:6px;padding:8px 10px;margin-bottom:10px;line-height:1.5">${c.notes}</div>`:''}
+      ${c.notes?`<div style="font-size:12.5px;color:var(--mist);background:rgba(255,255,255,.04);border-radius:6px;padding:10px 12px;margin-bottom:14px;line-height:1.55">${c.notes}</div>`:''}
       <div style="display:flex;gap:8px">
         <button class="btn btn-sm btn-primary" onclick="openTribalModal('${c.id}')">Edit</button>
         <button class="btn btn-sm btn-ghost" onclick="delTribal('${c.id}')" style="color:var(--red)">Delete</button>
       </div>
+    </div>`;
+  }
+
+  // Compact status card for a completed / closed consultation.
+  function miniCard(c){
+    const proj=allProjs.find(p=>String(p.id)===String(c.projectId));
+    const closeDate=c.responseDate||c.followUpDate||'';
+    const noHist=c.phase==='Closed — no historic properties';
+    const badgeCol=noHist?'var(--slate)':'var(--green)';
+    const badgeBg=noHist?'rgba(148,163,184,.15)':'rgba(40,168,112,.15)';
+    const badgeBd=noHist?'rgba(148,163,184,.4)':'rgba(40,168,112,.4)';
+    return`<div style="display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.1);border-left:3px solid ${badgeCol};border-radius:8px;padding:9px 14px;margin-bottom:8px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.tribeName||'(Unnamed tribe)'}</div>
+        <div style="font-size:11px;color:var(--fog);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${proj?proj.pid+' · '+proj.name+' · ':''}${c.consultationType||'—'}</div>
+      </div>
+      ${closeDate?`<span style="font-size:11px;color:var(--fog);white-space:nowrap;flex-shrink:0">${fmt(closeDate)}</span>`:''}
+      <span style="font-size:10px;font-weight:700;color:${badgeCol};background:${badgeBg};border:1px solid ${badgeBd};border-radius:10px;padding:3px 10px;white-space:nowrap;flex-shrink:0">✓ ${c.phase}</span>
+      <button class="btn btn-sm btn-ghost" onclick="openTribalModal('${c.id}')" style="flex-shrink:0">Edit</button>
     </div>`;
   }
 
@@ -13774,7 +13819,15 @@ function renderTribal(m){
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" style="width:40px;height:40px;margin-bottom:12px;opacity:.4"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.582-7 8-7s8 3 8 7"/></svg>
       <div style="font-size:14px;margin-bottom:6px">${all.length===0?'No tribal consultations logged yet':'No results match your filters'}</div>
       <div style="font-size:12px">${all.length===0?'Click <strong>Log consultation</strong> to add the first entry.':'Try adjusting the search or filters above.'}</div>
-    </div>`:recs.map(card).join('')}
+    </div>`:
+      (activeRecs.length?activeRecs.map(card).join('')
+        :(doneRecs.length?`<div style="text-align:center;padding:24px 20px;color:var(--fog);font-size:13px">No open consultations — all shown below are completed or closed.</div>`:''))
+      +(doneRecs.length?`<div style="display:flex;align-items:center;gap:10px;margin:22px 0 12px">
+          <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--slate)">Completed / Closed</span>
+          <span style="font-size:11px;font-weight:700;color:var(--green)">${doneRecs.length}</span>
+          <div style="flex:1;height:1px;background:rgba(255,255,255,.1)"></div>
+        </div>`+doneRecs.map(miniCard).join(''):'')
+    }
   </div>`;
 }
 

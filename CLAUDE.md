@@ -262,7 +262,20 @@ competitor has — keeping the PI firm's client continuously informed) is live.
   project and renders. No client login. Copy/Revoke wired via
   `_renderPortalBtnActive/Inactive()` on `.portal-btn-container[data-proj][data-style]`.
 - **Magic-link login** (`pi_client_access` + Supabase OTP) for multi-project
-  clients — built but has NO admin UI (grants are hand-inserted in Supabase).
+  clients — the portal side (project selector, `switchProject`, per-project
+  data) is fully built. **Phase 1 provisioning admin SHIPPED** (July 2026):
+  Settings → **Client Portal Access** grants access **by email** (no pre-invite).
+  Migration `sql/2026-07-13_client_access_by_email.sql` adds an `email` column +
+  a JWT-email read policy (`lower(email)=lower(auth.jwt()->>'email')`) + an
+  anon SELECT policy so the admin UI can list grants. Provisioning is **Option C
+  (manual)**: `renderClientAccessPanel()` / `caGenerateGrantSQL()` /
+  `caGenerateRevokeSQL()` generate INSERT/DELETE SQL you paste into Supabase —
+  the app never writes grants (anon has no insert, so clients can't self-grant).
+  `_clientAccessFetch()` reads `pi_client_access` with an explicit anon Bearer.
+  **Functional today** (data loads via existing permissive RLS); **not yet
+  isolated** — per-table email-scoped RLS + an Edge Function for one-click
+  invite are Phase 2/3. `client-portal.html` needs no change (bootApp reads
+  grants via RLS).
 
 **Portal sections (NAV):** Overview (stats + "Needs Attention" panel),
 Deliverables, Engagement (date-ranged), Issues, Commitments, Comment Periods,

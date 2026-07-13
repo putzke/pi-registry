@@ -15103,6 +15103,13 @@ function renderSettings(m) {
       <div style="margin-top:12px;font-size:11px;color:var(--fog)">Model: <span style="color:var(--slate)">claude-haiku-4-5</span> · Max tokens per call: <span style="color:var(--slate)">400</span> · Typical cost: ~$0.0002–0.0005 per narrative</div>
     </div>
 
+    <!-- Client Portal Access -->
+    <div style="background:var(--navy-mid);border:1px solid rgba(74,155,232,.25);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">
+      <div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:4px">Client Portal Access <span style="font-size:11px;font-weight:600;color:var(--sky-lt);background:rgba(74,155,232,.15);border-radius:8px;padding:2px 8px;margin-left:6px">multi-project login</span></div>
+      <div style="font-size:12px;color:var(--fog);margin-bottom:14px;line-height:1.5">Grant a client one magic-link login that shows every project you pick — they get a project switcher in the portal. <strong style="color:var(--slate)">Provisioning is manual for now:</strong> choose the client + projects, copy the generated SQL, and run it once in the Supabase SQL Editor. The client then signs in at <span style="font-family:var(--mono);color:var(--slate)">client-portal.html</span> with their email.</div>
+      <div id="client-access-panel" style="font-size:13px;color:var(--fog)">Loading current access…</div>
+    </div>
+
     <!-- Data Integrity -->
     <div style="background:var(--navy-mid);border:1px solid rgba(255,255,255,.12);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">
       <div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:4px">Data Integrity Scanner</div>
@@ -15145,6 +15152,109 @@ function renderSettings(m) {
     </div>
 
   </div>`;
+  setTimeout(function(){ if(document.getElementById('client-access-panel')) renderClientAccessPanel(); }, 0);
+}
+
+// ── CLIENT PORTAL ACCESS (Phase 1: manual grant-by-email provisioning) ────────
+// Reads pi_client_access with the anon key (so the anon RLS policy applies
+// regardless of any consultant session) and generates copy-paste SQL to add or
+// revoke grants in Supabase. The app never writes grants itself.
+async function _clientAccessFetch() {
+  try {
+    var r = await fetch(SUPA_REST + '/pi_client_access?select=id,email,project_id,user_id,created_at&order=email.asc', {
+      headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY, 'Accept': 'application/json' }
+    });
+    if (!r.ok) return { ok:false, status:r.status, rows:[] };
+    return { ok:true, rows: await r.json() };
+  } catch(e) { return { ok:false, error:e.message, rows:[] }; }
+}
+
+async function renderClientAccessPanel() {
+  var panel = document.getElementById('client-access-panel');
+  if (!panel) return;
+  var projs = DB.get('projects').slice().sort(function(a,b){ return (a.pid||'').localeCompare(b.pid||''); });
+  var res = await _clientAccessFetch();
+  var inp = 'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);border-radius:6px;color:var(--white);font-size:13px;padding:8px 12px;box-sizing:border-box;outline:none';
+
+  var projCbs = projs.map(function(p){
+    return '<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--mist);padding:3px 0;cursor:pointer">'
+      + '<input type="checkbox" id="ca-proj-'+p.id+'" style="accent-color:var(--sky)"> '
+      + '<span><span style="color:var(--slate)">'+escHtml(p.pid||'')+'</span> — '+escHtml(p.name||'')+'</span></label>';
+  }).join('');
+
+  var builder = '<div style="border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:14px;margin-bottom:16px">'
+    + '<div style="font-size:12px;font-weight:700;color:var(--white);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Grant access</div>'
+    + '<input id="ca-email" type="email" placeholder="client@email.com" style="'+inp+';width:100%;margin-bottom:10px">'
+    + '<div style="font-size:11px;color:var(--fog);margin-bottom:6px">Projects this client can see:</div>'
+    + '<div style="max-height:180px;overflow-y:auto;border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:8px 10px;margin-bottom:10px">'+(projCbs||'<span style="color:var(--fog)">No projects</span>')+'</div>'
+    + '<button class="btn btn-primary" onclick="caGenerateGrantSQL()">Generate grant SQL</button>'
+    + '</div>';
+
+  var sqlBox = '<div id="ca-sql-wrap" style="display:none;margin-bottom:16px">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
+    + '<span style="font-size:11px;color:var(--fog)">Copy and run once in Supabase → SQL Editor</span>'
+    + '<button class="btn btn-sm" onclick="caCopySQL()">Copy SQL</button></div>'
+    + '<pre id="ca-sql-out" style="background:#0d1a2b;border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:12px;font-family:var(--mono);font-size:12px;color:#cfe0f5;white-space:pre-wrap;word-break:break-word;margin:0"></pre></div>';
+
+  var grantsHtml = '';
+  if (!res.ok) {
+    grantsHtml = '<div style="font-size:12px;color:var(--amber);border:1px solid rgba(232,160,32,.3);border-radius:6px;padding:10px 12px">Could not load current grants'+(res.status?' (HTTP '+res.status+')':'')+'. If this is the first time, run <span style="font-family:var(--mono)">sql/2026-07-13_client_access_by_email.sql</span> in Supabase first.</div>';
+  } else {
+    var byEmail = {};
+    res.rows.forEach(function(g){ var e = g.email || '(no email — legacy user_id grant)'; if(!byEmail[e]) byEmail[e]=[]; byEmail[e].push(g); });
+    var emails = Object.keys(byEmail).sort();
+    if (!emails.length) {
+      grantsHtml = '<div style="font-size:12px;color:var(--fog);font-style:italic">No client grants yet.</div>';
+    } else {
+      grantsHtml = emails.map(function(e){
+        var eJs = e.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        var chips = byEmail[e].map(function(g){
+          var p = projs.find(function(x){ return String(x.id)===String(g.project_id); });
+          var label = p ? (p.pid+' — '+p.name) : ('Project '+g.project_id);
+          return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--mist);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:3px 10px;margin:2px">'
+            + escHtml(label)
+            + '<span onclick="caGenerateRevokeSQL(\''+eJs+'\','+Number(g.project_id)+')" title="Generate revoke SQL for this project" style="cursor:pointer;color:var(--red);font-weight:700">×</span></span>';
+        }).join('');
+        return '<div style="border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px 12px;margin-bottom:8px">'
+          + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">'
+          + '<span style="font-size:13px;font-weight:600;color:var(--white)">'+escHtml(e)+'</span>'
+          + '<button class="btn btn-sm btn-ghost" style="color:var(--red);font-size:11px" onclick="caGenerateRevokeSQL(\''+eJs+'\',null)">Revoke all</button></div>'
+          + '<div>'+chips+'</div></div>';
+      }).join('');
+    }
+    grantsHtml = '<div style="font-size:12px;font-weight:700;color:var(--white);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Current access</div>'+grantsHtml;
+  }
+
+  panel.innerHTML = builder + sqlBox + grantsHtml;
+}
+
+function _caSqlEsc(s){ return String(s).replace(/'/g,"''"); }
+function _caShowSQL(sql){
+  var out = document.getElementById('ca-sql-out'); var wrap = document.getElementById('ca-sql-wrap');
+  if (out) out.textContent = sql;
+  if (wrap) { wrap.style.display = 'block'; wrap.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+}
+
+function caGenerateGrantSQL(){
+  var email = ((document.getElementById('ca-email')||{}).value || '').trim().toLowerCase();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('Enter a valid client email.', 'warn'); return; }
+  var picked = DB.get('projects').filter(function(p){ var el = document.getElementById('ca-proj-'+p.id); return el && el.checked; });
+  if (!picked.length) { showToast('Select at least one project.', 'warn'); return; }
+  var vals = picked.map(function(p){ return "  ('"+_caSqlEsc(email)+"', "+Number(p.id)+")"; }).join(',\n');
+  _caShowSQL("insert into pi_client_access (email, project_id) values\n"+vals+"\non conflict (email, project_id) do nothing;");
+}
+
+function caGenerateRevokeSQL(email, projectId){
+  var sql = (projectId===null || projectId===undefined)
+    ? "delete from pi_client_access where lower(email)=lower('"+_caSqlEsc(email)+"');"
+    : "delete from pi_client_access where lower(email)=lower('"+_caSqlEsc(email)+"') and project_id = "+Number(projectId)+";";
+  _caShowSQL(sql);
+  showToast('Revoke SQL generated below.', 'info', 2000);
+}
+
+function caCopySQL(){
+  var out = document.getElementById('ca-sql-out');
+  if (out && out.textContent) navigator.clipboard.writeText(out.textContent).then(function(){ showToast('SQL copied — paste into Supabase SQL Editor.', 'info', 2500); });
 }
 
 function runIntegrityScan() {

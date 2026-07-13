@@ -13655,8 +13655,12 @@ function renderTribal(m){
   if(phaseF)recs=recs.filter(c=>c.phase===phaseF);
   if(typeF)recs=recs.filter(c=>c.consultationType===typeF);
 
-  // "Completed" = concurrence received or closed → shown as compact mini-cards below the large active cards.
-  const isDoneTribal=c=>c.phase==='Concurrence received'||c.phase==='Closed — complete'||c.phase==='Closed — no historic properties';
+  // "Completed" = a terminal phase AND no unresolved objection. An Objection /
+  // Non-concurrence keeps the consultation Active even if the phase says closed
+  // (36 CFR 800.7 — not resolved until dispute resolution concludes).
+  const isObjectionResp=c=>c.responseStatus==='Objection'||c.responseStatus==='Non-concurrence';
+  const isTerminalPhaseC=c=>c.phase==='Concurrence received'||c.phase==='Closed — complete'||c.phase==='Closed — no historic properties';
+  const isDoneTribal=c=>isTerminalPhaseC(c)&&!isObjectionResp(c);
   const activeRecs=recs.filter(c=>!isDoneTribal(c));
   const doneRecs=recs.filter(isDoneTribal);
 
@@ -13718,6 +13722,9 @@ function renderTribal(m){
         </div>
         ${deadlineBlock}
       </div>
+      ${isTerminalPhaseC(c)&&isObjectionResp(c)?`<div style="background:rgba(224,82,82,.1);border:1px solid rgba(224,82,82,.4);border-radius:8px;padding:9px 12px;margin-bottom:14px;font-size:12px;color:#f0a8a8;line-height:1.45">
+        <strong style="color:var(--red)">⚠ Unresolved:</strong> phase is marked closed, but the response is &ldquo;${c.responseStatus}.&rdquo; Under 36 CFR 800.7 this is not resolved until dispute resolution concludes — kept in Active until the response status changes.
+      </div>`:''}
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
         <span class="badge b-sky">${c.consultationType||'—'}</span>
         ${c.section106Phase?`<span class="badge b-purple">${c.section106Phase}</span>`:''}
@@ -14008,6 +14015,27 @@ function saveTribal(){
   _markField('f-toffphone',_offPhoneOk);
   _markField('f-tphone',_thpoPhoneOk);
   if(!_offEmailOk||!_thpoEmailOk||!_offPhoneOk||!_thpoPhoneOk)return;
+
+  // ── Close-out coherence guardrails: keep Phase and Response/concurrence status in sync ──
+  let phase=v('f-tphase');
+  const respStatus=v('f-trespstatus');
+  const TERMINAL_PHASES=['Concurrence received','Closed — complete','Closed — no historic properties'];
+  const isTerminalPhase=TERMINAL_PHASES.indexOf(phase)>=0;
+  const isConcur=respStatus==='Concurrence — no effect'||respStatus==='Concurrence — with conditions';
+  const isOptOut=respStatus==='No interest / opted out';
+  const isObjection=respStatus==='Objection'||respStatus==='Non-concurrence';
+  // (1) A concurrence/opt-out is recorded but the phase isn't closed → offer to close it out.
+  if((isConcur||isOptOut)&&!isTerminalPhase){
+    const suggested=isOptOut?'Closed — complete':'Concurrence received';
+    if(confirm('You recorded a response of "'+respStatus+'", but the phase is still "'+(phase||'unset')+'".\n\nMark this consultation as closed out now? (sets phase to "'+suggested+'")')){
+      phase=suggested;
+    }
+  }
+  // (2) Phase says closed but the response is an objection → not resolved under 36 CFR 800.7.
+  if(isTerminalPhase&&isObjection){
+    alert('Heads up: the phase is set to "'+phase+'", but the response is "'+respStatus+'".\n\nUnder 36 CFR 800.7, an objection / non-concurrence is not resolved until dispute resolution concludes — so this consultation will stay in the Active list until the response status changes.');
+  }
+
   const data={
     id:S.editTribalId||DB.uid(),
     tribeName:name,
@@ -14017,7 +14045,7 @@ function saveTribal(){
     thpoPhone:v('f-tphone'),
     projectId:projId,
     consultationType:ctype,
-    phase:v('f-tphase'),
+    phase:phase,
     section106Phase:v('f-t106'),
     notificationDate:v('f-tnotdate'),
     responseDeadline:v('f-tdeadline'),

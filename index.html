@@ -42,6 +42,9 @@ body{font-family:var(--font);font-size:13px;background:var(--navy);color:var(--w
 .nav-btn.active{background:var(--sky-dim);color:var(--sky-lt)}
 .nav-btn svg{width:18px;height:18px;flex-shrink:0;opacity:.8}
 .nav-btn.active svg{opacity:1}
+.nav-btn.nav-util{margin-top:8px;box-sizing:border-box;border:1px solid rgba(255,255,255,.08)}
+.nav-btn.nav-util:not(.active){background:rgba(120,140,170,.10)}
+.nav-btn.nav-util:not(.active):hover{background:rgba(120,140,170,.17)}
 .nav-badge{margin-left:auto;font-size:11px;font-weight:600;border-radius:10px;padding:1px 6px;min-width:18px;text-align:center;background:var(--sky);color:#fff}
 .nav-badge.warn{background:var(--amber)}
 .nav-badge.hide{display:none}
@@ -442,7 +445,7 @@ window.onGoogleMapsReady = function() {
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 13.5 L8 3.5 L14 13.5"/><path d="M6.5 1 L9.5 4"/><path d="M9.5 1 L6.5 4"/><path d="M8 8 L5.5 13.5"/><path d="M8 8 L10.5 13.5"/><path d="M1.5 13.5 L14.5 13.5"/></svg>
       Tribal - N/A
     </div>
-    <button class="nav-btn" id="nav-settings" onclick="setView('settings')">
+    <button class="nav-btn nav-util" id="nav-settings" onclick="setView('settings')">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg>
       Settings
     </button>

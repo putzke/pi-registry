@@ -416,11 +416,6 @@ window.onGoogleMapsReady = function() {
       Comments
       <span class="nav-badge warn hide" id="nb-pcomm">0</span>
     </button>
-    <button class="nav-btn" id="nav-tribal" onclick="setView('tribal')">
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="4" r="2"/><path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5"/><path d="M5 8.5l-2 2M11 8.5l2 2"/></svg>
-      Tribal
-      <span class="nav-badge warn hide" id="nb-tribal">0</span>
-    </button>
     <button class="nav-btn" id="nav-deliverables" onclick="setView('deliverables')">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 1h8l3 3v10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z"/><path d="M4 1v4h8"/><path d="M4 9h8M4 12h5"/></svg>
       Deliverables
@@ -443,6 +438,10 @@ window.onGoogleMapsReady = function() {
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="14" height="14" rx="1.5"/><path d="M4 11V8M7 11V5M10 11V7M13 11V4"/></svg>
       Reports
     </button>
+    <div class="nav-btn" id="nav-tribal" style="opacity:.42;cursor:not-allowed;font-style:italic" title="Not available yet">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 13.5 L8 3.5 L14 13.5"/><path d="M6.5 1 L9.5 4"/><path d="M9.5 1 L6.5 4"/><path d="M8 8 L5.5 13.5"/><path d="M8 8 L10.5 13.5"/><path d="M1.5 13.5 L14.5 13.5"/></svg>
+      Tribal - N/A
+    </div>
     <button class="nav-btn" id="nav-settings" onclick="setView('settings')">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg>
       Settings
@@ -1436,7 +1435,7 @@ function initDashRows(){
     }
   });
 }
-function setView(v){S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.showBulkAdd=false;S.showEmailPanel=false;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;S.cmtSearch='';S.cmtProj='';S.cmtStatus='';S.cmtPeriod='';S.cmtPeriodId='';S.cmtTab='comments';
+function setView(v){if(v==='tribal'){showToast('Tribal consultation module is not available yet.','info',2500);return;}S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.showBulkAdd=false;S.showEmailPanel=false;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;S.cmtSearch='';S.cmtProj='';S.cmtStatus='';S.cmtPeriod='';S.cmtPeriodId='';S.cmtTab='comments';
   S.view=v;S.selStakeholder=null;S.selInteraction=null;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const navId=v==='commitments'?'nav-commitments':v==='comments'?'nav-comments':v==='tribal'?'nav-tribal':('nav-'+v);
@@ -5240,12 +5239,10 @@ function renderDelScope(pF){
                     +'<path d="M6 4l4 4-4 4"/></svg>'
                     +'<span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:'+hdrCol+';flex:1">'+g.name+'</span>'
                     +'<span style="font-size:11px;color:var(--fog)">'+doneCt+'/'+g.items.length+'</span>'
-                    +(g.name==='Tribal Consultation'?'<span onclick="event.stopPropagation();setView(\'tribal\')" style="font-size:11px;color:#60a5fa;padding:1px 7px;border:1px solid rgba(96,165,250,.35);border-radius:4px;cursor:pointer;flex-shrink:0;line-height:1.6">Tribal records →</span>':'')
                     +'</button>'
                   :'<div style="display:flex;align-items:center;gap:9px;padding:7px 10px;border-left:3px solid '+hdrCol+'">'
                     +'<span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:'+hdrCol+';flex:1">'+g.name+'</span>'
                     +'<span style="font-size:11px;color:var(--fog)">'+doneCt+'/'+g.items.length+'</span>'
-                    +(g.name==='Tribal Consultation'?'<span onclick="setView(\'tribal\')" style="font-size:11px;color:#60a5fa;padding:1px 7px;border:1px solid rgba(96,165,250,.35);border-radius:4px;cursor:pointer;flex-shrink:0;line-height:1.6">Tribal records →</span>':'')
                     +'</div>')
                 +'</div>';
               var items=g.items.map(function(x){

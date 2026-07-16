@@ -350,12 +350,49 @@ function dfltFrom() { const d = new Date(); d.setDate(d.getDate()-30); return is
 function dfltTo()   { return isoDate(new Date()); }
 
 // ── Session ───────────────────────────────────────────────────────────────────
-function saveSession(data) { try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(data)); } catch(_) {} }
-function loadSession()     { try { return JSON.parse(sessionStorage.getItem(SESSION_KEY)); } catch(_) { return null; } }
-function clearSession()    { sessionStorage.removeItem(SESSION_KEY); }
+// localStorage (not sessionStorage) so the login survives closing the browser —
+// the client returns to the portal on the same device without re-clicking the
+// email link. Token refresh below keeps it alive past the ~1h access-token life.
+function saveSession(data) { try { localStorage.setItem(SESSION_KEY, JSON.stringify(data)); } catch(_) {} }
+function loadSession()     { try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch(_) { return null; } }
+function clearSession()    { localStorage.removeItem(SESSION_KEY); }
+
+// Exchange the long-lived refresh token for a fresh access token.
+async function refreshSession(refresh_token) {
+  try {
+    const r = await fetch(`${SUPA_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPA_KEY },
+      body: JSON.stringify({ refresh_token })
+    });
+    if (!r.ok) return null;
+    const d = await r.json();
+    if (!d.access_token) return null;
+    const sess = {
+      access_token: d.access_token,
+      refresh_token: d.refresh_token || refresh_token,
+      expires_at: d.expires_at || (Math.floor(Date.now()/1000) + (d.expires_in || 3600))
+    };
+    saveSession(sess);
+    return sess;
+  } catch(_) { return null; }
+}
+
+// Return a usable session, refreshing when the access token is expired/near expiry.
+async function ensureSession() {
+  let s = loadSession();
+  if (!s || !s.access_token) return null;
+  const now = Math.floor(Date.now() / 1000);
+  if (s.expires_at && (s.expires_at - now) < 60) {
+    if (!s.refresh_token) { clearSession(); return null; }
+    s = await refreshSession(s.refresh_token);
+    if (!s) { clearSession(); return null; }
+  }
+  return s;
+}
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
   const params = new URLSearchParams(window.location.search);
   const token = params.get('token');
   if (token) { _tokenMode = true; bootFromToken(token); return; }
@@ -365,13 +402,18 @@ window.addEventListener('DOMContentLoaded', () => {
     const p = new URLSearchParams(hash.slice(1));
     const tok = p.get('access_token');
     if (tok) {
-      saveSession({ access_token: tok, refresh_token: p.get('refresh_token') });
+      const expIn = Number(p.get('expires_in')) || 3600;
+      saveSession({
+        access_token: tok,
+        refresh_token: p.get('refresh_token'),
+        expires_at: Number(p.get('expires_at')) || (Math.floor(Date.now()/1000) + expIn)
+      });
       history.replaceState(null, '', window.location.pathname);
       bootApp(); return;
     }
   }
-  const s = loadSession();
-  if (s && s.access_token) { bootApp(); return; }
+  const s = await ensureSession();
+  if (s) { bootApp(); return; }
   showLogin();
 });
 
@@ -391,6 +433,7 @@ document.getElementById('login-form').addEventListener('submit', async e => {
     });
     if (res.ok) {
       msg.className = 'success';
+      try { localStorage.setItem('hc_portal_last_email', email); } catch(_) {}
       msg.textContent = 'Login link sent — check your inbox and click the link to sign in.';
       btn.textContent = 'Sent ✓';
     } else {
@@ -408,6 +451,13 @@ document.getElementById('login-form').addEventListener('submit', async e => {
 function showLogin() {
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('app').classList.remove('visible');
+  // Prefill the last email used on this device so re-login (esp. on a new
+  // device the client only needs to do once) is a single click.
+  try {
+    const last = localStorage.getItem('hc_portal_last_email');
+    const inp = document.getElementById('email-input');
+    if (last && inp && !inp.value) inp.value = last;
+  } catch(_) {}
 }
 function showApp() {
   document.getElementById('login-screen').style.display = 'none';

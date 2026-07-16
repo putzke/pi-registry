@@ -6302,6 +6302,7 @@ function updateIntStakeholders(){
   }
   const lst=document.getElementById('f-is-list');
   if(lst) lst.style.display='none';
+  if(typeof intHideNewContactForm==='function') intHideNewContactForm();
 }
 
 function _getIntStakeList(){
@@ -6318,27 +6319,56 @@ function _getIntStakeList(){
   return list.sort((a,b)=>(a.lastName+a.firstName).localeCompare(b.lastName+b.firstName));
 }
 
+// Split search matches into (a) already on this project and (b) on the master
+// list but not yet linked here — the two states the consultant needs to see.
+function _intSearchGroups(term){
+  const projId=document.getElementById('f-ip')?.value||'';
+  const stakes=DB.getActive('stakeholders');
+  const ps=DB.get('project_stakeholders');
+  const t=(term||'').toLowerCase();
+  const byName=(a,b)=>((a.lastName||'')+(a.firstName||'')).localeCompare((b.lastName||'')+(b.firstName||''));
+  const match=s=>!t||(dispName(s)+' '+(s.org||'')).toLowerCase().includes(t);
+  if(!projId) return {inProject:[],onMaster:[]};
+  const linked=new Set(ps.filter(x=>String(x.projectId)===String(projId)).map(x=>String(x.stakeholderId)));
+  return {
+    inProject: stakes.filter(s=>linked.has(String(s.id))&&match(s)).sort(byName),
+    onMaster:  stakes.filter(s=>!linked.has(String(s.id))&&s.isMaster&&match(s)).sort(byName)
+  };
+}
+
 function filterIntStakeList(){
   const inp=document.getElementById('f-is-search');
-  const search=(inp?.value||'').toLowerCase();
   const lst=document.getElementById('f-is-list');
   if(!lst||!inp) return;
-  const list=_getIntStakeList();
-  const filtered=search?list.filter(s=>(dispName(s)+' '+(s.org||'')).toLowerCase().includes(search)):list;
-  if(filtered.length===0&&!search){ lst.style.display='none'; return; }
-  // Position using fixed coords to escape overflow:auto on modal body
+  const term=(inp.value||'').toLowerCase();
+  const projId=document.getElementById('f-ip')?.value||'';
   const rect=inp.getBoundingClientRect();
-  lst.style.position='fixed';
-  lst.style.top=(rect.bottom+2)+'px';
-  lst.style.left=rect.left+'px';
-  lst.style.width=rect.width+'px';
-  lst.style.zIndex='99999';
-  const items=[{id:'',label:'— None / Anonymous —'},...filtered.map(s=>({id:s.id,label:dispName(s)+(s.org?' — '+s.org:'')}))];
-  lst.innerHTML=items.map(item=>`<div onclick="selectIntStake('${item.id}','${(item.label||'').replace(/'/g,"\\'")}')"
-    style="padding:8px 12px;cursor:pointer;font-size:13px;color:var(--mist);border-bottom:1px solid rgba(255,255,255,.06)"
-    onmouseover="this.style.background='rgba(255,255,255,.08)'"
-    onmouseout="this.style.background=''">${item.label}</div>`).join('');
-  lst.style.display='block';
+  lst.style.position='fixed'; lst.style.top=(rect.bottom+2)+'px'; lst.style.left=rect.left+'px'; lst.style.width=rect.width+'px'; lst.style.zIndex='99999';
+  const ej=s=>(''+s).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  const hov='onmouseover="this.style.background=\'rgba(255,255,255,.08)\'" onmouseout="this.style.background=\'\'"';
+  const row='padding:8px 12px;cursor:pointer;font-size:13px;color:var(--mist);border-bottom:1px solid rgba(255,255,255,.06)';
+  const hdr=t=>`<div style="padding:5px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--fog);background:rgba(255,255,255,.04)">${t}</div>`;
+  const cell=s=>`${escHtml(dispName(s))}${s.org?` <span style="color:var(--fog)">· ${escHtml(s.org)}</span>`:''}`;
+  let html='';
+  if(!projId){
+    const all=DB.getActive('stakeholders').filter(s=>!term||(dispName(s)+' '+(s.org||'')).toLowerCase().includes(term)).sort((a,b)=>((a.lastName||'')+(a.firstName||'')).localeCompare((b.lastName||'')+(b.firstName||'')));
+    html+=all.map(s=>`<div onclick="selectIntStake('${s.id}','${ej(dispName(s)+(s.org?' — '+s.org:''))}')" style="${row}" ${hov}>${cell(s)}</div>`).join('');
+    html+=`<div style="padding:6px 12px;font-size:11px;color:var(--fog);font-style:italic;border-bottom:1px solid rgba(255,255,255,.06)">Select a project above to add a new contact.</div>`;
+    html+=`<div onclick="selectIntStake('','')" style="${row};color:var(--fog);font-style:italic" ${hov}>— None / Anonymous —</div>`;
+    lst.innerHTML=html; lst.style.display='block'; return;
+  }
+  const g=_intSearchGroups(term);
+  if(g.inProject.length){
+    html+=hdr('In this project');
+    html+=g.inProject.map(s=>`<div onclick="selectIntStake('${s.id}','${ej(dispName(s)+(s.org?' — '+s.org:''))}')" style="${row}" ${hov}>${cell(s)}</div>`).join('');
+  }
+  if(g.onMaster.length){
+    html+=hdr('On master list — click to add to this project');
+    html+=g.onMaster.map(s=>`<div onclick="intAddMasterToProject('${s.id}')" style="${row};display:flex;justify-content:space-between;align-items:center;gap:10px" ${hov}><span>${cell(s)}</span><span style="font-size:11px;color:var(--sky-lt);font-weight:600;white-space:nowrap">+ Add to project</span></div>`).join('');
+  }
+  html+=`<div onclick="intShowNewContactForm()" style="${row};color:var(--sky-lt);font-weight:600" ${hov}>${term?`+ Add &ldquo;${escHtml(inp.value)}&rdquo; as a new contact`:'+ Add a new contact'}</div>`;
+  html+=`<div onclick="selectIntStake('','')" style="${row};color:var(--fog);font-style:italic" ${hov}>— None / Anonymous —</div>`;
+  lst.innerHTML=html; lst.style.display='block';
 }
 
 function selectIntStake(id, label){
@@ -6348,6 +6378,62 @@ function selectIntStake(id, label){
   if(hid) hid.value=id;
   if(search) search.value=id?label:'';
   if(lst) lst.style.display='none';
+  intHideNewContactForm();
+}
+
+// Link an existing master-list contact to this project, then select them.
+async function intAddMasterToProject(id){
+  const projId=document.getElementById('f-ip')?.value||'';
+  if(!projId){ showToast('Select a project first.','warn'); return; }
+  const s=DB.getActive('stakeholders').find(x=>String(x.id)===String(id));
+  if(!s) return;
+  const already=(_syncCache['project_stakeholders']||[]).some(x=>String(x.stakeholderId)===String(id)&&String(x.projectId)===String(projId));
+  if(!already){
+    const link={id:DB.uid(),projectId:projId,stakeholderId:id,support:'Neutral',issueTags:'',addedDate:localToday(),notes:'',distributionGroups:'',stakeholderRole:'External'};
+    const realId=await sbAdd('project_stakeholders',link);
+    if(!realId){ showToast('Could not add to project.','error'); return; }
+    link.id=realId; const arr=(_syncCache['project_stakeholders']||[]).slice(); arr.push(link); _syncCache['project_stakeholders']=arr;
+  }
+  selectIntStake(id, dispName(s)+(s.org?' — '+s.org:''));
+  showToast('✓ '+dispName(s)+' added to this project','info',2500);
+}
+
+function intShowNewContactForm(){
+  const projId=document.getElementById('f-ip')?.value||'';
+  if(!projId){ showToast('Select a project first.','warn'); return; }
+  const lst=document.getElementById('f-is-list'); if(lst) lst.style.display='none';
+  const term=(document.getElementById('f-is-search')?.value||'').trim();
+  const parts=term?term.split(/\s+/):[];
+  const fn=document.getElementById('nc-fn'), ln=document.getElementById('nc-ln');
+  if(fn) fn.value = parts.length>1 ? parts.slice(0,-1).join(' ') : (parts[0]||'');
+  if(ln) ln.value = parts.length>1 ? parts[parts.length-1] : '';
+  const form=document.getElementById('f-is-newform'); if(form) form.style.display='block';
+  if(fn) fn.focus();
+}
+function intHideNewContactForm(){
+  const form=document.getElementById('f-is-newform'); if(form) form.style.display='none';
+}
+
+// Create a brand-new contact, link them to the project, and select them.
+async function intAddNewContact(){
+  const projId=document.getElementById('f-ip')?.value||'';
+  if(!projId){ showToast('Select a project first.','warn'); return; }
+  const v=id=>(document.getElementById(id)?.value||'').trim();
+  const fn=v('nc-fn'), ln=v('nc-ln'), org=v('nc-org'), em=v('nc-em'), ph=v('nc-ph');
+  const ty=document.getElementById('nc-ty')?.value||'Other';
+  const role=document.getElementById('nc-role')?.value||'External';
+  if(!((fn&&ln)||org)){ showToast('Enter first + last name, or an organization.','warn'); return; }
+  if(ph){ const d=ph.replace(/\D/g,''); if(d.length!==10){ showToast('Phone must be 10 digits (or leave blank).','warn'); return; } }
+  if(em && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)){ showToast('Enter a valid email (or leave blank).','warn'); return; }
+  const stake={id:DB.uid(),firstName:fn,lastName:ln,org:org,title:'',email:em,phone:ph?formatPhone(cleanPhone(ph)):'',type:ty,influenceTier:'Medium',isMaster:false,isAnonymous:false,notes:'',address:'',parcelId:'',isArchived:false};
+  const realId=await sbAdd('stakeholders',stake);
+  if(!realId){ showToast('Could not create contact.','error'); return; }
+  stake.id=realId; const sArr=(_syncCache['stakeholders']||[]).slice(); sArr.push(stake); _syncCache['stakeholders']=sArr;
+  const link={id:DB.uid(),projectId:projId,stakeholderId:realId,support:'Neutral',issueTags:'',addedDate:localToday(),notes:'',distributionGroups:'',stakeholderRole:role};
+  const linkId=await sbAdd('project_stakeholders',link);
+  if(linkId){ link.id=linkId; const pArr=(_syncCache['project_stakeholders']||[]).slice(); pArr.push(link); _syncCache['project_stakeholders']=pArr; }
+  selectIntStake(realId, dispName(stake)+(org?' — '+org:''));
+  showToast('✓ '+dispName(stake)+' added to project','info',2500);
 }
 
 function openIntModal(preStake){
@@ -6363,6 +6449,29 @@ function openIntModal(preStake){
     </div>
     <div class="fr"><label>Date *</label><input type="date" id="f-id" value="${localToday()}"></div>
     <div class="fr"><label>Channel</label><select id="f-ic">${['Phone','Email','In-person','Public meeting','Public event','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'].map(c=>`<option>${c}</option>`).join('')}</select></div>
+  </div>
+  <div id="f-is-newform" style="display:none;margin:0 0 10px;border:1px solid var(--sky-dim);background:rgba(74,155,232,.06);border-radius:8px;padding:12px 14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <span style="font-size:11px;font-weight:700;color:var(--sky-lt);text-transform:uppercase;letter-spacing:.5px">✚ New contact — added to this project</span>
+      <span onclick="intHideNewContactForm()" title="Cancel" style="cursor:pointer;color:var(--fog);font-size:18px;line-height:1">×</span>
+    </div>
+    <div class="fgrid fg2f">
+      <div class="fr"><label>First name</label><input id="nc-fn" autocomplete="off"></div>
+      <div class="fr"><label>Last name</label><input id="nc-ln" autocomplete="off"></div>
+    </div>
+    <div class="fgrid fg2f">
+      <div class="fr"><label>Organization</label><input id="nc-org" autocomplete="off"></div>
+      <div class="fr"><label>Type</label><select id="nc-ty">${STAKE_TYPES.map(t=>`<option${t==='Other'?' selected':''}>${t}</option>`).join('')}</select></div>
+    </div>
+    <div class="fgrid fg2f">
+      <div class="fr"><label>Email</label><input id="nc-em" autocomplete="off"></div>
+      <div class="fr"><label>Phone</label><input id="nc-ph" autocomplete="off"></div>
+    </div>
+    <div class="fgrid fg2f">
+      <div class="fr"><label>Role on project</label><select id="nc-role"><option value="External">External</option><option value="Internal">Internal</option></select></div>
+      <div class="fr"><label>&nbsp;</label><button class="btn btn-primary" onclick="intAddNewContact()" style="width:100%">✓ Add &amp; continue</button></div>
+    </div>
+    <div style="font-size:11px;color:var(--fog);margin-top:2px">First + last name, or an organization. Email &amp; phone optional but recommended.</div>
   </div>
   <div class="fgrid fg3f">
     <div class="fr"><label>Direction</label><select id="f-idr">${['Incoming','Outgoing','In-person'].map(d=>`<option>${d}</option>`).join('')}</select></div>
@@ -6392,7 +6501,7 @@ function openIntModal(preStake){
   setTimeout(function(){
     var isearch = document.getElementById('f-is-search');
     var anonDefault = getAnonLabel(S.projectFilter||'');
-    if(isearch) isearch.placeholder = anonDefault + ' — search to select a specific contact';
+    if(isearch) isearch.placeholder = anonDefault + ' — search, or add a new contact';
   }, 50);
   // Auto-populate Logged by from session
   (function(){var lb=getLoggedBy();var d=document.getElementById('f-il-display');var h=document.getElementById('f-il');if(d)d.textContent=lb||'—';if(h)h.value=lb;})();

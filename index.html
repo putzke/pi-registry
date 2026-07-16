@@ -6425,7 +6425,8 @@ async function intAddNewContact(){
   if(!((fn&&ln)||org)){ showToast('Enter first + last name, or an organization.','warn'); return; }
   if(ph){ const d=ph.replace(/\D/g,''); if(d.length!==10){ showToast('Phone must be 10 digits (or leave blank).','warn'); return; } }
   if(em && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)){ showToast('Enter a valid email (or leave blank).','warn'); return; }
-  const stake={id:DB.uid(),firstName:fn,lastName:ln,org:org,title:'',email:em,phone:ph?formatPhone(cleanPhone(ph)):'',type:ty,influenceTier:'Medium',isMaster:false,isAnonymous:false,notes:'',address:'',parcelId:'',isArchived:false};
+  const toMaster=document.getElementById('nc-master')?.checked||false;
+  const stake={id:DB.uid(),firstName:fn,lastName:ln,org:org,title:'',email:em,phone:ph?formatPhone(cleanPhone(ph)):'',type:ty,influenceTier:'Medium',isMaster:toMaster,isAnonymous:false,notes:'',address:'',parcelId:'',isArchived:false};
   const realId=await sbAdd('stakeholders',stake);
   if(!realId){ showToast('Could not create contact.','error'); return; }
   stake.id=realId; const sArr=(_syncCache['stakeholders']||[]).slice(); sArr.push(stake); _syncCache['stakeholders']=sArr;
@@ -6471,6 +6472,7 @@ function openIntModal(preStake){
       <div class="fr"><label>Role on project</label><select id="nc-role"><option value="External">External</option><option value="Internal">Internal</option></select></div>
       <div class="fr"><label>&nbsp;</label><button class="btn btn-primary" onclick="intAddNewContact()" style="width:100%">✓ Add &amp; continue</button></div>
     </div>
+    <label style="display:flex;align-items:center;gap:8px;margin:4px 0 2px;cursor:pointer"><input type="checkbox" id="nc-master" style="width:15px;height:15px;accent-color:var(--sky)"><span style="font-size:12px;color:var(--mist)">Also add to Master List <span style="color:var(--fog);font-size:11px">— only for contacts you’ll reuse across projects</span></span></label>
     <div style="font-size:11px;color:var(--fog);margin-top:2px">First + last name, or an organization. Email &amp; phone optional but recommended.</div>
   </div>
   <div class="fgrid fg3f">

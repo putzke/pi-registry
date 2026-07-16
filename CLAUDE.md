@@ -276,6 +276,17 @@ competitor has — keeping the PI firm's client continuously informed) is live.
   isolated** — per-table email-scoped RLS + an Edge Function for one-click
   invite are Phase 2/3. `client-portal.html` needs no change (bootApp reads
   grants via RLS).
+  - **OTP login prereqs:** portal login uses `create_user:true` (grant-by-email
+    self-provisions the auth user on first OTP login); Supabase must have email
+    signups enabled + the portal URL in Auth Redirect URLs. Session persists in
+    `localStorage` with refresh-token renewal (survives browser close / ~1h
+    token expiry); last email is prefilled; a one-time "bookmark this page" tip
+    shows after login.
+  - **⚠ Configure custom SMTP before onboarding real clients.** Supabase's
+    built-in auth email sender is rate-limited (~few/hour + ~60s per-address
+    cooldown → "email rate limit exceeded") and has poor deliverability (login
+    links land in spam). Set Authentication → Emails → SMTP to a provider
+    (Resend / Postmark / SendGrid / SES) before any real client logs in.
 
 **Portal sections (NAV):** Overview (stats + "Needs Attention" panel),
 Deliverables, Engagement (date-ranged), Issues, Commitments, Comment Periods,

@@ -15169,11 +15169,14 @@ async function _clientAccessFetch() {
   } catch(e) { return { ok:false, error:e.message, rows:[] }; }
 }
 
+var _caGrantsByEmail = {};   // lowercased email -> array of currently-granted project_ids
 async function renderClientAccessPanel() {
   var panel = document.getElementById('client-access-panel');
   if (!panel) return;
   var projs = DB.get('projects').slice().sort(function(a,b){ return (a.pid||'').localeCompare(b.pid||''); });
   var res = await _clientAccessFetch();
+  _caGrantsByEmail = {};
+  if (res.ok) res.rows.forEach(function(g){ if(!g.email) return; var k=g.email.toLowerCase(); (_caGrantsByEmail[k]=_caGrantsByEmail[k]||[]).push(g.project_id); });
   var inp = 'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);border-radius:6px;color:var(--white);font-size:13px;padding:8px 12px;box-sizing:border-box;outline:none';
 
   var projCbs = projs.map(function(p){
@@ -15183,11 +15186,12 @@ async function renderClientAccessPanel() {
   }).join('');
 
   var builder = '<div style="border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:14px;margin-bottom:16px">'
-    + '<div style="font-size:12px;font-weight:700;color:var(--white);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Grant access</div>'
-    + '<input id="ca-email" type="email" placeholder="client@email.com" style="'+inp+';width:100%;margin-bottom:10px">'
+    + '<div style="font-size:12px;font-weight:700;color:var(--white);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Grant or edit access</div>'
+    + '<div style="font-size:11px;color:var(--fog);margin-bottom:10px;line-height:1.45">Type a <strong style="color:var(--slate)">new</strong> email to grant, or click <strong style="color:var(--slate)">Edit access</strong> on a client below to load their current projects. The checked projects become the client’s <strong style="color:var(--slate)">complete</strong> access — the generated SQL adds the newly checked and removes the unchecked.</div>'
+    + '<input id="ca-email" type="email" placeholder="client@email.com" onblur="caPrefillFromEmail()" style="'+inp+';width:100%;margin-bottom:10px">'
     + '<div style="font-size:11px;color:var(--fog);margin-bottom:6px">Projects this client can see:</div>'
     + '<div style="max-height:180px;overflow-y:auto;border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:8px 10px;margin-bottom:10px">'+(projCbs||'<span style="color:var(--fog)">No projects</span>')+'</div>'
-    + '<button class="btn btn-primary" onclick="caGenerateGrantSQL()">Generate grant SQL</button>'
+    + '<button class="btn btn-primary" onclick="caGenerateAccessSQL()">Generate access SQL</button>'
     + '</div>';
 
   var sqlBox = '<div id="ca-sql-wrap" style="display:none;margin-bottom:16px">'
@@ -15218,7 +15222,10 @@ async function renderClientAccessPanel() {
         return '<div style="border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px 12px;margin-bottom:8px">'
           + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">'
           + '<span style="font-size:13px;font-weight:600;color:var(--white)">'+escHtml(e)+'</span>'
-          + '<button class="btn btn-sm btn-ghost" style="color:var(--red);font-size:11px" onclick="caGenerateRevokeSQL(\''+eJs+'\',null)">Revoke all</button></div>'
+          + '<div style="display:flex;gap:6px">'
+          +   '<button class="btn btn-sm" style="font-size:11px" onclick="caLoadClient(\''+eJs+'\')">Edit access</button>'
+          +   '<button class="btn btn-sm btn-ghost" style="color:var(--red);font-size:11px" onclick="caGenerateRevokeSQL(\''+eJs+'\',null)">Revoke all</button>'
+          + '</div></div>'
           + '<div>'+chips+'</div></div>';
       }).join('');
     }
@@ -15235,13 +15242,52 @@ function _caShowSQL(sql){
   if (wrap) { wrap.style.display = 'block'; wrap.scrollIntoView({behavior:'smooth',block:'nearest'}); }
 }
 
-function caGenerateGrantSQL(){
+// Reconcile the client's access to exactly the checked projects: INSERT the
+// newly checked, DELETE the unchecked-but-currently-granted. The generated SQL
+// is shown for review before you paste it into Supabase (Option C), so a wrong
+// checkbox never silently changes access.
+function caGenerateAccessSQL(){
   var email = ((document.getElementById('ca-email')||{}).value || '').trim().toLowerCase();
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('Enter a valid client email.', 'warn'); return; }
-  var picked = DB.get('projects').filter(function(p){ var el = document.getElementById('ca-proj-'+p.id); return el && el.checked; });
-  if (!picked.length) { showToast('Select at least one project.', 'warn'); return; }
-  var vals = picked.map(function(p){ return "  ('"+_caSqlEsc(email)+"', "+Number(p.id)+")"; }).join(',\n');
-  _caShowSQL("insert into pi_client_access (email, project_id) values\n"+vals+"\non conflict (email, project_id) do nothing;");
+  var checked = DB.get('projects').filter(function(p){ var el=document.getElementById('ca-proj-'+p.id); return el&&el.checked; }).map(function(p){ return String(p.id); });
+  var current = (_caGrantsByEmail[email]||[]).map(String);
+  var curSet={}, chkSet={};
+  current.forEach(function(id){ curSet[id]=1; });
+  checked.forEach(function(id){ chkSet[id]=1; });
+  var toAdd = checked.filter(function(id){ return !curSet[id]; });
+  var toRemove = current.filter(function(id){ return !chkSet[id]; });
+  if (!toAdd.length && !toRemove.length) {
+    _caShowSQL('-- No changes: '+email+' already has exactly the checked projects.');
+    showToast('No changes — already matches this client’s access.', 'info', 2500); return;
+  }
+  var sql = '';
+  if (toAdd.length) {
+    sql += "insert into pi_client_access (email, project_id) values\n"
+      + toAdd.map(function(id){ return "  ('"+_caSqlEsc(email)+"', "+Number(id)+")"; }).join(',\n')
+      + "\non conflict (email, project_id) do nothing;";
+  }
+  if (toRemove.length) {
+    if (sql) sql += "\n\n";
+    sql += "delete from pi_client_access where lower(email)=lower('"+_caSqlEsc(email)+"') and project_id in ("+toRemove.map(Number).join(',')+");";
+  }
+  _caShowSQL(sql);
+  showToast((toAdd.length?('+'+toAdd.length+' add'):'')+(toAdd.length&&toRemove.length?' · ':'')+(toRemove.length?('−'+toRemove.length+' remove'):''), 'info', 3000);
+}
+
+function _caCheckProjects(email){
+  var current = _caGrantsByEmail[(email||'').toLowerCase()] || [];
+  var set = {}; current.forEach(function(id){ set[String(id)]=1; });
+  DB.get('projects').forEach(function(p){ var el=document.getElementById('ca-proj-'+p.id); if(el) el.checked = !!set[String(p.id)]; });
+}
+function caLoadClient(email){
+  var inp=document.getElementById('ca-email'); if(inp) inp.value=email;
+  _caCheckProjects(email);
+  if(inp) inp.scrollIntoView({behavior:'smooth',block:'center'});
+  showToast('Loaded '+email+' — adjust the checked projects, then Generate access SQL.', 'info', 3000);
+}
+function caPrefillFromEmail(){
+  var email=((document.getElementById('ca-email')||{}).value||'').trim().toLowerCase();
+  if(email && _caGrantsByEmail[email]) _caCheckProjects(email);
 }
 
 function caGenerateRevokeSQL(email, projectId){

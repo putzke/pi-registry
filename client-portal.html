@@ -318,6 +318,9 @@
 const SUPA_URL  = 'https://ncfbblhlsiglxkoiounv.supabase.co';
 const SUPA_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5jZmJibGhsc2lnbHhrb2lvdW52Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0MTUzOTMsImV4cCI6MjA5NDk5MTM5M30.-fRI1QGkr1teN0sFvl25Uq7U38Jq1SAc6heIJvOud2Q';
 const PORTAL_URL = 'https://putzke.github.io/pi-registry/client-portal.html';
+// Client-facing support contact shown on the "no access yet" screen. Change to
+// your business/client-facing email.
+const SUPPORT_CONTACT = 'putzke@hotmail.com';
 const SESSION_KEY = 'cp_session_v1';
 
 // ── Nav definition ────────────────────────────────────────────────────────────
@@ -356,6 +359,31 @@ function dfltTo()   { return isoDate(new Date()); }
 function saveSession(data) { try { localStorage.setItem(SESSION_KEY, JSON.stringify(data)); } catch(_) {} }
 function loadSession()     { try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch(_) { return null; } }
 function clearSession()    { localStorage.removeItem(SESSION_KEY); }
+
+// The email the current session is authenticated as (decoded from the JWT).
+function _sessionEmail() {
+  try {
+    const s = loadSession();
+    if (!s || !s.access_token) return '';
+    const b = s.access_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+    return (JSON.parse(atob(b)).email) || '';
+  } catch(_) { return ''; }
+}
+
+// Friendly, actionable "you're signed in but have no access" screen.
+function _noAccessHTML() {
+  const em = _sessionEmail();
+  return '<div style="max-width:540px;margin:48px auto;background:#fff;border:1px solid #dde1ea;border-radius:12px;padding:28px;color:#374151;line-height:1.55">'
+    + '<div style="font-size:18px;font-weight:700;color:#1f2937;margin-bottom:10px">You’re signed in — but no projects yet</div>'
+    + '<p style="margin:0 0 16px">Your login worked'+(em?' (signed in as <strong>'+esc(em)+'</strong>)':'')+', but your project manager hasn’t linked any projects to this email address yet.</p>'
+    + '<div style="font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">What to do</div>'
+    + '<ul style="margin:0 0 4px;padding-left:20px">'
+    +   '<li style="margin-bottom:10px">Were you invited under a <strong>different email address</strong>? <a href="#" onclick="signOut();return false;" style="color:#4f46e5;font-weight:600">Sign in with the other email</a>.</li>'
+    +   '<li>Otherwise, ask your project manager to grant you access: <a href="mailto:'+SUPPORT_CONTACT+'?subject='+encodeURIComponent('Client portal access request'+(em?' — '+em:''))+'" style="color:#4f46e5;font-weight:600">'+esc(SUPPORT_CONTACT)+'</a></li>'
+    + '</ul>'
+    + '<p style="margin:16px 0 0;font-size:12px;color:#9ca3af">Once access is granted you won’t need a new link — just reopen this page (or your bookmark) on this device.</p>'
+    + '</div>';
+}
 
 // Exchange the long-lived refresh token for a fresh access token.
 async function refreshSession(refresh_token) {
@@ -506,7 +534,7 @@ async function bootApp() {
   try {
     const access = await sbFetch('pi_client_access?select=project_id');
     if (!access.length) {
-      setContent('<div class="error-box">No projects have been assigned to your account yet. Please contact your project manager.</div>');
+      setContent(_noAccessHTML());
       return;
     }
     const ids = access.map(r => r.project_id).join(',');
@@ -517,7 +545,7 @@ async function bootApp() {
       sbFetch(`pi_report_archive?project_id=in.(${ids})&client_visible=eq.true&select=id,project_id,report_num,report_title,report_subtitle,period_start,period_end,overall_summary,sections,archived_at&order=archived_at.desc`)
     ]);
     if (!projects.length) {
-      setContent('<div class="error-box">No projects found. Please contact your project manager.</div>');
+      setContent(_noAccessHTML());
       return;
     }
     _projects = projects;

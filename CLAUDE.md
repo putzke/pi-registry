@@ -287,6 +287,11 @@ competitor has — keeping the PI firm's client continuously informed) is live.
     cooldown → "email rate limit exceeded") and has poor deliverability (login
     links land in spam). Set Authentication → Emails → SMTP to a provider
     (Resend / Postmark / SendGrid / SES) before any real client logs in.
+    **This is a Supabase-dashboard setting only — no app code changes and
+    nothing to remove once configured; delete this reminder line when done.**
+  - **`SUPPORT_CONTACT`** in `client-portal.html` sets the client-facing email
+    shown on the "no access yet" screen (`_noAccessHTML`) — update it from the
+    default before onboarding.
 
 **Portal sections (NAV):** Overview (stats + "Needs Attention" panel),
 Deliverables, Engagement (date-ranged), Issues, Commitments, Comment Periods,

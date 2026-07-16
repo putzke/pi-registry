@@ -387,7 +387,7 @@ document.getElementById('login-form').addEventListener('submit', async e => {
     const res = await fetch(`${SUPA_URL}/auth/v1/otp?redirect_to=${encodeURIComponent(PORTAL_URL)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': SUPA_KEY },
-      body: JSON.stringify({ email, create_user: false })
+      body: JSON.stringify({ email, create_user: true })
     });
     if (res.ok) {
       msg.className = 'success';

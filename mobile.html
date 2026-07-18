@@ -557,6 +557,10 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
               <input type="text" class="form-input" id="caller-ln" placeholder="Optional">
             </div>
           </div>
+          <div class="form-group" style="margin-bottom:10px">
+            <label class="form-label">Organization</label>
+            <input type="text" class="form-input" id="caller-org" placeholder="Optional">
+          </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
             <div class="form-group">
               <label class="form-label">Phone</label>
@@ -1772,7 +1776,7 @@ function _getPickerList(){
 }
 
 function _clearCallerFields(){
-  ['caller-fn','caller-ln','caller-ph','caller-em'].forEach(id=>{
+  ['caller-fn','caller-ln','caller-org','caller-ph','caller-em'].forEach(id=>{
     const el=document.getElementById(id);
     if(el) el.value='';
   });
@@ -1799,35 +1803,46 @@ function showStakePicker(){
 }
 
 function filterStakePicker(){
-  const query=(document.getElementById('log-stake-search').value||'').toLowerCase().trim();
-  const hid=document.getElementById('log-stake');
-  const lst=document.getElementById('stake-picker-list');
-
-  // If user is editing text, clear the hidden selection
-  hid.value='';
-  // Show caller info since no stakeholder is linked
+  const rawq=(document.getElementById('log-stake-search').value||'').trim();
+  const query=rawq.toLowerCase();
+  document.getElementById('log-stake').value='';
+  // Search-first: do NOT reveal caller-info on typing — the user must confirm
+  // no match and explicitly choose "Add new contact".
   const wrap=document.getElementById('caller-info-wrap');
-  if(wrap) wrap.style.display='block';
+  if(wrap) wrap.style.display='none';
 
-  const list=_getPickerList();
-  const filtered=query
-    ? list.filter(s=>(s.firstName+' '+s.lastName+' '+(s.org||'')).toLowerCase().includes(query))
-    : list.slice(0,40); // show first 40 when no query
-
-  if(!filtered.length && !query){
-    lst.style.display='none';
-    return;
+  const lst=document.getElementById('stake-picker-list');
+  const pF=document.getElementById('log-proj').value;
+  const stakes=DB.getActive('stakeholders');
+  const ps=DB.get('project_stakeholders');
+  const match=s=>!query||(s.firstName+' '+s.lastName+' '+(s.org||'')).toLowerCase().includes(query);
+  const nm=s=>(s.firstName+' '+s.lastName).trim();
+  const sub=s=>s.org?(s.org+(s.title?' · '+s.title:'')):(s.title||'');
+  const eh=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const ej=s=>(''+s).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  const grp=t=>`<div class="stake-opt" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);cursor:default;background:rgba(0,0,0,.03)">${t}</div>`;
+  const row=(onmd,main,subt,tag)=>`<div class="stake-opt" onmousedown="${onmd}">${tag||''}<div>${eh(main)}</div>${subt?`<div class="stake-opt-sub">${eh(subt)}</div>`:''}</div>`;
+  let html='';
+  if(pF){
+    const linked=new Set(ps.filter(x=>String(x.projectId)===String(pF)).map(x=>String(x.stakeholderId)));
+    const inProj=stakes.filter(s=>linked.has(String(s.id))&&match(s));
+    const onMaster=stakes.filter(s=>!linked.has(String(s.id))&&(s.isMaster||s.isMasterList)&&match(s));
+    if(inProj.length){
+      html+=grp('In this project');
+      html+=inProj.map(s=>row("selectStake('"+s.id+"','"+ej(nm(s))+"')",nm(s),sub(s))).join('');
+    }
+    if(onMaster.length){
+      html+=grp('On master list — tap to add to project');
+      html+=onMaster.map(s=>row("mobAddMasterToProject('"+s.id+"')",nm(s),sub(s),'<div style="float:right;font-size:11px;color:var(--sky);font-weight:700">+ Add</div>')).join('');
+    }
+    html+='<div class="stake-opt" style="color:var(--sky);font-weight:700" onmousedown="mobShowCallerInfo()">'+(rawq?'+ Add “'+eh(rawq)+'” as a new contact':'+ Add a new contact')+'</div>';
+  } else {
+    const all=stakes.filter(match).slice(0,40);
+    html+=all.map(s=>row("selectStake('"+s.id+"','"+ej(nm(s))+"')",nm(s),sub(s))).join('');
+    html+='<div class="stake-opt" style="color:var(--text3);font-style:italic;cursor:default">Select a project above to add a new contact</div>';
   }
-
-  lst.innerHTML='<div class="stake-opt" style="color:var(--text3);font-style:italic" onmousedown="selectStake(\'\',\'— None / Anonymous —\')">— None / Anonymous —</div>'+
-    filtered.map(s=>{
-      const name=(s.firstName+' '+s.lastName).trim();
-      const sub=s.org?(s.org+(s.title?' · '+s.title:'')):(s.title||'');
-      return `<div class="stake-opt" onmousedown="selectStake('${s.id}','${name.replace(/'/g,"\\'")}')">
-        <div>${name}</div>
-        ${sub?`<div class="stake-opt-sub">${sub}</div>`:''}
-      </div>`;
-    }).join('');
+  html+='<div class="stake-opt" style="color:var(--text3);font-style:italic" onmousedown="selectStake(\'\',\'\')">— None / Anonymous —</div>';
+  lst.innerHTML=html;
   lst.style.display='block';
 }
 
@@ -1835,10 +1850,40 @@ function selectStake(id, label){
   document.getElementById('log-stake').value=id;
   document.getElementById('log-stake-search').value=id?label:'';
   document.getElementById('stake-picker-list').style.display='none';
-  // Show caller info only when no stakeholder selected
+  // Caller-info only appears via an explicit "Add new contact" choice.
   const wrap=document.getElementById('caller-info-wrap');
-  if(wrap) wrap.style.display=id?'none':'block';
-  if(id) _clearCallerFields();
+  if(wrap) wrap.style.display='none';
+  _clearCallerFields();
+}
+
+// Link an existing master-list contact to this project, then select them.
+async function mobAddMasterToProject(id){
+  const pF=document.getElementById('log-proj').value;
+  if(!pF){showToast('Select a project first','error');return;}
+  const s=DB.getActive('stakeholders').find(x=>String(x.id)===String(id));
+  if(!s)return;
+  const ps=DB.get('project_stakeholders');
+  if(!ps.some(x=>String(x.stakeholderId)===String(id)&&String(x.projectId)===String(pF))){
+    ps.push({id:DB.uid(),projectId:pF,stakeholderId:id,stakeholderRole:'External'});
+    await DB.set('project_stakeholders',ps);
+  }
+  selectStake(id,(s.firstName+' '+s.lastName).trim());
+  showToast('✓ '+((s.firstName+' '+s.lastName).trim()||s.org)+' added to project','info');
+}
+
+// Reveal the new-caller form (prefilled from the search text) — only after the
+// consultant has seen there's no existing match.
+function mobShowCallerInfo(){
+  const pF=document.getElementById('log-proj').value;
+  if(!pF){showToast('Select a project first','error');return;}
+  const lst=document.getElementById('stake-picker-list'); if(lst) lst.style.display='none';
+  const term=(document.getElementById('log-stake-search').value||'').trim();
+  const parts=term?term.split(/\s+/):[];
+  const fn=document.getElementById('caller-fn'), ln=document.getElementById('caller-ln');
+  if(fn) fn.value=parts.length>1?parts.slice(0,-1).join(' '):(parts[0]||'');
+  if(ln) ln.value=parts.length>1?parts[parts.length-1]:'';
+  const wrap=document.getElementById('caller-info-wrap'); if(wrap) wrap.style.display='block';
+  if(fn) fn.focus();
 }
 
 // Close picker when tapping outside
@@ -1887,6 +1932,7 @@ async function saveInteraction(){
   if(!stakeId){
     const cfn=(document.getElementById('caller-fn').value||'').trim();
     const cln=(document.getElementById('caller-ln').value||'').trim();
+    const corg=(document.getElementById('caller-org')?.value||'').trim();
     const rawCph=(document.getElementById('caller-ph').value||'').trim();
     const cem=(document.getElementById('caller-em').value||'').trim();
     if(rawCph){
@@ -1894,13 +1940,13 @@ async function saveInteraction(){
       if(phoneErr){showToast(phoneErr,'error');return;}
     }
     const cph=rawCph?formatPhone(cleanPhone(rawCph)):'';
-    if(cfn||cln||cph||cem){
+    if(cfn||cln||corg||cph||cem){
       // Create a minimal project-only stakeholder record
       const newS={
         id:DB.uid(),
-        firstName:cfn||'Unknown',
+        firstName:cfn||(corg?'':'Unknown'),
         lastName:cln||'',
-        org:'',title:'',
+        org:corg,title:'',
         email:cem,phone:cph,
         type:'Motorist/Passerby',
         isMaster:false,

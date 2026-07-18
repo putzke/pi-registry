@@ -132,6 +132,44 @@ Bulk CSV import wizard for stakeholders and interactions. ~2,420 lines.
 5. **Continue testing** stakeholders LEP/EJ checkboxes, public meeting equity toggle, public comments nav/form
 6. **NEPA Compliance section in PI Report Editor** — new section type `'nepa-compliance'` in the Add Section dropdown; auto-populates with live checklist group progress + comment period compliance for the project; includes an "AI Draft" button that calls `_claudeNarrative()` to generate a professional narrative paragraph from the compliance snapshot, written into the section text field like other AI-drafted sections. High priority — good AI use case.
 
+## PARKED — Survey/public-input ingestion bridge (validate first, July 2026)
+
+**Idea:** Jeff floated a built-in survey tool (prompted by QuestionPro). Decision:
+**do NOT build a survey engine.** The survey-builder market (QuestionPro,
+Qualtrics, SurveyMonkey, Alchemer, Typeform) is mature/commoditized — 80+
+question types, AI generation, panels, dashboards. Rebuilding it lands us at a
+worse QuestionPro and repeats the "don't compete on engagement scale" trap.
+
+**What IS strategically sound — an ingestion bridge, not an engine.** Every
+survey tool is generic; NONE ties responses to a NEPA comment period, Title
+VI/LEP/EJ documentation, or the consultant's system of record. That linkage is
+the COMPASS thesis. So: pull survey responses via API into
+`pi_public_comments` / `pi_comment_periods`, carrying the equity flags we
+already have (`lep`/`underserved`/`equityFormSubmitted`) + response-status
+tracking → a NEPA-documentable compliance record no survey vendor produces.
+Fraction of the build vs. an engine; owns the compliance layer on top of
+whatever tool the firm already runs.
+
+**Candidate API sources (in priority order):**
+1. **ESRI ArcGIS Survey123 — STRONGEST. The company already owns ArcGIS**, so
+   no new procurement, and Survey123 is **geospatial** — responses carry
+   coordinates, which ties directly into the existing stakeholder **Map view**
+   (map public comment geographically). This is the differentiated angle;
+   pursue this one first.
+2. QuestionPro API / SurveyMonkey API / Google Forms API — generic fallbacks if
+   a firm already standardized on one.
+
+**Optional native piece (only if validation demands it):** a single narrow
+purpose-built **meeting feedback / equity-intake form** (Title VI/LEP/EJ tied to
+a specific meeting) — NOT a form builder. If it ever goes native, house it in a
+separate **Horizon Interactive Technologies** app to keep COMPASS's focus clean.
+
+**GATE (do before any build):** validate with 3–5 PI managers at other firms —
+ask specifically *"when you collect public comment during a NEPA comment period,
+where does it live today and what's painful about documenting it?"* Build the
+bridge only if the pain is "getting responses into a defensible record." If the
+agency already owns that workflow, build nothing and stay focused.
+
 ## AI contact importer + interaction-logging scope (LOCKED, July 2026)
 
 **Phase 1 SHIPPED** — text-path AI import built into the Bulk-add contacts grid

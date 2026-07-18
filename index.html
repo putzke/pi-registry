@@ -7669,7 +7669,13 @@ el.innerHTML=topbar
     +'</div></div>';
 
   var groupPanel='<div style="margin-bottom:20px;background:#0E1E30;border:1px solid rgba(255,255,255,.13);border-radius:10px;padding:14px 18px">'
-    +'<div style="font-size:12px;font-weight:700;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Report distribution — recipients</div>'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px">'
+    +'<div style="font-size:12px;font-weight:700;color:var(--fog);text-transform:uppercase;letter-spacing:.5px">Report distribution — recipients</div>'
+    +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:8px;padding:6px 12px;white-space:nowrap">'
+    +'<input type="checkbox" id="rpt-brand-cb"'+(_rptBrandOn()?' checked':'')+' onchange="_rptBrandSet(this.checked)" style="accent-color:var(--sky);width:15px;height:15px">'
+    +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:15px;height:15px;color:var(--sky-lt)"><circle cx="12" cy="12" r="9"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><path d="M15 9l-3.5 5-2-2z" fill="currentColor" stroke="none"/></svg>'
+    +'<span style="font-size:12px;color:var(--slate)">Sunrise letterhead on exports</span></label>'
+    +'</div>'
     +'<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">'+grpHTML+internalToggle+'</div>'
     +'<div style="margin-top:8px;font-size:12px;color:var(--fog)">'+projPS.length+' stakeholders across all groups</div></div>';
 
@@ -7731,6 +7737,34 @@ el.innerHTML=topbar
     +tabStrip
     +tabContent
     +'</div></div>';
+}
+
+// ── Report branding (firm letterhead on printable/quick reports) ─────────
+// Toggle persisted in localStorage; default ON. Uses the Sunrise letterhead
+// assets defined at the top of the file (window._srHeader / window._srFooter).
+function _rptBrandOn(){
+  var v=localStorage.getItem('compass_report_branding');
+  return v===null?true:v==='1';
+}
+function _rptBrandSet(on){
+  localStorage.setItem('compass_report_branding', on?'1':'0');
+  showToast(on?'Sunrise letterhead will appear on exported reports.':'Letterhead removed from exported reports.','info',2200);
+}
+// Letterhead banner for the top of a printable report. '' when branding off.
+function _rptBrandHeader(){
+  if(!_rptBrandOn()||!window._srHeader) return '';
+  return '<div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">'
+    +'<div style="width:54px;height:54px;flex-shrink:0;background:#1a3050;border-radius:11px;display:flex;align-items:center;justify-content:center;padding:8px">'
+    +'<img src="'+window._srHeader+'" alt="Sunrise Engineering" style="width:100%;height:100%;object-fit:contain">'
+    +'</div>'
+    +'<div><div style="font-size:16px;font-weight:700;color:#1a3050;letter-spacing:.3px">Sunrise Engineering, Inc.</div>'
+    +'<div style="font-size:11px;color:#7a95a8">Public Involvement Services</div></div>'
+    +'</div>';
+}
+// Full-width letterhead footer band. '' when branding off.
+function _rptBrandFooter(){
+  if(!_rptBrandOn()||!window._srFooter) return '';
+  return '<div style="margin-top:20px"><img src="'+window._srFooter+'" alt="Sunrise Engineering" style="width:100%;height:auto;display:block"></div>';
 }
 
 function generatePISummary(){
@@ -7871,6 +7905,7 @@ function generatePISummary(){
     // Print button
     +'<div class="no-print" style="display:flex;justify-content:flex-end;margin-bottom:16px">'
     +'<button onclick="window.print()" style="background:#1a3050;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;cursor:pointer;font-weight:600">⬇ Save / Print PDF</button></div>'
+    +_rptBrandHeader()
     // Header
     +'<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px">'
     +'<div><h1>Public Involvement Compliance Summary</h1>'
@@ -7958,6 +7993,7 @@ function generatePISummary(){
 
     +'<div style="margin-top:30px;padding-top:12px;border-top:1px solid #c8d6e5;font-size:11px;color:#7a95a8;display:flex;justify-content:space-between">'
     +'<span>Horizon COMPASS — Sunrise Engineering Inc.</span><span>'+dateStr+'</span></div>'
+    +_rptBrandFooter()
     +'</body></html>';
 
   showInlineReport(html, 'PI Summary Report');
@@ -8113,6 +8149,7 @@ function generateNepaComplianceReport(){
     +'@media print{.no-print{display:none!important}body{padding:12px 18px}}</style></head><body>'
     +'<div class="no-print" style="display:flex;justify-content:flex-end;margin-bottom:16px">'
     +'<button onclick="window.print()" style="background:#1a3050;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;cursor:pointer;font-weight:600">⬇ Save / Print PDF</button></div>'
+    +_rptBrandHeader()
     +'<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px">'
     +'<div><div style="font-size:20px;font-weight:700;color:#1a3050;margin-bottom:2px">NEPA Compliance Report</div>'
     +'<div style="font-size:13px;color:#2d7dd2;font-weight:600">'+titleLine+'</div></div>'
@@ -8122,6 +8159,7 @@ function generateNepaComplianceReport(){
     +bodyHTML
     +'<div style="margin-top:24px;padding-top:10px;border-top:1px solid #c8d6e5;font-size:10px;color:#7a95a8;display:flex;justify-content:space-between">'
     +'<span>Horizon COMPASS — Sunrise Engineering Inc.</span><span>'+dateStr+'</span></div>'
+    +_rptBrandFooter()
     +'</body></html>';
 
   showInlineReport(html, 'NEPA Compliance Report');
@@ -8570,6 +8608,7 @@ function _openRptPopup(rawHtml, rptTitle, rptProjLabel, dateStr, summaryTxt){
     +'<button onclick="window.print()" style="padding:6px 14px;background:#1A3050;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer">Print / Save PDF</button>'
     +'<span style="font-size:11px;color:#555">'+rptTitle+(rptProjLabel?' — '+rptProjLabel:'')+'</span>'
     +'</div>'
+    +_rptBrandHeader()
     +'<div style="padding:0 0 8px 0">'
     +'<div style="font-size:15px;font-weight:700;color:#1a3a5c;margin-bottom:3px">'+rptTitle+'</div>'
     +(rptProjLabel?'<div style="font-size:11px;color:#555;margin-bottom:2px">'+rptProjLabel+'</div>':'')
@@ -8581,6 +8620,7 @@ function _openRptPopup(rawHtml, rptTitle, rptProjLabel, dateStr, summaryTxt){
     +'<span>PI Registry · Sunrise Engineering</span>'
     +'<span>'+footerLabel+'</span>'
     +'</div>'
+    +_rptBrandFooter()
     +'</body></html>';
   showInlineReport(_rptHtml, rptTitle);
 }

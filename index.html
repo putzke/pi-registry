@@ -575,7 +575,7 @@ async function refreshSession() {
   if (!sess || !sess.refresh_token) {
     showToast('Session expired — please sign in again.');
     signOut();
-    return;
+    return false;
   }
   try {
     const res = await fetch(SUPA_URL + '/auth/v1/token?grant_type=refresh_token', {
@@ -588,13 +588,15 @@ async function refreshSession() {
       console.warn('Token refresh failed — signing out:', data);
       showToast('Session expired — please sign in again.');
       signOut();
-      return;
+      return false;
     }
     setSession({ access_token: data.access_token, refresh_token: data.refresh_token, user: data.user });
     console.log('Session refreshed successfully');
+    return true;
   } catch(e) {
     // Network error — don't sign out, will retry next interval
     console.warn('Token refresh error (will retry next interval):', e);
+    return false;
   }
 }
 
@@ -889,19 +891,30 @@ async function sbGet(table) {
   return items;
 }
 
+// Write helper: on a 401 (expired auth token) refresh the session once and
+// retry, so an expired token never surfaces as a spurious save failure.
+async function _sbWrite(url, method, bodyObj, headerOverrides) {
+  const build = () => ({
+    method: method,
+    headers: {...getAuthHeaders(), ...(headerOverrides||{})},
+    body: bodyObj !== undefined ? JSON.stringify(bodyObj) : undefined
+  });
+  let r = await fetch(url, build());
+  if (r.status === 401 && getSession()) {
+    const ok = await refreshSession();
+    if (ok) r = await fetch(url, build());   // retry once with the fresh token
+  }
+  return r;
+}
+
 async function sbAdd(table, obj) {
   const sbTable = SB_TABLES[table];
   const body = toSB(table, obj);
   // Use upsert for text-PK tables so re-seeding never 409s
   const TEXT_PK_TABLES = new Set(['pi_comment_periods','pi_public_comments','pi_tribal_consultations']);
   const url = SUPA_REST + '/' + sbTable + (TEXT_PK_TABLES.has(sbTable) ? '?on_conflict=id' : '');
-  const headers = {...getAuthHeaders()};
-  if (TEXT_PK_TABLES.has(sbTable)) headers['Prefer'] = 'resolution=merge-duplicates';
-  const r = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body)
-  });
+  const overrides = TEXT_PK_TABLES.has(sbTable) ? {'Prefer':'resolution=merge-duplicates'} : undefined;
+  const r = await _sbWrite(url, 'POST', body, overrides);
   if (!r.ok) { const e = await r.text(); console.error('SB ADD error:', r.status, e); return null; }
   const text = await r.text();
   const rows = text ? JSON.parse(text) : [];
@@ -913,11 +926,7 @@ async function sbUpdate(table, sbId, obj) {
   const sbTable = SB_TABLES[table];
   const body = toSB(table, obj);
   console.log('SB UPDATE sending:', sbTable, 'id=', sbId, JSON.stringify(body));
-  const r = await fetch(SUPA_REST + '/' + sbTable + '?id=eq.' + sbId, {
-    method: 'PATCH',
-    headers: getAuthHeaders(),
-    body: JSON.stringify(body)
-  });
+  const r = await _sbWrite(SUPA_REST + '/' + sbTable + '?id=eq.' + sbId, 'PATCH', body);
   const responseText = await r.text();
   console.log('SB UPDATE response:', r.status, responseText);
   if (!r.ok) {
@@ -930,10 +939,7 @@ async function sbUpdate(table, sbId, obj) {
 
 async function sbDelete(table, sbId) {
   const sbTable = SB_TABLES[table];
-  const r = await fetch(SUPA_REST + '/' + sbTable + '?id=eq.' + sbId, {
-    method: 'DELETE',
-    headers: getAuthHeaders()
-  });
+  const r = await _sbWrite(SUPA_REST + '/' + sbTable + '?id=eq.' + sbId, 'DELETE');
   if (!r.ok) { console.error('SB DELETE error:', r.status); return false; }
   cacheClear(table);
   return true;

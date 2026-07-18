@@ -846,17 +846,34 @@ function signOut() { clearSession(); location.reload(); }
 
 async function refreshSession() {
   const sess = getSession();
-  if (!sess || !sess.refresh_token) return;
+  if (!sess || !sess.refresh_token) return false;
   try {
     const res = await fetch(SUPA_URL + '/auth/v1/token?grant_type=refresh_token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': SUPA_KEY },
       body: JSON.stringify({ refresh_token: sess.refresh_token })
     });
-    if (res.status >= 400) { signOut(); return; }
+    if (res.status >= 400) { signOut(); return false; }
     const data = await res.json();
     setSession({ access_token: data.access_token, refresh_token: data.refresh_token, user: data.user });
-  } catch(e) { console.warn('Token refresh failed', e); }
+    return true;
+  } catch(e) { console.warn('Token refresh failed', e); return false; }
+}
+
+// Write helper: on a 401 (expired auth token) refresh the session once and
+// retry, so an expired token never surfaces as a spurious save failure.
+async function _sbWrite(url, method, bodyObj, headerOverrides) {
+  const build = () => ({
+    method: method,
+    headers: {...getAuthHeaders(), ...(headerOverrides||{})},
+    body: bodyObj !== undefined ? JSON.stringify(bodyObj) : undefined
+  });
+  let r = await fetch(url, build());
+  if (r.status === 401 && getSession()) {
+    const ok = await refreshSession();
+    if (ok) r = await fetch(url, build());
+  }
+  return r;
 }
 
 function showLoginOverlay() {
@@ -1041,11 +1058,7 @@ async function sbGet(table) {
 async function sbAdd(table, obj) {
   const sbTable = SB_TABLES[table];
   const body = toSB(table, obj);
-  const r = await fetch(SUPA_REST + '/' + sbTable, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    body: JSON.stringify(body)
-  });
+  const r = await _sbWrite(SUPA_REST + '/' + sbTable, 'POST', body);
   if (!r.ok) { const e = await r.text(); console.error('SB ADD error:', r.status, e); showToast('DB error '+r.status+': '+e.slice(0,80),'error'); return null; }
   const rows = await r.json();
   cacheClear(table);
@@ -1055,11 +1068,7 @@ async function sbAdd(table, obj) {
 async function sbUpdate(table, sbId, obj) {
   const sbTable = SB_TABLES[table];
   const body = toSB(table, obj);
-  const r = await fetch(SUPA_REST + '/' + sbTable + '?id=eq.' + sbId, {
-    method: 'PATCH',
-    headers: getAuthHeaders(),
-    body: JSON.stringify(body)
-  });
+  const r = await _sbWrite(SUPA_REST + '/' + sbTable + '?id=eq.' + sbId, 'PATCH', body);
   if (!r.ok) { console.error('SB UPDATE error:', r.status); return false; }
   cacheClear(table);
   return true;
@@ -1067,10 +1076,7 @@ async function sbUpdate(table, sbId, obj) {
 
 async function sbDelete(table, sbId) {
   const sbTable = SB_TABLES[table];
-  const r = await fetch(SUPA_REST + '/' + sbTable + '?id=eq.' + sbId, {
-    method: 'DELETE',
-    headers: getAuthHeaders()
-  });
+  const r = await _sbWrite(SUPA_REST + '/' + sbTable + '?id=eq.' + sbId, 'DELETE');
   if (!r.ok) { console.error('SB DELETE error:', r.status); return false; }
   cacheClear(table);
   return true;

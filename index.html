@@ -1439,7 +1439,7 @@ function initDashRows(){
   });
 }
 function setView(v){if(v==='tribal'){showToast('Tribal consultation module is not available yet.','info',2500);return;}S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.showBulkAdd=false;S.showEmailPanel=false;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;S.cmtSearch='';S.cmtProj='';S.cmtStatus='';S.cmtPeriod='';S.cmtPeriodId='';S.cmtTab='comments';
-  S.view=v;S.selStakeholder=null;S.selInteraction=null;
+  S.view=v;S.mapPicked=undefined;S.selStakeholder=null;S.selInteraction=null;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const navId=v==='commitments'?'nav-commitments':v==='comments'?'nav-comments':v==='tribal'?'nav-tribal':('nav-'+v);
   const nb=document.getElementById(navId);if(nb)nb.classList.add('active');
@@ -13123,7 +13123,12 @@ function printEngagementMatrix(projectId) {
 
 function renderMapView(m) {
   var allProjs = DB.get('projects');
-  var projF = S.projectFilter || '';
+  // The map does not auto-load: the user must deliberately pick a project (or
+  // "All projects") each time they enter the view. S.mapPicked is reset on
+  // every view entry (setView), so nothing geocodes until a choice is made.
+  var picked = S.mapPicked;
+  var chosen = (picked !== undefined && picked !== null && picked !== '');
+  var projF = (chosen && picked !== '__all__') ? picked : '';
   var projLabel = projF ? (allProjs.find(function(p){return String(p.id)===String(projF);})||{}).name||'' : '';
 
   var fSupport = S.mapFSupport || '';
@@ -13186,10 +13191,11 @@ function renderMapView(m) {
     <div style="width:260px;flex-shrink:0;background:#0e1e30;border-right:1px solid rgba(255,255,255,.1);display:flex;flex-direction:column;overflow-y:auto;padding:14px 12px;gap:12px">
       <div>
         <div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Project</div>
-        <select onchange="filterByProject(this.value);renderMapView(document.getElementById('main'))" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:var(--white);font-size:12px;padding:6px 9px;outline:none">
-          <option value="" ${!projF?'selected':''} style="background:#0e1e30">All projects</option>
+        <select onchange="mapSelectProject(this.value)" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:var(--white);font-size:12px;padding:6px 9px;outline:none">
+          <option value="" ${!chosen?'selected':''} style="background:#0e1e30">— Select a project —</option>
+          <option value="__all__" ${picked==='__all__'?'selected':''} style="background:#0e1e30">All projects</option>
           ${allProjs.filter(function(p){return p.status==='Active'||p.status==='On hold';}).map(function(p){
-            return `<option value="${p.id}" ${String(projF)===String(p.id)?'selected':''} style="background:#0e1e30">${p.pid} — ${p.name}</option>`;
+            return `<option value="${p.id}" ${String(picked)===String(p.id)?'selected':''} style="background:#0e1e30">${p.pid} — ${p.name}</option>`;
           }).join('')}
         </select>
       </div>
@@ -13266,8 +13272,7 @@ function renderMapView(m) {
       <!-- Status bar -->
       <div style="display:flex;align-items:center;gap:12px;padding:8px 16px;background:#0e1e30;border-bottom:1px solid rgba(255,255,255,.1);flex-shrink:0;flex-wrap:wrap">
         <div style="font-size:12px;color:var(--slate)">
-          ${withAddr.length} of ${totalAddr} plotted
-          ${fSupport||fType||fInf||fEJ||fLEP||fSearch ? `<span style="color:var(--amber);margin-left:6px">· filters active</span>` : ''}
+          ${chosen ? `${withAddr.length} of ${totalAddr} plotted${fSupport||fType||fInf||fEJ||fLEP||fSearch ? `<span style="color:var(--amber);margin-left:6px">· filters active</span>` : ''}` : `<span style="color:var(--fog)">Select a project to load the map</span>`}
         </div>
         <div style="display:flex;gap:14px;margin-left:auto;font-size:11px;color:var(--fog)" id="mv-legend">
           ${_mapLegendHtml(colorBy)}
@@ -13288,15 +13293,30 @@ function renderMapView(m) {
   window._mvProjId   = projF;
   window._mvProjName = projLabel;
 
+  // Nothing loads until the user deliberately picks a project — no Google Maps
+  // load, no geocoding API calls.
+  if (!chosen) {
+    var ld0 = document.getElementById('mv-loading');
+    if (ld0) { ld0.style.display = 'flex'; ld0.textContent = 'Select a project above to load the map.'; }
+    return;
+  }
+
   if (withAddr.length === 0) {
-    document.getElementById('mv-loading').textContent = projF
-      ? 'No stakeholders match the current filters or have addresses.'
-      : 'Select a project to load stakeholders.';
+    document.getElementById('mv-loading').textContent = 'No stakeholders match the current filters or have addresses.';
     return;
   }
 
   loadGoogleMaps();
   _mvGeocode(withAddr, projF);
+}
+
+// Deliberate project choice for the map. '' = the placeholder (back to prompt),
+// '__all__' = all projects, otherwise a project id. Only after this does the
+// map load and geocode.
+function mapSelectProject(v){
+  if (v === '') { S.mapPicked = undefined; filterByProject(''); return; }
+  S.mapPicked = v;
+  filterByProject(v === '__all__' ? '' : v);
 }
 
 function _mapLegendHtml(colorBy) {

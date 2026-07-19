@@ -60,7 +60,9 @@
     if (rows.length) console.log('  Cleared ' + rows.length + ' from ' + t);
   }
 
-  await loadAllData();
-  if (typeof render === 'function') render();
-  console.log('\n✓ Done. The app is now empty and ready for real data.');
+  console.log('\n✓ Done. Reloading the app so every count/badge reflects the empty database…');
+  // Full reload is the most robust repaint for a one-off wipe: render() alone
+  // does NOT refresh the sidebar nav badges (those need refreshBadges()), so a
+  // reload guarantees no stale counts linger anywhere.
+  setTimeout(function(){ location.reload(); }, 600);
 })();

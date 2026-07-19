@@ -1194,6 +1194,9 @@ function showScreen(id){
   if(id==='screen-interactions')renderInteractionsList();
   if(id==='screen-followups')renderFollowupsList();
   if(id==='screen-issues')renderIssuesList();
+  // Keep the nav badges in sync on every screen change so counts never go stale.
+  updateFUBadges();
+  updateIssBadges();
 }
 
 // ── SHEET MANAGEMENT ───────────────────────────────────────────────────

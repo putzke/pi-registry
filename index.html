@@ -1567,6 +1567,7 @@ function buildProjList(){
 // ── RENDER ────────────────────────────────────
 function render(){
   buildProjList();
+  refreshBadges();
   const m=document.getElementById('main');
   if(S.view==='dashboard'){renderDash(m);initDashRows();}
   else if(S.view==='master')renderMaster(m);

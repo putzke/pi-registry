@@ -249,6 +249,10 @@ body{padding:0}
     <div class="card">
       <div class="card-title">Upload your stakeholder file</div>
       <div class="card-sub">Accepts CSV or Excel (.xlsx). First row must be column headers. All other formatting is handled automatically — capitalization and blank cells are fine. Phone numbers must be 10 digits; invalid numbers are flagged in the review step and stored as-is for manual correction.</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:rgba(45,125,210,.06);border:1px solid rgba(45,125,210,.2);border-radius:8px;padding:10px 14px;margin-top:10px">
+        <div style="font-size:12px;color:var(--mist);line-height:1.5"><strong style="color:var(--sky)">Required columns:</strong> First name + Last name (or a single Full name column). Every other column is optional — map what you have.</div>
+        <button type="button" class="btn" style="flex-shrink:0" onclick="downloadStakeholderTemplate()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 2v8M5 7l3 3 3-3"/><rect x="2" y="12" width="12" height="2" rx="1"/></svg>Download template</button>
+      </div>
       <div id="no-project-warn" style="display:none;background:rgba(232,160,32,.1);border:1px solid rgba(232,160,32,.3);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--amber);margin-top:10px"><strong>⚠ No project selected</strong> — contacts will be added to the master list only and will not be linked to any project. Select a project above if this import is project-specific.</div>
 
       <div class="fi-row" style="margin-bottom:16px">
@@ -420,7 +424,11 @@ body{padding:0}
       <div id="int-pane-1">
         <div class="card">
           <div class="card-title">Upload your interactions file</div>
-          <div class="card-sub">Accepts CSV or Excel (.xlsx). First row must be column headers. Required fields: stakeholder name (full name, or separate first/last columns), date, and at least one of: channel, summary, or logged-by.</div>
+          <div class="card-sub">Accepts CSV or Excel (.xlsx). First row must be column headers. Each row is linked to a stakeholder already in the registry — matched by email or phone first, then by name.</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:rgba(45,125,210,.06);border:1px solid rgba(45,125,210,.2);border-radius:8px;padding:10px 14px;margin-top:10px">
+            <div style="font-size:12px;color:var(--mist);line-height:1.5"><strong style="color:var(--sky)">Required columns:</strong> a Date, plus something to match on — an Email, a Phone, or a Name (Full name, or First + Last). <span style="color:var(--slate)">Recommended: Channel, Summary, Logged by.</span></div>
+            <button type="button" class="btn" style="flex-shrink:0" onclick="downloadInteractionTemplate()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 2v8M5 7l3 3 3-3"/><rect x="2" y="12" width="12" height="2" rx="1"/></svg>Download template</button>
+          </div>
 
           <div class="fi-row" style="margin-bottom:16px">
             <div class="fi-lbl">Project</div>
@@ -918,6 +926,39 @@ function normalizeType(s) {
   if (v.includes('property')||v.includes('owner')) return 'Property Owner';
   return s || 'Other';
 }
+// ── Downloadable CSV templates ────────────────────────────────
+// Headers are chosen so the auto-mapper recognizes every column, and each
+// template carries one clearly-labelled example row to show the expected
+// format (date, yes/no, phone). The review step catches the sample row.
+function _downloadCSV(filename, rows) {
+  const esc = v => {
+    const s = (v == null ? '' : String(v));
+    return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const csv = rows.map(r => r.map(esc).join(',')).join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function downloadStakeholderTemplate() {
+  _downloadCSV('horizon-compass_stakeholder-template.csv', [
+    ['First Name','Last Name','Organization','Title','Email','Phone','Mailing Address','Stakeholder Type','Influence Tier','Preferred Contact','Master List','LEP','EJ / Underserved','Support Level','Distribution Groups','Notes'],
+    ['Jane','Doe','Doe Consulting','Project Manager','jane.doe@example.com','801-555-0100','123 Main St, Provo, UT 84601','Business','High','Email','Yes','No','No','Neutral','Property Owners','EXAMPLE ROW — delete before importing']
+  ]);
+}
+function downloadInteractionTemplate() {
+  _downloadCSV('horizon-compass_interaction-template.csv', [
+    ['Full Name','Email','Phone','Date','Channel','Direction','Subject','Summary','Logged By'],
+    ['Jane Doe','jane.doe@example.com','801-555-0100','2026-07-15','Phone','Incoming','Driveway access','EXAMPLE ROW — delete before importing. Called about driveway access during construction.','JP']
+  ]);
+}
+
 function splitFullName(full) {
   let s = (full||'').trim();
   if (!s) return { firstName: '', lastName: '' };

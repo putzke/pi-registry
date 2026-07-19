@@ -919,8 +919,15 @@ function normalizeType(s) {
   return s || 'Other';
 }
 function splitFullName(full) {
-  const parts = (full||'').trim().split(/\s+/);
-  if (parts.length === 0) return { firstName: '', lastName: '' };
+  let s = (full||'').trim();
+  if (!s) return { firstName: '', lastName: '' };
+  // "Last, First" format (common in exported logs) → flip to first/last.
+  if (s.includes(',')) {
+    const bits = s.split(',').map(x => x.trim()).filter(Boolean);
+    if (bits.length >= 2) return { firstName: bits[1], lastName: bits[0] };
+    s = bits[0] || '';   // trailing comma → treat remainder as a plain name
+  }
+  const parts = s.split(/\s+/);
   if (parts.length === 1) return { firstName: parts[0], lastName: '' };
   return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
 }
@@ -1533,6 +1540,8 @@ const INT_FIELDS = [
   {key:'fullName',     label:'Full name (first + last) *'},
   {key:'firstName',    label:'First name *'},
   {key:'lastName',     label:'Last name *'},
+  {key:'email',        label:'Email (matches more reliably)'},
+  {key:'phone',        label:'Phone (matches more reliably)'},
   {key:'date',         label:'Date *'},
   {key:'channel',      label:'Channel'},
   {key:'summary',      label:'Summary / notes'},
@@ -1542,6 +1551,11 @@ const INT_FIELDS = [
 ];
 
 const INT_AUTO_MAP = {
+  // Identifier columns first so "Contact Email" maps to email, not full name.
+  'email':      'email',
+  'mobile':     'phone',
+  'cell':       'phone',
+  'phone':      'phone',
   'first':      'firstName',
   'fname':      'firstName',
   'last':       'lastName',
@@ -1835,11 +1849,10 @@ function intBuildParsed() {
       if (field === 'ignore') return;
       const val = (row[ci]||'').toString().trim();
       if (field === 'fullName') {
-        const v = val;
-        const parts = v.trim().split(/\s+/);
-        obj.firstName = obj.firstName || parts[0] || '';
-        obj.lastName  = obj.lastName  || parts.slice(1).join(' ') || '';
-        obj._fullName = v;
+        const sn = splitFullName(val);
+        obj.firstName = obj.firstName || sn.firstName;
+        obj.lastName  = obj.lastName  || sn.lastName;
+        obj._fullName = val;
       } else if (field === 'firstName') {
         obj.firstName = val;
       } else if (field === 'lastName') {
@@ -1879,11 +1892,11 @@ function intBuildParsed() {
 
     return obj;
   }).filter((obj, idx) => {
-    const hasName = (obj.firstName || '').trim() || (obj.lastName || '').trim();
+    const hasIdentifier = (obj.firstName || '').trim() || (obj.lastName || '').trim() || (obj.email || '').trim() || (obj.phone || '').trim();
     const hasDate = obj.date && !String(obj.date).startsWith('INVALID:');
-    const displayName = [obj.firstName, obj.lastName].filter(Boolean).join(' ') || obj._fullName || `Row ${idx + 2}`;
-    if (!hasName) {
-      intState.intRejected.push({ name: displayName, reason: 'No stakeholder name' });
+    const displayName = [obj.firstName, obj.lastName].filter(Boolean).join(' ') || obj._fullName || obj.email || obj.phone || `Row ${idx + 2}`;
+    if (!hasIdentifier) {
+      intState.intRejected.push({ name: displayName, reason: 'No name, email, or phone to match on' });
       return false;
     }
     if (!hasDate) {
@@ -1896,6 +1909,27 @@ function intBuildParsed() {
 
 // ── STAKEHOLDER MATCHING ──────────────────────────────────────
 function intMatchStakeholder(row, existing) {
+  // 1. Email — the most reliable join key. Exact, case-insensitive.
+  const em = (row.email||'').toLowerCase().trim();
+  if (em) {
+    const byEmail = existing.filter(e => (e.email||'').toLowerCase().trim() === em);
+    if (byEmail.length === 1) return { type: 'ok', matches: byEmail, chosen: byEmail[0], via: 'email' };
+    if (byEmail.length > 1)   return { type: 'ambiguous', matches: byEmail, chosen: null, via: 'email' };
+  }
+
+  // 2. Phone — compare the last 10 digits so formatting/country codes don't matter.
+  const ph = (row.phone||'').replace(/\D/g,'');
+  if (ph.length >= 10) {
+    const key = ph.slice(-10);
+    const byPhone = existing.filter(e => {
+      const ep = (e.phone||'').replace(/\D/g,'');
+      return ep.length >= 10 && ep.slice(-10) === key;
+    });
+    if (byPhone.length === 1) return { type: 'ok', matches: byPhone, chosen: byPhone[0], via: 'phone' };
+    if (byPhone.length > 1)   return { type: 'ambiguous', matches: byPhone, chosen: null, via: 'phone' };
+  }
+
+  // 3. Name — exact first + last, then a last-name-only fallback.
   const fn = (row.firstName||'').toLowerCase().trim();
   const ln = (row.lastName||'').toLowerCase().trim();
   if (!fn && !ln) return { type: 'none', matches: [] };
@@ -1904,15 +1938,15 @@ function intMatchStakeholder(row, existing) {
     (e.firstName||'').toLowerCase().trim() === fn &&
     (e.lastName||'').toLowerCase().trim() === ln
   );
-  if (exact.length === 1) return { type: 'ok', matches: exact, chosen: exact[0] };
-  if (exact.length > 1)   return { type: 'ambiguous', matches: exact, chosen: null };
+  if (exact.length === 1) return { type: 'ok', matches: exact, chosen: exact[0], via: 'name' };
+  if (exact.length > 1)   return { type: 'ambiguous', matches: exact, chosen: null, via: 'name' };
 
   // Partial last name match fallback
   const partial = existing.filter(e =>
     (e.lastName||'').toLowerCase().trim() === ln && ln.length > 1
   );
-  if (partial.length === 1) return { type: 'partial', matches: partial, chosen: partial[0] };
-  if (partial.length > 1)   return { type: 'ambiguous', matches: partial, chosen: null };
+  if (partial.length === 1) return { type: 'partial', matches: partial, chosen: partial[0], via: 'name' };
+  if (partial.length > 1)   return { type: 'ambiguous', matches: partial, chosen: null, via: 'name' };
 
   return { type: 'none', matches: [] };
 }
@@ -1940,7 +1974,7 @@ function intBuildReview() {
         ? 'int-match-warn'
         : hasWarnings ? 'int-match-warn' : 'int-match-ok';
 
-    const nameTxt = sanitizeHTML([row.firstName, row.lastName].filter(Boolean).join(' ') || row._fullName || '—');
+    const nameTxt = sanitizeHTML([row.firstName, row.lastName].filter(Boolean).join(' ') || row._fullName || row.email || row.phone || '—');
     const dateTxt = sanitizeHTML(row.date || '—');
     const chanTxt = sanitizeHTML(row.channel || '—');
     const sumTxt  = sanitizeHTML((row.summary||'').slice(0,80) + ((row.summary||'').length>80?'…':''));
@@ -1960,13 +1994,15 @@ function intBuildReview() {
       ? `<div style="margin-top:3px;font-size:10px;color:var(--amber);font-weight:500">⚠ ${sanitizeHTML(msgs[0])}</div>`
       : '';
 
+    const viaTxt = (match.via && match.via !== 'name')
+      ? ` <span style="font-size:9px;color:var(--slate);font-weight:600">via ${sanitizeHTML(match.via)}</span>` : '';
     let matchCell = '';
     if (match.type === 'ok') {
       const e = match.chosen;
-      matchCell = `<span class="int-badge int-badge-ok">Matched</span><div style="font-size:10px;color:var(--slate);margin-top:3px">${sanitizeHTML([e.firstName,e.lastName].filter(Boolean).join(' '))}${e.org?` · ${sanitizeHTML(e.org)}`:''}</div>`;
+      matchCell = `<span class="int-badge int-badge-ok">Matched</span>${viaTxt}<div style="font-size:10px;color:var(--slate);margin-top:3px">${sanitizeHTML([e.firstName,e.lastName].filter(Boolean).join(' '))}${e.org?` · ${sanitizeHTML(e.org)}`:''}</div>`;
     } else if (match.type === 'partial') {
       const e = match.chosen;
-      matchCell = `<span class="int-badge int-badge-ok">Partial match</span><div style="font-size:10px;color:var(--slate);margin-top:3px">${sanitizeHTML([e.firstName,e.lastName].filter(Boolean).join(' '))}${e.org?` · ${sanitizeHTML(e.org)}`:''}</div>`;
+      matchCell = `<span class="int-badge int-badge-ok">Partial match</span>${viaTxt}<div style="font-size:10px;color:var(--slate);margin-top:3px">${sanitizeHTML([e.firstName,e.lastName].filter(Boolean).join(' '))}${e.org?` · ${sanitizeHTML(e.org)}`:''}</div>`;
     } else if (match.type === 'ambiguous') {
       const opts = match.matches.map(e =>
         `<option value="${e.id}">${sanitizeHTML([e.firstName,e.lastName].filter(Boolean).join(' '))}${e.org?' ('+sanitizeHTML(e.org)+')':''}</option>`
@@ -2050,7 +2086,7 @@ async function runIntImport() {
   for (const r of intState.reviewed) {
     const stakeholderId = r.chosenId;
     const row = r.row;
-    const displayName = [row.firstName, row.lastName].filter(Boolean).join(' ') || row._fullName || 'Unknown';
+    const displayName = [row.firstName, row.lastName].filter(Boolean).join(' ') || row._fullName || row.email || row.phone || 'Unknown';
 
     if (!stakeholderId) {
       skippedRows.push({

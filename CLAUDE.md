@@ -102,6 +102,20 @@ pi_report_archive   -- exported report snapshots (up to 50 per project)
 - After every edit, run the syntax check before committing
 - Push to `main` branch: `git push origin HEAD:main`
 - Working branch also: `claude/pi-registry-scroll-fixes-c2i1cc`
+- **Shared lists live in 3 separate files — update all together.** `index.html`,
+  `mobile.html`, and `importer.html` are standalone; none imports the others,
+  so any list a user picks from is duplicated. When changing one, grep all three
+  (+ the importer's embedded `.xlsx` template) and reconcile. Known duplicated lists:
+  - **Stakeholder types** — canonical `STAKE_TYPES` in `index.html` (13: Business,
+    Elected Official, Agency, Community Group, Contractor, Engineering, Media,
+    Property Owner, Resident, Tribal, Utility, Non-profit, Other). Mirrored in
+    mobile's `#add-type` dropdown, importer's `normalizeType()` + the `.xlsx`
+    template's StakeholderType data-validation dropdown + its Legend sheet.
+  - **Distribution groups** — `DIST_GROUPS` in `index.html` (Project team, Agency
+    contacts, Media, Other). Importer normalizes to it (`normalizeDistributionGroups`)
+    + `.xlsx` dropdown. Report filtering matches these strings exactly.
+  - Editing the `.xlsx` template = decode the base64 in `downloadTemplate()`
+    (importer), edit the sheet XML, re-zip, re-base64. Verify all sheets survive.
 
 ## CSP (line 6)
 ```

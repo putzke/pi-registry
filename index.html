@@ -366,7 +366,7 @@ function loadGoogleMaps() {
   if (window._googleMapsLoaded) return;
   window._googleMapsLoaded = true;
   const s = document.createElement('script');
-  s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&callback=onGoogleMapsReady`;
+  s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&loading=async&callback=onGoogleMapsReady`;
   s.async = true;
   s.defer = true;
   document.head.appendChild(s);
@@ -5945,22 +5945,60 @@ function initAddressAutocomplete(input) {
   let attempts = 0;
   const poll = setInterval(() => {
     attempts++;
-    if (window.google && window.google.maps && window.google.maps.places) {
+    const places = window.google && window.google.maps && window.google.maps.places;
+    if (places) {
       clearInterval(poll);
-      const ac = new window.google.maps.places.Autocomplete(input, {
-        types: ['address'],
-        componentRestrictions: { country: 'us' },
-        fields: ['formatted_address']
-      });
-      ac.addListener('place_changed', () => {
-        const place = ac.getPlace();
-        if (place && place.formatted_address) {
-          input.value = place.formatted_address;
-        }
-      });
+      // Prefer the modern PlaceAutocompleteElement (google.maps.places.Autocomplete
+      // is deprecated / unavailable to new keys). Feature-detect it; if the loaded
+      // Maps channel doesn't include it, fall back to the legacy widget so the
+      // address field always works.
+      if (typeof places.PlaceAutocompleteElement === 'function') {
+        try { _initPlaceAutocompleteEl(input); return; }
+        catch (e) { console.warn('PlaceAutocompleteElement unavailable, using legacy Autocomplete:', e); }
+      }
+      _initLegacyAutocomplete(input);
     }
     if (attempts > 30) clearInterval(poll); // give up after 3 seconds
   }, 100);
+}
+
+// New Places API widget. Keeps the original <input> in the DOM as a hidden value
+// store so saveStake (which reads f-ad) and edit prefill keep working unchanged.
+function _initPlaceAutocompleteEl(input) {
+  if (input.dataset.pacInit === '1') return;
+  input.dataset.pacInit = '1';
+  const el = new window.google.maps.places.PlaceAutocompleteElement({ includedRegionCodes: ['us'] });
+  el.className = 'pac-el';
+  el.style.width = '100%';
+  const existing = input.value || '';
+  input.type = 'hidden';                       // hide the plain input; it holds the saved value
+  input.parentNode.insertBefore(el, input.nextSibling);
+  if (existing) { try { el.setAttribute('placeholder', existing); } catch (_) {} } // show current address on edit
+  el.addEventListener('gmp-select', async (ev) => {
+    try {
+      const pred = ev.placePrediction;
+      if (!pred) return;
+      const place = pred.toPlace();
+      await place.fetchFields({ fields: ['formattedAddress'] });
+      if (place.formattedAddress) input.value = place.formattedAddress;
+    } catch (e) { console.warn('Place selection error:', e); }
+  });
+}
+
+// Legacy fallback (google.maps.places.Autocomplete) — used only when the new
+// element isn't present in the loaded Maps channel.
+function _initLegacyAutocomplete(input) {
+  const ac = new window.google.maps.places.Autocomplete(input, {
+    types: ['address'],
+    componentRestrictions: { country: 'us' },
+    fields: ['formatted_address']
+  });
+  ac.addListener('place_changed', () => {
+    const place = ac.getPlace();
+    if (place && place.formatted_address) {
+      input.value = place.formatted_address;
+    }
+  });
 }
 
 async function saveStake(){

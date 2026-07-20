@@ -8605,29 +8605,38 @@ function generateReport(type){
     body+='</tbody></table>';
 
   } else if(type==='comment-matrix'){
-    var comments=externalInts.filter(function(i){return['Comment card','Public meeting','Mail','In-person'].indexOf(i.channel)>=0});
-    comments.sort(function(a,b){return b.date.localeCompare(a.date)});
-    body='<div style="margin-bottom:12px;font-size:13px;color:var(--slate)">'+comments.length+' public comment interactions found</div>'
-      +'<table class="dtable" style="font-size:13px;table-layout:fixed;width:100%">'
-      +'<colgroup><col style="width:11%"><col style="width:15%"><col style="width:19%"><col style="width:13%"><col style="width:22%"><col style="width:20%"></colgroup>'
-      +'<thead><tr><th>Date</th><th>Name</th><th>Organization</th><th>Channel</th><th>Response status</th><th>Follow-up notes</th></tr></thead><tbody>';
-    comments.forEach(function(i,idx){
-      var s=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
-      body+='<tr style="page-break-inside:avoid">'
-        +'<td class="td-mono" style="white-space:nowrap;vertical-align:middle">'+fmt(i.date)+'</td>'
-        +'<td style="font-weight:600;color:var(--white);vertical-align:middle">'+(s?dispName(s):(i.anonLabel||'Anonymous'))+'</td>'
-        +'<td style="vertical-align:middle">'+(s?s.org||'&mdash;':'&mdash;')+'</td>'
-        +'<td style="vertical-align:middle"><span class="badge '+chCls(i.channel)+'">'+i.channel+'</span></td>'
-        +'<td style="vertical-align:middle">'+(i.followUpDone?'<span class="badge b-green">Responded</span>':'<span class="badge b-amber">Pending</span>')+'</td>'
-        +'<td style="font-size:12px;color:var(--slate);vertical-align:middle">'+(i.followUpNote||'&mdash;')+'</td>'
-        +'</tr>'
-        +'<tr style="page-break-inside:avoid">'
-        +'<td colspan="6" style="padding:8px 14px 16px;background:rgba(255,255,255,.03);border-bottom:2px solid var(--border);font-size:13px;line-height:1.65;color:var(--mist)">'
-        +'<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);display:block;margin-bottom:4px">Comment / Summary</span>'
-        +i.summary
-        +'</td></tr>';
-    });
-    body+='</tbody></table>';
+    // Pull from the Comments feature (pi_public_comments), NOT interactions.
+    var comments=(DB.get('public_comments')||[]).filter(function(c){return String(c.projectId)===String(projF)});
+    comments.sort(function(a,b){return (b.submittedDate||'').localeCompare(a.submittedDate||'')});
+    if(comments.length===0){
+      body='<div style="margin:18px 0;padding:26px;text-align:center;color:var(--slate);border:1px dashed var(--border);border-radius:8px">'
+        +'<div style="font-style:italic;margin-bottom:6px">No public comments have been logged for this project yet.</div>'
+        +'<div style="font-size:12px;color:var(--fog)">Log formal public comments in the <strong>Comments</strong> view — this matrix reads from there.</div>'
+        +'</div>';
+    } else {
+      var _stCls=function(st){return st==='Responded'?'b-green':st==='In progress'?'b-sky':st==='No response needed'?'b-dark':'b-amber';};
+      body='<div style="margin-bottom:12px;font-size:13px;color:var(--slate)">'+comments.length+' public comment'+(comments.length!==1?'s':'')+' found</div>'
+        +'<table class="dtable" style="font-size:13px;table-layout:fixed;width:100%">'
+        +'<colgroup><col style="width:11%"><col style="width:16%"><col style="width:18%"><col style="width:13%"><col style="width:15%"><col style="width:27%"></colgroup>'
+        +'<thead><tr><th>Date</th><th>Commenter</th><th>Organization</th><th>Method</th><th>Response status</th><th>Topic</th></tr></thead><tbody>';
+      comments.forEach(function(c){
+        body+='<tr style="page-break-inside:avoid">'
+          +'<td class="td-mono" style="white-space:nowrap;vertical-align:middle">'+(c.submittedDate?fmt(c.submittedDate):'&mdash;')+'</td>'
+          +'<td style="font-weight:600;color:var(--white);vertical-align:middle">'+(c.commenterName||'Anonymous')+'</td>'
+          +'<td style="vertical-align:middle">'+(c.commenterOrg||'&mdash;')+'</td>'
+          +'<td style="vertical-align:middle">'+(c.commentMethod?'<span class="badge '+chCls(c.commentMethod)+'">'+c.commentMethod+'</span>':'&mdash;')+'</td>'
+          +'<td style="vertical-align:middle"><span class="badge '+_stCls(c.responseStatus)+'">'+(c.responseStatus||'Pending')+'</span></td>'
+          +'<td style="font-size:12px;color:var(--slate);vertical-align:middle">'+(c.topic||'&mdash;')+'</td>'
+          +'</tr>'
+          +'<tr style="page-break-inside:avoid">'
+          +'<td colspan="6" style="padding:8px 14px 16px;background:rgba(255,255,255,.03);border-bottom:2px solid var(--border);font-size:13px;line-height:1.65;color:var(--mist)">'
+          +'<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);display:block;margin-bottom:4px">Comment</span>'
+          +(c.commentText||'&mdash;')
+          +(c.responseText?'<div style="margin-top:10px"><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#28A870;display:block;margin-bottom:4px">Formal response'+(c.respondedBy?' &mdash; '+c.respondedBy:'')+(c.responseDate?' ('+fmt(c.responseDate)+')':'')+'</span>'+c.responseText+'</div>':'')
+          +'</td></tr>';
+      });
+      body+='</tbody></table>';
+    }
   }
 
   var summaryTxtVal=summaryBlock; // summaryBlock is the raw textarea wrapper; extract text if present

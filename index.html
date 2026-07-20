@@ -5896,7 +5896,7 @@ function openStakeModal(id){
     <div class="fr"><label>Project</label><select id="f-lp"><option value="">— None —</option>${projs.map(p=>`<option value="${p.id}"${S.projectFilter===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
     <div class="fr"><label>Support level</label><select id="f-ls">${['Neutral','Champion','Opponent'].map(t=>`<option>${t}</option>`).join('')}</select></div>
   </div>`:''}
-  <div class="fr"><label>Notes</label><textarea id="f-no">${s.notes||''}</textarea></div>  <div class="fr" style="margin-top:8px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400"><input type="checkbox" id="f-smaster" ${s.isMaster!==false?'checked':''} style="accent-color:var(--sky);width:15px;height:15px"><span>Add to master stakeholder list</span><span style="font-size:11px;color:var(--fog);margin-left:4px">(uncheck to keep this contact project-only)</span></label></div>`,
+  <div class="fr"><label>Notes</label><textarea id="f-no">${s.notes||''}</textarea></div>  <div class="fr" style="margin-top:8px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400"><input type="checkbox" id="f-smaster" ${s.id&&s.isMaster!==false?'checked':''} style="accent-color:var(--sky);width:15px;height:15px"><span>Add to master stakeholder list</span><span style="font-size:11px;color:var(--fog);margin-left:4px">(uncheck to keep this contact project-only)</span></label></div>`,
   `${id ? _stakeActionBtn(id) : ''}
   <button class="btn" onclick="closeM()">Cancel</button>
   <button class="btn btn-primary" onclick="saveStake()">Save stakeholder</button>`,true);

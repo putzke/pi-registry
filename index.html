@@ -3387,8 +3387,34 @@ function dupStakeCol(s, otherEmail, otherPhone, isB){
     + '<div style="font-size:12px;color:var(--slate);margin-bottom:4px">\u2709 <span style="color:'+(emailMatch?'#97c459':'#f87171')+'">'+(s.email||'&mdash;')+'</span></div>'
     + '<div style="font-size:12px;color:var(--slate);margin-bottom:4px">\u{1F4DE} <span style="color:'+(phoneMatch?'#97c459':'var(--mist)')+'">'+(s.phone||'&mdash;')+'</span></div>'
     + '<div style="font-size:12px;color:var(--slate);margin-bottom:4px">\uD83D\uDCC1 '+projCt+' project'+(projCt!==1?'s':'')+' &middot; '+intCt+' interaction'+(intCt!==1?'s':'')+'</div>'
-    + '<div style="font-size:11px;color:var(--fog)">Added '+added+'</div>'
+    + '<div style="font-size:11px;color:var(--fog);margin-bottom:10px">Added '+added+'</div>'
+    + '<button class="btn btn-sm" style="color:#f87171;border-color:rgba(248,113,113,.4)" onclick="deleteDupRecord(\''+s.id+'\')" title="Permanently remove this stakeholder record">\uD83D\uDDD1 Delete this record</button>'
     + '</div>';
+}
+
+// Remove one side of a duplicate pair. Safe path for clearing orphan records
+// (0 projects / 0 interactions) left behind by a failed save \u2014 warns loudly if
+// the record actually carries history so a real contact isn't deleted by mistake.
+async function deleteDupRecord(id){
+  const s = DB.get('stakeholders').find(x=>String(x.id)===String(id));
+  if(!s){ renderDuplicates(document.getElementById('main')); return; }
+  const nm = ([s.firstName,s.lastName].filter(Boolean).join(' ')||s.org||'this contact');
+  const intCt  = DB.get('interactions').filter(x=>String(x.stakeholderId)===String(id)).length;
+  const linkCt = DB.get('project_stakeholders').filter(x=>String(x.stakeholderId)===String(id)).length;
+  const commCt = DB.get('commitments').filter(x=>String(x.stakeholderId)===String(id)).length;
+  let msg = 'Permanently delete "'+nm+'"?\n\nThis removes the stakeholder record from the database. This cannot be undone.';
+  if(intCt||linkCt||commCt){
+    msg += '\n\n\u26A0 WARNING: this record has '+linkCt+' project link'+(linkCt!==1?'s':'')
+         + ', '+intCt+' interaction'+(intCt!==1?'s':'')
+         + ', and '+commCt+' commitment'+(commCt!==1?'s':'')+'.'
+         + '\nThose would be left orphaned. To clear a leftover duplicate, delete the EMPTY one (0 projects \u00B7 0 interactions) instead.';
+  }
+  if(!confirm(msg)) return;
+  await DB.set('stakeholders', DB.get('stakeholders').filter(x=>String(x.id)!==String(id)));
+  await DB.set('project_stakeholders', DB.get('project_stakeholders').filter(x=>String(x.stakeholderId)!==String(id)));
+  refreshBadges();
+  renderDuplicates(document.getElementById('main'));
+  showToast('Duplicate record deleted','success');
 }
 
 function renderDuplicates(el){

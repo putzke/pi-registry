@@ -1850,6 +1850,17 @@ function intNormalizeDate(val) {
     if (isNaN(d)) return { date: 'INVALID:' + s, _dateWarn: 'Invalid date: ' + s };
     return { date: s };
   }
+  // Excel stores dates as serial numbers; .xlsx cells surface them raw
+  // (e.g. 46178 = 2026-06-05). Convert any bare number in the Excel-date range,
+  // computed in UTC so there's no timezone drift. This is a clean conversion —
+  // no "reformatted" warning, since the user never typed the serial.
+  if (/^\d+(\.\d+)?$/.test(s)) {
+    const serial = parseFloat(s);
+    if (serial >= 20000 && serial < 2958466) {
+      const d2 = new Date(Math.round((serial - 25569) * 86400000));
+      if (!isNaN(d2)) return { date: d2.toISOString().slice(0,10) };
+    }
+  }
   // Try JS Date parsing for common formats
   const d = new Date(s);
   if (!isNaN(d)) return { date: d.toISOString().slice(0,10), _dateWarn: s !== d.toISOString().slice(0,10) ? 'Date reformatted from "' + s + '"' : null };

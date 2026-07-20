@@ -4603,6 +4603,24 @@ function renderBubbleChart(projectId){
 
 
 
+// Switch the detail-pane sub-tab (Profile / Interaction log / Events) WITHOUT
+// rebuilding the contact list. Re-rendering the whole view (the old behavior)
+// reset the list's scroll position to the top; swap only the detail pane so the
+// list stays exactly where the user scrolled it.
+function _stakeTabSwitch(tab){
+  S.stakeTab=tab;
+  if(S.view==='master'){
+    if(document.getElementById('master-detail')){ renderMasterDetail(); return; }
+    renderMaster(document.getElementById('main')); return;
+  }
+  const detPane=document.querySelector('#sk-list-pane')?.closest('.split')?.querySelector('.detail-pane');
+  if(detPane&&S.selStakeholder){
+    const sel=DB.getActive('stakeholders').find(x=>String(x.id)===String(S.selStakeholder));
+    const selLink=DB.get('project_stakeholders').find(lk=>String(lk.stakeholderId)===String(S.selStakeholder)&&String(lk.projectId)===String(S.projectFilter));
+    if(sel){ detPane.innerHTML=renderStakeDetail(sel, selLink||null); return; }
+  }
+  renderStakeholders(document.getElementById('main'));
+}
 function renderStakeDetail(s,link){
   // Use link (not S.projectFilter) to scope interactions — master view passes link=null so always shows all projects
   const allInts=DB.get('interactions').filter(i=>String(i.stakeholderId)===String(s.id));
@@ -4762,9 +4780,9 @@ function renderStakeDetail(s,link){
     </div>
   </div>
   <div class="dtabs">
-    <button class="dtab${tab==='info'?' active':''}" onclick="S.stakeTab='info';${cb}">Profile & project</button>
-    <button class="dtab${tab==='log'?' active':''}" onclick="S.stakeTab='log';${cb}">Interaction log (${ints.length})</button>
-    <button class="dtab${tab==='events'?' active':''}" onclick="S.stakeTab='events';${cb}">Events attended (${(function(){var ms=DB.get('meetings')||[];return ms.filter(function(m){return Array.isArray(m.attendeeIds)&&m.attendeeIds.map(String).includes(String(s.id));}).length;})()})</button>
+    <button class="dtab${tab==='info'?' active':''}" onclick="_stakeTabSwitch('info')">Profile & project</button>
+    <button class="dtab${tab==='log'?' active':''}" onclick="_stakeTabSwitch('log')">Interaction log (${ints.length})</button>
+    <button class="dtab${tab==='events'?' active':''}" onclick="_stakeTabSwitch('events')">Events attended (${(function(){var ms=DB.get('meetings')||[];return ms.filter(function(m){return Array.isArray(m.attendeeIds)&&m.attendeeIds.map(String).includes(String(s.id));}).length;})()})</button>
   </div>
   ${tab==='info'?infoHTML:tab==='log'?logHTML:eventsHTML}`;
 }

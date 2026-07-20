@@ -1038,7 +1038,7 @@ function seed(){
   ]);
   const s1=DB.uid(),s2=DB.uid(),s3=DB.uid(),s4=DB.uid(),s5=DB.uid(),s6=DB.uid(),s7=DB.uid(),s8=DB.uid(),s9=DB.uid();
   DB.set('stakeholders',[
-    {id:s1,firstName:'Robert',lastName:'Nguyen',org:'Millbrook Chamber of Commerce',title:'Executive Director',email:'rnguyen@millbrookchamber.org',phone:'(909) 555-0142',prefContact:'Email',type:'Business Group',influenceTier:'High',address:'142 Commerce Dr, Millbrook, CA 92350',isMaster:true,notes:'Very engaged, attends all public meetings. Wants monthly business impact updates sent to his board.'},
+    {id:s1,firstName:'Robert',lastName:'Nguyen',org:'Millbrook Chamber of Commerce',title:'Executive Director',email:'rnguyen@millbrookchamber.org',phone:'(909) 555-0142',prefContact:'Email',type:'Community Group',influenceTier:'High',address:'142 Commerce Dr, Millbrook, CA 92350',isMaster:true,notes:'Very engaged, attends all public meetings. Wants monthly business impact updates sent to his board.'},
     {id:s2,firstName:'Patricia',lastName:'Reyes',org:'City of Millbrook',title:'Council Member, District 3',email:'preyes@cityofmillbrook.gov',phone:'(909) 555-0198',prefContact:'Phone',type:'Elected Official',influenceTier:'High',address:'City Hall, 1 Civic Plaza, Millbrook',isMaster:true,notes:'Direct line for constituent escalations. Prefers a phone call before any press release.'},
     {id:s3,firstName:'Tom',lastName:'Barker',org:'Barker Plumbing Supply',title:'Owner',email:'tom@barkerplumbing.com',phone:'(951) 555-0077',prefContact:'Email',type:'Business',influenceTier:'Medium',address:'889 SR-12, Millbrook, CA 92350',isMaster:true,notes:'Concerns about delivery truck access to loading dock during construction.'},
     {id:s4,firstName:'Maria',lastName:'Santos',org:'Riverside Residents Assoc.',title:'President',email:'msantos@rra.org',phone:'(951) 555-0211',prefContact:'Email',type:'Community Group',influenceTier:'High',address:'',isMaster:true,notes:'Organized opposition to overnight work hours. Filed formal written comment.'},
@@ -2485,7 +2485,8 @@ function renderEmailPanel(el) {
 
 
 // ── BULK ADD CONTACTS ─────────────────────────────────────────────
-const BULK_TYPES = ['Agency','Business','Business Group','Community Group','Contractor','Elected Official','Engineering','Media','Other','Property Owner','Resident','Road Traveler'];
+// Stakeholder types come from the single canonical STAKE_TYPES list (defined
+// below). Bulk-add + AI import use it directly — no separate copy to drift.
 const BULK_TIERS = ['High','Medium','Low'];
 let BULK_ROWS = 10;              // dynamic — grows to fit AI-extracted contacts or the "+ Add rows" button
 const BULK_ROWS_MAX = 50;        // hard cap per import batch
@@ -2862,7 +2863,7 @@ function renderBulkAdd(el) {
   var orgSugs = _bulkOrgSuggestions();
   var datalistHtml = '<div id="bulk-org-dropdown" style="display:none;position:fixed;z-index:9999;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;max-height:200px;overflow-y:auto;min-width:200px;box-shadow:0 4px 16px rgba(0,0,0,.4)"></div>';
 
-  var typeOpts = '<option value="">Type\u2026</option>'+BULK_TYPES.map(function(t){ return '<option>'+t+'</option>'; }).join('');
+  var typeOpts = '<option value="">Type\u2026</option>'+STAKE_TYPES.map(function(t){ return '<option>'+t+'</option>'; }).join('');
   var tierOpts = '<option value="">Tier\u2026</option>'+BULK_TIERS.map(function(t){ return '<option>'+t+'</option>'; }).join('');
   var roleOpts = '<option value="External">External</option><option value="Internal">Internal</option>';
 
@@ -3042,7 +3043,7 @@ async function _aiParseContacts(content, model) {
             title:     { type: 'string' },
             email:     { type: 'string' },
             phone:     { type: 'string' },
-            type:      { type: 'string', enum: BULK_TYPES.concat(['']) }
+            type:      { type: 'string', enum: STAKE_TYPES.concat(['']) }
           },
           required: ['firstName','lastName','org','title','email','phone','type'],
           additionalProperties: false
@@ -3190,7 +3191,7 @@ function _bulkSetRow(i, c) {
   var tyEl = document.getElementById('bty'+i);
   if (tyEl) {
     var t = (c.type || '').trim();
-    var match = BULK_TYPES.find(function(x){ return x.toLowerCase() === t.toLowerCase(); });
+    var match = STAKE_TYPES.find(function(x){ return x.toLowerCase() === t.toLowerCase(); });
     tyEl.value = match || '';
   }
   _bulkUnlockRow(i);
@@ -3539,7 +3540,7 @@ function renderMaster(el){
     <select class="fsel" id="ms-type" onchange="S.masterType=this.value;renderMaster(document.getElementById('main'))">
       <option value="">All types</option>
       <optgroup label="── By type ──">
-      ${['Business','Business Group','Elected Official','Agency','Community Group','Contractor','Engineering','Media','Property Owner','Resident','Road Traveler','Other'].map(t=>`<option${(S.masterType||'')===''+t?' selected':''}>${t}</option>`).join('')}
+      ${STAKE_TYPES.map(t=>`<option${(S.masterType||'')===''+t?' selected':''}>${t}</option>`).join('')}
       </optgroup>
       <optgroup label="── By role ──">
         <option value="__internal"${(S.masterType||'')==='__internal'?' selected':''}>Internal only</option>
@@ -3579,7 +3580,7 @@ function renderMaster(el){
             </select>
             <select id="master-bulk-type-sel" style="font-size:11px;padding:3px 7px;background:var(--navy-mid);border:1px solid var(--border);border-radius:5px;color:var(--white)">
               <option value="">— Type —</option>
-              ${['Resident','Business','Agency','Community Group','Elected Official','Media','Utility','Tribal','Non-profit','Other'].map(t=>`<option value="${t}">${t}</option>`).join('')}
+              ${STAKE_TYPES.map(t=>`<option value="${t}">${t}</option>`).join('')}
             </select>
             <button class="btn btn-sm btn-primary" style="font-size:11px;padding:4px 10px" onclick="applyMasterBulkUpdate()">Apply to ${(S.masterBulkSelected||[]).length}</button>
             <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 8px" onclick="S.masterBulkSelected=[];renderMaster(document.getElementById('main'))">✕</button>
@@ -4067,7 +4068,7 @@ function _msBulkToolbarUpdate() {
       </select>
       <select id="master-bulk-type-sel" style="font-size:11px;padding:3px 7px;background:var(--navy-mid);border:1px solid var(--border);border-radius:5px;color:var(--white)">
         <option value="">— Type —</option>
-        ${['Resident','Business','Agency','Community Group','Elected Official','Media','Utility','Tribal','Non-profit','Other'].map(t=>`<option value="${t}">${t}</option>`).join('')}
+        ${STAKE_TYPES.map(t=>`<option value="${t}">${t}</option>`).join('')}
       </select>
       <button class="btn btn-sm btn-primary" style="font-size:11px;padding:4px 10px" onclick="applyMasterBulkUpdate()">Apply to ${ct}</button>
       <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 8px" onclick="S.masterBulkSelected=[];renderMaster(document.getElementById('main'))">✕</button>
@@ -13721,7 +13722,7 @@ const COMM_STATUSES = ['Open','Fulfilled'];
 
 // ── PUBLIC COMMENT LOG ────────────────────────────────────────────────────────
 const CMT_METHODS=['Mail','Email','Online form','Public hearing','Comment card','Phone','In-person','Other'];
-const STAKE_TYPES=['Business','Business Group','Elected Official','Agency','Community Group','Contractor','Engineering','Media','Property Owner','Resident','Road Traveler','Tribal','Utility','Non-profit','Other'];
+const STAKE_TYPES=['Business','Elected Official','Agency','Community Group','Contractor','Engineering','Media','Property Owner','Resident','Tribal','Utility','Non-profit','Other'];
 const CMT_TOPICS=['Noise','Traffic / access','Environmental / natural resources','Project scope','Alternatives','Schedule','Cost / funding','Safety','Property / right-of-way','General support','General opposition','Other'];
 const CMT_STATUSES=['Pending','In progress','Responded','No response needed'];
 const CMT_PERIOD_TYPES=[

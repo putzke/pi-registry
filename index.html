@@ -7848,15 +7848,15 @@ function _rptBrandSet(on){
 // Letterhead banner for the top of a printable report. '' when branding off.
 function _rptBrandHeader(){
   if(!_rptBrandOn()||!window._srHeader) return '';
-  return '<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px">'
+  return '<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid #e0e8f0">'
     // Firm identity, left
     +'<div><div style="font-size:16px;font-weight:700;color:#1a3050;letter-spacing:.3px">Sunrise Engineering, Inc.</div>'
     +'<div style="font-size:11px;color:#7a95a8">Public Involvement Services</div></div>'
-    // "Report Powered by —" attribution + Horizon COMPASS logo, right-justified
-    +'<div style="display:flex;align-items:center;gap:9px;flex-shrink:0">'
+    // "Report Powered by —" attribution + Horizon COMPASS logo (the logo art
+    // includes the wordmark, so no separate text label), right-justified
+    +'<div style="display:flex;align-items:center;gap:11px;flex-shrink:0">'
     +'<span style="font-size:11px;color:#7a95a8;white-space:nowrap">Report Powered by —</span>'
-    +'<img src="'+window._srHeader+'" alt="Horizon COMPASS" style="width:58px;height:58px;object-fit:contain;flex-shrink:0">'
-    +'<span style="font-size:14px;font-weight:700;color:#1a3050;white-space:nowrap">Horizon COMPASS</span>'
+    +'<img src="'+window._srHeader+'" alt="Horizon COMPASS" style="width:150px;height:auto;object-fit:contain;flex-shrink:0">'
     +'</div>'
     +'</div>';
 }

@@ -3356,7 +3356,7 @@ function findDuplicatePairs(){
 function _dupBtn(){
   const pairs = findDuplicatePairs();
   if(!pairs.length) return '';
-  return '<button class="btn btn-xs" style="background:rgba(239,159,39,.2);border-color:rgba(239,159,39,.7);color:#f5c842;font-weight:600" onclick="S.showDuplicates=true;renderMaster(document.getElementById(\'main\'))">&#9873; Duplicates (' + pairs.length + ')</button>';
+  return '<button class="btn btn-xs" title="Scans every contact — master list and project-only — across all projects" style="background:rgba(239,159,39,.2);border-color:rgba(239,159,39,.7);color:#f5c842;font-weight:600" onclick="S.showDuplicates=true;renderMaster(document.getElementById(\'main\'))">&#9873; Duplicates (' + pairs.length + ')</button>';
 }
 
 async function dismissPair(idA, idB){
@@ -3458,7 +3458,7 @@ function renderDuplicates(el){
 
   el.innerHTML = '<div class="topbar">'
     + '<div><div class="topbar-title">Duplicate contacts</div>'
-    + '<div class="topbar-sub">'+pairs.length+' pair'+(pairs.length!==1?'s':'')+' to review &middot; '+dismissed.length+' dismissed</div></div>'
+    + '<div class="topbar-sub">'+pairs.length+' pair'+(pairs.length!==1?'s':'')+' to review &middot; '+dismissed.length+' dismissed &middot; scans all contacts (master + project-only)</div></div>'
     + '<div style="display:flex;align-items:center;gap:8px;margin-left:auto">'
     +   '<button class="btn btn-ghost" onclick="S.showDuplicates=false;renderMaster(document.getElementById(\'main\'))">\u2190 Back to contacts</button>'
     + '</div></div>'
@@ -3554,7 +3554,7 @@ function renderMaster(el){
   const selData=sel?DB.get('stakeholders').find(x=>String(x.id)===String(sel)):null;
   el.innerHTML=`
   <div class="topbar">
-    <div><div class="topbar-title">Master stakeholder list</div><div class="topbar-sub">All contacts — global, unfiltered</div></div>
+    <div><div class="topbar-title">Master stakeholder list</div><div class="topbar-sub">Master-list contacts — across all projects</div></div>
     <div class="topbar-sp"></div>
     <div class="topbar-acts">
       <button class="btn" onclick="openImportTool()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg>Import</button>

@@ -845,20 +845,29 @@ async function signIn(email, password) {
 
 function signOut() { clearSession(); location.reload(); }
 
+// Share ONE in-flight refresh among concurrent callers — Supabase refresh
+// tokens are single-use, so parallel 401s each refreshing would race and spend
+// the token, causing spurious sign-outs and silent write failures.
+let _refreshInFlight = null;
 async function refreshSession() {
-  const sess = getSession();
-  if (!sess || !sess.refresh_token) return false;
-  try {
-    const res = await fetch(SUPA_URL + '/auth/v1/token?grant_type=refresh_token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': SUPA_KEY },
-      body: JSON.stringify({ refresh_token: sess.refresh_token })
-    });
-    if (res.status >= 400) { signOut(); return false; }
-    const data = await res.json();
-    setSession({ access_token: data.access_token, refresh_token: data.refresh_token, user: data.user });
-    return true;
-  } catch(e) { console.warn('Token refresh failed', e); return false; }
+  if (_refreshInFlight) return _refreshInFlight;
+  _refreshInFlight = (async () => {
+    const sess = getSession();
+    if (!sess || !sess.refresh_token) return false;
+    try {
+      const res = await fetch(SUPA_URL + '/auth/v1/token?grant_type=refresh_token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPA_KEY },
+        body: JSON.stringify({ refresh_token: sess.refresh_token })
+      });
+      if (res.status >= 400) { signOut(); return false; }
+      const data = await res.json();
+      setSession({ access_token: data.access_token, refresh_token: data.refresh_token, user: data.user });
+      return true;
+    } catch(e) { console.warn('Token refresh failed', e); return false; }
+  })();
+  try { return await _refreshInFlight; }
+  finally { _refreshInFlight = null; }
 }
 
 // Write helper: on a 401 (expired auth token) refresh the session once and

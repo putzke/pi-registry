@@ -570,34 +570,46 @@ function signOut() {
   location.reload();
 }
 
+// Supabase refresh tokens are single-use — the response rotates the token and
+// invalidates the old one. If several writes 401 at once (e.g. a stakeholder +
+// its project link, or a bulk import) and each calls refreshSession, they race:
+// the first rotates the token, the rest POST an already-spent token, fail, and
+// can trigger a spurious sign-out + silent write failures. Share ONE in-flight
+// refresh among all concurrent callers so the token rotates exactly once.
+let _refreshInFlight = null;
 async function refreshSession() {
-  const sess = getSession();
-  if (!sess || !sess.refresh_token) {
-    showToast('Session expired — please sign in again.');
-    signOut();
-    return false;
-  }
-  try {
-    const res = await fetch(SUPA_URL + '/auth/v1/token?grant_type=refresh_token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': SUPA_KEY },
-      body: JSON.stringify({ refresh_token: sess.refresh_token })
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      console.warn('Token refresh failed — signing out:', data);
+  if (_refreshInFlight) return _refreshInFlight;
+  _refreshInFlight = (async () => {
+    const sess = getSession();
+    if (!sess || !sess.refresh_token) {
       showToast('Session expired — please sign in again.');
       signOut();
       return false;
     }
-    setSession({ access_token: data.access_token, refresh_token: data.refresh_token, user: data.user });
-    console.log('Session refreshed successfully');
-    return true;
-  } catch(e) {
-    // Network error — don't sign out, will retry next interval
-    console.warn('Token refresh error (will retry next interval):', e);
-    return false;
-  }
+    try {
+      const res = await fetch(SUPA_URL + '/auth/v1/token?grant_type=refresh_token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPA_KEY },
+        body: JSON.stringify({ refresh_token: sess.refresh_token })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        console.warn('Token refresh failed — signing out:', data);
+        showToast('Session expired — please sign in again.');
+        signOut();
+        return false;
+      }
+      setSession({ access_token: data.access_token, refresh_token: data.refresh_token, user: data.user });
+      console.log('Session refreshed successfully');
+      return true;
+    } catch(e) {
+      // Network error — don't sign out, will retry next interval
+      console.warn('Token refresh error (will retry next interval):', e);
+      return false;
+    }
+  })();
+  try { return await _refreshInFlight; }
+  finally { _refreshInFlight = null; }
 }
 
 // ── LOGIN OVERLAY ──────────────────────────────────────────────────
@@ -5951,7 +5963,7 @@ function initAddressAutocomplete(input) {
   }, 100);
 }
 
-function saveStake(){
+async function saveStake(){
   const v=id=>document.getElementById(id)?.value||'';
   const rawPhone=v('f-ph');
   const phoneErr=validatePhone(rawPhone);
@@ -5992,21 +6004,38 @@ function saveStake(){
     }
   }
 
+  const isNew=!S.editId;
   const all=DB.getActive('stakeholders');
   if(S.editId){const i=all.findIndex(x=>x.id===S.editId);if(i>-1)all[i]=data;}else all.push(data);
-  DB.set('stakeholders',all);
+  await DB.set('stakeholders',all);
+
+  // For a NEW contact, confirm it actually persisted before doing anything else.
+  // On a failed insert, DB._sync leaves the cache item with its temporary text
+  // id (a successful insert rotates it to the numeric Supabase id). If it failed,
+  // roll the phantom out of the cache — otherwise it silently blocks re-entry via
+  // the duplicate check even though nothing reached the database — and tell the
+  // user instead of losing the contact quietly.
+  if(isNew && !/^\d+$/.test(String(data.id))){
+    _syncCache['stakeholders']=(_syncCache['stakeholders']||[]).filter(x=>x!==data);
+    alert('This contact could not be saved — the server didn’t confirm the save (likely a brief connection or session issue). Nothing was added to the database. Please try Save again.');
+    return; // keep the modal open so the filled-in form can be resubmitted
+  }
+
+  // Link to the project only AFTER the contact is confirmed, using its real
+  // numeric id (previously the link was created concurrently with the temp id,
+  // which could insert a broken/duplicate link or race the token refresh).
   const lp=document.getElementById('f-lp')?.value;
-  if(!S.editId&&lp){
+  if(isNew&&lp){
     const ps=DB.get('project_stakeholders');
     if(!ps.find(x=>x.projectId===lp&&x.stakeholderId===data.id)){
       ps.push({id:DB.uid(),projectId:lp,stakeholderId:data.id,support:document.getElementById('f-ls')?.value||'Neutral',issueTags:'',addedDate:localToday(),notes:'',distributionGroups:'',stakeholderRole:'External'});
-      DB.set('project_stakeholders',ps);
+      await DB.set('project_stakeholders',ps);
     }
-  } else if(!S.editId&&S.projectFilter){
+  } else if(isNew&&S.projectFilter){
     const ps=DB.get('project_stakeholders');
     if(!ps.find(x=>x.projectId===S.projectFilter&&x.stakeholderId===data.id)){
       ps.push({id:DB.uid(),projectId:S.projectFilter,stakeholderId:data.id,support:'Neutral',issueTags:'',addedDate:localToday(),notes:'',distributionGroups:'',stakeholderRole:'External'});
-      DB.set('project_stakeholders',ps);
+      await DB.set('project_stakeholders',ps);
     }
   }
   closeM();

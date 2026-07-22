@@ -144,6 +144,7 @@ Bulk CSV import wizard for stakeholders and interactions. ~2,420 lines.
 3. **AI cross-report trend summary testing** — needs 2+ real exports to test fully
 4. **NEPA checklist progress bar on project cards** — may be partially implemented, needs verification
 5. **Continue testing** stakeholders LEP/EJ checkboxes, public meeting equity toggle, public comments nav/form
+6. **Tribal consultation tracker** — nav view exists (`renderTribal()`), but feature is classified as **in development / not production-ready**. Do not present as live to external users. Needs full testing and validation before going live.
 6. **NEPA Compliance section in PI Report Editor** — new section type `'nepa-compliance'` in the Add Section dropdown; auto-populates with live checklist group progress + comment period compliance for the project; includes an "AI Draft" button that calls `_claudeNarrative()` to generate a professional narrative paragraph from the compliance snapshot, written into the section text field like other AI-drafted sections. High priority — good AI use case.
 7. **REMIND JEFF: remove verbose `SB UPDATE` debug logging before go-live.** `sbUpdate()`
    in `index.html` has two `console.log` calls (`'SB UPDATE sending:'` and

@@ -7922,17 +7922,24 @@ function _rptBrandFooter(){
 // per page — the target for "Save as PDF".
 function _rptFrameCSS(){
   var mode=_rptBrandMode();
-  if(mode==='off') return '';
+  var branded=(mode!=='off');
   var hasFooter=(mode==='sunrise'&&!!window._srFooter);
-  return '@media print{'
-    +'body{margin:0}'
-    +'.rpt-page-header{position:fixed;top:0;left:0;right:0;background:#fff;padding:6mm 14mm 2mm}'
-    +'.rpt-page-header>div{margin-bottom:0!important}'   // trim the letterhead\'s screen margin in print so the header is compact/predictable
-    +(hasFooter
-      ?'.rpt-page-footer{position:fixed;bottom:0;left:0;right:0;background:#fff;padding:0;margin:0}'  // full-bleed footer band, edge to edge
-      :'.rpt-page-footer{display:none}')
-    +'.rpt-content{padding:38mm 14mm '+(hasFooter?'26mm':'12mm')+' 14mm}'
-    +'}';
+  // Table-based print frame: the letterhead lives in <thead> and the footer in
+  // <tfoot>, which browsers repeat on EVERY printed page AND reserve space for
+  // on every page — so flowing content never overlaps them. (position:fixed only
+  // reserved space on the first/last page, which clipped rows on middle pages.)
+  var css='.rpt-frame{width:100%;border-collapse:collapse}';
+  if(branded){
+    css+='.rpt-hdr-cell{padding:6mm 14mm 3mm 14mm}'      // letterhead, side margins align with content
+      +'.rpt-body-cell{padding:3mm 14mm 6mm 14mm}'        // content column
+      +'.rpt-ftr-cell{padding:0}'                          // footer band full-bleed (no side padding)
+      +(hasFooter?'':'.rpt-frame>tfoot{display:none}')     // UDOT: no footer
+      +'@media print{@page{size:letter portrait;margin:0}body{margin:0}}';
+  } else {
+    css+='.rpt-hdr-cell,.rpt-ftr-cell{display:none}.rpt-body-cell{padding:0}'
+      +'@media print{@page{size:letter portrait;margin:19mm 14mm 14mm 14mm}body{margin:0}}';
+  }
+  return css;
 }
 
 function generatePISummary(){
@@ -8595,7 +8602,7 @@ function generateReport(type){
     matCols.forEach(function(c){matLegend+='<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+matColors[c]+';margin-right:4px"></span>'+matColHdr[c]+'</span>';});
     matLegend+='<span style="margin-left:auto;font-style:italic;color:var(--fog);font-size:10px">Hover initials for name · External stakeholders only</span></div>';
 
-    body='<div style="page-break-inside:avoid;page-break-after:always;margin-bottom:20px">'      +'<div style="font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Stakeholder Engagement Matrix</div>'      +matLegend      +'<table style="width:100%;border-collapse:separate;border-spacing:3px"><thead><tr>'+matHdr+'</tr></thead><tbody>'+matBodyRows+'</tbody></table>'      +'</div>'      +'<div style="font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-top:14px;border-top:1px solid var(--border);page-break-before:always">External Stakeholder Detail ('+externalFilteredPS.length+' contacts)</div>'
+    body='<div style="page-break-inside:avoid;margin-bottom:20px">'      +'<div style="font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Stakeholder Engagement Matrix</div>'      +matLegend      +'<table style="width:100%;border-collapse:separate;border-spacing:3px"><thead><tr>'+matHdr+'</tr></thead><tbody>'+matBodyRows+'</tbody></table>'      +'</div>'      +'<div style="font-size:11px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-top:14px;border-top:1px solid var(--border);page-break-before:always">External Stakeholder Detail ('+externalFilteredPS.length+' contacts)</div>'
       +'<table style="width:100%;border-collapse:collapse;table-layout:fixed"><thead><tr>'
       +'<td style="width:33%;padding:8px 10px;background:rgba(40,168,112,.08);border:1px solid var(--border);font-size:13px;font-weight:600;color:var(--green)">Champions ('+groupsExt['Champion'].length+')</td>'
       +'<td style="width:34%;padding:8px 10px;background:rgba(255,255,255,.03);border:1px solid var(--border);font-size:13px;font-weight:600;color:var(--slate)">Neutrals ('+groupsExt['Neutral'].length+')</td>'
@@ -8761,7 +8768,6 @@ function _openRptPopup(rawHtml, rptTitle, rptProjLabel, dateStr, summaryTxt){
   var _rptHtml='<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+rptTitle+'</title><style>'
     +'*{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
     +'body{font-family:Arial,sans-serif;font-size:10px;color:#111;margin:0;padding:0;background:#fff}'
-    +'@page{size:letter portrait;margin:'+(_rptBrandMode()==='off'?'19mm 14mm 14mm 14mm':'0')+'}'
     +'@media print{button{display:none!important}.no-print{display:none!important}}'
     +_rptFrameCSS()
     +'table{width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed}'
@@ -8785,8 +8791,10 @@ function _openRptPopup(rawHtml, rptTitle, rptProjLabel, dateStr, summaryTxt){
     +'<button onclick="window.print()" style="padding:6px 14px;background:#1A3050;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer">Print / Save PDF</button>'
     +'<span style="font-size:11px;color:#555">'+rptTitle+(rptProjLabel?' — '+rptProjLabel:'')+'</span>'
     +'</div>'
-    +'<div class="rpt-page-header">'+_rptBrandHeader()+'</div>'
-    +'<div class="rpt-content">'
+    +'<table class="rpt-frame">'
+    +'<thead><tr><td class="rpt-hdr-cell">'+_rptBrandHeader()+'</td></tr></thead>'
+    +'<tfoot><tr><td class="rpt-ftr-cell">'+_rptBrandFooter()+'</td></tr></tfoot>'
+    +'<tbody><tr><td class="rpt-body-cell">'
     +'<div style="padding:0 0 8px 0">'
     +'<div style="font-size:15px;font-weight:700;color:#1a3a5c;margin-bottom:3px">'+rptTitle+'</div>'
     +(rptProjLabel?'<div style="font-size:11px;color:#555;margin-bottom:2px">'+rptProjLabel+'</div>':'')
@@ -8798,8 +8806,8 @@ function _openRptPopup(rawHtml, rptTitle, rptProjLabel, dateStr, summaryTxt){
     +'<span>PI Registry · Sunrise Engineering</span>'
     +'<span>'+footerLabel+'</span>'
     +'</div>'
-    +'</div>'
-    +'<div class="rpt-page-footer">'+_rptBrandFooter()+'</div>'
+    +'</td></tr></tbody>'
+    +'</table>'
     +'</body></html>';
   showInlineReport(_rptHtml, rptTitle);
 }

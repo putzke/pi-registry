@@ -7922,14 +7922,17 @@ function _rptFrameCSS(){
     css+='.rpt-hdr-cell{padding:6mm 18mm 3mm 18mm}'      // letterhead, side margins align with content
       +'.rpt-body-cell{padding:3mm 18mm 6mm 18mm}'        // content column
       +'.rpt-ftr-cell{padding:0}'                          // footer band full-bleed (no side padding)
+      +'.rpt-ftr-fixed{display:none}'                      // fixed footer clone: print-only (see below)
       +(hasFooter?'':'.rpt-frame>tfoot{display:none}')     // UDOT: no footer
-      // height:100% makes the frame table fill each printed page, so the <tfoot>
-      // footer band is pushed to the physical bottom of EVERY page — including a
-      // short final page (otherwise the repeating footer floats up right after
-      // the last content row). Only needed when there is a footer (Sunrise).
-      +'@media print{@page{size:letter portrait;margin:0}'
-      +(hasFooter?'html,body{height:100%}.rpt-frame{height:100%}':'')
-      +'body{margin:0}}';
+      // Footer strategy: the <tfoot> keeps RESERVING footer-height space at the
+      // bottom of every page (table-footer-group), so flowing content never runs
+      // under the footer — but in print it is made invisible so it doesn't show
+      // mid-page on a short final page. The visible footer is a position:fixed
+      // clone pinned to the physical bottom of EVERY printed page, wherever the
+      // content happens to end. (height:100% only worked for single-page output.)
+      +'@media print{@page{size:letter portrait;margin:0}body{margin:0}'
+      +(hasFooter?'.rpt-ftr-cell{visibility:hidden}.rpt-ftr-fixed{display:block;position:fixed;left:0;right:0;bottom:0}':'')
+      +'}';
   } else {
     css+='.rpt-hdr-cell,.rpt-ftr-cell{display:none}.rpt-body-cell{padding:0}'
       +'@media print{@page{size:letter portrait;margin:19mm 18mm 14mm 18mm}body{margin:0}}';
@@ -8903,6 +8906,9 @@ function _openRptPopup(rawHtml, rptTitle, rptProjLabel, dateStr, summaryTxt){
     +'</div>'
     +'</td></tr></tbody>'
     +'</table>'
+    // Fixed footer clone — hidden on screen, pinned to the physical bottom of
+    // every printed page (the <tfoot> above only reserves the space).
+    +(_rptBrandFooter()?'<div class="rpt-ftr-fixed">'+_rptBrandFooter()+'</div>':'')
     +'</body></html>';
   showInlineReport(_rptHtml, rptTitle);
 }

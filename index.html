@@ -9106,6 +9106,80 @@ function _claudeSystemPrompt() {
     + 'Write in third person past or present tense as appropriate.';
 }
 
+// Enriched, itemized facts for the "Recent public concerns and inquiries"
+// section: the aggregate counts PLUS each in-period interaction's subject and
+// summary, so the AI can synthesize the ACTUAL topics/concerns raised — not
+// just volume. Returns null when there is nothing in the report period.
+function _buildConcernsAIFacts() {
+  var projF = S.projectFilter;
+  if (!projF) return null;
+  var saved = loadReportSections(projF);
+  var ps = DB.get('project_stakeholders').filter(function(x){ return String(x.projectId)===String(projF); });
+  var allStakes = DB.getActive('stakeholders');
+  var ints = DB.get('interactions').filter(function(i){ return String(i.projectId)===String(projF); });
+  var externalIds = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; })
+                      .map(function(lk){ return String(lk.stakeholderId); });
+  var periodInts = ints.filter(function(i){
+    if (externalIds.indexOf(String(i.stakeholderId)) < 0) return false;
+    if (saved.periodStart && i.date < saved.periodStart) return false;
+    if (saved.periodEnd && i.date > saved.periodEnd) return false;
+    return true;
+  });
+  if (periodInts.length === 0) return null;
+  periodInts = periodInts.slice().sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+
+  var chanCount = {};
+  periodInts.forEach(function(i){ var c=i.channel||'Unknown'; chanCount[c]=(chanCount[c]||0)+1; });
+  var chanStr = Object.keys(chanCount).sort(function(a,b){ return chanCount[b]-chanCount[a]; })
+                  .map(function(c){ return c+' ('+chanCount[c]+')'; }).join(', ');
+  var needFU = periodInts.filter(function(i){ return i.followUp && !i.followUpDone; }).length;
+  var periodLabel = (saved.periodStart || saved.periodEnd)
+    ? ((saved.periodStart||'start') + ' to ' + (saved.periodEnd||'present'))
+    : 'the report period';
+
+  var lines = [];
+  lines.push('Report period: ' + periodLabel + '.');
+  lines.push('Total external stakeholder interactions: ' + periodInts.length + '.');
+  if (chanStr) lines.push('Channel breakdown: ' + chanStr + '.');
+  lines.push('Interactions still requiring follow-up: ' + needFU + '.');
+  lines.push('');
+  lines.push('Individual interactions (date | contact | channel | subject | summary | follow-up status):');
+  periodInts.forEach(function(i){
+    var s = allStakes.find(function(x){ return String(x.id)===String(i.stakeholderId); });
+    var who = i.anonLabel || (s ? ((s.firstName||'')+' '+(s.lastName||'')).trim() : '') || 'Unknown';
+    var subj = (i.subject||'').trim() || '(no subject)';
+    var summ = (i.summary||'').trim();
+    if (summ.length > 300) summ = summ.slice(0,300) + '…';
+    var fu = (i.followUp && !i.followUpDone) ? 'follow-up pending' : (i.followUp ? 'follow-up done' : 'no follow-up');
+    lines.push('- ' + (i.date||'') + ' | ' + who + ' | ' + (i.channel||'') + ' | ' + subj + ' | ' + (summ||'(no notes)') + ' | ' + fu);
+  });
+  return lines.join('\n');
+}
+
+// Build the user-message + token budget for a given section's AI draft. The
+// concerns section gets the enriched itemized facts and a topic-synthesis
+// instruction; every other section keeps the plain "summarize these stats"
+// prompt off its template draft.
+function _sectionAIRequest(secType, templateDraft) {
+  if (secType === 'auto-concerns') {
+    var facts = _buildConcernsAIFacts() || templateDraft || '';
+    return {
+      userContent: 'Write a brief narrative (3-4 sentences) for the "Recent public concerns and inquiries" '
+        + 'section of a PI progress report. Summarize the main topics, concerns, questions, and requests that '
+        + 'stakeholders actually raised during the period, grouping recurring themes together, and weave in the '
+        + 'relevant counts (total interactions, primary contact channels, and how many still require follow-up). '
+        + 'Do not list interactions individually and do not include stakeholder names. Base it strictly on these '
+        + 'facts:\n\n' + facts,
+      maxTokens: 600
+    };
+  }
+  return {
+    userContent: 'Write a narrative summary for the "' + secType.replace('auto-','').replace(/-/g,' ')
+      + '" section of a PI progress report. Base it strictly on these facts: ' + (templateDraft||''),
+    maxTokens: undefined
+  };
+}
+
 async function generateSectionDraft(secType, textareaIdx) {
   var ta = document.querySelector('.rpt-sec-summary[data-idx="'+textareaIdx+'"]');
   if (!ta) return;
@@ -9130,11 +9204,8 @@ async function generateSectionDraft(secType, textareaIdx) {
   var origText = btn ? btn.textContent : '';
   if (btn) { btn.textContent = 'Generating…'; btn.disabled = true; }
 
-  var narrative = await _claudeNarrative(
-    _claudeSystemPrompt(),
-    'Write a narrative summary for the "' + secType.replace('auto-','').replace(/-/g,' ') + '" section of a PI progress report. '
-    + 'Base it strictly on these facts: ' + templateDraft
-  );
+  var req = _sectionAIRequest(secType, templateDraft);
+  var narrative = await _claudeNarrative(_claudeSystemPrompt(), req.userContent, req.maxTokens);
 
   if (btn) { btn.textContent = origText; btn.disabled = false; }
   ta.value = narrative || templateDraft;
@@ -9216,10 +9287,8 @@ async function generateAllSectionDrafts() {
   // Fire all section drafts in parallel
   var sectionPromises = autoSections.map(function(s) {
     var templateDraft = _buildSectionDraft(s.secType) || '';
-    var userContent = 'Write a narrative summary for the "'
-      + s.secType.replace('auto-','').replace(/-/g,' ')
-      + '" section of a PI progress report. Facts: ' + templateDraft;
-    return _claudeNarrative(_claudeSystemPrompt(), userContent).then(function(narrative) {
+    var req = _sectionAIRequest(s.secType, templateDraft);
+    return _claudeNarrative(_claudeSystemPrompt(), req.userContent, req.maxTokens).then(function(narrative) {
       if (narrative) s.ta.value = narrative;
       else if (templateDraft) s.ta.value = templateDraft;
       progress();
@@ -9288,7 +9357,7 @@ function _buildSectionDraft(secType) {
 
   if (secType === 'auto-concerns') {
     if (periodInts.length === 0) return null;
-    var needFU = periodInts.filter(function(i){ return i.followUpRequired && !i.followUpDone; }).length;
+    var needFU = periodInts.filter(function(i){ return i.followUp && !i.followUpDone; }).length;
     // Channel breakdown
     var chanCount = {};
     periodInts.forEach(function(i){ var c=i.channel||'Unknown'; chanCount[c]=(chanCount[c]||0)+1; });
@@ -9341,7 +9410,7 @@ function _buildSectionDraft(secType) {
   }
 
   if (secType === 'auto-followups') {
-    var fuItems = ints.filter(function(i){ return i.followUpRequired; });
+    var fuItems = ints.filter(function(i){ return i.followUp; });
     if (fuItems.length === 0) return null;
     var fuOpen     = fuItems.filter(function(i){ return !i.followUpDone; }).length;
     var fuResolved = fuItems.filter(function(i){ return i.followUpDone; }).length;
@@ -9542,7 +9611,7 @@ function _buildOverallDraft() {
   // ── Sentence 2: Period outreach activity ─────────────────────────────────
   if (periodInts.length > 0) {
     var compEvts = meetings.filter(function(m){ return m.status==='Completed'; }).length;
-    var needFU = periodInts.filter(function(i){ return i.followUpRequired && !i.followUpDone; }).length;
+    var needFU = periodInts.filter(function(i){ return i.followUp && !i.followUpDone; }).length;
     var s2 = 'During '+periodLabel+', the project team conducted '+periodInts.length
       +' external stakeholder interaction'+(periodInts.length!==1?'s':'');
     if (compEvts > 0) s2 += ' and '+compEvts+' public outreach event'+(compEvts!==1?'s':'');

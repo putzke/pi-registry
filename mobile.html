@@ -878,12 +878,36 @@ async function _sbWrite(url, method, bodyObj, headerOverrides) {
     headers: {...getAuthHeaders(), ...(headerOverrides||{})},
     body: bodyObj !== undefined ? JSON.stringify(bodyObj) : undefined
   });
-  let r = await fetch(url, build());
-  if (r.status === 401 && getSession()) {
-    const ok = await refreshSession();
-    if (ok) r = await fetch(url, build());
+  // Retry on 401 (refresh token once) and on transient network failures
+  // (fetch rejects with "Failed to fetch" when connectivity drops — common in
+  // the field) with backoff, instead of letting the rejection go unhandled.
+  let lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      let r = await fetch(url, build());
+      if (r.status === 401 && getSession()) {
+        const ok = await refreshSession();
+        if (ok) r = await fetch(url, build());
+      }
+      return r;
+    } catch (e) {
+      lastErr = e;
+      if (attempt < 2) await new Promise(res => setTimeout(res, 400 * (attempt + 1)));
+    }
   }
-  return r;
+  throw lastErr;
+}
+
+// Debounced warning when a write can't reach Supabase after retries — the
+// change is in the local cache but not persisted; prompt the user to re-save.
+let _sbNetworkWarnAt = 0;
+function _sbNetworkWarn() {
+  const now = Date.now();
+  if (now - _sbNetworkWarnAt < 4000) return;
+  _sbNetworkWarnAt = now;
+  if (typeof showToast === 'function') {
+    showToast('Could not reach the server — change not saved. Check your connection and re-save.', 'error');
+  }
 }
 
 function showLoginOverlay() {
@@ -1068,7 +1092,9 @@ async function sbGet(table) {
 async function sbAdd(table, obj) {
   const sbTable = SB_TABLES[table];
   const body = toSB(table, obj);
-  const r = await _sbWrite(SUPA_REST + '/' + sbTable, 'POST', body);
+  let r;
+  try { r = await _sbWrite(SUPA_REST + '/' + sbTable, 'POST', body); }
+  catch (e) { console.error('SB ADD network error:', e.message); _sbNetworkWarn(); return null; }
   if (!r.ok) { const e = await r.text(); console.error('SB ADD error:', r.status, e); showToast('DB error '+r.status+': '+e.slice(0,80),'error'); return null; }
   const rows = await r.json();
   cacheClear(table);
@@ -1078,7 +1104,9 @@ async function sbAdd(table, obj) {
 async function sbUpdate(table, sbId, obj) {
   const sbTable = SB_TABLES[table];
   const body = toSB(table, obj);
-  const r = await _sbWrite(SUPA_REST + '/' + sbTable + '?id=eq.' + sbId, 'PATCH', body);
+  let r;
+  try { r = await _sbWrite(SUPA_REST + '/' + sbTable + '?id=eq.' + sbId, 'PATCH', body); }
+  catch (e) { console.error('SB UPDATE network error:', e.message); _sbNetworkWarn(); return false; }
   if (!r.ok) { console.error('SB UPDATE error:', r.status); return false; }
   cacheClear(table);
   return true;
@@ -1086,7 +1114,9 @@ async function sbUpdate(table, sbId, obj) {
 
 async function sbDelete(table, sbId) {
   const sbTable = SB_TABLES[table];
-  const r = await _sbWrite(SUPA_REST + '/' + sbTable + '?id=eq.' + sbId, 'DELETE');
+  let r;
+  try { r = await _sbWrite(SUPA_REST + '/' + sbTable + '?id=eq.' + sbId, 'DELETE'); }
+  catch (e) { console.error('SB DELETE network error:', e.message); _sbNetworkWarn(); return false; }
   if (!r.ok) { console.error('SB DELETE error:', r.status); return false; }
   cacheClear(table);
   return true;

@@ -7525,6 +7525,12 @@ function exportIssuesPdf(){
   var issProj=isssProjF?issProjs.find(function(p){return p.id===isssProjF;}):null;
   var issProjLabel=issProj?(issProj.pid+' — '+issProj.name):'All Projects';
   var issDateStr=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  // When a report package is being assembled, hand the body to the collector
+  // instead of rendering a standalone report.
+  if(window._rptCollector){
+    window._rptCollector.push({title:'Issues Tracker',distBlock:'',body:bodyHtml});
+    return;
+  }
   _openRptPopup(bodyHtml,'Issues Tracker',issProjLabel,issDateStr);
 }
 
@@ -7808,7 +7814,12 @@ el.innerHTML=topbar
   var tabContent='';
   if(rptTab==='reports'){
     tabContent=summaryBar+groupPanel
-      +'<div style="font-size:12px;font-weight:700;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Select a report to generate</div>'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">'
+      +'<div style="font-size:12px;font-weight:700;color:var(--fog);text-transform:uppercase;letter-spacing:.5px">Select a report to generate</div>'
+      +'<button class="btn btn-sm" onclick="openReportSequenceModal()" style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap">'
+      +'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" style="width:13px;height:13px"><path d="M2 4h9M2 8h9M2 12h6"/><path d="M12 3l2 2-2 2M14 5H9"/></svg>'
+      +'Build report package</button>'
+      +'</div>'
       +reportCards
       +'<div id="rpt-output"></div>';
   } else if(rptTab==='pi-editor'){
@@ -8694,7 +8705,109 @@ function generateReport(type){
   var summaryTxtVal2=ta?ta.value||'':'';
   // Strip the summary wrap from body passed to popup (popup re-renders it via summaryTxt param)
   var bodyForPopup=distBlock+body;
+  // When a report package is being assembled, hand the body (and distributed-to
+  // block) to the collector instead of rendering a standalone report. The
+  // package driver places the distributed-to block once, on page 1.
+  if(window._rptCollector){
+    window._rptCollector.push({title:getReportTitle(type),distBlock:distBlock,body:body});
+    return;
+  }
   _openRptPopup(bodyForPopup, getReportTitle(type), proj.pid+' — '+proj.name, dateStr, summaryTxtVal2);
+}
+
+// ── REPORT PACKAGE (stitch multiple quick reports into one document) ──────
+// The reports that render through the shared letterhead frame (_openRptPopup)
+// can be stitched into a single printable document. The user assigns each a
+// sequence number 1–9; the package renders them in order, one letterhead frame
+// around the whole thing (so the header/footer repeat on every page), with a
+// page break between reports and the "Distributed to" block shown once up top.
+var PACKAGE_REPORTS=[
+  {id:'contact-list',name:'Stakeholder contact list'},
+  {id:'interaction-log',name:'Interaction log'},
+  {id:'followup-status',name:'Follow-up status report'},
+  {id:'sentiment-summary',name:'Sentiment & engagement matrix'},
+  {id:'deliverable-status',name:'Deliverable / scope status'},
+  {id:'comment-matrix',name:'Public comment matrix'},
+  {id:'issues-report',name:'Issues tracker report'},
+  {id:'events-log',name:'Events & outreach log'}
+];
+
+function openReportSequenceModal(){
+  var projF=S.projectFilter;
+  if(!projF){alert('Select a project first.');return;}
+  var opts='<option value="">—</option>';
+  for(var n=1;n<=9;n++)opts+='<option value="'+n+'">'+n+'</option>';
+  var rows='';
+  PACKAGE_REPORTS.forEach(function(r){
+    rows+='<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:#1A3050;border:1px solid rgba(255,255,255,.12);border-radius:8px;margin-bottom:8px">'
+      +'<select class="rpt-seq-sel fsel" data-rid="'+r.id+'" data-rname="'+r.name+'" style="width:64px;flex-shrink:0;text-align:center">'+opts+'</select>'
+      +'<span style="font-size:13px;color:var(--mist)">'+r.name+'</span>'
+      +'</div>';
+  });
+  var body='<div style="font-size:13px;color:var(--slate);margin-bottom:16px;line-height:1.55">'
+    +'Assign a sequence number (1–9) to each report you want included. They print in that order as one document — '
+    +'letterhead on every page, a page break between reports, and the distribution list shown once on page 1. '
+    +'Reports left blank are skipped. The internal-stakeholder toggle and distribution checkboxes on the Quick Reports screen still apply.'
+    +'</div>'
+    +rows;
+  var ftr='<button class="btn" onclick="closeM()">Cancel</button>'
+    +'<button class="btn btn-primary" onclick="generateReportSequence()" style="margin-left:8px">Generate package</button>';
+  openM('Build report package',body,ftr);
+}
+
+function generateReportSequence(){
+  var projF=S.projectFilter;
+  if(!projF){alert('Select a project first.');return;}
+  var sels=document.querySelectorAll('.rpt-seq-sel');
+  var chosen=[];
+  for(var i=0;i<sels.length;i++){
+    var v=parseInt(sels[i].value,10);
+    if(v>0)chosen.push({id:sels[i].getAttribute('data-rid'),ord:v,idx:i});
+  }
+  if(!chosen.length){alert('Assign a sequence number (1–9) to at least one report.');return;}
+  // Sort by chosen number, ties broken by list order for determinism.
+  chosen.sort(function(a,b){return a.ord-b.ord||a.idx-b.idx;});
+  closeM();
+
+  var collected=[];
+  window._rptCollector=collected;
+  try{
+    chosen.forEach(function(c){
+      if(c.id==='issues-report'){
+        // Issues report reads its own view state; scope to this project and
+        // ignore any leftover status/category/priority filters, then restore.
+        var _pv=S.issViewProj,_sv=S.issViewStatus,_cv=S.issViewCat,_pr=S.issViewPri;
+        S.issViewProj=projF;S.issViewStatus='';S.issViewCat='';S.issViewPri='';
+        try{ exportIssuesPdf(); }
+        finally{ S.issViewProj=_pv;S.issViewStatus=_sv;S.issViewCat=_cv;S.issViewPri=_pr; }
+      } else {
+        generateReport(c.id);
+      }
+    });
+  } finally {
+    window._rptCollector=null;
+  }
+  if(!collected.length){alert('Nothing was generated.');return;}
+
+  var projs=DB.get('projects');
+  var proj=projs.find(function(p){return p.id===projF;});
+  var projLabel=proj?(proj.pid+' — '+proj.name):'';
+  var dateStr=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+
+  // Distributed-to block is identical across reports (same project + checkboxes);
+  // show the first non-empty one, once, at the top (so it lands on page 1 only).
+  var distBlock='';
+  for(var d=0;d<collected.length;d++){if(collected[d].distBlock){distBlock=collected[d].distBlock;break;}}
+
+  var combined=distBlock;
+  collected.forEach(function(r,i){
+    combined+='<div'+(i>0?' style="page-break-before:always;break-before:page"':'')+'>'
+      +'<div style="font-size:15px;font-weight:700;color:#1a3a5c;margin:0 0 12px;border-bottom:2px solid #1a3a5c;padding-bottom:5px">'+(i+1)+'. '+r.title+'</div>'
+      +r.body
+      +'</div>';
+  });
+
+  _openRptPopup(combined,'Public Involvement Report Package',projLabel,dateStr);
 }
 
 // ── PI REPORT EDITOR ──────────────────────────────

@@ -8916,7 +8916,23 @@ function _buildPackageFacts(projF){
   f.push('Deliverables complete: '+delDone+' of '+dels.length+'.');
   f.push('Open issues: '+openIss+' of '+issues.length+' total.');
   if(comments.length)f.push('Public comments received: '+comments.length+' ('+responded+' responded).');
-  return f.join(' ');
+  var stats=f.join(' ');
+
+  // Thin qualitative layer: short excerpts of the most recent external
+  // interactions so the summary can name the 2-3 dominant THEMES (not just
+  // counts). Kept brief and theme-level; full descriptive narrative stays in
+  // the PI Report Editor. (Subject is often just a category like "General", so
+  // we use the interaction summary text, trimmed.)
+  var recent=extInts.slice().sort(function(a,b){return (b.date||'').localeCompare(a.date||'');}).slice(0,12);
+  var topics=recent.map(function(i){
+    var t=((i.summary||'').trim()||(i.subject||'').trim()).replace(/\s+/g,' ');
+    if(!t)return '';
+    return '- '+(t.length>110?t.slice(0,110)+'…':t);
+  }).filter(Boolean);
+  if(topics.length){
+    stats+='\n\nRecent interaction excerpts (use ONLY to identify the 2-3 recurring themes stakeholders raised; do not restate them individually or quote names):\n'+topics.join('\n');
+  }
+  return stats;
 }
 
 // Tier 1 package AI: generate ONE executive summary paragraph for the whole
@@ -8935,7 +8951,8 @@ async function genPackageExecSummary(btn){
   var userContent='Write a 3-5 sentence executive summary for a public involvement report package covering project "'
     +(proj.name||'this project')+'"'+(proj.pid?' ('+proj.pid+')':'')+'. '
     +'Synthesize the following current project facts into a cohesive narrative for a client/agency audience, '
-    +'highlighting engagement level, stakeholder sentiment, and any open items. Base it strictly on these facts: '+facts;
+    +'highlighting engagement level, stakeholder sentiment, the main themes stakeholders have raised, and any '
+    +'open items. Base it strictly on these facts: '+facts;
   var narrative=await _claudeNarrative(_claudeSystemPrompt(),userContent,600,'claude-sonnet-5');
   if(btn){btn.disabled=false;btn.innerHTML=orig;}
   if(narrative&&ta){ta.value=narrative;showToast('Executive summary drafted — review before printing','info',2500);}

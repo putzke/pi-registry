@@ -715,7 +715,7 @@ const SB_TO_INT = {
   },
   pi_project_stakeholders: {
     id:'id', projectId:'project_id', stakeholderId:'stakeholder_id',
-    stakeholderRole:'stakeholder_role', support:'support',
+    stakeholderRole:'stakeholder_role', support:'support', influence:'influence',
     distributionGroups:'distribution_groups', issueTags:'issue_tags',
     addedDate:'added_date', notes:'notes'
   },
@@ -2783,7 +2783,7 @@ async function saveBulkContacts() {
       if (alreadyLinked) { errors.push('Row ' + (r.idx+1) + ': "' + linkInfo.name + '" is already linked to this project (skipped)'); continue; }
       var linkPS = {
         id: DB.uid(), projectId: S.projectFilter, stakeholderId: existId,
-        support: 'Neutral', issueTags: '', addedDate: localToday(), notes: '',
+        support: 'Neutral', influence: 'Medium', issueTags: '', addedDate: localToday(), notes: '',
         distributionGroups: '', stakeholderRole: r.ro || 'External'
       };
       var linkId = await sbAdd('project_stakeholders', linkPS);
@@ -2834,6 +2834,7 @@ async function saveBulkContacts() {
         projectId: S.projectFilter,
         stakeholderId: realId,
         support: 'Neutral',
+        influence: 'Medium',
         issueTags: '',
         addedDate: localToday(),
         notes: '',
@@ -4646,6 +4647,7 @@ function renderStakeDetail(s,link){
     <div class="fg fg3" style="margin-bottom:10px">
       <div class="fi"><div class="fl">Role</div><div class="fv"><span class="badge ${(link.stakeholderRole||'External')==='Internal'?'b-sky':'b-teal'}">${link.stakeholderRole||'External'}</span></div></div>
       <div class="fi"><div class="fl">Support level</div><div class="fv">${supBadge(link.support)}</div></div>
+      <div class="fi"><div class="fl">Influence</div><div class="fv"><span class="badge b-gray">${link.influence||'Medium'}</span></div></div>
       <div class="fi"><div class="fl">Added to project</div><div class="fv">${fmt(link.addedDate)}</div></div>
     </div>
     <div class="fg fg3" style="margin-bottom:10px">
@@ -6112,13 +6114,13 @@ async function saveStake(){
   if(isNew&&lp){
     const ps=DB.get('project_stakeholders');
     if(!ps.find(x=>x.projectId===lp&&x.stakeholderId===data.id)){
-      ps.push({id:DB.uid(),projectId:lp,stakeholderId:data.id,support:document.getElementById('f-ls')?.value||'Neutral',issueTags:'',addedDate:localToday(),notes:'',distributionGroups:'',stakeholderRole:'External'});
+      ps.push({id:DB.uid(),projectId:lp,stakeholderId:data.id,support:document.getElementById('f-ls')?.value||'Neutral',influence:'Medium',issueTags:'',addedDate:localToday(),notes:'',distributionGroups:'',stakeholderRole:'External'});
       await DB.set('project_stakeholders',ps);
     }
   } else if(isNew&&S.projectFilter){
     const ps=DB.get('project_stakeholders');
     if(!ps.find(x=>x.projectId===S.projectFilter&&x.stakeholderId===data.id)){
-      ps.push({id:DB.uid(),projectId:S.projectFilter,stakeholderId:data.id,support:'Neutral',issueTags:'',addedDate:localToday(),notes:'',distributionGroups:'',stakeholderRole:'External'});
+      ps.push({id:DB.uid(),projectId:S.projectFilter,stakeholderId:data.id,support:'Neutral',influence:'Medium',issueTags:'',addedDate:localToday(),notes:'',distributionGroups:'',stakeholderRole:'External'});
       await DB.set('project_stakeholders',ps);
     }
   }
@@ -6247,6 +6249,7 @@ function saveAddToProject(){
     projectId:projId,
     stakeholderId:stakeId,
     support:document.getElementById('f-atp-sup')?.value||'Neutral',
+    influence:'Medium',
     issueTags:document.getElementById('f-atp-tags')?.value||'',
     addedDate:localToday(),
     notes:document.getElementById('f-atp-notes')?.value||'',
@@ -6280,7 +6283,7 @@ function saveLinkStake(){
   const sId=document.getElementById('f-ls2')?.value;if(!sId)return;
   const ps=DB.get('project_stakeholders');
   const dgs=[...document.querySelectorAll('.f-ldg-cb:checked')].map(c=>c.value).join(',');
-  ps.push({id:DB.uid(),projectId:S.projectFilter,stakeholderId:sId,support:document.getElementById('f-lsu')?.value||'Neutral',issueTags:document.getElementById('f-ltg')?.value||'',addedDate:localToday(),notes:document.getElementById('f-lno')?.value||'',distributionGroups:dgs,stakeholderRole:document.getElementById('f-lsr')?.value||'External'});
+  ps.push({id:DB.uid(),projectId:S.projectFilter,stakeholderId:sId,support:document.getElementById('f-lsu')?.value||'Neutral',influence:'Medium',issueTags:document.getElementById('f-ltg')?.value||'',addedDate:localToday(),notes:document.getElementById('f-lno')?.value||'',distributionGroups:dgs,stakeholderRole:document.getElementById('f-lsr')?.value||'External'});
   DB.set('project_stakeholders',ps);closeM();render();
 }
 function openEditLinkModal(lid){
@@ -6288,7 +6291,8 @@ function openEditLinkModal(lid){
   openM('Edit project context',
   `<div class="fgrid fg2f"><div class="fr"><label>Stakeholder role</label><select id="f-lksr"><option value="External"${(lk.stakeholderRole||'External')==='External'?' selected':''}>External</option><option value="Internal"${(lk.stakeholderRole||'External')==='Internal'?' selected':''}>Internal</option></select></div>
   <div class="fr"><label>Support level</label><select id="f-lksu">${['Champion','Neutral','Opponent'].map(t=>`<option${lk.support===t?' selected':''}>${t}</option>`).join('')}</select></div></div>
-  <div class="fgrid fg2f"><div class="fr"><label>Issue tags</label><input id="f-lktg" value="${lk.issueTags||''}"></div></div>
+  <div class="fgrid fg2f"><div class="fr"><label>Influence level</label><select id="f-lkinf">${['High','Medium','Low'].map(t=>`<option${(lk.influence||'Medium')===t?' selected':''}>${t}</option>`).join('')}</select></div>
+  <div class="fr"><label>Issue tags</label><input id="f-lktg" value="${lk.issueTags||''}"></div></div>
   <div class="fr"><label>Report distribution</label>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">${DIST_GROUPS.map(g=>`<label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--mist);cursor:pointer"><input type="checkbox" class="f-lkdg-cb" value="${g}" ${(lk.distributionGroups||'').split(',').map(x=>x.trim()).includes(g)?'checked':''} style="accent-color:var(--sky);width:14px;height:14px"> ${g}</label>`).join('')}</div>
   </div>
@@ -6307,6 +6311,7 @@ function saveEditLink(lid){
     }
     all[i].stakeholderRole=newRole;
     all[i].support=document.getElementById('f-lksu')?.value;
+    all[i].influence=document.getElementById('f-lkinf')?.value||'Medium';
     all[i].issueTags=document.getElementById('f-lktg')?.value||'';
     all[i].notes=document.getElementById('f-lkno')?.value||'';
     all[i].distributionGroups=[...document.querySelectorAll('.f-lkdg-cb:checked')].map(c=>c.value).join(',');
@@ -8564,7 +8569,7 @@ function generateReport(type){
     var matStakes=[];
     externalFilteredPS.forEach(function(lk){
       var s=allStakes.find(function(x){return String(x.id)===String(lk.stakeholderId)});
-      if(s)matStakes.push({name:((s.firstName||'')+' '+(s.lastName||'')).trim()||(s.org||'?'),org:s.org||'',influence:s.influenceTier||'Medium',sentiment:lk.support||'Neutral'});
+      if(s)matStakes.push({name:((s.firstName||'')+' '+(s.lastName||'')).trim()||(s.org||'?'),org:s.org||'',influence:lk.influence||s.influenceTier||'Medium',sentiment:lk.support||'Neutral'});
     });
     var groupsExt={Champion:[],Neutral:[],Opponent:[]};
     externalFilteredPS.forEach(function(lk){
@@ -11186,7 +11191,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
       var sMatStakes=allStakes.map(function(sk){
         var lk=ps.find(function(x){return String(x.stakeholderId)===String(sk.id)});
         if(!lk)return null;
-        return{name:((sk.firstName||'')+' '+(sk.lastName||'')).trim()||(sk.org||'Unknown'),org:sk.org||'',influence:sk.influenceTier||'Medium',sentiment:lk.support||'Neutral'};
+        return{name:((sk.firstName||'')+' '+(sk.lastName||'')).trim()||(sk.org||'Unknown'),org:sk.org||'',influence:lk.influence||sk.influenceTier||'Medium',sentiment:lk.support||'Neutral'};
       }).filter(Boolean);
       // Matrix sub-heading
       xml+=para('Stakeholder Engagement Matrix (all project stakeholders):',boldRpr);
@@ -11419,7 +11424,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
       var matrixStakes=allStakes.map(function(sk){
         var lk=ps.find(function(x){return String(x.stakeholderId)===String(sk.id)});
         if(!lk)return null;
-        return{name:((sk.firstName||'')+' '+(sk.lastName||'')).trim()||(sk.org||'Unknown'),org:sk.org||'',influence:sk.influenceTier||'Medium',sentiment:lk.support||'Neutral'};
+        return{name:((sk.firstName||'')+' '+(sk.lastName||'')).trim()||(sk.org||'Unknown'),org:sk.org||'',influence:lk.influence||sk.influenceTier||'Medium',sentiment:lk.support||'Neutral'};
       }).filter(Boolean);
       var tblHdr='<w:tc><w:tcPr><w:tcW w:w="1200" w:type="dxa"/><w:shd w:val="clear" w:color="auto" w:fill="1A3050"/></w:tcPr><w:p><w:r><w:rPr><w:color w:val="FFFFFF"/><w:b/><w:sz w:val="16"/></w:rPr><w:t>Influence</w:t></w:r></w:p></w:tc>';
       cols3.forEach(function(c){
@@ -12975,7 +12980,7 @@ function showEngagementMatrix(projectId) {
       name: ((s.firstName||'')+' '+(s.lastName||'')).trim() || s.org || 'Unknown',
       org: s.org || '',
       type: s.type || '',
-      influence: s.influenceTier || 'Medium',
+      influence: lk.influence || s.influenceTier || 'Medium',
       sentiment: lk.support || 'Neutral'
     };
   }).filter(Boolean);
@@ -13166,7 +13171,7 @@ function printEngagementMatrix(projectId) {
       name: ((s.firstName||'')+' '+(s.lastName||'')).trim() || s.org || 'Unknown',
       org: s.org || '',
       type: s.type || '',
-      influence: s.influenceTier || 'Medium',
+      influence: lk.influence || s.influenceTier || 'Medium',
       sentiment: lk.support || 'Neutral'
     };
   }).filter(Boolean);

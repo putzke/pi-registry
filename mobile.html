@@ -958,7 +958,7 @@ const SB_TO_INT = {
   },
   pi_project_stakeholders: {
     id:'id', projectId:'project_id', stakeholderId:'stakeholder_id',
-    stakeholderRole:'stakeholder_role', support:'support',
+    stakeholderRole:'stakeholder_role', support:'support', influence:'influence',
     distributionGroups:'distribution_groups', issueTags:'issue_tags',
     addedDate:'added_date', notes:'notes'
   },
@@ -2113,6 +2113,7 @@ async function saveStakeholder(){
         stakeholderId:realId,
         stakeholderRole:'External',
         support:'Neutral',
+        influence:'Medium',
         distributionGroups:'',
         issueTags:'',
         addedDate:today()

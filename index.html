@@ -7510,9 +7510,8 @@ function exportIssuesPdf(){
     '</div>';
   }
 
-  const html='<div style="font-family:Arial,sans-serif;font-size:10px;color:#111;line-height:1.4">'+
-    '<div style="font-size:18px;font-weight:700;color:#1a3a5c;margin-bottom:4px">Issues Tracker</div>'+
-    '<div style="font-size:10px;color:#555;margin-bottom:4px">'+filtered.length+' issue'+(filtered.length!==1?'s':'')+' &bull; '+filtered.filter(x=>x.status==='Open'||x.status==='In Progress').length+' open &bull; Exported '+new Date().toLocaleDateString()+'</div>'+
+  const bodyHtml='<div style="font-family:Arial,sans-serif;font-size:10px;color:#111;line-height:1.4">'+
+    '<div style="font-size:10px;color:#555;margin-bottom:8px">'+filtered.length+' issue'+(filtered.length!==1?'s':'')+' &bull; '+filtered.filter(x=>x.status==='Open'||x.status==='In Progress').length+' open</div>'+
     filterLine+
     '<table style="width:100%;border-collapse:collapse;margin-bottom:24px;table-layout:fixed"><thead><tr>'+
       '<th style="width:28%">Title</th><th style="width:9%">Status</th><th style="width:9%">Priority</th><th style="width:14%">Category</th><th style="width:22%">Project</th><th style="width:12%;white-space:nowrap">Date Raised</th><th style="width:6%">Links</th>'+
@@ -7526,33 +7525,7 @@ function exportIssuesPdf(){
   var issProj=isssProjF?issProjs.find(function(p){return p.id===isssProjF;}):null;
   var issProjLabel=issProj?(issProj.pid+' — '+issProj.name):'All Projects';
   var issDateStr=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-  var _rptHtml='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Issues Tracker</title><style>'
-    +'*{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
-    +'body{font-family:Arial,sans-serif;font-size:10px;color:#111;margin:0;padding:0;background:#fff}'
-    +'@page{size:letter portrait;margin:19mm 14mm 14mm 14mm}'
-    +'@media print{button{display:none!important}.no-print{display:none!important}}'
-    +'table{width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed}'
-    +'th{background:#1a3a5c!important;color:#fff!important;padding:5px 8px!important;font-size:8px!important;text-transform:uppercase;letter-spacing:.4px;text-align:left}'
-    +'td{padding:5px 8px!important;border-bottom:1px solid #ddd!important;vertical-align:top!important;word-wrap:break-word;font-size:9px!important}'
-    +'tr{page-break-inside:avoid}'
-    +'thead{display:table-header-group}'
-    +'</style></head><body>'
-    +'<div class="no-print" style="padding:10px 16px;background:#f5f5f5;border-bottom:1px solid #ddd;display:flex;align-items:center;gap:12px">'
-    +'<button onclick="window.print()" style="padding:6px 14px;background:#1A3050;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer">Print / Save PDF</button>'
-    +'<span style="font-size:11px;color:#555">Issues Tracker — '+issProjLabel+'</span>'
-    +'</div>'
-    +'<div style="padding:0 0 8px 0">'
-    +'<div style="font-size:15px;font-weight:700;color:#1a3a5c;margin-bottom:2px">Issues Tracker</div>'
-    +'<div style="font-size:11px;color:#555;margin-bottom:2px">'+issProjLabel+'</div>'
-    +'<div style="font-size:10px;color:#595959;margin-bottom:10px">Generated '+issDateStr+'</div>'
-    +'</div>'
-    +html
-    +'<div style="margin-top:20px;padding-top:8px;border-top:1px solid #ddd;font-size:8px;color:#aaa;display:flex;justify-content:space-between">'
-    +'<span>PI Registry · Sunrise Engineering</span>'
-    +'<span>'+issProjLabel+' · Issues Tracker</span>'
-    +'</div>'
-    +'</body></html>';
-  showInlineReport(_rptHtml, 'Issues Tracker');
+  _openRptPopup(bodyHtml,'Issues Tracker',issProjLabel,issDateStr);
 }
 
 function renderReports(el){
@@ -7610,7 +7583,7 @@ function renderReports(el){
       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>'},
     {id:'comment-matrix',name:'Public comment matrix',desc:'Public comments received with response status for formal documentation',
       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h4"/></svg>'},
-    {id:'issues-report',name:'Issues tracker report',desc:'Open and resolved issues with linked interactions — export as PDF or Word',
+    {id:'issues-report',name:'Issues tracker report',desc:'Open and resolved issues with linked interactions',
       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><circle cx="12" cy="12" r="9"/><path d="M12 7v5"/><circle cx="12" cy="15.5" r=".8" fill="currentColor"/></svg>'},
     {id:'stakeholder-map',name:'Stakeholder map',desc:'Interactive map with filters by support, type, influence, LEP/EJ — open as a full view with live filtering',
       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M12 2C8.686 2 6 4.686 6 8c0 5 6 12 6 12s6-7 6-12c0-3.314-2.686-6-6-6z"/><circle cx="12" cy="8" r="2"/></svg>'},
@@ -8346,20 +8319,16 @@ function generateNepaComplianceReport(){
 }
 
 function generateIssuesReport(){
-  // Set the project filter on the issues view state to match current Reports project filter,
-  // then offer PDF or Word export via a small modal
-  var projF=S.projectFilter;
-  var projs=DB.get('projects')||[];
-  var proj=projF?projs.find(function(p){return p.id===projF;}):null;
-  var issues=DB.get('issues')||[];
-  var filtered=projF?issues.filter(function(x){return x.projectId===projF;}):issues;
-  var openCount=filtered.filter(function(x){return x.status==='Open'||x.status==='In Progress';}).length;
-  var label=proj?proj.pid+' — '+proj.name:'All projects';
-
-  openM('Issues tracker report',
-    '<div style="margin-bottom:14px;font-size:13px;color:var(--mist)">'    +'<strong>'+label+'</strong><br>'    +(filtered.length+' issue'+(filtered.length!==1?'s':'')+' · '+openCount+' open')    +'</div>'    +'<div style="font-size:12px;color:var(--slate);margin-bottom:18px">Choose an export format. The report will include all issues for the selected project, with linked interaction details.</div>'    +'<div style="display:flex;flex-direction:column;gap:10px">'    +'<button class="btn" style="justify-content:flex-start;gap:12px;padding:14px 16px;background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.15)" onclick="closeM();S.issViewProj=\''+projF+'\';exportIssuesPdf()">'    +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:18px;height:18px;color:var(--red);flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h4"/></svg>'    +'<div><div style="font-size:13px;font-weight:600;color:var(--white)">Export as PDF</div><div style="font-size:11px;color:var(--slate)">Summary table + full issue details with linked interactions</div></div></button>'    +'<button class="btn" style="justify-content:flex-start;gap:12px;padding:14px 16px;background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.15)" onclick="closeM();S.issViewProj=\''+projF+'\';exportIssuesSummaryDocx()">'    +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:18px;height:18px;color:var(--sky-lt);flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h4"/></svg>'    +'<div><div style="font-size:13px;font-weight:600;color:var(--white)">Export as Word (.docx)</div><div style="font-size:11px;color:var(--slate)">Branded document using Sunrise Engineering template</div></div></button>'    +'</div>',
-    ''
-  );
+  // Behave like the other quick reports: render the PDF inline in the shared
+  // letterhead frame, scoped to the current project only (no Word option — that
+  // lives in the PI Report Editor). Temporarily neutralize the Issues-view
+  // status/category/priority filters so the report shows the full project scope,
+  // then restore them so the Issues view is unaffected.
+  var _pv=S.issViewProj,_sv=S.issViewStatus,_cv=S.issViewCat,_pr=S.issViewPri;
+  S.issViewProj=S.projectFilter||'';
+  S.issViewStatus='';S.issViewCat='';S.issViewPri='';
+  try{ exportIssuesPdf(); }
+  finally{ S.issViewProj=_pv;S.issViewStatus=_sv;S.issViewCat=_cv;S.issViewPri=_pr; }
 }
 
 function getReportTitle(type){

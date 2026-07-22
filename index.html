@@ -7919,10 +7919,11 @@ function _rptFrameCSS(){
   return '@media print{'
     +'body{margin:0}'
     +'.rpt-page-header{position:fixed;top:0;left:0;right:0;background:#fff;padding:6mm 14mm 2mm}'
+    +'.rpt-page-header>div{margin-bottom:0!important}'   // trim the letterhead\'s screen margin in print so the header is compact/predictable
     +(hasFooter
-      ?'.rpt-page-footer{position:fixed;bottom:0;left:0;right:0;background:#fff;padding:1mm 14mm 4mm}'
+      ?'.rpt-page-footer{position:fixed;bottom:0;left:0;right:0;background:#fff;padding:0;margin:0}'  // full-bleed footer band, edge to edge
       :'.rpt-page-footer{display:none}')
-    +'.rpt-content{padding:32mm 14mm '+(hasFooter?'24mm':'12mm')+' 14mm}'
+    +'.rpt-content{padding:44mm 14mm '+(hasFooter?'26mm':'12mm')+' 14mm}'
     +'}';
 }
 

@@ -144,6 +144,7 @@ Bulk CSV import wizard for stakeholders and interactions. ~2,420 lines.
 3. **AI cross-report trend summary testing** — needs 2+ real exports to test fully
 4. **NEPA checklist progress bar on project cards** — may be partially implemented, needs verification
 5. **Continue testing** stakeholders LEP/EJ checkboxes, public meeting equity toggle, public comments nav/form
+6. **Tribal consultation tracker** — nav view exists (`renderTribal()`), but feature is classified as **in development / not production-ready**. Do not present as live to external users. Needs full testing and validation before going live.
 6. **NEPA Compliance section in PI Report Editor** — new section type `'nepa-compliance'` in the Add Section dropdown; auto-populates with live checklist group progress + comment period compliance for the project; includes an "AI Draft" button that calls `_claudeNarrative()` to generate a professional narrative paragraph from the compliance snapshot, written into the section text field like other AI-drafted sections. High priority — good AI use case.
 7. **REMIND JEFF: remove verbose `SB UPDATE` debug logging before go-live.** `sbUpdate()`
    in `index.html` has two `console.log` calls (`'SB UPDATE sending:'` and
@@ -412,6 +413,34 @@ single current trend, prior ones kept as history.
    open portal link, confirm both render.
 
 **Cross-app:** reports module is desktop-only — mobile/importer unaffected.
+
+
+## FUTURE — ArcGIS Survey123 Integration (in development)
+
+Import public outreach survey responses directly from ArcGIS Survey123 into
+Horizon COMPASS as interaction log entries. Goal: eliminate manual re-entry
+of field survey data, closing the gap between DOT/agency field outreach data
+collection tools and the internal PI stakeholder record. Integration via
+ArcGIS Survey123 API — pull completed survey responses, map fields to
+Horizon COMPASS interaction schema (stakeholder, date, subject, channel,
+summary), and create draft interactions for PI manager review before saving.
+
+Relevant because ArcGIS Survey123 is already widely used by transportation
+agencies and field teams; this positions Horizon COMPASS as compatible with
+the DOT technology ecosystem rather than requiring a separate workflow.
+
+## FUTURE — Phone Hotline Voicemail Transcription (in development, vendor TBD)
+
+Automatically transcribe project phone hotline voicemails and log them as
+interaction records in Horizon COMPASS. Construction-phase PI hotlines are
+often required by UDOT or the contractor; currently voicemails require
+manual transcription and re-entry into the PI log — a significant time drain.
+
+Architecture planned: webhook from hotline provider → Supabase Edge Function
+receiver → auto-create interaction record (anonLabel for unidentified callers,
+subject tagging, follow-up flag if needed). Specific hotline provider not yet
+selected — candidates include Dialpad, Twilio, or similar. Design session
+required before build; vendor selection pending.
 
 ## Supabase project
 - URL: `https://ncfbblhlsiglxkoiounv.supabase.co`

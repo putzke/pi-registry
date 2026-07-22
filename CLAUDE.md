@@ -413,6 +413,34 @@ single current trend, prior ones kept as history.
 
 **Cross-app:** reports module is desktop-only — mobile/importer unaffected.
 
+
+## FUTURE — ArcGIS Survey123 Integration (in development)
+
+Import public outreach survey responses directly from ArcGIS Survey123 into
+Horizon COMPASS as interaction log entries. Goal: eliminate manual re-entry
+of field survey data, closing the gap between DOT/agency field outreach data
+collection tools and the internal PI stakeholder record. Integration via
+ArcGIS Survey123 API — pull completed survey responses, map fields to
+Horizon COMPASS interaction schema (stakeholder, date, subject, channel,
+summary), and create draft interactions for PI manager review before saving.
+
+Relevant because ArcGIS Survey123 is already widely used by transportation
+agencies and field teams; this positions Horizon COMPASS as compatible with
+the DOT technology ecosystem rather than requiring a separate workflow.
+
+## FUTURE — Phone Hotline Voicemail Transcription (in development, vendor TBD)
+
+Automatically transcribe project phone hotline voicemails and log them as
+interaction records in Horizon COMPASS. Construction-phase PI hotlines are
+often required by UDOT or the contractor; currently voicemails require
+manual transcription and re-entry into the PI log — a significant time drain.
+
+Architecture planned: webhook from hotline provider → Supabase Edge Function
+receiver → auto-create interaction record (anonLabel for unidentified callers,
+subject tagging, follow-up flag if needed). Specific hotline provider not yet
+selected — candidates include Dialpad, Twilio, or similar. Design session
+required before build; vendor selection pending.
+
 ## Supabase project
 - URL: `https://ncfbblhlsiglxkoiounv.supabase.co`
 - Anon key in `index.html` line ~505 (`SUPA_KEY`)

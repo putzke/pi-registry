@@ -17,5 +17,5 @@ alter table pi_project_stakeholders
 update pi_project_stakeholders ps
 set influence = coalesce(nullif(s.influence_tier, ''), 'Medium')
 from pi_stakeholders s
-where ps.stakeholder_id = s.id
+where ps.stakeholder_id = s.id::text
   and (ps.influence is null or ps.influence = '');

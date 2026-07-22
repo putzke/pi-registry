@@ -8371,9 +8371,14 @@ function generateReport(type){
   var cbs=document.querySelectorAll('.rpt-grp-cb:checked');
   for(var ci=0;ci<cbs.length;ci++)selGroups.push(cbs[ci].value);
 
-  // Filter stakeholders by selected groups
+  // Filter stakeholders by selected groups — STRICT membership: a contact is a
+  // recipient only if assigned to one of the SELECTED distribution groups. A
+  // contact with no distribution group is not on any distribution list, so it is
+  // never auto-included. (Previously an ungrouped contact was swept in whenever
+  // all groups happened to be checked, which made checking the last box appear
+  // to pull in internal/ungrouped contacts.)
   var filteredPS=ps.filter(function(lk){
-    if(!lk.distributionGroups)return selGroups.length===DIST_GROUPS.length;
+    if(!lk.distributionGroups)return false;
     var groups=(lk.distributionGroups||'').split(',').map(function(s){return s.trim()});
     for(var gi=0;gi<groups.length;gi++){if(selGroups.indexOf(groups[gi])>=0)return true;}
     return false;

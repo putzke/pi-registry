@@ -7904,7 +7904,26 @@ function _rptBrandHeader(){
 // Full-width letterhead footer band. Sunrise mode only (UDOT skips the footer).
 function _rptBrandFooter(){
   if(_rptBrandMode()!=='sunrise'||!window._srFooter) return '';
-  return '<div style="margin-top:20px"><img src="'+window._srFooter+'" alt="Sunrise Engineering" style="width:100%;height:auto;display:block"></div>';
+  return '<img src="'+window._srFooter+'" alt="Sunrise Engineering" style="width:100%;height:auto;display:block">';
+}
+// Print frame: when branding is on, make the letterhead header and (Sunrise)
+// footer position:fixed IN PRINT ONLY so they repeat on every printed page,
+// and reserve top/bottom space in the flowing content so nothing overlaps.
+// Returns '' when branding is off (reports print with their normal @page margin).
+// NOTE: relies on Chrome's print behavior of repeating position:fixed elements
+// per page — the target for "Save as PDF".
+function _rptFrameCSS(){
+  var mode=_rptBrandMode();
+  if(mode==='off') return '';
+  var hasFooter=(mode==='sunrise'&&!!window._srFooter);
+  return '@media print{'
+    +'body{margin:0}'
+    +'.rpt-page-header{position:fixed;top:0;left:0;right:0;background:#fff;padding:6mm 14mm 2mm}'
+    +(hasFooter
+      ?'.rpt-page-footer{position:fixed;bottom:0;left:0;right:0;background:#fff;padding:1mm 14mm 4mm}'
+      :'.rpt-page-footer{display:none}')
+    +'.rpt-content{padding:32mm 14mm '+(hasFooter?'24mm':'12mm')+' 14mm}'
+    +'}';
 }
 
 function generatePISummary(){
@@ -8734,8 +8753,9 @@ function _openRptPopup(rawHtml, rptTitle, rptProjLabel, dateStr, summaryTxt){
   var _rptHtml='<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+rptTitle+'</title><style>'
     +'*{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
     +'body{font-family:Arial,sans-serif;font-size:10px;color:#111;margin:0;padding:0;background:#fff}'
-    +'@page{size:letter portrait;margin:19mm 14mm 14mm 14mm}'
+    +'@page{size:letter portrait;margin:'+(_rptBrandMode()==='off'?'19mm 14mm 14mm 14mm':'0')+'}'
     +'@media print{button{display:none!important}.no-print{display:none!important}}'
+    +_rptFrameCSS()
     +'table{width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed}'
     +'th{background:#1a3a5c!important;color:#fff!important;padding:5px 8px!important;font-size:8px!important;text-transform:uppercase;letter-spacing:.4px;text-align:left}'
     +'td{padding:5px 8px!important;border-bottom:1px solid #ddd!important;vertical-align:top!important;word-wrap:break-word;font-size:9px!important}'
@@ -8757,7 +8777,8 @@ function _openRptPopup(rawHtml, rptTitle, rptProjLabel, dateStr, summaryTxt){
     +'<button onclick="window.print()" style="padding:6px 14px;background:#1A3050;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer">Print / Save PDF</button>'
     +'<span style="font-size:11px;color:#555">'+rptTitle+(rptProjLabel?' — '+rptProjLabel:'')+'</span>'
     +'</div>'
-    +_rptBrandHeader()
+    +'<div class="rpt-page-header">'+_rptBrandHeader()+'</div>'
+    +'<div class="rpt-content">'
     +'<div style="padding:0 0 8px 0">'
     +'<div style="font-size:15px;font-weight:700;color:#1a3a5c;margin-bottom:3px">'+rptTitle+'</div>'
     +(rptProjLabel?'<div style="font-size:11px;color:#555;margin-bottom:2px">'+rptProjLabel+'</div>':'')
@@ -8769,7 +8790,8 @@ function _openRptPopup(rawHtml, rptTitle, rptProjLabel, dateStr, summaryTxt){
     +'<span>PI Registry · Sunrise Engineering</span>'
     +'<span>'+footerLabel+'</span>'
     +'</div>'
-    +_rptBrandFooter()
+    +'</div>'
+    +'<div class="rpt-page-footer">'+_rptBrandFooter()+'</div>'
     +'</body></html>';
   showInlineReport(_rptHtml, rptTitle);
 }

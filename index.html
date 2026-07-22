@@ -8860,6 +8860,13 @@ function generateReportSequence(){
   for(var d=0;d<collected.length;d++){if(collected[d].distBlock){distBlock=collected[d].distBlock;break;}}
 
   var combined=distBlock;
+  // Executive summary prints just BELOW the distribution list (page 1 only).
+  if(execSummary){
+    combined+='<div style="margin-bottom:18px;padding:12px 16px;background:#f0f4f8;border-left:4px solid #1a3a5c;border-radius:0 6px 6px 0;font-size:12px;color:#222;line-height:1.7;white-space:pre-wrap;word-wrap:break-word">'
+      +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#1a3a5c;margin-bottom:5px">Executive Summary</div>'
+      +escHtml(execSummary)
+      +'</div>';
+  }
   collected.forEach(function(r,i){
     combined+='<div'+(i>0?' style="page-break-before:always;break-before:page"':'')+'>'
       +'<div style="font-size:15px;font-weight:700;color:#1a3a5c;margin:0 0 12px;border-bottom:2px solid #1a3a5c;padding-bottom:5px">'+(i+1)+'. '+r.title+'</div>'
@@ -8867,7 +8874,7 @@ function generateReportSequence(){
       +'</div>';
   });
 
-  _openRptPopup(combined,'Public Involvement Report Package',projLabel,dateStr,execSummary||undefined);
+  _openRptPopup(combined,'Public Involvement Report Package',projLabel,dateStr);
 }
 
 // Build a compact current-state facts digest for the package executive summary

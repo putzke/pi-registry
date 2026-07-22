@@ -7590,7 +7590,6 @@ function renderReports(el){
 
   // Internal stakeholder toggle
   var internalCt=projPS.filter(function(x){return(x.stakeholderRole||'External')==='Internal'}).length;
-  var internalToggle='<label style="display:flex;align-items:center;gap:7px;cursor:pointer;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:8px;padding:8px 14px;margin-left:8px">'    +'<input type="checkbox" id="rpt-include-internal" style="accent-color:var(--sky);width:15px;height:15px">'    +'<span style="font-size:13px;color:var(--slate)">Include internal stakeholders in interaction log</span>'    +'<span class="badge b-dark" style="font-size:10px;margin-left:4px">'+internalCt+'</span></label>';
 
   // Report type cards data
   var rptCards=[
@@ -7619,6 +7618,14 @@ function renderReports(el){
   ];
   var cardsHTML='';
   rptCards.forEach(function(r){
+    // The internal-stakeholders option lives on the Interaction log card only —
+    // it affects that report exclusively (all other reports are external-only).
+    var extra = r.id==='interaction-log'
+      ? '<label onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.10)">'
+        +'<input type="checkbox" id="rpt-include-internal" onclick="event.stopPropagation()" style="accent-color:var(--sky);width:14px;height:14px">'
+        +'<span style="font-size:11px;color:var(--slate)">Include internal stakeholders</span>'
+        +'<span class="badge b-dark" style="font-size:9px;margin-left:2px">'+internalCt+'</span></label>'
+      : '';
     cardsHTML+='<div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:18px 20px;cursor:pointer;transition:border-color .12s,transform .12s" '
       +'onmouseover="this.style.borderColor=\'rgba(45,125,210,.5)\';this.style.transform=\'translateY(-2px)\'" '
       +'onmouseout="this.style.borderColor=\'rgba(255,255,255,.14)\';this.style.transform=\'none\'" '
@@ -7627,6 +7634,7 @@ function renderReports(el){
       +'<div style="color:var(--sky-lt);flex-shrink:0;margin-top:2px">'+r.icon+'</div>'
       +'<div><div style="font-size:14px;font-weight:600;color:var(--white);margin-bottom:5px">'+r.name+'</div>'
       +'<div style="font-size:12px;color:var(--slate);line-height:1.5">'+r.desc+'</div></div></div>'
+      +extra
       +'</div>';
   });
 
@@ -7793,7 +7801,7 @@ el.innerHTML=topbar
     +['off','sunrise','udot'].map(function(m){return '<option value="'+m+'"'+(_rptBrandMode()===m?' selected':'')+'>'+(m==='off'?'None':m==='udot'?'UDOT':'Sunrise')+'</option>';}).join('')
     +'</select></label>'
     +'</div>'
-    +'<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">'+grpHTML+internalToggle+'</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">'+grpHTML+'</div>'
     +'<div style="margin-top:8px;font-size:12px;color:var(--fog)">'+projPS.length+' stakeholders across all groups</div></div>';
 
   var reportCards='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px">'+cardsHTML+'</div>';
@@ -8371,18 +8379,12 @@ function generateReport(type){
   var cbs=document.querySelectorAll('.rpt-grp-cb:checked');
   for(var ci=0;ci<cbs.length;ci++)selGroups.push(cbs[ci].value);
 
-  // Filter stakeholders by selected groups — STRICT membership: a contact is a
-  // recipient only if assigned to one of the SELECTED distribution groups. A
-  // contact with no distribution group is not on any distribution list, so it is
-  // never auto-included. (Previously an ungrouped contact was swept in whenever
-  // all groups happened to be checked, which made checking the last box appear
-  // to pull in internal/ungrouped contacts.)
-  var filteredPS=ps.filter(function(lk){
-    if(!lk.distributionGroups)return false;
-    var groups=(lk.distributionGroups||'').split(',').map(function(s){return s.trim()});
-    for(var gi=0;gi<groups.length;gi++){if(selGroups.indexOf(groups[gi])>=0)return true;}
-    return false;
-  });
+  // Report BODIES are NOT filtered by distribution group. The distribution
+  // checkboxes only drive the "Distributed to" recipients block below. The
+  // Stakeholder Contact List shows ALL project contacts (internal + external);
+  // every other report is based on external contacts only (see externalFilteredPS
+  // and the external interaction sets further down).
+  var filteredPS=ps.slice();
 
   var filteredStakes=[];
   filteredPS.forEach(function(lk){

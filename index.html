@@ -9066,7 +9066,7 @@ function _setClaudeKey(key) {
   localStorage.removeItem('compass_claude_api_key'); // remove any legacy plain-text copy
 }
 
-async function _claudeNarrative(systemPrompt, userContent, maxTokens) {
+async function _claudeNarrative(systemPrompt, userContent, maxTokens, model) {
   var key = _getClaudeKey();
   if (!key) return null;
   try {
@@ -9079,7 +9079,7 @@ async function _claudeNarrative(systemPrompt, userContent, maxTokens) {
         'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: model || 'claude-sonnet-5',
         max_tokens: maxTokens || 400,
         system: systemPrompt,
         messages: [{ role: 'user', content: userContent }]
@@ -9270,8 +9270,8 @@ async function generateAllSectionDrafts() {
   if (total === 0) { showToast('No auto-generated sections to draft', 'info', 2000); return; }
 
   if (!confirm('This will send ' + total + ' API call' + (total !== 1 ? 's' : '') + ' to Claude (Anthropic). '
-    + 'Each call costs approximately $0.002–0.005. '
-    + 'Total estimated cost: ~$' + (total * 0.005).toFixed(2) + ' or less.\n\n'
+    + 'Each call costs approximately $0.01–0.02 (Claude Sonnet). '
+    + 'Total estimated cost: ~$' + (total * 0.02).toFixed(2) + ' or less.\n\n'
     + 'Make sure you have a spend cap set at console.anthropic.com.\n\nProceed?')) return;
 
   if (allBtn) { allBtn.disabled = true; allBtn.textContent = 'Drafting…'; }
@@ -10794,8 +10794,8 @@ async function generateTrendSummary() {
     +'\n\nWrite a trend analysis narrative covering how PI engagement has evolved across these reporting periods.';
 
   var total = archives.length;
-  var estCost = (total * 0.003).toFixed(2);
-  if (!confirm('This will send 1 API call to Claude analyzing '+total+' archived reports.\n'
+  var estCost = (total * 0.01 + 0.02).toFixed(2);
+  if (!confirm('This will send 1 API call to Claude (Sonnet) analyzing '+total+' archived reports.\n'
     +'Estimated cost: ~$'+estCost+' or less.\n\nProceed?')) {
     if (btn) { btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px"><path d="M2 12 L5 8 L8 10 L11 5 L14 3"/></svg> ✦ AI: Summarize PI trend'; }
     return;
@@ -10811,7 +10811,7 @@ async function generateTrendSummary() {
         'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: 'claude-sonnet-5',
         max_tokens: 600,
         system: systemPrompt,
         messages: [{ role: 'user', content: userContent }]
@@ -15628,7 +15628,7 @@ function renderSettings(m) {
           if(confirm('Remove saved Claude API key?')){_setClaudeKey('');renderSettings(document.getElementById('main'));showToast('Key removed','info',2000);}
         ">Remove</button>
       </div>
-      <div style="margin-top:12px;font-size:11px;color:var(--fog)">Model: <span style="color:var(--slate)">claude-haiku-4-5</span> · Max tokens per call: <span style="color:var(--slate)">400</span> · Typical cost: ~$0.0002–0.0005 per narrative</div>
+      <div style="margin-top:12px;font-size:11px;color:var(--fog)">Model: <span style="color:var(--slate)">claude-sonnet-5</span> · Max tokens per call: <span style="color:var(--slate)">400–600</span> · Typical cost: ~$0.005–0.02 per narrative</div>
     </div>
 
     <!-- Client Portal Access -->

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 132" width="520" height="132">
+  
+  <rect width="520" height="132" rx="4" fill="#000000"></rect>
+  <g transform="translate(22,22) scale(0.88)">
+    <circle cx="50" cy="50" r="37" fill="none" stroke="#ffffff" stroke-width="3"></circle>
+    <line x1="14" y1="50" x2="86" y2="50" stroke="#ffffff" stroke-width="2.4" opacity="0.40"></line>
+    <path d="M50 13 A37 37 0 0 1 87 50" fill="none" stroke="#35A6C9" stroke-width="7.5" stroke-linecap="round"></path>
+    <polygon points="65.6,34.4 52.97,52.97 47.03,47.03" fill="#C24A42"></polygon>
+    <polygon points="38,62 52.97,52.97 47.03,47.03" fill="#C2C8D2"></polygon>
+    <circle cx="50" cy="50" r="4" fill="#ffffff"></circle></g>
+  <text x="138" y="66" font-family="Michroma, sans-serif" font-size="27" letter-spacing="0.5">
+    <tspan fill="#ffffff">HORIZON </tspan><tspan fill="#35A6C9">COMPASS</tspan>
+  </text>
+  <text x="140" y="92" font-family="Saira, sans-serif" font-weight="700" font-style="italic" font-size="11" letter-spacing="2.6" fill="#D7DCE4">STAKEHOLDER MANAGEMENT</text>
+</svg>

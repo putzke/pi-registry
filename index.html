@@ -4004,8 +4004,17 @@ function _issStatusResolvedSync(src){
   if(!st||!dt)return;
   if(src==='resolved'){
     if(dt.value) st.value='Resolved';
-  }else{
-    if(st.value==='Resolved'&&!dt.value) dt.focus();
+  }else{ // status changed
+    if(st.value==='Resolved'){
+      if(!dt.value) dt.focus();
+    }else{
+      // Reopened / no longer resolved: clear the resolution date AND summary.
+      // They are a coupled pair (save requires both-or-neither) and don't apply
+      // to an unresolved issue.
+      dt.value='';
+      var rs=document.getElementById('iss-resolution');
+      if(rs) rs.value='';
+    }
   }
 }
 

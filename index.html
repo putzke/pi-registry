@@ -10424,6 +10424,7 @@ function renderLivePreview() {
   document.querySelectorAll('.rpt-ed-grp:checked').forEach(function(cb){ selGroups.push(cb.value); });
   var ps = DB.get('project_stakeholders').filter(function(lk){ return String(lk.projectId) === String(projF); });
   var allStakes = DB.get('stakeholders');
+  var previewExternalIds = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; }).map(function(lk){ return lk.stakeholderId; });
   var recipients = [];
   ps.forEach(function(lk) {
     if (!selGroups.length) return;
@@ -10489,7 +10490,23 @@ function renderLivePreview() {
     if (isAuto) {
       // Show auto-data summary row counts
       var counts = [];
-      if (sec.type === 'auto-concerns' || sec.type === 'auto-intlog') counts.push(filteredInts.length + ' interaction' + (filteredInts.length !== 1 ? 's' : '') + ' in period');
+      if (sec.type === 'auto-concerns') {
+        var _cN = ints.filter(function(i){
+          if (!includeInternal && previewExternalIds.indexOf(i.stakeholderId) < 0) return false;
+          if (pstart && i.date < pstart) return false;
+          if (pend   && i.date > pend)   return false;
+          return true;
+        }).length;
+        counts.push(_cN + ' interaction' + (_cN !== 1 ? 's' : '') + ' in period');
+      }
+      if (sec.type === 'auto-intlog') {
+        var _pN = ints.filter(function(i){
+          if (!includeInternal && previewExternalIds.indexOf(i.stakeholderId) < 0) return false;
+          if (pstart && i.date >= pstart) return false; // prior to the period
+          return true;
+        }).length;
+        counts.push(_pN + ' prior interaction' + (_pN !== 1 ? 's' : ''));
+      }
       if (sec.type === 'auto-del') counts.push(dels.length + ' deliverable' + (dels.length !== 1 ? 's' : ''));
       if (sec.type === 'auto-comments') counts.push(pcomms.length + ' public comment' + (pcomms.length !== 1 ? 's' : ''));
       if (sec.type === 'auto-comment-matrix') counts.push(pcomms.length + ' public comment' + (pcomms.length !== 1 ? 's' : '') + ' across ' + (function(){ var cats={}; pcomms.forEach(function(c){ var k=c.category||'Uncategorized'; cats[k]=1; }); return Object.keys(cats).length; })() + ' topic' + (pcomms.length !== 1 ? 's' : ''));
@@ -11129,19 +11146,22 @@ async function exportPIDocx(){
   var proj=projs.find(function(p){return p.id===projF});
   if(!proj)return;
 
-  // Snapshot to archive before export
-  await _archiveReport(projF);
+  // Export saves the draft (above) but does NOT auto-archive — use the
+  // "Save to archive" button to checkpoint a snapshot deliberately.
 
   var saved=JSON.parse(localStorage.getItem('pir4_pi_reports_'+projF)||'{}');
   var allStakes=DB.getActive('stakeholders');
   var ps=DB.get('project_stakeholders').filter(function(x){return x.projectId===projF});
   var ints=DB.get('interactions').filter(function(i){return i.projectId===projF});
 
-  // Filter interactions to External stakeholders and report period
+  // Filter interactions to the report period. External-only by default, but
+  // honor the "Include internal stakeholders in interaction log" toggle so an
+  // in-period internal interaction can appear (and matches the preview + count).
   var externalPS=ps.filter(function(lk){return(lk.stakeholderRole||'External')==='External'});
   var externalIds=externalPS.map(function(lk){return lk.stakeholderId});
+  var _incInternalDocx=!!(( document.getElementById('rpt-ed-include-internal')||document.getElementById('rpt-include-internal')||{}).checked);
   var periodInts=ints.filter(function(i){
-    if(externalIds.indexOf(i.stakeholderId)<0)return false;
+    if(!_incInternalDocx&&externalIds.indexOf(i.stakeholderId)<0)return false;
     if(saved.periodStart&&i.date<saved.periodStart)return false;
     if(saved.periodEnd&&i.date>saved.periodEnd)return false;
     return true;
@@ -11501,9 +11521,8 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
 
     } else if(sec.type==='auto-intlog'){
       // Past interactions — everything BEFORE the report period (excludes what's in Recent Concerns)
-      if(saved.periodStart||saved.periodEnd){
-        var pLabelLog='Report period: '+(saved.periodStart||'—')+' to '+(saved.periodEnd||'—');
-        xml+=para(pLabelLog,italicGrayRpr);
+      if(saved.periodStart){
+        xml+=para('Interactions prior to '+saved.periodStart+' (project start through the start of the report period).',italicGrayRpr);
       }
       var allProjInts=DB.get('interactions').filter(function(i){return i.projectId===proj.id});
       var extIds3=externalPS.map(function(lk){return lk.stakeholderId});

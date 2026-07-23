@@ -10078,15 +10078,15 @@ function openPIReport(){
     +'<div style="display:flex;flex-wrap:wrap;gap:8px" id="rpt-ed-groups">'
     +DIST_GROUPS.map(function(g){return '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--mist)"><input type="checkbox" class="rpt-ed-grp" value="'+g+'"'+(g==='Project team'?' checked':'')+' style="accent-color:var(--sky);width:13px;height:13px" onchange="schedulePreview()"> '+g+'</label>'}).join('')
     +'</div>'
-    +'<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.07)">'
-    +'<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--mist)">'
-    +'<input type="checkbox" id="rpt-ed-include-internal" style="accent-color:var(--sky);width:13px;height:13px"'+(document.getElementById('rpt-include-internal')&&document.getElementById('rpt-include-internal').checked?' checked':'')+' onchange="schedulePreview()"> '
-    +'Include internal stakeholders in interaction log</label>'
-    +'</div></div>'
+    +'</div>'
     +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'
     +'<div style="font-size:13px;font-weight:600;color:var(--white)">Report sections</div>'
     +'<div style="font-size:11px;color:var(--fog)">▲▼ reorder • ✕ remove</div>'
     +'</div>'
+    // Report-wide option (applies to the whole report, not tied to distribution).
+    +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--mist);margin-bottom:14px;padding:9px 13px;background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:8px">'
+    +'<input type="checkbox" id="rpt-ed-include-internal" style="accent-color:var(--sky);width:14px;height:14px" onchange="schedulePreview()"> '
+    +'<span>Include internal stakeholders in the interaction log <span style="color:var(--fog);font-weight:400">— applies to the whole report</span></span></label>'
     +sectionsHTML
     +'<div style="margin-top:12px;margin-bottom:12px">'
     +'<div style="font-size:12px;font-weight:600;color:var(--white);margin-bottom:8px">Add sections</div>'

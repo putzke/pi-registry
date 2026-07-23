@@ -3983,6 +3983,21 @@ function renderIssuesPanel(projectId){
   detPane.innerHTML=det;
 }
 
+// Keep issue Status and Date Resolved in sync in the Edit/New issue modal:
+//  - entering a Date Resolved auto-sets Status to 'Resolved';
+//  - selecting Status 'Resolved' with no date focuses the date field to prompt
+//    entry (saveIssue then blocks the save until a date is provided).
+function _issStatusResolvedSync(src){
+  var st=document.getElementById('iss-status-f');
+  var dt=document.getElementById('iss-resolved');
+  if(!st||!dt)return;
+  if(src==='resolved'){
+    if(dt.value) st.value='Resolved';
+  }else{
+    if(st.value==='Resolved'&&!dt.value) dt.focus();
+  }
+}
+
 function openIssueModal(id, projectId){
   S.editId=id||null;
   const all=DB.get('issues')||[];
@@ -3999,15 +4014,15 @@ function openIssueModal(id, projectId){
   </div>
   <div class="fgrid fg2f">
     <div class="fr"><label>Category</label><select id="iss-cat-f">${ISSUE_CATEGORIES.map(c=>`<option${(iss.category||'')=== c?' selected':''}>${c}</option>`).join('')}</select></div>
-    <div class="fr"><label>Status</label><select id="iss-status-f">${ISSUE_STATUSES.map(s=>`<option${(iss.status||'Open')=== s?' selected':''}>${s}</option>`).join('')}</select></div>
+    <div class="fr"><label>Status</label><select id="iss-status-f" onchange="_issStatusResolvedSync('status')">${ISSUE_STATUSES.map(s=>`<option${(iss.status||'Open')=== s?' selected':''}>${s}</option>`).join('')}</select></div>
   </div>
   <div class="fgrid fg2f">
     <div class="fr"><label>Priority</label><select id="iss-pri">${ISSUE_PRIORITIES.map(p=>`<option${(iss.priority||'Medium')=== p?' selected':''}>${p}</option>`).join('')}</select></div>
     <div class="fr"><label>Assigned to</label><input id="iss-assigned" value="${iss.assignedTo||''}" placeholder="Name or team member"></div>
   </div>
   <div class="fgrid fg2f">
-    <div class="fr"><label>Date raised</label><input type="date" id="iss-raised" value="${fmt(iss.dateRaised)||''}"></div>
-    <div class="fr"><label>Date resolved</label><input type="date" id="iss-resolved" value="${iss.dateResolved||''}"></div>
+    <div class="fr"><label>Date raised</label><input type="date" id="iss-raised" value="${iss.dateRaised||''}"></div>
+    <div class="fr"><label>Date resolved</label><input type="date" id="iss-resolved" value="${iss.dateResolved||''}" onchange="_issStatusResolvedSync('resolved')"></div>
   </div>
   <div class="fr"><label>Description</label><textarea id="iss-desc" style="height:70px">${iss.description||''}</textarea></div>
   <div class="fr"><label>Resolution summary</label><textarea id="iss-resolution" style="height:60px" placeholder="What was done to address this issue?">${iss.resolutionSummary||''}</textarea></div>
@@ -4037,7 +4052,7 @@ async function saveIssue(projectId){
   const issStatus=v('iss-status-f')||'Open';
   if(resDate&&!resSummary){alert('Please add a Resolution Summary — a date resolved was entered.');return;}
   if(resSummary&&!resDate){alert('Please add a Date Resolved — a resolution summary was entered.');return;}
-  if(issStatus==='Resolved'&&!resDate){alert('A Date Resolved is required when status is Resolved.');return;}
+  if(issStatus==='Resolved'&&!resDate){alert('Status is set to Resolved — you cannot save until a Date Resolved is entered.');return;}
   if(issStatus==='Resolved'&&!resSummary){alert('A Resolution Summary is required when status is Resolved.');return;}
 
   const linkedSel=Array.from(document.getElementById('iss-int-links')?.selectedOptions||[]).map(o=>o.value);

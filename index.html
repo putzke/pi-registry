@@ -118,7 +118,7 @@ body{font-family:var(--font);font-size:13px;background:var(--navy);color:var(--w
 .lrow:nth-child(even){background:rgba(255,255,255,.04)}
 .lrow:hover{background:rgba(255,255,255,.07)}
 .lrow:nth-child(even):hover{background:rgba(255,255,255,.09)}
-.lrow.sel{background:var(--sky-dim);border-left:2px solid var(--sky)}
+.lrow.sel{background:rgba(74,155,232,.18);box-shadow:inset 0 0 0 2px var(--sky-lt);position:relative;z-index:1}
 .avatar{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;letter-spacing:-.2px}
 .lrow-body{flex:1;min-width:0}
 .lrow-name{font-size:14px;font-weight:600;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -4677,7 +4677,7 @@ function renderStakeDetail(s,link){
     ${s.address?`<div style="margin-bottom:14px"><div class="fl">Address</div><div class="fv">${s.address}</div></div>`:''}
     ${s.parcelId?`<div style="margin-bottom:14px"><div class="fl">Parcel ID</div><div class="fv">${s.parcelId}</div></div>`:''}
     ${s.notes?`<div class="fl" style="margin-bottom:5px">Notes</div><div class="fnotes">${s.notes}</div>`:''}
-    ${link?`<hr class="div"><div class="sec-hd"><span class="sec-t">Project context — <span style="font-family:var(--mono);font-size:11px">${(projs.find(p=>p.id===S.projectFilter)||{}).pid||''}</span></span><button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="openEditLinkModal('${link.id}')">Edit</button> <button class="btn btn-xs" style="background:rgba(220,60,60,.15);border-color:rgba(220,60,60,.4);color:#f87171" onclick="unlinkFromProject('${link.id}')">Unlink</button></div>
+    ${link?`<hr class="div"><div class="sec-hd"><span class="sec-t">Project context — <span style="font-family:var(--mono);font-size:11px">${(projs.find(p=>p.id===S.projectFilter)||{}).pid||''}</span></span><button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="openEditLinkModal('${link.id}')">Edit project context</button> <button class="btn btn-xs" style="background:rgba(220,60,60,.15);border-color:rgba(220,60,60,.4);color:#f87171" onclick="unlinkFromProject('${link.id}')">Unlink</button></div>
     <div class="fg fg3" style="margin-bottom:10px">
       <div class="fi"><div class="fl">Role</div><div class="fv"><span class="badge ${(link.stakeholderRole||'External')==='Internal'?'b-sky':'b-teal'}">${link.stakeholderRole||'External'}</span></div></div>
       <div class="fi"><div class="fl">Support level</div><div class="fv">${supBadge(link.support)}</div></div>
@@ -4806,7 +4806,7 @@ function renderStakeDetail(s,link){
         </div>
       </div>
       <div class="det-acts">
-        <button class="btn btn-sm" onclick="openStakeModal('${s.id}')">Edit</button>
+        <button class="btn btn-sm" onclick="openStakeModal('${s.id}')">Edit profile</button>
         ${!link?`<button class="btn btn-sm" style="background:rgba(40,168,112,.15);border-color:rgba(40,168,112,.4);color:#4ddb9e" onclick="openAddToProjectModal('${s.id}')">+ Add to project</button>`:''}
         <button class="btn btn-primary btn-sm" onclick="openIntModal('${s.id}')">+ Log interaction</button>
       </div>

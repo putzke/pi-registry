@@ -6320,12 +6320,41 @@ function saveLinkStake(){
   ps.push({id:DB.uid(),projectId:S.projectFilter,stakeholderId:sId,support:document.getElementById('f-lsu')?.value||'Neutral',influence:'Medium',issueTags:document.getElementById('f-ltg')?.value||'',addedDate:localToday(),notes:document.getElementById('f-lno')?.value||'',distributionGroups:dgs,stakeholderRole:document.getElementById('f-lsr')?.value||'External'});
   DB.set('project_stakeholders',ps);closeM();render();
 }
+// Segmented control (presentation-only) for discrete ordinal fields like
+// Support and Influence. Backed by a hidden input of the given id so existing
+// save code that reads that id keeps working and the stored strings are
+// unchanged. options: [{value,label,color(hex)}]; current = selected value.
+function _segStyle(color, sel){
+  var base='flex:1;padding:8px 6px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .12s;border:1px solid;text-align:center;line-height:1.2;';
+  return sel
+    ? base+'background:'+color+';border-color:'+color+';color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.25)'
+    : base+'background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.14);color:var(--slate)';
+}
+function _segControl(hiddenId, options, current){
+  var btns=options.map(function(o){
+    return '<button type="button" data-val="'+o.value+'" data-color="'+o.color+'" '
+      +'onclick="_segPick(\''+hiddenId+'\',this)" style="'+_segStyle(o.color,o.value===current)+'">'+o.label+'</button>';
+  }).join('');
+  return '<input type="hidden" id="'+hiddenId+'" value="'+current+'">'
+    +'<div class="segctl" style="display:flex;gap:6px;margin-top:4px">'+btns+'</div>';
+}
+function _segPick(hiddenId, btn){
+  var inp=document.getElementById(hiddenId);
+  if(inp) inp.value=btn.getAttribute('data-val');
+  var kids=btn.parentNode.children;
+  for(var i=0;i<kids.length;i++){
+    kids[i].setAttribute('style', _segStyle(kids[i].getAttribute('data-color'), kids[i]===btn));
+  }
+}
+var SUPPORT_SEG=[{value:'Opponent',label:'Opponent',color:'#d94040'},{value:'Neutral',label:'Neutral',color:'#7a8ba0'},{value:'Champion',label:'Champion',color:'#28a870'}];
+var INFLUENCE_SEG=[{value:'Low',label:'Low',color:'#6b7a8d'},{value:'Medium',label:'Medium',color:'#4a9be8'},{value:'High',label:'High',color:'#1f6fd6'}];
+
 function openEditLinkModal(lid){
   const lk=DB.get('project_stakeholders').find(x=>x.id===lid)||{};
   openM('Edit project context',
   `<div class="fgrid fg2f"><div class="fr"><label>Stakeholder role</label><select id="f-lksr"><option value="External"${(lk.stakeholderRole||'External')==='External'?' selected':''}>External</option><option value="Internal"${(lk.stakeholderRole||'External')==='Internal'?' selected':''}>Internal</option></select></div>
-  <div class="fr"><label>Support level</label><select id="f-lksu">${['Champion','Neutral','Opponent'].map(t=>`<option${lk.support===t?' selected':''}>${t}</option>`).join('')}</select></div></div>
-  <div class="fgrid fg2f"><div class="fr"><label>Influence level</label><select id="f-lkinf">${['High','Medium','Low'].map(t=>`<option${(lk.influence||'Medium')===t?' selected':''}>${t}</option>`).join('')}</select></div>
+  <div class="fr"><label>Support level</label>${_segControl('f-lksu',SUPPORT_SEG,lk.support||'Neutral')}</div></div>
+  <div class="fgrid fg2f"><div class="fr"><label>Influence level</label>${_segControl('f-lkinf',INFLUENCE_SEG,lk.influence||'Medium')}</div>
   <div class="fr"><label>Issue tags</label><input id="f-lktg" value="${lk.issueTags||''}"></div></div>
   <div class="fr"><label>Report distribution</label>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">${DIST_GROUPS.map(g=>`<label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--mist);cursor:pointer"><input type="checkbox" class="f-lkdg-cb" value="${g}" ${(lk.distributionGroups||'').split(',').map(x=>x.trim()).includes(g)?'checked':''} style="accent-color:var(--sky);width:14px;height:14px"> ${g}</label>`).join('')}</div>

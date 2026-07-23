@@ -3960,7 +3960,7 @@ function renderIssuesPanel(projectId){
   if(sel.description) det+='<div style="font-size:13px;color:var(--mist);line-height:1.6;margin-bottom:16px">'+sel.description+'</div>';
   det+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;font-size:12px">';
   det+='<div><span style="color:var(--slate)">Date raised:</span> <span style="color:var(--mist)">'+(fmt(sel.dateRaised)||'—')+'</span></div>';
-  det+='<div><span style="color:var(--slate)">Date resolved:</span> <span style="color:var(--mist)">'+(sel.dateResolved||'—')+'</span></div>';
+  det+='<div><span style="color:var(--slate)">Date resolved:</span> <span style="color:var(--mist)">'+(fmt(sel.dateResolved)||'—')+'</span></div>';
   det+='<div><span style="color:var(--slate)">Assigned to:</span> <span style="color:var(--mist)">'+(sel.assignedTo||'—')+'</span></div>';
   det+='<div><span style="color:var(--slate)">Logged by:</span> <span style="color:var(--mist)">'+(sel.createdBy||'—')+'</span></div>';
   det+='</div>';
@@ -3981,6 +3981,17 @@ function renderIssuesPanel(projectId){
   }
   det+='</div>';
   detPane.innerHTML=det;
+}
+
+// Normalize any stored date value to yyyy-mm-dd for <input type="date">, which
+// only accepts ISO. Handles values already ISO, ISO with a time part, or other
+// parseable date strings; returns '' if unparseable/empty.
+function _toDateInput(d){
+  if(!d) return '';
+  if(/^\d{4}-\d{2}-\d{2}/.test(d)) return d.slice(0,10);
+  var dt=new Date(d); if(isNaN(dt)) dt=new Date(d+'T00:00:00');
+  if(isNaN(dt)) return '';
+  return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
 }
 
 // Keep issue Status and Date Resolved in sync in the Edit/New issue modal:
@@ -4021,8 +4032,8 @@ function openIssueModal(id, projectId){
     <div class="fr"><label>Assigned to</label><input id="iss-assigned" value="${iss.assignedTo||''}" placeholder="Name or team member"></div>
   </div>
   <div class="fgrid fg2f">
-    <div class="fr"><label>Date raised</label><input type="date" id="iss-raised" value="${iss.dateRaised||''}"></div>
-    <div class="fr"><label>Date resolved</label><input type="date" id="iss-resolved" value="${iss.dateResolved||''}" onchange="_issStatusResolvedSync('resolved')"></div>
+    <div class="fr"><label>Date raised</label><input type="date" id="iss-raised" value="${_toDateInput(iss.dateRaised)}"></div>
+    <div class="fr"><label>Date resolved</label><input type="date" id="iss-resolved" value="${_toDateInput(iss.dateResolved)}" onchange="_issStatusResolvedSync('resolved')"></div>
   </div>
   <div class="fr"><label>Description</label><textarea id="iss-desc" style="height:70px">${iss.description||''}</textarea></div>
   <div class="fr"><label>Resolution summary</label><textarea id="iss-resolution" style="height:60px" placeholder="What was done to address this issue?">${iss.resolutionSummary||''}</textarea></div>
@@ -7136,7 +7147,7 @@ function renderIssuesView(el){
           ${selIss.description?`<div style="font-size:13px;color:var(--mist);line-height:1.6;margin-bottom:16px">${selIss.description}</div>`:''}
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;font-size:12px">
             <div><span style="color:var(--slate)">Date raised:</span> <span style="color:var(--mist)">${fmt(selIss.dateRaised)||'—'}</span></div>
-            <div><span style="color:var(--slate)">Date resolved:</span> <span style="color:var(--mist)">${selIss.dateResolved||'—'}</span></div>
+            <div><span style="color:var(--slate)">Date resolved:</span> <span style="color:var(--mist)">${fmt(selIss.dateResolved)||'—'}</span></div>
             <div><span style="color:var(--slate)">Assigned to:</span> <span style="color:var(--mist)">${selIss.assignedTo||'—'}</span></div>
             <div><span style="color:var(--slate)">Logged by:</span> <span style="color:var(--mist)">${selIss.createdBy||'—'}</span></div>
           </div>

@@ -444,10 +444,10 @@ single current trend, prior ones kept as history.
   `content_full`, `content_recent` unused, latest `published_at` = current
   trend, older rows = history.
 
-**Build order (ALL CODE SHIPPED — migration still needs running):**
+**Build order (ALL CODE SHIPPED — migration CONFIRMED run 2026-07-24):**
 1. ✅ Migration: `sql/2026-07-06_portal_shared_reports.sql` — add `client_visible`
-   + idempotent grants. **Jeff must run this in Supabase** or the Share toggle
-   errors and the portal can't read shared reports.
+   + idempotent grants. **CONFIRMED applied 2026-07-24** — verified all three parts
+   present (client_visible column, `anon_portal_read` policy, anon UPDATE grant).
 2. ✅ COMPASS Report Archive: "Share with client" toggle per archived report
    (`toggleReportShared()` flips `client_visible`); trend button → generate →
    editable textarea → "Publish trend to client portal" (`publishClientTrend()`,

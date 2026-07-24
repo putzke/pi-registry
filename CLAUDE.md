@@ -162,14 +162,35 @@ Bulk CSV import wizard for stakeholders and interactions. ~2,420 lines.
   visible to desktop's concurrency guard. Keep `OCC_TABLES` in sync with `index.html`.
 
 ## Pending / next tasks
-1. **Manual "Save to archive" button** — checkpoint a draft without exporting (discussed, not yet built)
-2. **Absorb popup report windows** — currently `generateReport()`, `generatePISummary()`, `generateIssuesReport()` open `window.open()` popups; absorb into inline output panel (deferred by user)
-3. **AI cross-report trend summary testing** — needs 2+ real exports to test fully
-4. **NEPA checklist progress bar on project cards** — may be partially implemented, needs verification
-5. **Continue testing** stakeholders LEP/EJ checkboxes, public meeting equity toggle, public comments nav/form
-6. **Tribal consultation tracker** — nav view exists (`renderTribal()`), but feature is classified as **in development / not production-ready**. Do not present as live to external users. Needs full testing and validation before going live.
-6. **NEPA Compliance section in PI Report Editor** — new section type `'nepa-compliance'` in the Add Section dropdown; auto-populates with live checklist group progress + comment period compliance for the project; includes an "AI Draft" button that calls `_claudeNarrative()` to generate a professional narrative paragraph from the compliance snapshot, written into the section text field like other AI-drafted sections. High priority — good AI use case.
-7. **REMIND JEFF: remove verbose `SB UPDATE` debug logging before go-live.** `sbUpdate()`
+
+**⚠ This list drifts — VERIFY in code before treating anything as "not built."**
+On 2026-07-24 a reconciliation found four items marked pending were already
+shipped. Grep the actual functions before planning work off this list.
+
+**Recently completed (verified in code, 2026-07-24):**
+- ✅ **Manual "Save to archive" button** — `manualArchiveReport()` → `_archiveReport()`.
+- ✅ **NEPA checklist progress bar on project cards** — dashboard + cards render
+  per-project checklist %; portfolio avg in `renderDash` (`avgNepaPct`).
+- ✅ **NEPA Compliance section in PI Report Editor** — section type
+  `'auto-nepa-compliance'` in Add Section; auto-populates checklist progress +
+  comment-period compliance; AI-draft path; also a standalone quick report
+  (`generateNepaComplianceReport()`).
+- ✅ **AI contact importer Phase 2 (vision)** — image/PDF → Sonnet 5, in the
+  Bulk-add grid (see the AI contact importer section above).
+
+**Live / open:**
+1. **Absorb popup report windows** — the Issues report was converted to inline
+   this session; verify whether `generateReport()` / `generatePISummary()` still
+   use `window.open()` and absorb them into the inline output panel too (deferred by user).
+2. **AI cross-report trend summary testing** — needs 2+ real exports to test fully.
+3. **Continue testing** stakeholders LEP/EJ checkboxes, public meeting equity toggle, public comments nav/form.
+4. **Tribal consultation tracker** — nav view exists (`renderTribal()`), but classified
+   as **in development / not production-ready**. Do not present as live to external
+   users. Needs full testing and validation before going live.
+5. **Client reporting redesign — end-to-end test** (redesign section below, step 5):
+   confirm `sql/2026-07-06_portal_shared_reports.sql` was run, then share a report +
+   publish a trend and confirm both render in the portal. Shipped-but-untested; client-facing.
+6. **REMIND JEFF: remove verbose `SB UPDATE` debug logging before go-live.** `sbUpdate()`
    in `index.html` has two `console.log` calls (`'SB UPDATE sending:'` and
    `'SB UPDATE response:'`) left in as instrumentation while chasing save bugs.
    Jeff explicitly chose to KEEP them for now (still in testing, July 2026) and
@@ -229,9 +250,17 @@ on `openBulkAdd()`, grows to fit extracted contacts, plus a "+ Add rows" button
 extract button disabled with a hint when no Claude key is saved. Nothing saves
 without review.
 
-**Phase 2 (planned, not built)** — vision path for the SAME desktop grid:
-images (screenshots, business-card photos, roster photos) and PDFs via Sonnet 5
-(`claude-sonnet-5`), routed by input type. Still lands in the review grid.
+**Phase 2 SHIPPED** — vision path for the SAME desktop grid. `_bulkAIPanelHTML()`
+has a "📎 Add image / PDF" file input (`accept="image/*,application/pdf"`, multi);
+`_bulkFilesChanged()` shows attachments. `aiExtractContacts()` routes by input:
+text-only paste → Haiku; any image/PDF attached → **Sonnet 5** (`claude-sonnet-5`)
+vision. `_aiParseContacts(content, model)` takes either a string (text) or an
+array of content blocks — images as `{type:'image',source:{type:'base64',…}}`,
+PDFs as `{type:'document',source:{type:'base64',media_type:'application/pdf',…}}`
+(helper reads files as raw base64). Still lands in the review grid; PII/API
+notice covers uploaded images. Model-string note: the code uses
+`claude-haiku-4-5-20251001` for the text path — the current unsuffixed id is
+`claude-haiku-4-5` (see claude-api skill); leave as-is unless doing a model pass.
 
 **LOCKED SCOPE BOUNDARIES (do not cross without Jeff's explicit say-so):**
 1. **Image/scan AI import → CONTACTS ONLY, DESKTOP ONLY.** The Bulk-add review

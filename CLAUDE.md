@@ -138,6 +138,14 @@ Field companion for logging interactions, managing contacts, follow-ups, and iss
 - **Status: current** — LEP, EJ (`underserved`), and `equityFormSubmitted` fields are all implemented
 - Has its own `SB_TABLES`, `SB_TO_INT`, `toSB()`, `fromSB()`, `sbGet/Add/Update/Delete()`, `loadAllData()`
 - Does NOT have the reports module — reports are desktop-only
+- **OCC participation (July 2026):** mobile stamps `updated_at`/`updated_by` on every
+  write to the OCC tables (`stakeholders`, `interactions`, `issues`) via `_occStamp()`
+  in `sbAdd`/`sbUpdate` — REQUIRED so desktop's optimistic-concurrency guard sees
+  mobile edits instead of silently overwriting them. Mobile itself stays
+  **last-writer-wins** (no conflict prompt — deliberately; you don't nag a field
+  worker mid-log). Keep `OCC_TABLES` in sync with `index.html`. If symmetric
+  conflict *detection* on mobile is ever wanted, mirror index.html's conditional
+  PATCH + `_occResolveConflict` (mobile's `DB._sync` has the same `oldMap` baseline).
 - No known bugs as of this session
 
 ## Importer app (`importer.html`)
@@ -148,6 +156,10 @@ Bulk CSV import wizard for stakeholders and interactions. ~2,420 lines.
   - `AUTO_MAP`: auto-detects headers `lep`, `limited english`, `underserved`, `ej`, `environmental justice`
   - Boolean parsing: `yes/true/1/y → true` for `lep`/`underserved` (same as `isMaster`)
 - `sbAdd()` at line ~746 calls `r.json()` directly — safe because it uses plain POST (not upsert), so body is never empty
+- **OCC participation (July 2026):** stamps `updated_at`/`updated_by` on writes to the
+  OCC tables via `_occStamp()` in `sbAdd`/`sbUpdate` (the import can `sbUpdate` an
+  existing stakeholder on match) — same rationale as mobile: keep imported changes
+  visible to desktop's concurrency guard. Keep `OCC_TABLES` in sync with `index.html`.
 
 ## Pending / next tasks
 1. **Manual "Save to archive" button** — checkpoint a draft without exporting (discussed, not yet built)

@@ -1036,6 +1036,23 @@ const DATE_FIELDS = new Set(['interaction_date','follow_up_due','follow_up_resol
 // Integer FK columns that Supabase expects as numbers, not strings
 const SB_INT_FIELDS = new Set(['project_id','stakeholder_id','issue_id','interaction_id','meeting_id']);
 
+// Tables the DESKTOP app guards with optimistic concurrency (updated_at). The
+// mobile field app stays last-writer-wins (no conflict prompt — you don't nag a
+// field worker mid-log), BUT it MUST stamp updated_at/updated_by on every write
+// to these tables. Otherwise a mobile edit leaves updated_at unchanged, the
+// desktop's conditional PATCH still matches its stale baseline, and desktop
+// silently overwrites the field edit with no conflict warning. Stamping makes
+// mobile's changes visible to desktop's OCC so desktop prompts instead of
+// clobbering. Keep this set in sync with index.html's OCC_TABLES.
+const OCC_TABLES = new Set(['stakeholders','interactions','issues']);
+function _occStamp(table, body) {
+  if (!OCC_TABLES.has(table)) return body;
+  body.updated_at = new Date().toISOString();
+  const s = getSession();
+  if (s && s.user && s.user.email) body.updated_by = s.user.email;
+  return body;
+}
+
 function toSB(table, obj) {
   const sbTable = SB_TABLES[table];
   const map = SB_TO_INT[sbTable];
@@ -1092,7 +1109,7 @@ async function sbGet(table) {
 
 async function sbAdd(table, obj) {
   const sbTable = SB_TABLES[table];
-  const body = toSB(table, obj);
+  const body = _occStamp(table, toSB(table, obj));
   let r;
   try { r = await _sbWrite(SUPA_REST + '/' + sbTable, 'POST', body); }
   catch (e) { console.error('SB ADD network error:', e.message); _sbNetworkWarn(); return null; }
@@ -1104,7 +1121,7 @@ async function sbAdd(table, obj) {
 
 async function sbUpdate(table, sbId, obj) {
   const sbTable = SB_TABLES[table];
-  const body = toSB(table, obj);
+  const body = _occStamp(table, toSB(table, obj));
   let r;
   try { r = await _sbWrite(SUPA_REST + '/' + sbTable + '?id=eq.' + sbId, 'PATCH', body); }
   catch (e) { console.error('SB UPDATE network error:', e.message); _sbNetworkWarn(); return false; }

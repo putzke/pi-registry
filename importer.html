@@ -761,9 +761,24 @@ async function sbGet(table) {
   return rows.map(row => fromSB(table, row));
 }
 
+// Stamp updated_at/updated_by on writes to the desktop OCC tables so an import
+// that touches an existing stakeholder is visible to the desktop app's
+// optimistic-concurrency guard (otherwise updated_at stays stale and desktop can
+// silently overwrite the imported change). Keep in sync with index.html's
+// OCC_TABLES. Imports are inserts + the occasional stakeholder update; no
+// conflict prompt here (bulk import is deliberate, last-writer-wins).
+const OCC_TABLES = new Set(['stakeholders','interactions','issues']);
+function _occStamp(table, body) {
+  if (!OCC_TABLES.has(table)) return body;
+  body.updated_at = new Date().toISOString();
+  const s = getSession();
+  if (s && s.user && s.user.email) body.updated_by = s.user.email;
+  return body;
+}
+
 async function sbAdd(table, obj) {
   const sbTable = SB_TABLES[table];
-  const body = toSB(table, obj);
+  const body = _occStamp(table, toSB(table, obj));
   console.log('[sbAdd]', table, JSON.stringify(body).slice(0, 200));
   const r = await fetch(SUPA_REST + '/' + sbTable, {
     method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(body)
@@ -780,7 +795,7 @@ async function sbAdd(table, obj) {
 
 async function sbUpdate(table, sbId, obj) {
   const sbTable = SB_TABLES[table];
-  const body = toSB(table, obj);
+  const body = _occStamp(table, toSB(table, obj));
   const r = await fetch(SUPA_REST + '/' + sbTable + '?id=eq.' + sbId, {
     method: 'PATCH', headers: getAuthHeaders(), body: JSON.stringify(body)
   });

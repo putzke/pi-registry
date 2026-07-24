@@ -35,6 +35,15 @@ Other files: `mobile.html` (mobile companion), `importer.html` (bulk data import
   into the cache so a concurrent user's saved change shows immediately (no hard-refresh)
   and the OCC baseline is accurate-at-open. There is NO live presence warning on these
   modals (unlike the report editor) — that's by design, not a bug.
+- **Live data refresh** (`_bgRefreshTick`, near `loadAllData`) — `_syncCache` is
+  loaded once at startup, so this keeps a DWELLED-on list view from going stale.
+  Refetches only the current view's tables (`_viewTables(S.view)`) and re-renders
+  ONLY if the data actually changed. Triggers: on nav (`setView`), on tab re-focus
+  (`visibilitychange`), and a 60s interval. Stands down (`_bgRefreshOK`) when a
+  refresh would disrupt: tab hidden, `_rptEdit` active, a modal open, an input
+  focused, or a local write in flight / just made (`_writesInFlight`,
+  `_lastLocalWriteAt` — both set in `_sbWrite`). Replaces arrays, so no memory
+  growth. Views not in `_viewTables` (settings, map, reports) don't auto-refresh.
 
 ### State
 ```javascript

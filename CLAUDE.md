@@ -453,6 +453,56 @@ subject tagging, follow-up flag if needed). Specific hotline provider not yet
 selected — candidates include Dialpad, Twilio, or similar. Design session
 required before build; vendor selection pending.
 
+## FUTURE — Multi-tenant launch readiness (plan captured July 2026, not started)
+
+**Context:** the app today is single-firm / pilot-grade. Before onboarding the
+FIRST paying client, several things must be in place. This section captures the
+agreed sequence and the human-vs-Claude split so a future session picks it up
+cold. Do NOT start any of this without Jeff's explicit go — it's a deliberate,
+staged project, not incremental work.
+
+**The API-key ceiling (why this exists):** AI features are gated on a BYO Claude
+key in `localStorage` (`compass_claude_api_key_v2`, per-browser, per-device) —
+see `_getClaudeKey()`. Fine for internal/pilot use. NOT acceptable for paid
+clients: (a) making clients paste raw API keys is bad onboarding, and (b)
+hard-coding Horizon's own key in the static page would publish it (browser can
+read anything it sends → extractable → uncapped charges, no per-client
+tracking). The answer is a **server-side proxy**, not either of those.
+
+**Build sequence (do in this order):**
+1. **Multi-tenant data isolation — the long pole.** Add `org_id` to every table;
+   replace today's permissive anon RLS ("anon can read/write everything") with
+   tenant-scoped policies. This is the real gate on a paid launch, not the AI
+   proxy. Ties to the portal's known "token isolation is client-side / RLS is
+   permissive" hardening note (see Client Portal section).
+2. **Unified AI/API gateway (Supabase Edge Function).** Browser calls a Horizon
+   endpoint, NOT `api.anthropic.com` / Google directly. The function holds the
+   single key server-side, checks the caller's Supabase JWT (which tenant), and
+   forwards. One pattern reused per provider (Claude, Google, later transcription
+   vendors). Only app-side change is redirecting the `_claudeNarrative()` fetch
+   target — one narrow call site. CSP `connect-src` updates to the Horizon
+   endpoint instead of `api.anthropic.com`.
+3. **Per-tenant metering.** A `pi_ai_usage` table logged by the gateway (tenant,
+   provider, model, tokens, timestamp) → usage visibility, quotas, alerts,
+   billing basis. Calls here are cheap (~400-token Haiku/Sonnet narratives,
+   fractions of a cent) — small COGS to price into the subscription.
+4. **Transcription receivers** (voicemail / live phone; ArcGIS Survey123) — same
+   webhook → Edge Function → interaction-record pattern, built once the vendor is
+   chosen. Rides the same gateway + metering rails.
+5. **Security review** over the whole thing before go-live (Claude can do a pass;
+   a human security check is strongly recommended given multi-client data).
+
+**Human-only (Claude CANNOT do these — they're account/config/decisions):**
+provider accounts + billing (Anthropic, Google Cloud, phone vendor); pasting keys
+into **Supabase Edge Function secrets** (dashboard only); vendor + pricing
+decisions; **custom SMTP** setup (already a standing portal prereq); domain; any
+client procurement/legal/security sign-off.
+
+**Split in one line:** Claude writes essentially all code, migrations, and Edge
+Functions; Jeff makes the vendor/billing/account decisions and holds the actual
+secrets. When Jeff says "we're ready to scale," walk him through the sequence
+above end to end.
+
 ## Supabase project
 - URL: `https://ncfbblhlsiglxkoiounv.supabase.co`
 - Anon key in `index.html` line ~505 (`SUPA_KEY`)

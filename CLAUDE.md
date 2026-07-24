@@ -29,6 +29,12 @@ Other files: `mobile.html` (mobile companion), `importer.html` (bulk data import
   The PI report editor has its own richer OCC (presence + heartbeat, `_rptEdit`); this
   is the lightweight save-time version for everything else. To extend OCC to another
   table: add it to `OCC_TABLES`, add `updated_at`/`updated_by` columns via migration.
+  **Fetch-fresh-on-open:** `_syncCache` is loaded once at startup and NOT auto-refreshed,
+  so the three OCC edit modals (`openEditIntModal`, `openStakeModal`, `openIssueModal`)
+  `await _occRefreshRow(table,id)` before populating — pulls the latest row from Supabase
+  into the cache so a concurrent user's saved change shows immediately (no hard-refresh)
+  and the OCC baseline is accurate-at-open. There is NO live presence warning on these
+  modals (unlike the report editor) — that's by design, not a bug.
 
 ### State
 ```javascript

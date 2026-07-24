@@ -1065,6 +1065,24 @@ function _occReplaceCache(table, sbId, freshItem) {
   const i = arr.findIndex(x => String(x.id) === String(sbId));
   if (i > -1) arr[i] = freshItem;
 }
+// Fetch-fresh-on-open: pull the latest version of one record from the server and
+// upsert it into _syncCache, so an edit modal shows a concurrent user's saved
+// change immediately (the cache is loaded once at startup and NOT auto-refreshed,
+// so without this a second editor sees stale data until a hard refresh). Only for
+// OCC tables with server-side integer PKs — a non-numeric id is an unsynced local
+// row, nothing to fetch. Best-effort: on any failure the caller falls back to cache.
+async function _occRefreshRow(table, sbId) {
+  if (!OCC_TABLES.has(table) || !/^\d+$/.test(String(sbId))) return null;
+  const fresh = await _occFetchRow(table, sbId);
+  if (fresh) {
+    const arr = _syncCache[table];
+    if (arr) {
+      const i = arr.findIndex(x => String(x.id) === String(sbId));
+      if (i > -1) arr[i] = fresh; else arr.push(fresh);
+    }
+  }
+  return fresh;
+}
 // Force our version over theirs: an unconditional PATCH (no updated_at filter).
 async function _occForceWrite(table, sbId, obj) {
   const body = toSB(table, obj);
@@ -4138,8 +4156,11 @@ function _issStatusResolvedSync(src){
   }
 }
 
-function openIssueModal(id, projectId){
+async function openIssueModal(id, projectId){
   S.editId=id||null;
+  // Fetch-fresh-on-open so a concurrent user's saved change shows immediately
+  // (no-op for a new issue or an unsynced local id).
+  if(id) await _occRefreshRow('issues', id);
   const all=DB.get('issues')||[];
   const iss=id?all.find(x=>String(x.id)===String(id))||{}:{};
   const ints=DB.get('interactions')||[];
@@ -6103,8 +6124,11 @@ function closeM(){document.getElementById('modal-ov').classList.remove('open');S
 document.getElementById('modal-ov').addEventListener('click',e=>{if(e.target===e.currentTarget)closeM()});
 
 // STAKEHOLDER MODAL
-function openStakeModal(id){
+async function openStakeModal(id){
   S.editId=id||null;
+  // Fetch-fresh-on-open so a concurrent user's saved change shows immediately
+  // (no-op for a new stakeholder or an unsynced local id).
+  if(id) await _occRefreshRow('stakeholders', id);
   // Search all stakeholders including any whose tmp ID may have been replaced
   const s=id?(DB.get('stakeholders').find(x=>String(x.id)===String(id))||{}):{};
   const projs=DB.get('projects');
@@ -6862,8 +6886,11 @@ function updateIntNepaStage(){
   const proj=(DB.get('projects')||[]).find(x=>x.id===projId);
   h.value=(proj&&proj.nepaStage)||'';
 }
-function openEditIntModal(id){
+async function openEditIntModal(id){
   S.editId=id;
+  // Pull the latest from the server first so a concurrent user's saved change
+  // shows immediately (the local cache isn't auto-refreshed after startup).
+  await _occRefreshRow('interactions', id);
   const i=DB.get('interactions').find(x=>String(x.id)===String(id))||{};
   const projs=DB.get('projects'),stakes=DB.getActive('stakeholders');
   openM('Edit interaction',

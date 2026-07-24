@@ -10088,7 +10088,7 @@ async function _rptDoSave(force){
   var res=await _rptSaveSupabase(saved,force);
   e.saving=false;
   if(res.ok){ e.dirty=false; _rptStatus('saved',res.ts); _rptUpdateMetaBanner(); }
-  else if(res.conflict){ _rptStatus('conflict'); _rptHandleConflict(); }
+  else if(res.conflict){ _rptHandleConflict(); }   // status set inside (silent for our own writes)
   else{ _rptStatus('local'); }   // Supabase unreachable — kept locally, retried on next edit
 }
 async function _rptHandleConflict(){
@@ -10098,8 +10098,9 @@ async function _rptHandleConflict(){
   // just drifted (e.g. our own heartbeat, or a DB updated_at trigger). Silently
   // adopt the new baseline and retry, so solo editing never nags.
   if(row&&_rptMyEmail()&&row.updatedBy===_rptMyEmail()){
-    e.baseTs=row.updatedAt; _rptStatus('saving'); _rptDoSave(true); return;
+    e.baseTs=row.updatedAt; _rptStatus('saving'); _rptDoSave(true); return;   // not a real conflict — no scary flash
   }
+  _rptStatus('conflict');
   var who=row?_rptDisplayName(row.updatedBy):'another user';
   var when=row?_rptRelTime(row.updatedAt):'';
   var msg='This report was changed by '+who+(when?' ('+when+')':'')+' since you opened it.\n\n'

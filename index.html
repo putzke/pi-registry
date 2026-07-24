@@ -10209,7 +10209,7 @@ async function openPIReport(_isReopen){
   var el=document.getElementById('main');
   el.innerHTML='<div class="topbar">'
     +'<div><div class="topbar-title">PI Report Editor</div>'
-    +'<div class="topbar-sub">'+proj.name+' ('+proj.pid+') <span id="rpt-meta-banner" style="color:var(--fog);font-weight:400;display:none;margin-left:6px"></span></div></div>'
+    +'<div class="topbar-sub">'+proj.name+' ('+proj.pid+') <span id="rpt-meta-banner" style="display:none;margin-left:8px;font-weight:700;color:var(--sky-lt);background:rgba(74,155,232,.16);border:1px solid rgba(74,155,232,.4);padding:2px 9px;border-radius:10px;font-size:11px;white-space:nowrap"></span></div></div>'
     +'<div class="topbar-sp"></div>'
     +'<div class="topbar-acts">'
     +(_getClaudeKey()?'<button class="btn" id="all-drafts-btn" onclick="generateAllSectionDrafts()" style="background:linear-gradient(135deg,#1e3a5f,#0f4c75);border-color:var(--sky-lt);color:var(--sky-lt)">✦ AI: Draft all sections</button>':'')

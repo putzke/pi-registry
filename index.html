@@ -810,7 +810,8 @@ const SB_TO_INT = {
   pi_reports: {
     id:'id', projectId:'project_id', reportNum:'report_num', reportTitle:'report_title',
     reportSubtitle:'report_subtitle', periodStart:'period_start', periodEnd:'period_end',
-    overallSummary:'overall_summary', sections:'sections', updatedAt:'updated_at'
+    overallSummary:'overall_summary', sections:'sections', updatedAt:'updated_at',
+    updatedBy:'updated_by', editingEmail:'editing_email', editingSession:'editing_session', editingAt:'editing_at'
   },
   pi_report_archive: {
     id:'id', projectId:'project_id', reportNum:'report_num', reportTitle:'report_title',
@@ -9972,12 +9973,193 @@ function _buildOverallDraft() {
   return lines.join(' ');
 }
 
-function openPIReport(){
+// ── PI REPORT EDITOR: auto-save + presence + optimistic concurrency ──────────
+// One draft row per project (pi_reports). Multiple people can open the same
+// project's report, so: (1) fetch fresh on open, (2) warn if someone else is
+// actively editing (advisory presence, auto-expires), (3) auto-save debounced,
+// (4) guard saves with OCC (conditional on updated_at) so we never silently
+// overwrite. All Supabase calls degrade gracefully (fall back to localStorage).
+var _rptEdit=null;                 // {projF, sbId, baseTs, saveTimer, hbTimer, saving, dirty}
+var _RPT_PRESENCE_STALE=60000;     // presence heartbeat older than this = not actively editing
+var _RPT_HEARTBEAT=25000;
+var _RPT_SAVE_DEBOUNCE=1800;
+
+function _rptSessionId(){
+  if(!S._rptSessionId) S._rptSessionId=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():('s'+Date.now()+Math.random().toString(36).slice(2));
+  return S._rptSessionId;
+}
+function _rptMyEmail(){ var s=getSession(); return (s&&s.user&&s.user.email)||''; }
+function _rptDisplayName(email){
+  if(!email) return 'Someone';
+  var p=email.split('@')[0].replace(/[._-]+/g,' ').trim();
+  return p.replace(/\b\w/g,function(c){return c.toUpperCase();})||email;
+}
+function _rptRelTime(iso){
+  if(!iso) return '';
+  var d=new Date(iso); if(isNaN(d)) return '';
+  var mins=Math.round((Date.now()-d.getTime())/60000);
+  if(mins<1) return 'just now';
+  if(mins===1) return '1 minute ago';
+  if(mins<60) return mins+' minutes ago';
+  return d.toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+}
+// Fetch this project's report row fresh (bypasses the startup cache); updates
+// _syncCache['reports']. Returns the internal-mapped row or null.
+async function _rptFetchRow(projF){
+  try{
+    var r=await fetch(SUPA_REST+'/pi_reports?project_id=eq.'+encodeURIComponent(projF),{headers:getAuthHeaders()});
+    if(!r.ok) return null;
+    var rows=await r.json();
+    if(!rows||!rows.length) return null;
+    var rec=fromSB('reports',rows[0]);
+    if(!_syncCache['reports']) _syncCache['reports']=[];
+    _syncCache['reports']=_syncCache['reports'].filter(function(x){return String(x.projectId)!==String(projF);});
+    _syncCache['reports'].push(rec);
+    return rec;
+  }catch(e){ return null; }
+}
+function _rptCacheUpsertSbRow(sbRow){
+  var rec=fromSB('reports',sbRow);
+  if(!_syncCache['reports']) _syncCache['reports']=[];
+  _syncCache['reports']=_syncCache['reports'].filter(function(x){return String(x.projectId)!==String(rec.projectId);});
+  _syncCache['reports'].push(rec);
+}
+async function _rptSetPresence(sbId){
+  if(!sbId) return;
+  try{ await _sbWrite(SUPA_REST+'/pi_reports?id=eq.'+sbId,'PATCH',{editing_email:_rptMyEmail(),editing_session:_rptSessionId(),editing_at:new Date().toISOString()}); }catch(e){}
+}
+async function _rptClearPresence(sbId){
+  if(!sbId) return;
+  try{ await _sbWrite(SUPA_REST+'/pi_reports?id=eq.'+sbId+'&editing_session=eq.'+encodeURIComponent(_rptSessionId()),'PATCH',{editing_email:null,editing_session:null,editing_at:null}); }catch(e){}
+}
+// The single Supabase write path for the editor. force=true skips the OCC guard.
+async function _rptSaveSupabase(saved, force){
+  var e=_rptEdit; if(!e) return {ok:false};
+  var nowIso=new Date().toISOString();
+  var sb={
+    project_id:e.projF,
+    report_num:saved.reportNum||'', report_title:saved.reportTitle||'', report_subtitle:saved.reportSubtitle||'',
+    period_start:saved.periodStart||null, period_end:saved.periodEnd||null,
+    overall_summary:saved.overallSummary||'', sections:saved.sections||[],
+    updated_at:nowIso, updated_by:_rptMyEmail()
+  };
+  try{
+    var r,rows;
+    if(!e.sbId){
+      r=await _sbWrite(SUPA_REST+'/pi_reports','POST',sb,{'Prefer':'return=representation'});
+      rows=JSON.parse((await r.text())||'[]');
+      if(r.ok&&rows[0]){ e.sbId=String(rows[0].id); e.baseTs=rows[0].updated_at; _rptCacheUpsertSbRow(rows[0]); return {ok:true,ts:rows[0].updated_at}; }
+      return {ok:false};
+    }
+    var url=SUPA_REST+'/pi_reports?id=eq.'+e.sbId+(force?'':'&updated_at=eq.'+encodeURIComponent(e.baseTs||''));
+    r=await _sbWrite(url,'PATCH',sb,{'Prefer':'return=representation'});
+    var txt=await r.text();
+    if(!r.ok) return {ok:false};
+    rows=JSON.parse(txt||'[]');
+    if(!rows.length) return {ok:false,conflict:true};   // baseline no longer matched → someone else saved
+    e.baseTs=rows[0].updated_at; _rptCacheUpsertSbRow(rows[0]);
+    return {ok:true,ts:rows[0].updated_at};
+  }catch(err){ return {ok:false,network:true}; }
+}
+function _rptStatus(state, ts){
+  var el=document.getElementById('rpt-save-status'); if(!el) return;
+  var t=ts?(' '+new Date(ts).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})):'';
+  var map={
+    saving:['Saving…','var(--fog)'],
+    saved:['✓ Saved'+t,'var(--teal)'],
+    unsaved:['Unsaved changes…','var(--fog)'],
+    local:['⚠ Saved on this device only','var(--amber)'],
+    conflict:['⚠ Edit conflict','var(--red)']
+  };
+  var m=map[state]||['',''];
+  el.textContent=m[0]; el.style.color=m[1];
+}
+function _scheduleRptSave(){
+  var e=_rptEdit; if(!e) return;
+  e.dirty=true; _rptStatus('unsaved');
+  clearTimeout(e.saveTimer);
+  e.saveTimer=setTimeout(_rptDoSave,_RPT_SAVE_DEBOUNCE);
+}
+async function _rptDoSave(force){
+  var e=_rptEdit; if(!e||e.saving) return;
+  var saved=captureFormState(); if(!saved) return;
+  localStorage.setItem('pir4_pi_reports_'+e.projF,JSON.stringify(saved)); // never lose work locally
+  e.saving=true; _rptStatus('saving');
+  var res=await _rptSaveSupabase(saved,force);
+  e.saving=false;
+  if(res.ok){ e.dirty=false; _rptStatus('saved',res.ts); _rptUpdateMetaBanner(); }
+  else if(res.conflict){ _rptStatus('conflict'); _rptHandleConflict(); }
+  else{ _rptStatus('local'); }   // Supabase unreachable — kept locally, retried on next edit
+}
+async function _rptHandleConflict(){
+  var e=_rptEdit; if(!e) return;
+  var row=await _rptFetchRow(e.projF);
+  // If WE were the last content writer, this isn't a real conflict — the baseline
+  // just drifted (e.g. our own heartbeat, or a DB updated_at trigger). Silently
+  // adopt the new baseline and retry, so solo editing never nags.
+  if(row&&_rptMyEmail()&&row.updatedBy===_rptMyEmail()){
+    e.baseTs=row.updatedAt; _rptStatus('saving'); _rptDoSave(true); return;
+  }
+  var who=row?_rptDisplayName(row.updatedBy):'another user';
+  var when=row?_rptRelTime(row.updatedAt):'';
+  var msg='This report was changed by '+who+(when?' ('+when+')':'')+' since you opened it.\n\n'
+    +'OK  = overwrite with YOUR version\n'
+    +'Cancel = discard your changes and reload THEIRS';
+  if(confirm(msg)){
+    if(row) e.baseTs=row.updatedAt;   // adopt their baseline, then force our write on top
+    _rptDoSave(true);
+  } else {
+    _rptTeardown(true);               // reload theirs (fresh fetch already in cache)
+    openPIReport();
+  }
+}
+function _rptUpdateMetaBanner(){
+  var el=document.getElementById('rpt-meta-banner'); if(!el) return;
+  var e=_rptEdit; if(!e) return;
+  var rec=(_syncCache['reports']||[]).find(function(r){return String(r.projectId)===String(e.projF);});
+  if(rec&&rec.updatedBy){ el.textContent='Last saved by '+_rptDisplayName(rec.updatedBy)+' · '+_rptRelTime(rec.updatedAt); el.style.display=''; }
+  else { el.style.display='none'; }
+}
+function _rptTeardown(keepPresence){
+  var e=_rptEdit; if(!e) return;
+  clearTimeout(e.saveTimer); clearInterval(e.hbTimer);
+  if(!keepPresence&&e.sbId) _rptClearPresence(e.sbId);
+  _rptEdit=null;
+}
+function _rptLeaveEditor(){
+  var e=_rptEdit;
+  if(e){ clearTimeout(e.saveTimer); if(e.dirty) _rptDoSave(); }
+  _rptTeardown();
+  renderReports(document.getElementById('main'));
+}
+// Force-flush the current form to Supabase before an explicit action that needs
+// it persisted (archive / export). Falls back to the legacy save outside the editor.
+async function _rptFlushSave(){
+  if(_rptEdit){ clearTimeout(_rptEdit.saveTimer); await _rptDoSave(true); }
+  else if(typeof savePIReportDraft==='function'){ await savePIReportDraft(); }
+}
+
+async function openPIReport(_isReopen){
   var projF=S.projectFilter;
   if(!projF){showToast('Please select a project from the dropdown first.','warn');return;}
   var projs=DB.get('projects');
   var proj=projs.find(function(p){return p.id===projF});
   if(!proj)return;
+
+  // Fresh open (not an internal re-render): pull the latest row, warn on active
+  // presence, then start our own editing session.
+  if(!_isReopen){
+    _rptTeardown();
+    var row=await _rptFetchRow(projF);   // best-effort; falls back to cache on failure
+    if(row&&row.editingSession&&String(row.editingSession)!==_rptSessionId()&&row.editingAt&&(Date.now()-new Date(row.editingAt).getTime())<_RPT_PRESENCE_STALE){
+      if(!confirm('⚠ '+_rptDisplayName(row.editingEmail)+' is currently editing this report ('+_rptRelTime(row.editingAt)+').\n\nEditing at the same time can overwrite their work. Open anyway?')){
+        renderReports(document.getElementById('main')); return;
+      }
+    }
+    _rptEdit={projF:projF, sbId:(row?String(row.id):null), baseTs:(row?row.updatedAt:null), saveTimer:null, hbTimer:null, saving:false, dirty:false};
+    _rptSetPresence(_rptEdit.sbId);
+    _rptEdit.hbTimer=setInterval(function(){ if(_rptEdit) _rptSetPresence(_rptEdit.sbId); },_RPT_HEARTBEAT);
+  }
 
   var saved=loadReportSections(projF);
   var reportNum=saved.reportNum||'1';
@@ -10026,11 +10208,11 @@ function openPIReport(){
   var el=document.getElementById('main');
   el.innerHTML='<div class="topbar">'
     +'<div><div class="topbar-title">PI Report Editor</div>'
-    +'<div class="topbar-sub">'+proj.name+' ('+proj.pid+')</div></div>'
+    +'<div class="topbar-sub">'+proj.name+' ('+proj.pid+') <span id="rpt-meta-banner" style="color:var(--fog);font-weight:400;display:none;margin-left:6px"></span></div></div>'
     +'<div class="topbar-sp"></div>'
     +'<div class="topbar-acts">'
     +(_getClaudeKey()?'<button class="btn" id="all-drafts-btn" onclick="generateAllSectionDrafts()" style="background:linear-gradient(135deg,#1e3a5f,#0f4c75);border-color:var(--sky-lt);color:var(--sky-lt)">✦ AI: Draft all sections</button>':'')
-    +'<button class="btn" onclick="savePIReportDraft()">Save draft</button>'
+    +'<span id="rpt-save-status" style="font-size:12px;color:var(--teal);margin-right:8px;white-space:nowrap;cursor:pointer" onclick="_rptDoSave(true)" title="Auto-saves as you type — click to save now"></span>'
     +'<button class="btn" onclick="manualArchiveReport()" title="Checkpoint the current draft to the archive without exporting"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:13px;height:13px"><path d="M2 13h12M4 13V7l4-4 4 4v6"/><path d="M6 13v-3h4v3"/></svg> Save to archive</button>'
     +'<button class="btn" style="color:var(--fog);border-color:rgba(255,255,255,.15)" onclick="resetPIReportDraft()" title="Clear saved draft and reset to default sections">Reset</button>'
     +'<label style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--slate);margin-right:6px">Letterhead:'
@@ -10041,7 +10223,7 @@ function openPIReport(){
     +'<option value="off"'+(_rptBrandMode()==='off'?' selected':'')+'>None</option>'
     +'</select></label>'
     +'<button class="btn btn-primary" onclick="exportPIDocx()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:14px;height:14px"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg> Export .docx</button>'
-    +'<button class="btn btn-ghost" onclick="renderReports(document.getElementById(\'main\'))">Back to reports</button>'
+    +'<button class="btn btn-ghost" onclick="_rptLeaveEditor()">Back to reports</button>'
     +'</div></div>'
     +(_getClaudeKey()?'<div id="all-drafts-progress" style="display:none;align-items:center;gap:10px;padding:8px 22px;background:#0d1f33;border-bottom:1px solid var(--border)">'
       +'<div style="flex:1;height:6px;background:rgba(255,255,255,.08);border-radius:3px"><div id="all-drafts-bar-inner" style="height:100%;width:0%;background:var(--sky-lt);border-radius:3px;transition:width .3s"></div></div>'
@@ -10109,9 +10291,12 @@ function openPIReport(){
   // Trigger initial preview render after DOM is set
   setTimeout(function(){
     renderLivePreview();
-    // Delegated listener catches section title/content/summary inputs (including dynamically added ones)
+    // Delegated listener catches section title/content/summary inputs (including
+    // dynamically added ones): refresh the preview AND debounce an auto-save.
     var edPane=document.getElementById('rpt-editor-pane');
-    if(edPane) edPane.addEventListener('input',schedulePreview);
+    if(edPane) edPane.addEventListener('input',function(){ schedulePreview(); _scheduleRptSave(); });
+    _rptStatus('saved');            // opened on the latest saved state
+    _rptUpdateMetaBanner();
   },50);
 }
 
@@ -10612,6 +10797,7 @@ function _persistReportEdit(saved){
       rec.sections=saved.sections;
     }
   }
+  _scheduleRptSave();   // structural change (add/move/remove) also auto-saves to Supabase
 }
 
 // Re-render the editor after a structural change while preserving the left
@@ -10619,7 +10805,7 @@ function _persistReportEdit(saved){
 function _reopenPIReportKeepScroll(){
   var pane=document.getElementById('rpt-editor-pane');
   var sc=pane?pane.scrollTop:0;
-  openPIReport();
+  openPIReport(true);   // internal re-render — keep the editing session/presence
   var np=document.getElementById('rpt-editor-pane');
   if(np){
     np.scrollTop=sc;
@@ -10737,7 +10923,7 @@ const ARCHIVE_LIMIT = 10;
 async function manualArchiveReport() {
   var projF = S.projectFilter;
   if (!projF) { showToast('No project selected.', 'warn'); return; }
-  await savePIReportDraft();
+  await _rptFlushSave();
   var existing = (_syncCache['report_archive']||[]).filter(function(r){ return String(r.projectId)===String(projF); });
   if (existing.length >= ARCHIVE_LIMIT) {
     showToast('Archive limit ('+ARCHIVE_LIMIT+') reached. Delete old snapshots first.', 'warn', 5000); return;
@@ -11139,7 +11325,7 @@ async function publishClientTrend() {
 }
 
 async function exportPIDocx(){
-  await savePIReportDraft();
+  await _rptFlushSave();
   var projF=S.projectFilter;
   if(!projF)return;
   var projs=DB.get('projects');

@@ -842,6 +842,19 @@ const DATE_FIELDS = new Set(['interaction_date','follow_up_due','follow_up_resol
 // Integer FK columns that Supabase expects as numbers
 const SB_INT_FIELDS = new Set(['project_id','stakeholder_id','issue_id','interaction_id','meeting_id']);
 
+// Tables guarded by optimistic concurrency (OCC): every UPDATE is conditional
+// on the row's updated_at matching the value we loaded, so a second user who
+// edits the same record while our copy is stale is detected instead of being
+// silently clobbered (or clobbering us). These are the records that most often
+// have two people in them at once and where a lost edit matters:
+//   • stakeholders — shared contact records edited from master + project views
+//   • interactions — compliance log entries (date/who/what) that flow into reports
+//   • issues       — tracked concerns with status/resolution edited by anyone
+// The report editor has its own richer OCC (presence + heartbeat); this is the
+// lightweight, save-time guard for ordinary modal edits. `updated_at`/`updated_by`
+// are read back into the cache (via fromSB) so the next edit has a fresh baseline.
+const OCC_TABLES = new Set(['stakeholders','interactions','issues']);
+
 function toSB(table, obj) {
   const sbTable = SB_TABLES[table];
   const map = SB_TO_INT[sbTable];
@@ -884,6 +897,13 @@ function fromSB(table, row) {
   ['isMaster','isAnonymous','followUp','followUpDone','isArchived','equityFormSubmitted','lep','underserved'].forEach(f => {
     if (result[f] !== undefined) result[f] = result[f] === true || result[f] === 1;
   });
+  // OCC baseline: carry updated_at/updated_by into the cache record so the next
+  // save can send a conditional PATCH. Deliberately NOT in SB_TO_INT — that would
+  // make toSB echo the stale timestamp back as the new value and defeat the guard.
+  if (OCC_TABLES.has(table)) {
+    result.updatedAt = row.updated_at || '';
+    result.updatedBy = row.updated_by || '';
+  }
   return result;
 }
 
@@ -969,12 +989,26 @@ async function sbAdd(table, obj) {
   return rows[0] ? String(rows[0].id) : null;
 }
 
-async function sbUpdate(table, sbId, obj) {
+// baseTs (optional): the updated_at value we loaded for this row. When present
+// on an OCC table, the PATCH is made conditional on it — if the server row has
+// moved on (someone else saved), 0 rows come back and we resolve the conflict
+// instead of overwriting. Callers that don't know a baseline (or non-OCC tables)
+// fall through to a plain unconditional update, exactly as before.
+async function sbUpdate(table, sbId, obj, baseTs) {
   const sbTable = SB_TABLES[table];
   const body = toSB(table, obj);
+  const occ = OCC_TABLES.has(table);
+  if (occ) {                                   // stamp a fresh audit trail on every OCC write
+    body.updated_at = new Date().toISOString();
+    const em = _occMyEmail();
+    if (em) body.updated_by = em;
+  }
+  const useOCC = occ && baseTs;                 // only guard when we have a baseline to compare
+  const url = SUPA_REST + '/' + sbTable + '?id=eq.' + sbId
+            + (useOCC ? '&updated_at=eq.' + encodeURIComponent(baseTs) : '');
   console.log('SB UPDATE sending:', sbTable, 'id=', sbId, JSON.stringify(body));
   let r;
-  try { r = await _sbWrite(SUPA_REST + '/' + sbTable + '?id=eq.' + sbId, 'PATCH', body); }
+  try { r = await _sbWrite(url, 'PATCH', body); }
   catch (e) { console.error('SB UPDATE network error:', sbTable, e.message); _sbNetworkWarn(); return false; }
   const responseText = await r.text();
   console.log('SB UPDATE response:', r.status, responseText);
@@ -983,7 +1017,90 @@ async function sbUpdate(table, sbId, obj) {
     return false;
   }
   cacheClear(table);
+  if (occ) {
+    let rows = []; try { rows = responseText ? JSON.parse(responseText) : []; } catch (_) {}
+    if (useOCC && rows.length === 0) {          // baseline no longer matched → conflict
+      return await _occResolveConflict(table, sbId, obj);
+    }
+    if (rows[0]) _occAdoptServerRow(table, sbId, rows[0]);  // keep cache baseline fresh
+  }
   return true;
+}
+
+// ── OPTIMISTIC-CONCURRENCY CONFLICT RESOLUTION (shared, save-time) ──
+function _occMyEmail() {
+  const s = getSession();
+  return (s && s.user && s.user.email) ? s.user.email : '';
+}
+function _occName(email) {
+  if (typeof _rptDisplayName === 'function') return _rptDisplayName(email);
+  return email ? email.split('@')[0] : 'another user';
+}
+function _occLabel(table) {
+  return ({stakeholders:'contact', interactions:'interaction record', issues:'issue'})[table] || 'record';
+}
+// Pull the current server row for one record (bypasses the 30s cache).
+async function _occFetchRow(table, sbId) {
+  try {
+    const r = await fetch(SUPA_REST + '/' + SB_TABLES[table] + '?id=eq.' + sbId + '&select=*', { headers: getAuthHeaders() });
+    if (!r.ok) return null;
+    const rows = await r.json();
+    return rows[0] ? fromSB(table, rows[0]) : null;
+  } catch (e) { return null; }
+}
+// Write the server's updated_at/updated_by back onto the matching cache record so
+// the NEXT edit sends a correct baseline (sbRow is a raw Supabase row).
+function _occAdoptServerRow(table, sbId, sbRow) {
+  const arr = _syncCache[table]; if (!arr) return;
+  const i = arr.findIndex(x => String(x.id) === String(sbId));
+  if (i > -1) {
+    if (sbRow.updated_at) arr[i].updatedAt = sbRow.updated_at;
+    if (sbRow.updated_by) arr[i].updatedBy = sbRow.updated_by;
+  }
+}
+// Replace a cache record with the server's version (used when the user chooses to
+// discard their edit and keep the latest).
+function _occReplaceCache(table, sbId, freshItem) {
+  const arr = _syncCache[table]; if (!arr) return;
+  const i = arr.findIndex(x => String(x.id) === String(sbId));
+  if (i > -1) arr[i] = freshItem;
+}
+// Force our version over theirs: an unconditional PATCH (no updated_at filter).
+async function _occForceWrite(table, sbId, obj) {
+  const body = toSB(table, obj);
+  body.updated_at = new Date().toISOString();
+  const em = _occMyEmail(); if (em) body.updated_by = em;
+  let r;
+  try { r = await _sbWrite(SUPA_REST + '/' + SB_TABLES[table] + '?id=eq.' + sbId, 'PATCH', body); }
+  catch (e) { console.error('SB UPDATE network error:', SB_TABLES[table], e.message); _sbNetworkWarn(); return false; }
+  const txt = await r.text();
+  if (!r.ok) { console.error('SB UPDATE error:', r.status, SB_TABLES[table], txt); return false; }
+  cacheClear(table);
+  let rows = []; try { rows = txt ? JSON.parse(txt) : []; } catch (_) {}
+  if (rows[0]) _occAdoptServerRow(table, sbId, rows[0]);
+  return true;
+}
+async function _occResolveConflict(table, sbId, obj) {
+  const fresh = await _occFetchRow(table, sbId);
+  // Self-write guard: if WE were the last writer (e.g. our own second tab, or a
+  // DB updated_at trigger drifting the baseline), it isn't a real conflict —
+  // adopt the new baseline and force our write, silently. Solo editing never nags.
+  const myEmail = _occMyEmail();
+  if (fresh && myEmail && fresh.updatedBy === myEmail) {
+    return await _occForceWrite(table, sbId, obj);
+  }
+  const who = fresh ? _occName(fresh.updatedBy) : 'another user';
+  const when = (fresh && fresh.updatedAt && typeof _rptRelTime === 'function') ? _rptRelTime(fresh.updatedAt) : '';
+  const msg = 'This ' + _occLabel(table) + ' was changed by ' + who + (when ? ' (' + when + ')' : '') + ' since you opened it.\n\n'
+    + 'OK  = save YOUR changes anyway (overwrites theirs)\n'
+    + 'Cancel = discard your changes and keep the latest version';
+  if (confirm(msg)) {
+    return await _occForceWrite(table, sbId, obj);
+  }
+  // Discard: drop our edit from the cache, restore theirs, re-render the view.
+  if (fresh) _occReplaceCache(table, sbId, fresh);
+  if (typeof render === 'function') render();
+  return false;
 }
 
 async function sbDelete(table, sbId) {
@@ -1059,7 +1176,8 @@ const DB = {
           }
         }
       } else if (JSON.stringify(oldMap[item.id]) !== JSON.stringify(item) && isNumeric) {
-        await sbUpdate(table, item.id, item);
+        // Pass the pre-edit updated_at as the OCC baseline (ignored for non-OCC tables).
+        await sbUpdate(table, item.id, item, oldMap[item.id] && oldMap[item.id].updatedAt);
       }
     }
     const _textPKTables = new Set(['comment_periods','public_comments','tribal_consultations']);
@@ -7929,20 +8047,20 @@ el.innerHTML=topbar
       +'<div style="width:52px;height:52px;background:rgba(45,125,210,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="var(--sky-lt)" stroke-width="1.5" style="width:28px;height:28px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6M9 15l3 3 3-3"/></svg></div>'
       +'<div style="flex:1">'
       +'<div style="font-size:16px;font-weight:700;color:var(--white);margin-bottom:6px">PI Compliance Report (.docx)</div>'
-      +'<div style="font-size:13px;color:var(--slate);margin-bottom:14px;line-height:1.5">Build a customizable narrative report with auto-populated and manual sections, live preview, AI-assisted drafts, and export as a branded Word document. Each export is automatically archived.</div>'
+      +'<div style="font-size:13px;color:var(--slate);margin-bottom:14px;line-height:1.5">Build a customizable narrative report with auto-populated and manual sections, live preview, AI-assisted drafts, and export as a branded Word document. Your work saves automatically as you edit.</div>'
       +'<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
       +'<button class="btn btn-primary" style="padding:10px 22px;font-size:14px" onclick="openPIReport()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:13px;height:13px"><path d="M11 3H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1z"/><path d="M8 6v4M6 8h4"/></svg> Open editor</button>'
       +(hasDraft?'<span style="font-size:12px;color:var(--teal)">✓ Draft saved</span>':'<span style="font-size:12px;color:var(--fog)">No saved draft</span>')
       +'</div></div></div>'
       +'<div style="font-size:12px;color:var(--slate);padding:14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:8px">'
       +'<strong style="color:var(--mist)">How it works:</strong> The editor opens in a split-pane view — edit on the left, see a live preview on the right. '
-      +'Use AI Draft buttons to generate narrative summaries for each section. Save your draft to Supabase and resume later on any device. '
-      +'When you export to .docx, the report is automatically archived in the <strong>Report Archive</strong> tab.'
+      +'Use AI Draft buttons to generate narrative summaries for each section. Your draft saves automatically as you work and syncs across devices, so you can resume anywhere. '
+      +'Use <strong>Save to archive</strong> to checkpoint a snapshot into the <strong>Report Archive</strong> tab whenever you want.'
       +'</div>';
   } else if(rptTab==='archive'){
     tabContent='<div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">'
       +'<div><div style="font-size:15px;font-weight:600;color:var(--white)">Report Archive</div>'
-      +'<div style="font-size:12px;color:var(--slate);margin-top:2px">Snapshots automatically created each time you export a PI Report. Limit: '+ARCHIVE_LIMIT+' per project.</div></div>'
+      +'<div style="font-size:12px;color:var(--slate);margin-top:2px">Snapshots you checkpoint with <strong>Save to archive</strong> in the report editor. Limit: '+ARCHIVE_LIMIT+' per project.</div></div>'
       +'</div>'
       +'<div id="rpt-archive-panel">'+archiveHtml+'</div>';
   }

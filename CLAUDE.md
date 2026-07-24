@@ -18,6 +18,17 @@ Other files: `mobile.html` (mobile companion), `importer.html` (bulk data import
 - `DATE_FIELDS` Set — columns that must be `null` (not `''`) when empty
 - `TEXT_PK_TABLES` — tables using app-generated text PKs (most use Supabase integer auto-increment)
 - **Important**: `pi_projects` and `pi_stakeholders` use `GENERATED ALWAYS AS IDENTITY` integer PKs. Never pre-assign text IDs for these.
+- **`OCC_TABLES`** Set (`stakeholders`, `interactions`, `issues`) — optimistic-concurrency
+  guard for ordinary modal edits. `sbUpdate(table,id,obj,baseTs)` takes a 4th arg
+  (the pre-edit `updated_at`); `DB._sync` passes `oldMap[item.id].updatedAt`. For OCC
+  tables the PATCH is conditional (`&updated_at=eq.<baseTs>`, `return=representation`)
+  — 0 rows back = a concurrent edit → `_occResolveConflict()` (self-write guard →
+  silent force; else `confirm()` overwrite-vs-discard). `updated_at`/`updated_by` are
+  read into the cache via a `fromSB` special-case (deliberately NOT in `SB_TO_INT`, or
+  `toSB` would echo the stale baseline). Migration: `sql/2026-07-24_app_wide_occ.sql`.
+  The PI report editor has its own richer OCC (presence + heartbeat, `_rptEdit`); this
+  is the lightweight save-time version for everything else. To extend OCC to another
+  table: add it to `OCC_TABLES`, add `updated_at`/`updated_by` columns via migration.
 
 ### State
 ```javascript

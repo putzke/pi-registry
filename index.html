@@ -811,6 +811,7 @@ const SB_TO_INT = {
     id:'id', projectId:'project_id', reportNum:'report_num', reportTitle:'report_title',
     reportSubtitle:'report_subtitle', periodStart:'period_start', periodEnd:'period_end',
     overallSummary:'overall_summary', sections:'sections', updatedAt:'updated_at',
+    includeInternal:'include_internal', distGroups:'dist_groups',
     updatedBy:'updated_by', editingEmail:'editing_email', editingSession:'editing_session', editingAt:'editing_at'
   },
   pi_report_archive: {
@@ -9416,6 +9417,10 @@ function loadReportSections(projF){
       periodEnd:   sbRec.periodEnd||'',
       overallSummary: sbRec.overallSummary||'',
       sections:    sbRec.sections||[],
+      includeInternal: !!sbRec.includeInternal,
+      // undefined (not []) when never saved, so the editor still applies the
+      // 'Project team' default on a brand-new draft.
+      distGroups:  Array.isArray(sbRec.distGroups)?sbRec.distGroups:undefined,
       sbId:        sbRec.id  // track for updates
     };
     // Also keep localStorage in sync
@@ -10271,6 +10276,10 @@ async function _rptSaveSupabase(saved, force){
     report_num:saved.reportNum||'', report_title:saved.reportTitle||'', report_subtitle:saved.reportSubtitle||'',
     period_start:saved.periodStart||null, period_end:saved.periodEnd||null,
     overall_summary:saved.overallSummary||'', sections:saved.sections||[],
+    // Report-wide options — persist so they survive leaving the editor and sync
+    // across devices like the rest of the draft.
+    include_internal:!!saved.includeInternal,
+    dist_groups:Array.isArray(saved.distGroups)?saved.distGroups:null,
     updated_at:nowIso, updated_by:_rptMyEmail()
   };
   try{
@@ -10489,7 +10498,9 @@ async function openPIReport(_isReopen){
     +'<div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:6px">Report Distribution</div>'
     +'<div style="font-size:11px;color:var(--fog);margin-bottom:8px">Stakeholders in selected groups appear in the Distributed To header.</div>'
     +'<div style="display:flex;flex-wrap:wrap;gap:8px" id="rpt-ed-groups">'
-    +DIST_GROUPS.map(function(g){return '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--mist)"><input type="checkbox" class="rpt-ed-grp" value="'+g+'"'+(g==='Project team'?' checked':'')+' style="accent-color:var(--sky);width:13px;height:13px" onchange="schedulePreview()"> '+g+'</label>'}).join('')
+    // Restore the saved groups; only fall back to the 'Project team' default on a
+    // brand-new draft (no distGroups key yet) — an explicitly emptied list stays empty.
+    +DIST_GROUPS.map(function(g){var _sel=Array.isArray(saved.distGroups)?(saved.distGroups.indexOf(g)>=0):(g==='Project team');return '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--mist)"><input type="checkbox" class="rpt-ed-grp" value="'+g+'"'+(_sel?' checked':'')+' style="accent-color:var(--sky);width:13px;height:13px" onchange="schedulePreview()"> '+g+'</label>'}).join('')
     +'</div>'
     +'</div>'
     +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'
@@ -10498,7 +10509,7 @@ async function openPIReport(_isReopen){
     +'</div>'
     // Report-wide option (applies to the whole report, not tied to distribution).
     +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--mist);margin-bottom:14px;padding:9px 13px;background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:8px">'
-    +'<input type="checkbox" id="rpt-ed-include-internal" style="accent-color:var(--sky);width:14px;height:14px" onchange="schedulePreview()"> '
+    +'<input type="checkbox" id="rpt-ed-include-internal"'+(saved.includeInternal?' checked':'')+' style="accent-color:var(--sky);width:14px;height:14px" onchange="schedulePreview()"> '
     +'<span>Include internal stakeholders in the interaction log <span style="color:var(--fog);font-weight:400">— applies to the whole report</span></span></label>'
     +sectionsHTML
     +'<div style="margin-top:12px;margin-bottom:12px">'
@@ -11004,6 +11015,17 @@ function captureFormState(){
   for(var tc=0;tc<tableCbs.length;tc++){
     var tcidx=parseInt(tableCbs[tc].getAttribute('data-idx'));
     if(tcidx>=0&&tcidx<saved.sections.length)saved.sections[tcidx].showTable=tableCbs[tc].checked;
+  }
+  // Report-wide options — these are real report settings and must persist like
+  // everything else (they change which interactions the report includes and who
+  // it says it was distributed to). Only capture when the control is actually in
+  // the DOM, so a save triggered from outside the editor can't wipe them.
+  var incCb=document.getElementById('rpt-ed-include-internal');
+  if(incCb)saved.includeInternal=incCb.checked;
+  var grpBox=document.getElementById('rpt-ed-groups');
+  if(grpBox){
+    var g=[];grpBox.querySelectorAll('.rpt-ed-grp:checked').forEach(function(cb){g.push(cb.value)});
+    saved.distGroups=g;
   }
   return saved;
 }

@@ -9549,7 +9549,13 @@ function _setClaudeKey(key) {
 
 async function _claudeNarrative(systemPrompt, userContent, maxTokens, model) {
   var key = _getClaudeKey();
-  if (!key) return null;
+  if (!key) {
+    // Was a silent null — indistinguishable from a failed call, and the caller
+    // then quietly wrote template text. Say so.
+    console.warn('Claude: no API key saved (Settings → Claude API key).');
+    if (typeof showToast === 'function') showToast('No Claude API key saved — add one in Settings to use AI drafting.', 'warn', 6000);
+    return null;
+  }
   try {
     var resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -9571,7 +9577,26 @@ async function _claudeNarrative(systemPrompt, userContent, maxTokens, model) {
       throw new Error((err.error && err.error.message) || ('API error ' + resp.status));
     }
     var data = await resp.json();
-    return (data.content && data.content[0] && data.content[0].text) || null;
+    // Collect EVERY text block, not just content[0]. If the first block is a
+    // non-text block (e.g. a thinking block), content[0].text is undefined and the
+    // old code returned null on a perfectly good response — a silent failure that
+    // looked exactly like a bad draft.
+    var blocks = (data && data.content) || [];
+    var text = blocks
+      .filter(function(b){ return b && b.type === 'text' && typeof b.text === 'string'; })
+      .map(function(b){ return b.text; })
+      .join('\n')
+      .trim();
+    if (!text) {
+      console.warn('Claude: response contained no text block. stop_reason=',
+                   data && data.stop_reason, 'block types=',
+                   blocks.map(function(b){ return b && b.type; }), data);
+      return null;
+    }
+    if (data.stop_reason === 'max_tokens') {
+      console.warn('Claude: response hit the max_tokens ceiling and may be truncated.');
+    }
+    return text;
   } catch(e) {
     console.error('Claude API error:', e);
     showToast('Claude API error: ' + e.message, 'error', 5000);

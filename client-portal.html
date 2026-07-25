@@ -1314,16 +1314,17 @@ function renderArchivedReportHTML(rec) {
       String(sec.content).split('\n').forEach(line => { if (line.trim()) html += `<li style="margin-bottom:4px;font-size:13px;color:#222">${esc(line.trim())}</li>`; });
       html += '</ul>';
     }
+    // Narrative first — it introduces the data block that follows.
+    if (sec.summary) {
+      html += `<div style="font-size:13px;color:#333;line-height:1.6;white-space:pre-wrap;margin-bottom:8px">${esc(sec.summary)}</div>`;
+    } else if (isAuto && !sec.tableHtml) {
+      html += `<div style="font-size:12px;color:#9ca3af;font-style:italic">See the Engagement, Deliverables, and Issues tabs for current detail on this section.</div>`;
+    }
     if (isAuto && sec.countsLabel) {
       html += `<div style="font-size:11px;color:#595959;font-style:italic;background:#f0f0f0;border-radius:4px;padding:5px 10px;margin-bottom:8px">${esc(sec.countsLabel)}</div>`;
     }
     if (isAuto && sec.tableHtml) {
       html += `<div style="overflow-x:auto">${sec.tableHtml}</div>`;   // frozen table markup
-    }
-    if (sec.summary) {
-      html += `<div style="font-size:13px;color:#333;line-height:1.6;white-space:pre-wrap">${esc(sec.summary)}</div>`;
-    } else if (isAuto && !sec.tableHtml) {
-      html += `<div style="font-size:12px;color:#9ca3af;font-style:italic">See the Engagement, Deliverables, and Issues tabs for current detail on this section.</div>`;
     }
     html += `</div>`;
   });

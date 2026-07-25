@@ -9579,6 +9579,35 @@ async function _claudeNarrative(systemPrompt, userContent, maxTokens, model) {
   }
 }
 
+// Executive-summary variant of the system prompt. The shared prompt caps output
+// at 2-4 sentences — right for a single section, too tight for a summary that has
+// to synthesise the whole report.
+function _claudeExecSystemPrompt() {
+  return 'You are a professional public involvement coordinator at a transportation engineering firm. '
+    + 'Write a polished executive summary of 4-6 sentences for an FHWA/NEPA project progress report. '
+    + 'Lead with the most consequential activity of the period, then cover engagement volume, the themes '
+    + 'stakeholders raised, and where things stand on deliverables, issues and commitments. '
+    + 'Use plain, factual language. Do not use headers, bullet points, or markdown. '
+    + 'Do not invent data — only summarize the facts and section narratives provided. '
+    + 'Do not simply restate the section text; synthesise it into a single coherent overview.';
+}
+
+// Collect whatever the report's section narratives currently say, so the executive
+// summary can synthesise the ACTUAL report rather than re-deriving stats from raw
+// data and ignoring the drafted prose.
+function _collectSectionNarratives() {
+  var out = [];
+  document.querySelectorAll('.rpt-sec-summary').forEach(function(ta){
+    var txt = (ta.value||'').trim();
+    if (!txt) return;
+    var idx = ta.getAttribute('data-idx');
+    var titleEl = document.querySelector('.rpt-sec-title[data-idx="'+idx+'"]');
+    var title = titleEl ? (titleEl.value||'').trim() : '';
+    out.push('- ' + (title || 'Section') + ': ' + txt);
+  });
+  return out.join('\n');
+}
+
 function _claudeSystemPrompt() {
   return 'You are a professional public involvement coordinator at a transportation engineering firm. '
     + 'Write concise, professional 2-4 sentence narrative summaries suitable for an FHWA project progress report. '
@@ -9718,11 +9747,16 @@ async function generateOverallDraft() {
   // Gather all section stats for context
   var projF = S.projectFilter;
   var proj = projF ? (DB.get('projects').find(function(p){return p.id===projF;}))||{} : {};
-  var userContent = 'Write a 3-4 sentence executive summary for a PI progress report for project "'
-    + (proj.name||'this project') + '" (' + (proj.pid||'') + '). '
-    + 'Synthesize the following facts into a cohesive narrative: ' + templateDraft;
+  // Feed in the report's own section narratives so this reads as a summary OF THE
+  // REPORT, not a separate stat recap that ignores everything already drafted.
+  var secNarr = _collectSectionNarratives();
+  var userContent = 'Write the executive summary for a public involvement progress report for project "'
+    + (proj.name||'this project') + '" (' + (proj.pid||'') + ').\n\n'
+    + 'PROJECT FACTS:\n' + templateDraft
+    + (secNarr ? '\n\nSECTION NARRATIVES ALREADY DRAFTED IN THIS REPORT (synthesise these — this summary '
+        + 'introduces the report they belong to):\n' + secNarr : '');
 
-  var narrative = await _claudeNarrative(_claudeSystemPrompt(), userContent);
+  var narrative = await _claudeNarrative(_claudeExecSystemPrompt(), userContent, 700);
 
   if (btn) { btn.textContent = '✦ Generate Overall Summary'; btn.disabled = false; }
   ta.value = narrative || templateDraft;
@@ -9792,9 +9826,17 @@ async function generateAllSectionDrafts() {
   if (doOverall && overallTa && overallTemplate) {
     jobs.push({
       key: 'overall', ta: overallTa, templateDraft: overallTemplate, secType: 'overall',
-      instruction: 'Write a 3-4 sentence executive summary for a public involvement progress report for project "'
+      // Listed LAST in the batch on purpose: the model writes the JSON values in
+      // order, so by the time it reaches this one it has already produced every
+      // section narrative above and can synthesise them into a real executive
+      // summary rather than a separate stat recap.
+      instruction: 'Write the executive summary (4-6 sentences) for a public involvement progress report for project "'
         + ((proj0 && proj0.name) || 'this project') + '" (' + ((proj0 && proj0.pid) || '') + '). '
-        + 'Synthesize the following facts into a cohesive narrative: ' + overallTemplate
+        + 'This task is LAST on purpose: synthesise the narratives you have just written for the preceding '
+        + 'tasks in this same response into one coherent overview of the whole report — lead with the most '
+        + 'consequential activity, then engagement volume, the themes stakeholders raised, and where '
+        + 'deliverables, issues and commitments stand. Do not merely restate the sections. '
+        + 'Supporting project facts: ' + overallTemplate
     });
   }
 
@@ -10522,7 +10564,7 @@ async function openPIReport(_isReopen){
           +'<span style="font-size:11px;color:var(--slate)">Include data table in report</span>'
           +'</label>'
         : '')
-      +'<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.07)">'      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">'      +'<div style="font-size:11px;color:var(--slate);font-style:italic">Section summary <span style="color:var(--fog)">(optional — prints after section data in Word export)</span></div>'      +(isAuto?'<button id="sec-draft-btn-'+idx+'" class="btn btn-xs" style="background:rgba(74,155,232,.15);border-color:rgba(74,155,232,.4);color:var(--sky-lt);font-size:10px;padding:2px 8px;white-space:nowrap" onclick="generateSectionDraft(\''+sec.type+'\','+idx+')">'+(_getClaudeKey()?'✦ AI Draft':'✦ Draft')+'</button>':'')      +'</div>'      +'<textarea class="rpt-sec-summary" data-idx="'+idx+'" data-sectype="'+sec.type+'" style="width:100%;min-height:60px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;color:var(--mist);font-family:var(--font);font-size:12px;padding:8px 12px;outline:none;resize:vertical;line-height:1.6" placeholder="Optional narrative or summary for this section...">'+(sec.summary||'')+'</textarea>'      +'</div>'      +'</div>';
+      +'<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.07)">'      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">'      +'<div style="font-size:11px;color:var(--slate);font-style:italic">Section summary <span style="color:var(--fog)">(optional — prints above the section data)</span></div>'      +(isAuto?'<button id="sec-draft-btn-'+idx+'" class="btn btn-xs" style="background:rgba(74,155,232,.15);border-color:rgba(74,155,232,.4);color:var(--sky-lt);font-size:10px;padding:2px 8px;white-space:nowrap" onclick="generateSectionDraft(\''+sec.type+'\','+idx+')">'+(_getClaudeKey()?'✦ AI Draft':'✦ Draft')+'</button>':'')      +'</div>'      +'<textarea class="rpt-sec-summary" data-idx="'+idx+'" data-sectype="'+sec.type+'" style="width:100%;min-height:60px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;color:var(--mist);font-family:var(--font);font-size:12px;padding:8px 12px;outline:none;resize:vertical;line-height:1.6" placeholder="Optional narrative or summary for this section...">'+(sec.summary||'')+'</textarea>'      +'</div>'      +'</div>';
   });
 
   var available=getAvailableSections();
@@ -11005,6 +11047,13 @@ function renderLivePreview() {
     var isAuto = sec.type && sec.type !== 'manual';
     var includeInternal = !!(( document.getElementById('rpt-ed-include-internal')||document.getElementById('rpt-include-internal')||{}).checked);
 
+    // Narrative first — it introduces the data block that follows.
+    if (sec.summary) {
+      html += '<div style="font-size:12px;color:#444;font-style:italic;margin-bottom:8px;border-left:2px solid #9ab;padding-left:10px;line-height:1.6">' + escHtml(sec.summary) + '</div>';
+    } else if (isAuto) {
+      html += '<div style="font-size:11px;color:#bbb;font-style:italic;margin-bottom:6px">Section narrative will appear here after AI draft or manual entry.</div>';
+    }
+
     if (isAuto) {
       // Show auto-data summary row counts
       var counts = [];
@@ -11056,12 +11105,6 @@ function renderLivePreview() {
         if (line.trim()) html += '<li style="margin-bottom:4px;font-size:13px;color:#222">' + escHtml(line.trim()) + '</li>';
       });
       html += '</ul>';
-    }
-
-    if (sec.summary) {
-      html += '<div style="font-size:12px;color:#444;font-style:italic;margin-top:6px;border-left:2px solid #9ab;padding-left:10px;line-height:1.6">' + escHtml(sec.summary) + '</div>';
-    } else if (isAuto) {
-      html += '<div style="font-size:11px;color:#bbb;font-style:italic">Section narrative will appear here after AI draft or manual entry.</div>';
     }
 
     html += '</div>';
@@ -11606,6 +11649,12 @@ function _buildArchivedPreviewHTML(rec, proj) {
     var isAuto = sec.type && sec.type !== 'manual';
     html += '<div style="margin-bottom:22px">';
     html += '<div style="font-size:13px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #cdd4dc;padding-bottom:4px;margin-bottom:10px">'+escHtml(sec.title||'')+'</div>';
+    // Narrative first — it introduces the data block that follows.
+    if (sec.summary) {
+      html += '<div style="font-size:12px;color:#444;font-style:italic;margin-bottom:8px;border-left:2px solid #9ab;padding-left:10px;line-height:1.6">'+escHtml(sec.summary)+'</div>';
+    } else if (isAuto && !sec.tableHtml) {
+      html += '<div style="font-size:11px;color:#bbb;font-style:italic;margin-bottom:6px">No narrative captured for this section.</div>';
+    }
     if (isAuto) {
       if (sec.countsLabel) {
         html += '<div style="font-size:11px;color:#595959;font-style:italic;background:#f0f0f0;border-radius:4px;padding:5px 10px;margin-bottom:8px">'+escHtml(sec.countsLabel)+'</div>';
@@ -11615,11 +11664,6 @@ function _buildArchivedPreviewHTML(rec, proj) {
       html += '<ul style="margin:0 0 8px 0;padding-left:20px">';
       sec.content.split('\n').forEach(function(line){ if(line.trim()) html += '<li style="margin-bottom:4px;font-size:13px;color:#222">'+escHtml(line.trim())+'</li>'; });
       html += '</ul>';
-    }
-    if (sec.summary) {
-      html += '<div style="font-size:12px;color:#444;font-style:italic;margin-top:6px;border-left:2px solid #9ab;padding-left:10px;line-height:1.6">'+escHtml(sec.summary)+'</div>';
-    } else if (isAuto && !sec.tableHtml) {
-      html += '<div style="font-size:11px;color:#bbb;font-style:italic">No narrative captured for this section.</div>';
     }
     html += '</div>';
   });
@@ -12109,6 +12153,13 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
   sections.forEach(function(sec){
     xml+=spacer();
     xml+=heading(sec.title+':');
+
+    // Section narrative prints ABOVE the data block — the prose introduces the
+    // table/bullets that follow rather than trailing them.
+    if(sec.summary&&sec.summary.trim()){
+      xml+='<w:p><w:pPr><w:spacing w:before="80" w:after="80" w:line="276" w:lineRule="auto"/>'+italicGrayRpr+'</w:pPr><w:r>'+italicGrayRpr+'<w:t xml:space="preserve">'+escXml(sec.summary.trim())+'</w:t></w:r></w:p>';
+      xml+=spacer();
+    }
 
     if(sec.type==='auto-concerns'){
       // Period label
@@ -12708,11 +12759,6 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
       }
     }
 
-    // Section summary — prints after data block if present
-    if(sec.summary&&sec.summary.trim()){
-      xml+=spacer();
-      xml+='<w:p><w:pPr><w:spacing w:before="80" w:after="80" w:line="276" w:lineRule="auto"/>'+italicGrayRpr+'</w:pPr><w:r>'+italicGrayRpr+'<w:t xml:space="preserve">'+escXml(sec.summary.trim())+'</w:t></w:r></w:p>';
-    }
 
   });
 

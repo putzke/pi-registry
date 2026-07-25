@@ -9604,31 +9604,27 @@ function _claudeSectionSystemPrompt() {
     + 'Write in third person past or present tense as appropriate.';
 }
 
+// Executive summary. Deliberately NARROW: it orients the reader and flags what
+// matters — it is NOT a recap of the report.
+//
+// Everything a recap would cover already sits below it in more detail (themes,
+// volume and the date range in the concerns section; deliverable status, issues and
+// commitments in their own sections), so a recap has nothing of its own to say and
+// reads thin however long you make it. Scoping it to "headline + what needs
+// attention" gives it a real job, removes the redundancy, and means it does not
+// depend on the section narratives having been written yet — so no two-pass
+// generation and no ordering assumption.
 function _claudeExecSystemPrompt() {
   return 'You are a professional public involvement coordinator at a transportation engineering firm. '
-    + 'Write a polished executive summary of 4-6 sentences for an FHWA/NEPA project progress report. '
-    + 'Lead with the most consequential activity of the period, then cover engagement volume, the themes '
-    + 'stakeholders raised, and where things stand on deliverables, issues and commitments. '
+    + 'Write a 3-4 sentence executive summary that opens an FHWA/NEPA public involvement progress report. '
+    + 'Its job is to ORIENT the reader, not to recap the report: state briefly what the project is and '
+    + 'where it stands, identify the single most consequential development of the period, and close with '
+    + 'what needs attention or a decision. '
+    + 'Do NOT summarise the report section by section, and do NOT restate counts, statistics or the '
+    + 'reporting date range — the sections and tables below already carry those, and repeating them is '
+    + 'redundant. Prefer significance over completeness: one thing that matters, said well. '
     + 'Use plain, factual language. Do not use headers, bullet points, or markdown. '
-    + 'Do not invent data — only summarize the facts and section narratives provided. '
-    + 'Do not simply restate the section text; synthesise it into a single coherent overview. '
-    + 'Do NOT state the reporting date range — the concerns section reports it and repeating it is redundant.';
-}
-
-// Collect whatever the report's section narratives currently say, so the executive
-// summary can synthesise the ACTUAL report rather than re-deriving stats from raw
-// data and ignoring the drafted prose.
-function _collectSectionNarratives() {
-  var out = [];
-  document.querySelectorAll('.rpt-sec-summary').forEach(function(ta){
-    var txt = (ta.value||'').trim();
-    if (!txt) return;
-    var idx = ta.getAttribute('data-idx');
-    var titleEl = document.querySelector('.rpt-sec-title[data-idx="'+idx+'"]');
-    var title = titleEl ? (titleEl.value||'').trim() : '';
-    out.push('- ' + (title || 'Section') + ': ' + txt);
-  });
-  return out.join('\n');
+    + 'Do not invent data — only use the facts provided.';
 }
 
 function _claudeSystemPrompt() {
@@ -9780,16 +9776,16 @@ async function generateOverallDraft() {
   // Gather all section stats for context
   var projF = S.projectFilter;
   var proj = projF ? (DB.get('projects').find(function(p){return p.id===projF;}))||{} : {};
-  // Feed in the report's own section narratives so this reads as a summary OF THE
-  // REPORT, not a separate stat recap that ignores everything already drafted.
-  var secNarr = _collectSectionNarratives();
-  var userContent = 'Write the executive summary for a public involvement progress report for project "'
+  // Deliberately does NOT receive the section narratives: this summary orients the
+  // reader rather than recapping the sections, and feeding it their text just pulls
+  // it back toward a recap. The project facts are enough to pick the headline.
+  var userContent = 'Write the opening executive summary for a public involvement progress report for project "'
     + (proj.name||'this project') + '" (' + (proj.pid||'') + ').\n\n'
-    + 'PROJECT FACTS:\n' + templateDraft
-    + (secNarr ? '\n\nSECTION NARRATIVES ALREADY DRAFTED IN THIS REPORT (synthesise these — this summary '
-        + 'introduces the report they belong to):\n' + secNarr : '');
+    + 'Identify the most consequential development and what needs attention. Do not recap the report\'s '
+    + 'sections and do not restate the date range or the counts shown in the tables.\n\n'
+    + 'PROJECT FACTS:\n' + templateDraft;
 
-  var narrative = await _claudeNarrative(_claudeExecSystemPrompt(), userContent, 700);
+  var narrative = await _claudeNarrative(_claudeExecSystemPrompt(), userContent, 400);
 
   if (btn) { btn.textContent = '✦ Generate Overall Summary'; btn.disabled = false; }
   ta.value = narrative || templateDraft;
@@ -9859,18 +9855,16 @@ async function generateAllSectionDrafts() {
   });
   if (doOverall && overallTa && overallTemplate) {
     jobs.push({
-      key: 'overall', ta: overallTa, templateDraft: overallTemplate, secType: 'overall', budget: 700,
-      // Listed LAST in the batch on purpose: the model writes the JSON values in
-      // order, so by the time it reaches this one it has already produced every
-      // section narrative above and can synthesise them into a real executive
-      // summary rather than a separate stat recap.
-      instruction: 'Write the executive summary (4-6 sentences) for a public involvement progress report for project "'
-        + ((proj0 && proj0.name) || 'this project') + '" (' + ((proj0 && proj0.pid) || '') + '). '
-        + 'This task is LAST on purpose: synthesise the narratives you have just written for the preceding '
-        + 'tasks in this same response into one coherent overview of the whole report — lead with the most '
-        + 'consequential activity, then engagement volume, the themes stakeholders raised, and where '
-        + 'deliverables, issues and commitments stand. Do not merely restate the sections. '
-        + 'Supporting project facts: ' + overallTemplate
+      key: 'overall', ta: overallTa, templateDraft: overallTemplate, secType: 'overall', budget: 400,
+      // Independent of the other tasks by design — it orients rather than recaps, so it
+      // needs no section text and there is no ordering dependency inside the batch.
+      instruction: 'Write the opening executive summary (3-4 sentences) for a public involvement progress '
+        + 'report for project "' + ((proj0 && proj0.name) || 'this project') + '" ('
+        + ((proj0 && proj0.pid) || '') + '). '
+        + 'Orient the reader: what the project is and where it stands, the single most consequential '
+        + 'development of the period, and what needs attention or a decision. Do NOT recap the other '
+        + 'sections in this response, and do NOT restate the reporting date range or the counts that '
+        + 'appear in the tables. Project facts: ' + overallTemplate
     });
   }
 

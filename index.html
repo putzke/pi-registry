@@ -10667,7 +10667,27 @@ async function openPIReport(_isReopen){
     +'<div style="display:flex;flex-wrap:wrap;gap:8px" id="rpt-ed-groups">'
     // Restore the saved groups; only fall back to the 'Project team' default on a
     // brand-new draft (no distGroups key yet) — an explicitly emptied list stays empty.
-    +DIST_GROUPS.map(function(g){var _sel=Array.isArray(saved.distGroups)?(saved.distGroups.indexOf(g)>=0):(g==='Project team');return '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--mist)"><input type="checkbox" class="rpt-ed-grp" value="'+g+'"'+(_sel?' checked':'')+' style="accent-color:var(--sky);width:13px;height:13px" onchange="schedulePreview()"> '+g+'</label>'}).join('')
+    // Show how many of THIS project's contacts carry each group, so it's obvious
+    // whether ticking a box will actually add anyone. A contact only joins a group
+    // if that group is assigned on its project link (Edit project context) — one
+    // with no groups assigned is excluded from distribution entirely, which
+    // otherwise looks like a broken checkbox.
+    +(function(){
+      var _psD=DB.get('project_stakeholders').filter(function(lk){return String(lk.projectId)===String(projF)});
+      var _cnt={};
+      _psD.forEach(function(lk){
+        (lk.distributionGroups||'').split(',').map(function(x){return x.trim()}).filter(Boolean)
+          .forEach(function(g){ _cnt[g]=(_cnt[g]||0)+1; });
+      });
+      return DIST_GROUPS.map(function(g){
+        var _sel=Array.isArray(saved.distGroups)?(saved.distGroups.indexOf(g)>=0):(g==='Project team');
+        var n=_cnt[g]||0;
+        var _dim=n===0?';opacity:.55':'';
+        return '<label title="'+(n===0?'No contacts on this project are assigned to '+g+' — assign it on a contact\'s project link (Edit project context).':n+' contact'+(n!==1?'s':'')+' assigned to '+g)+'" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--mist)'+_dim+'">'
+          +'<input type="checkbox" class="rpt-ed-grp" value="'+g+'"'+(_sel?' checked':'')+' style="accent-color:var(--sky);width:13px;height:13px" onchange="schedulePreview()"> '
+          +g+' <span style="color:'+(n===0?'var(--fog)':'var(--sky-lt)')+';font-size:11px">('+n+')</span></label>';
+      }).join('');
+    })()
     +'</div>'
     +'</div>'
     +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'

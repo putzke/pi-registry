@@ -1348,7 +1348,7 @@ function printSharedReport(archiveId) {
       ul{margin:0 0 6px 0;padding-left:18px}
     </style></head><body>
     <h1>${esc(rec.report_title||'PI Report')}${rec.report_num ? ' #'+esc(String(rec.report_num)) : ''}</h1>
-    <div class="meta">${esc(proj.name||'')}${proj.pid ? ' &middot; '+esc(proj.pid) : ''}${pl ? ' &middot; '+esc(pl) : ''}</div>
+    <div class="meta">${proj.pid ? 'PIN # '+esc(proj.pid)+(proj.name ? ' &middot; ' : '') : ''}${esc(proj.name||'')}${pl ? ' &middot; '+esc(pl) : ''}</div>
     ${renderArchivedReportHTML(rec)}
     </body></html>`);
   win.document.close();

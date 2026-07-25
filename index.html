@@ -7984,7 +7984,7 @@ function renderReports(el){
   // Assemble main HTML
   var topbar='<div class="topbar">'
     +'<div><div class="topbar-title">Reports</div>'
-    +'<div class="topbar-sub">'+(proj?proj.name+' ('+proj.pid+')':'Select a project to generate reports')+'</div></div>'
+    +'<div class="topbar-sub">'+(proj?escHtml(_projHeaderLabel(proj.name,proj.pid)):'Select a project to generate reports')+'</div></div>'
     +'<div class="topbar-sp"></div>'
     +'<div class="topbar-acts">'
     +'<select class="fsel" id="rpt-proj" onchange="S.projectFilter=this.value;renderReports(document.getElementById(\'main\'))" style="min-width:220px">'
@@ -9582,6 +9582,17 @@ async function _claudeNarrative(systemPrompt, userContent, maxTokens, model) {
 // Executive-summary variant of the system prompt. The shared prompt caps output
 // at 2-4 sentences — right for a single section, too tight for a summary that has
 // to synthesise the whole report.
+// Report header identity line: the PIN leads, then the project name —
+// "PIN # 15905 · 3600 West Reconstruction". Falls back to the name alone when a
+// project has no PIN. Used by the editor topbar, live preview, archive viewer and
+// the .docx so every surface reads the same.
+function _projHeaderLabel(name, pid) {
+  name = name || '';
+  pid  = pid  || '';
+  if (!pid) return name;
+  return 'PIN # ' + pid + (name ? ' \u00b7 ' + name : '');
+}
+
 function _claudeExecSystemPrompt() {
   return 'You are a professional public involvement coordinator at a transportation engineering firm. '
     + 'Write a polished executive summary of 4-6 sentences for an FHWA/NEPA project progress report. '
@@ -10581,7 +10592,7 @@ async function openPIReport(_isReopen){
   var el=document.getElementById('main');
   el.innerHTML='<div class="topbar">'
     +'<div><div class="topbar-title">PI Report Editor</div>'
-    +'<div class="topbar-sub">'+proj.name+' ('+proj.pid+') <span id="rpt-meta-banner" style="display:none;margin-left:8px;font-weight:700;color:var(--sky-lt);background:rgba(74,155,232,.16);border:1px solid rgba(74,155,232,.4);padding:2px 9px;border-radius:10px;font-size:11px;white-space:nowrap"></span></div></div>'
+    +'<div class="topbar-sub">'+escHtml(_projHeaderLabel(proj.name,proj.pid))+' <span id="rpt-meta-banner" style="display:none;margin-left:8px;font-weight:700;color:var(--sky-lt);background:rgba(74,155,232,.16);border:1px solid rgba(74,155,232,.4);padding:2px 9px;border-radius:10px;font-size:11px;white-space:nowrap"></span></div></div>'
     +'<div class="topbar-sp"></div>'
     +'<div class="topbar-acts">'
     +(_getClaudeKey()?'<button class="btn" id="all-drafts-btn" onclick="generateAllSectionDrafts()" style="background:linear-gradient(135deg,#1e3a5f,#0f4c75);border-color:var(--sky-lt);color:var(--sky-lt)">✦ AI: Draft all sections</button>':'')
@@ -11021,7 +11032,7 @@ function renderLivePreview() {
   html += '<div style="font-size:9px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Public Involvement Progress Report</div>';
   html += '<div style="font-size:20px;font-weight:700;color:#1e3a5f;line-height:1.2">' + escHtml(title) + (num ? ' <span style="font-size:14px;color:#555">#' + escHtml(num) + '</span>' : '') + '</div>';
   if (subtitle) html += '<div style="font-size:13px;color:#444;margin-top:3px">' + escHtml(subtitle) + '</div>';
-  html += '<div style="font-size:11px;color:#666;margin-top:6px">' + escHtml(proj.name) + ' &nbsp;·&nbsp; ' + escHtml(proj.pid || '') + '</div>';
+  html += '<div style="font-size:11px;color:#666;margin-top:6px">' + escHtml(_projHeaderLabel(proj.name, proj.pid)) + '</div>';
   if (periodStr) html += '<div style="font-size:11px;color:#666">Report period: ' + escHtml(periodStr) + '</div>';
   html += '<div style="font-size:11px;color:#999;margin-top:3px">Generated: ' + dateStr + '</div>';
   html += '</div>';
@@ -11627,7 +11638,7 @@ function _buildArchivedPreviewHTML(rec, proj) {
   html += '<div style="font-size:9px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Public Involvement Progress Report</div>';
   html += '<div style="font-size:20px;font-weight:700;color:#1e3a5f;line-height:1.2">'+escHtml(rec.reportTitle||'PI Progress Report')+(rec.reportNum?' <span style="font-size:14px;color:#555">#'+escHtml(rec.reportNum)+'</span>':'')+'</div>';
   if (rec.reportSubtitle) html += '<div style="font-size:13px;color:#444;margin-top:3px">'+escHtml(rec.reportSubtitle)+'</div>';
-  html += '<div style="font-size:11px;color:#666;margin-top:6px">'+escHtml(pName)+(pPid?' &nbsp;&middot;&nbsp; '+escHtml(pPid):'')+'</div>';
+  html += '<div style="font-size:11px;color:#666;margin-top:6px">'+escHtml(_projHeaderLabel(pName,pPid))+'</div>';
   if (periodStr) html += '<div style="font-size:11px;color:#666">Report period: '+escHtml(periodStr)+'</div>';
   html += '<div style="font-size:11px;color:#999;margin-top:3px">Archived: '+dateStr+'</div>';
   html += '</div>';
@@ -12087,7 +12098,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
 
   // ── PROJECT TITLE LINE ─────────────────────────
   xml+=spacer();
-  xml+='<w:p><w:pPr><w:spacing w:after="60" w:line="240" w:lineRule="auto"/>'+titleRpr+'</w:pPr><w:r>'+titleRpr+'<w:t xml:space="preserve">'+escXml('Project PIN: '+proj.pid)+'</w:t></w:r></w:p>';
+  xml+='<w:p><w:pPr><w:spacing w:after="60" w:line="240" w:lineRule="auto"/>'+titleRpr+'</w:pPr><w:r>'+titleRpr+'<w:t xml:space="preserve">'+escXml('PIN # '+proj.pid)+'</w:t></w:r></w:p>';
 
   // Project name + report title
   var titleText=proj.name;

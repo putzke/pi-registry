@@ -792,7 +792,7 @@ async function renderOverview() {
       sbFetch(`pi_commitments?project_id=eq.${_projId}&select=id,commitment,due_date,status`),
       sbFetch(`pi_comment_periods?project_id=eq.${_projId}&select=id,title,status,end_date`)
     ]);
-    const openIssues = issues.filter(i => !isComplete(i.status)).length;
+    const openIssues = issues.filter(i => isIssueOpen(i.status)).length;
 
     const t = id => document.getElementById(id);
     if (t('tile-issues'))   t('tile-issues').innerHTML   = `<div class="stat-num${openIssues > 0 ? ' ' : ''}" style="${openIssues>0?'color:#b45309':''}">${openIssues}</div><div class="stat-lbl">Open Issues</div>`;
@@ -804,7 +804,7 @@ async function renderOverview() {
     const in14  = isoDate(new Date(Date.now() + 14*86400000));
     const attnItems = [];
 
-    issues.filter(i => !isComplete(i.status) && i.priority && /high|critical/i.test(i.priority))
+    issues.filter(i => isIssueOpen(i.status) && i.priority && /high|critical/i.test(i.priority))
       .forEach(i => attnItems.push({ dot: 'amber', tag: 'Issue', text: i.title || 'Untitled issue' }));
 
     commitments.filter(c => !isComplete(c.status) && c.due_date && c.due_date < today)
@@ -1101,10 +1101,21 @@ function clip(s, n=120) {
   return s.length > n ? s.slice(0, n).trimEnd() + '…' : s;
 }
 
+// "Is this finished?" — used for deliverable/commitment progress AND for the
+// Overview's open-issue count and Needs Attention panel.
+//
+// Must recognise every terminal status the app can write, or a finished item is
+// reported as outstanding to the client. Issue statuses are
+// Open / In Progress / Resolved / Monitoring (ISSUE_STATUSES in index.html), so
+// 'resolv*' has to count as complete — without it a Resolved issue showed a green
+// "Resolved" badge on the Issues tab (issueBadge knows the word) while the
+// Overview still counted it as an Open Issue and raised a "Heads Up" panel.
+// 'Monitoring' is deliberately NOT terminal — it's still being watched.
 function isComplete(s) {
   if (!s) return false;
   const sl = s.toLowerCase();
-  return sl.includes('complet') || sl === 'done' || sl === 'closed' || sl === 'fulfilled';
+  return sl.includes('complet') || sl.includes('resolv')
+      || sl === 'done' || sl === 'closed' || sl === 'fulfilled';
 }
 
 function statusBadge(s) {
@@ -1114,6 +1125,17 @@ function statusBadge(s) {
   if (sl.includes('progress')||sl==='active'||sl.includes('review')) return `<span class="badge badge-blue">${esc(s)}</span>`;
   if (sl.includes('hold')||sl.includes('delay')||sl.includes('pend')) return `<span class="badge badge-amber">${esc(s)}</span>`;
   return `<span class="badge badge-gray">${esc(s)}</span>`;
+}
+
+// Is an issue still outstanding? Mirrors the desktop app exactly, which counts
+// open issues with the allow-list status === 'Open' || 'In Progress'
+// (ISSUE_STATUSES is Open / In Progress / Resolved / Monitoring). Using an
+// allow-list rather than "not complete" keeps 'Monitoring' out of the client's
+// open count the same way the desktop does, and means a new status can never
+// silently start alarming clients.
+function isIssueOpen(s) {
+  const sl = (s||'').trim().toLowerCase();
+  return sl === 'open' || sl === 'in progress';
 }
 
 function issueBadge(s) {

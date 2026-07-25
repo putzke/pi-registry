@@ -764,7 +764,7 @@ async function renderOverview() {
         <div class="stat-sub">${pctD}% overall</div>
       </div>
       <div class="stat-tile" id="tile-issues"><div class="stat-num">—</div><div class="stat-lbl">Open Issues</div></div>
-      <div class="stat-tile" id="tile-meetings"><div class="stat-num">—</div><div class="stat-lbl">Public Meetings</div></div>
+      <div class="stat-tile" id="tile-meetings"><div class="stat-num">—</div><div class="stat-lbl">Recent Events</div></div>
       <div class="stat-tile" id="tile-outreach"><div class="stat-num">—</div><div class="stat-lbl">Outreach Events</div></div>
     </div>
     <div class="card">
@@ -796,7 +796,7 @@ async function renderOverview() {
 
     const t = id => document.getElementById(id);
     if (t('tile-issues'))   t('tile-issues').innerHTML   = `<div class="stat-num${openIssues > 0 ? ' ' : ''}" style="${openIssues>0?'color:#b45309':''}">${openIssues}</div><div class="stat-lbl">Open Issues</div>`;
-    if (t('tile-meetings'))  t('tile-meetings').innerHTML  = `<div class="stat-num">${meetings.length}</div><div class="stat-lbl">Recent Meetings</div>`;
+    if (t('tile-meetings'))  t('tile-meetings').innerHTML  = `<div class="stat-num">${meetings.length}</div><div class="stat-lbl">Recent Events</div>`;
     if (t('tile-outreach'))  t('tile-outreach').innerHTML  = `<div class="stat-num">${interactions.length}</div><div class="stat-lbl">Recent Outreach</div>`;
 
     // ── Needs Attention panel ───────────────────────────────────────────

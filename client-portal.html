@@ -542,7 +542,7 @@ async function bootApp() {
       sbFetch(`pi_projects?id=in.(${ids})&select=id,name,pid,client,phase,status,start_date,end_date&order=name.asc`),
       sbFetch(`pi_deliverables?project_id=in.(${ids})&select=id,project_id,title,deliverable_type,status,progress,due_date,milestone_end&order=due_date.asc.nullslast`),
       sbFetch(`pi_client_summaries?project_id=in.(${ids})&select=id,project_id,content_recent,content_full,period_start,period_end,published_at,published_by&order=published_at.desc`),
-      sbFetch(`pi_report_archive?project_id=in.(${ids})&client_visible=eq.true&select=id,project_id,report_num,report_title,report_subtitle,period_start,period_end,overall_summary,sections,archived_at&order=archived_at.desc`)
+      sbFetch(`pi_report_archive?project_id=in.(${ids})&client_visible=eq.true&select=id,project_id,report_num,report_title,report_subtitle,period_start,period_end,overall_summary,sections,snapshot,archived_at&order=archived_at.desc`)
     ]);
     if (!projects.length) {
       setContent(_noAccessHTML());
@@ -577,7 +577,7 @@ async function bootFromToken(token) {
       sbFetch(`pi_projects?id=eq.${projId}&select=id,name,pid,client,phase,status,start_date,end_date`),
       sbFetch(`pi_deliverables?project_id=eq.${projId}&select=id,project_id,title,deliverable_type,status,progress,due_date,milestone_end&order=due_date.asc.nullslast`),
       sbFetch(`pi_client_summaries?project_id=eq.${projId}&select=id,project_id,content_recent,content_full,period_start,period_end,published_at,published_by&order=published_at.desc`),
-      sbFetch(`pi_report_archive?project_id=eq.${projId}&client_visible=eq.true&select=id,project_id,report_num,report_title,report_subtitle,period_start,period_end,overall_summary,sections,archived_at&order=archived_at.desc`)
+      sbFetch(`pi_report_archive?project_id=eq.${projId}&client_visible=eq.true&select=id,project_id,report_num,report_title,report_subtitle,period_start,period_end,overall_summary,sections,snapshot,archived_at&order=archived_at.desc`)
     ]);
     if (!projects.length) {
       setContent('<div class="error-box">Project not found. Please contact your project manager.</div>');
@@ -1247,11 +1247,27 @@ function renderSummary() {
 // Render an archived PI report's sections as read-only HTML (light theme).
 // Mirrors the desktop _buildArchivedPreviewHTML: per-section narrative summaries;
 // auto-data sections point the client to the live tabs for current detail.
+// Render a shared report from its FROZEN snapshot (captured by the desktop app at
+// archive time — see _buildReportSnapshot in index.html): distribution list,
+// per-section counts line, and the data tables exactly as they were when archived.
+// The snapshot's table markup is inline-styled and self-contained, so it renders
+// identically here without duplicating the desktop CSS.
+//
+// Reports archived before snapshots existed (snapshot == null) fall back to
+// narrative-only — their table data was never captured. We deliberately do NOT
+// recompute from current project data: an archived report is a point-in-time
+// record and must keep matching the copy the client already received.
 function renderArchivedReportHTML(rec) {
-  const sections = rec.sections || [];
+  const snap = rec.snapshot || null;
+  const sections = (snap && snap.sections && snap.sections.length) ? snap.sections : (rec.sections || []);
   let html = '';
   if ((rec.report_subtitle||'').trim()) {
     html += `<div style="font-size:13px;color:#4b5563;margin-bottom:10px">${esc(rec.report_subtitle)}</div>`;
+  }
+  if (snap && snap.recipients && snap.recipients.length) {
+    html += `<div style="background:#e8eef4;border:1px solid #b0c4d8;border-radius:6px;padding:9px 13px;margin-bottom:14px;font-size:12px">`
+      + `<span style="font-weight:700;color:#333;text-transform:uppercase;letter-spacing:.4px;font-size:10px">Distributed to: </span>`
+      + `<span style="color:#111">${snap.recipients.map(esc).join(', ')}</span></div>`;
   }
   if ((rec.overall_summary||'').trim()) {
     html += `<div style="background:#f0f4f8;border-left:3px solid #4a9be8;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#222;line-height:1.6">${esc(rec.overall_summary)}</div>`;
@@ -1265,9 +1281,15 @@ function renderArchivedReportHTML(rec) {
       String(sec.content).split('\n').forEach(line => { if (line.trim()) html += `<li style="margin-bottom:4px;font-size:13px;color:#222">${esc(line.trim())}</li>`; });
       html += '</ul>';
     }
+    if (isAuto && sec.countsLabel) {
+      html += `<div style="font-size:11px;color:#595959;font-style:italic;background:#f0f0f0;border-radius:4px;padding:5px 10px;margin-bottom:8px">${esc(sec.countsLabel)}</div>`;
+    }
+    if (isAuto && sec.tableHtml) {
+      html += `<div style="overflow-x:auto">${sec.tableHtml}</div>`;   // frozen table markup
+    }
     if (sec.summary) {
       html += `<div style="font-size:13px;color:#333;line-height:1.6;white-space:pre-wrap">${esc(sec.summary)}</div>`;
-    } else if (isAuto) {
+    } else if (isAuto && !sec.tableHtml) {
       html += `<div style="font-size:12px;color:#9ca3af;font-style:italic">See the Engagement, Deliverables, and Issues tabs for current detail on this section.</div>`;
     }
     html += `</div>`;

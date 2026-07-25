@@ -817,7 +817,8 @@ const SB_TO_INT = {
     id:'id', projectId:'project_id', reportNum:'report_num', reportTitle:'report_title',
     reportSubtitle:'report_subtitle', periodStart:'period_start', periodEnd:'period_end',
     overallSummary:'overall_summary', sections:'sections',
-    archivedAt:'archived_at', archivedBy:'archived_by', clientVisible:'client_visible'
+    archivedAt:'archived_at', archivedBy:'archived_by', clientVisible:'client_visible',
+    snapshot:'snapshot'
   },
   pi_client_summaries: {
     id:'id', projectId:'project_id', contentRecent:'content_recent',
@@ -8205,8 +8206,11 @@ function _rptBrandSet(mode){
   showToast(msg,'info',2200);
 }
 // Letterhead banner for the top of a printable report. '' when branding off.
-function _rptBrandHeader(){
-  var mode=_rptBrandModeQ();
+// modeOverride: render a specific brand instead of the current setting — used by
+// the Archive viewer so an archived report keeps the letterhead it was issued
+// under, even if the selector has since changed.
+function _rptBrandHeader(modeOverride){
+  var mode=modeOverride?(modeOverride==='sunrisealt'?'sunrise':modeOverride):_rptBrandModeQ();
   if(mode==='off'||!window._srHeader) return '';
   var leftLogo, leftAlt, leftTag;
   if(mode==='udot'){
@@ -11162,6 +11166,119 @@ async function manualArchiveReport() {
   if (panel) panel.innerHTML = _buildArchiveHTML(projF);
 }
 
+// Build a FROZEN, self-contained snapshot of everything the report renders:
+// the recipient list and, per section, the counts line + the rendered data
+// table. Without this the archive keeps only narrative text and the tables are
+// gone forever (they were computed from live data at preview/export time).
+//
+// An archived report is a point-in-time compliance record, so this is captured
+// ONCE at archive time and never recomputed — a report sent in July must still
+// read exactly the same in September, even if someone later back-dates an
+// interaction into its period.
+function _buildReportSnapshot(projF, saved) {
+  var proj = DB.get('projects').find(function(p){ return p.id === projF; }) || {};
+  var sections = saved.sections || [];
+  var pstart = saved.periodStart || '', pend = saved.periodEnd || '';
+
+  // Honor the same internal/external toggle the preview and .docx use.
+  var includeInternal = !!((document.getElementById('rpt-ed-include-internal')
+                          || document.getElementById('rpt-include-internal') || {}).checked);
+
+  var ps = DB.get('project_stakeholders').filter(function(lk){ return String(lk.projectId) === String(projF); });
+  var allStakes = DB.get('stakeholders');
+  var externalIds = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; })
+                      .map(function(lk){ return lk.stakeholderId; });
+
+  // Distribution list — frozen as names, exactly as printed in the header.
+  var selGroups = (saved.distGroups && saved.distGroups.length)
+    ? saved.distGroups.slice()
+    : (function(){ var g=[]; document.querySelectorAll('.rpt-ed-grp:checked').forEach(function(cb){ g.push(cb.value); }); return g; })();
+  var recipients = [];
+  ps.forEach(function(lk){
+    if (!selGroups.length) return;
+    var groups = (lk.distributionGroups||'').split(',').map(function(s){ return s.trim(); });
+    if (!groups.some(function(g){ return selGroups.indexOf(g) >= 0; })) return;
+    var s = allStakes.find(function(x){ return String(x.id) === String(lk.stakeholderId); });
+    if (s) recipients.push(dispName(s));
+  });
+
+  var ints   = DB.get('interactions').filter(function(i){ return String(i.projectId)===String(projF); });
+  var dels   = DB.get('deliverables').filter(function(d){ return String(d.projectId)===String(projF); });
+  var pcomms = DB.get('public_comments').filter(function(c){ return String(c.projectId)===String(projF); });
+  var _days  = (pstart && pend) ? Math.round((new Date(pend) - new Date(pstart)) / 86400000) + 1 : null;
+
+  var snapSections = sections.map(function(sec){
+    var isAuto = sec.type && sec.type !== 'manual';
+    var countsLabel = '', tableHtml = '';
+    if (isAuto) {
+      // Same count logic as renderLivePreview so the frozen line matches the preview.
+      var counts = [];
+      if (sec.type === 'auto-concerns') {
+        var cN = ints.filter(function(i){
+          if (!includeInternal && externalIds.indexOf(i.stakeholderId) < 0) return false;
+          if (pstart && i.date < pstart) return false;
+          if (pend   && i.date > pend)   return false;
+          return true;
+        }).length;
+        counts.push(cN + ' interaction' + (cN !== 1 ? 's' : '') + ' in period');
+      }
+      if (sec.type === 'auto-intlog') {
+        var pN = ints.filter(function(i){
+          if (!includeInternal && externalIds.indexOf(i.stakeholderId) < 0) return false;
+          if (pstart && i.date >= pstart) return false;
+          return true;
+        }).length;
+        counts.push(pN + ' prior interaction' + (pN !== 1 ? 's' : ''));
+      }
+      if (sec.type === 'auto-del') counts.push(dels.length + ' deliverable' + (dels.length !== 1 ? 's' : ''));
+      if (sec.type === 'auto-comments') counts.push(pcomms.length + ' public comment' + (pcomms.length !== 1 ? 's' : ''));
+      if (sec.type === 'auto-comment-matrix') {
+        var cats = {}; pcomms.forEach(function(c){ cats[c.category||'Uncategorized'] = 1; });
+        counts.push(pcomms.length + ' public comment' + (pcomms.length !== 1 ? 's' : '') + ' across ' + Object.keys(cats).length + ' topic' + (pcomms.length !== 1 ? 's' : ''));
+      }
+      if (sec.type === 'auto-contacts') {
+        var extCt = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; }).length;
+        counts.push(extCt + ' external contact' + (extCt !== 1 ? 's' : ''));
+      }
+      if (sec.type === 'auto-nepa-compliance') {
+        var cl = proj.nepaChecklist || [];
+        if (cl.length) counts.push(cl.filter(function(x){ return x.checked; }).length + '/' + cl.length + ' checklist items');
+        var perCt = (DB.get('comment_periods')||[]).filter(function(p){ return String(p.projectId)===String(projF); }).length;
+        if (perCt) counts.push(perCt + ' comment period' + (perCt !== 1 ? 's' : ''));
+      }
+      if (counts.length) countsLabel = (_days ? _days + '-day report period · ' : '') + counts.join(' · ');
+
+      // Freeze the rendered table — same builder the live preview uses, so the
+      // archived copy is identical to what was on screen and in the .docx.
+      if (sec.showTable && TABLE_ELIGIBLE_TYPES.indexOf(sec.type) >= 0) {
+        try { tableHtml = _buildSectionPreviewTable(sec.type, projF, pstart, pend, includeInternal) || ''; }
+        catch(e) { console.warn('Snapshot table failed for '+sec.type+':', e.message); }
+      }
+    }
+    return {
+      title:   sec.title || '',
+      type:    sec.type || 'manual',
+      summary: sec.summary || '',
+      content: sec.content || '',
+      showTable: !!sec.showTable,
+      countsLabel: countsLabel,
+      tableHtml: tableHtml
+    };
+  });
+
+  return {
+    projName: proj.name || '', projPid: proj.pid || '',
+    // Freeze the letterhead choice so the archived copy keeps the branding it
+    // was issued under, even if the selector is changed later.
+    brand: (typeof _rptBrandModeQ === 'function') ? _rptBrandModeQ() : 'sunrise',
+    generatedAt: new Date().toISOString(),
+    periodLabel: (pstart && pend) ? (fmt(pstart) + ' – ' + fmt(pend)) : (pstart ? 'From ' + fmt(pstart) : (pend ? 'Through ' + fmt(pend) : '')),
+    recipients: recipients,
+    includeInternal: includeInternal,
+    sections: snapSections
+  };
+}
+
 async function _archiveReport(projF) {
   if (typeof sbAdd !== 'function') return;
   var saved = JSON.parse(localStorage.getItem('pir4_pi_reports_'+projF)||'{}');
@@ -11187,7 +11304,10 @@ async function _archiveReport(projF) {
     overallSummary: saved.overallSummary||'',
     sections:       saved.sections||[],
     archivedAt:     new Date().toISOString(),
-    archivedBy:     'J. Putzke'
+    archivedBy:     'J. Putzke',
+    // Frozen point-in-time copy of the tables + distribution list (see
+    // _buildReportSnapshot). Never recomputed after this moment.
+    snapshot:       _buildReportSnapshot(projF, saved)
   };
 
   try {
@@ -11322,22 +11442,46 @@ function previewArchivedReport(archiveId) {
   showInlineReport(_buildArchivedPreviewHTML(rec, proj), (rec.reportTitle||'Archived Report')+(rec.reportNum?' #'+rec.reportNum:''));
 }
 
+// Renders an archived report from its FROZEN snapshot (see _buildReportSnapshot):
+// full fidelity — distribution list, per-section counts line, and the data tables
+// exactly as they were when archived.
+//
+// Records archived BEFORE the snapshot feature (snapshot == null) never had their
+// table data captured, so they render narrative-only with an honest note rather
+// than silently recomputing from today's data (which would rewrite history).
 function _buildArchivedPreviewHTML(rec, proj) {
-  var sections = rec.sections || [];
-  var periodStr = (rec.periodStart||rec.periodEnd)
-    ? ((rec.periodStart?fmt(rec.periodStart):'?')+' – '+(rec.periodEnd?fmt(rec.periodEnd):'?')) : '';
+  var snap = rec.snapshot || null;
+  var sections = (snap && snap.sections && snap.sections.length) ? snap.sections : (rec.sections || []);
+  var periodStr = (snap && snap.periodLabel) ? snap.periodLabel
+    : ((rec.periodStart||rec.periodEnd) ? ((rec.periodStart?fmt(rec.periodStart):'?')+' – '+(rec.periodEnd?fmt(rec.periodEnd):'?')) : '');
   var dateStr = rec.archivedAt ? new Date(rec.archivedAt).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}) : '—';
+  var pName = (snap && snap.projName) || proj.name || '';
+  var pPid  = (snap && snap.projPid)  || proj.pid  || '';
   var html = '';
+
+  // Letterhead band — matches the .docx so the archived copy reads like the
+  // document that was actually issued. Uses the brand frozen in the snapshot.
+  if (typeof _rptBrandHeader === 'function') {
+    try { html += _rptBrandHeader(snap && snap.brand) || ''; }
+    catch(e) { /* branding is decorative — never block the report */ }
+  }
 
   // Header
   html += '<div style="border-bottom:3px solid #1e3a5f;padding-bottom:16px;margin-bottom:20px">';
   html += '<div style="font-size:9px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Public Involvement Progress Report</div>';
   html += '<div style="font-size:20px;font-weight:700;color:#1e3a5f;line-height:1.2">'+escHtml(rec.reportTitle||'PI Progress Report')+(rec.reportNum?' <span style="font-size:14px;color:#555">#'+escHtml(rec.reportNum)+'</span>':'')+'</div>';
   if (rec.reportSubtitle) html += '<div style="font-size:13px;color:#444;margin-top:3px">'+escHtml(rec.reportSubtitle)+'</div>';
-  html += '<div style="font-size:11px;color:#666;margin-top:6px">'+escHtml(proj.name||'')+(proj.pid?' &nbsp;&middot;&nbsp; '+escHtml(proj.pid):'')+'</div>';
+  html += '<div style="font-size:11px;color:#666;margin-top:6px">'+escHtml(pName)+(pPid?' &nbsp;&middot;&nbsp; '+escHtml(pPid):'')+'</div>';
   if (periodStr) html += '<div style="font-size:11px;color:#666">Report period: '+escHtml(periodStr)+'</div>';
   html += '<div style="font-size:11px;color:#999;margin-top:3px">Archived: '+dateStr+'</div>';
   html += '</div>';
+
+  // Distributed to — frozen recipient list
+  if (snap && snap.recipients && snap.recipients.length) {
+    html += '<div style="background:#e8eef4;border:1px solid #b0c4d8;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:12px">'
+      + '<span style="font-weight:700;color:#333;text-transform:uppercase;letter-spacing:.4px;font-size:10px">Distributed to: </span>'
+      + '<span style="color:#111">'+snap.recipients.map(escHtml).join(', ')+'</span></div>';
+  }
 
   // Overall summary
   if ((rec.overallSummary||'').trim()) {
@@ -11350,8 +11494,10 @@ function _buildArchivedPreviewHTML(rec, proj) {
     html += '<div style="margin-bottom:22px">';
     html += '<div style="font-size:13px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #cdd4dc;padding-bottom:4px;margin-bottom:10px">'+escHtml(sec.title||'')+'</div>';
     if (isAuto) {
-      var _snapDays = (rec.periodStart && rec.periodEnd) ? Math.round((new Date(rec.periodEnd) - new Date(rec.periodStart)) / 86400000) + 1 : null;
-      html += '<div style="font-size:11px;color:#595959;font-style:italic;background:#f0f0f0;border-radius:4px;padding:5px 10px;margin-bottom:8px">'+(_snapDays ? _snapDays+'-day report period · data snapshot' : 'Data snapshot')+'</div>';
+      if (sec.countsLabel) {
+        html += '<div style="font-size:11px;color:#595959;font-style:italic;background:#f0f0f0;border-radius:4px;padding:5px 10px;margin-bottom:8px">'+escHtml(sec.countsLabel)+'</div>';
+      }
+      if (sec.tableHtml) html += sec.tableHtml;          // frozen table markup
     } else if (sec.content) {
       html += '<ul style="margin:0 0 8px 0;padding-left:20px">';
       sec.content.split('\n').forEach(function(line){ if(line.trim()) html += '<li style="margin-bottom:4px;font-size:13px;color:#222">'+escHtml(line.trim())+'</li>'; });
@@ -11359,13 +11505,18 @@ function _buildArchivedPreviewHTML(rec, proj) {
     }
     if (sec.summary) {
       html += '<div style="font-size:12px;color:#444;font-style:italic;margin-top:6px;border-left:2px solid #9ab;padding-left:10px;line-height:1.6">'+escHtml(sec.summary)+'</div>';
-    } else if (isAuto) {
+    } else if (isAuto && !sec.tableHtml) {
       html += '<div style="font-size:11px;color:#bbb;font-style:italic">No narrative captured for this section.</div>';
     }
     html += '</div>';
   });
 
   if (!sections.length) html += '<div style="color:#aaa;font-style:italic;text-align:center;padding:30px 0">No sections in this archived report.</div>';
+  if (!snap) {
+    html += '<div style="border-top:1px solid #e2c98a;background:#fdf6e3;margin-top:20px;padding:10px 12px;font-size:11px;color:#8a6d1f;border-radius:4px">'
+      + 'This report was archived before full snapshots were captured, so its data tables and distribution list aren’t stored. '
+      + 'Re-archive the current draft to capture a complete snapshot going forward.</div>';
+  }
   html += '<div style="border-top:1px solid #cdd4dc;margin-top:24px;padding-top:12px;font-size:10px;color:#aaa">*Stakeholder registry can be provided on request.</div>';
   return html;
 }

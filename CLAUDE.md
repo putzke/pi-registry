@@ -106,6 +106,24 @@ pi_report_archive   -- exported report snapshots (up to 50 per project)
 - `resetPIReportDraft()` — async, deletes from Supabase + localStorage
 
 ### Report archive
+- **FROZEN SNAPSHOTS (July 2026) — do not break this.** An archived report is a
+  point-in-time compliance record. `_buildReportSnapshot(projF, saved)` captures,
+  at archive time, everything the report renders: `recipients` (the Distributed-To
+  list), and per section the `countsLabel` + `tableHtml` (built with the SAME
+  `_buildSectionPreviewTable` the live preview uses, so it matches exactly), plus
+  `projName`/`projPid`/`periodLabel`/`brand`. Stored in `pi_report_archive.snapshot`
+  (jsonb; migration `sql/2026-07-25_report_archive_snapshot.sql`).
+  **NEVER recompute an archived report from live data** — a report issued in July
+  must still read identically in September even if an interaction is later
+  back-dated into its period, or the archive stops matching the .docx the client
+  already has. Renderers: `_buildArchivedPreviewHTML` (desktop) and
+  `renderArchivedReportHTML` (portal) both read the snapshot and fall back to
+  narrative-only + an explanatory note when `snapshot` is null (pre-feature rows —
+  their table data was never captured and cannot be recovered).
+  The frozen `tableHtml` is inline-styled and self-contained so the portal renders
+  it identically without duplicating desktop CSS. `_rptBrandHeader(modeOverride)`
+  takes an optional brand so archived copies keep the letterhead they were issued
+  under.
 - `ARCHIVE_LIMIT = 50` per project
 - `_archiveReport(projF)` — async, called inside `exportPIDocx()` before download
 - `deleteArchivedReport(archiveId)` — async, re-renders `#rpt-archive-panel` in place

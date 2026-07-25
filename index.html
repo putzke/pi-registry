@@ -9596,6 +9596,24 @@ function _projHeaderLabel(name, pid) {
 // Section drafting: same persona and factual rules as the shared prompt, but the
 // length comes from each task's own instruction instead of a blanket
 // "2-4 sentences" cap, which was truncating richer sections.
+// Human date range for AI facts and report text: "July 6 – August 7, 2026".
+// The AI echoes whatever format we hand it, so passing raw ISO ("2026-07-06
+// through 2026-07-17") is what put ISO dates in the narratives.
+function _fmtDateRange(startIso, endIso) {
+  function parse(d){ if(!d) return null; var p=String(d).split('-'); if(p.length<3) return null;
+    var dt=new Date(+p[0], +p[1]-1, +p[2]); return isNaN(dt) ? null : dt; }
+  var MON=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var a=parse(startIso), b=parse(endIso);
+  if(!a && !b) return 'the report period';
+  if(a && !b) return 'from ' + MON[a.getMonth()] + ' ' + a.getDate() + ', ' + a.getFullYear();
+  if(!a && b) return 'through ' + MON[b.getMonth()] + ' ' + b.getDate() + ', ' + b.getFullYear();
+  if(a.getFullYear() !== b.getFullYear())
+    return MON[a.getMonth()]+' '+a.getDate()+', '+a.getFullYear()+' \u2013 '+MON[b.getMonth()]+' '+b.getDate()+', '+b.getFullYear();
+  if(a.getMonth() === b.getMonth())
+    return MON[a.getMonth()]+' '+a.getDate()+'\u2013'+b.getDate()+', '+b.getFullYear();
+  return MON[a.getMonth()]+' '+a.getDate()+' \u2013 '+MON[b.getMonth()]+' '+b.getDate()+', '+b.getFullYear();
+}
+
 function _claudeSectionSystemPrompt() {
   return 'You are a professional public involvement coordinator at a transportation engineering firm. '
     + 'Write professional narrative prose suitable for an FHWA project progress report, at the length '
@@ -9663,7 +9681,7 @@ function _buildConcernsAIFacts() {
                   .map(function(c){ return c+' ('+chanCount[c]+')'; }).join(', ');
   var needFU = periodInts.filter(function(i){ return i.followUp && !i.followUpDone; }).length;
   var periodLabel = (saved.periodStart || saved.periodEnd)
-    ? ((saved.periodStart||'start') + ' to ' + (saved.periodEnd||'present'))
+    ? _fmtDateRange(saved.periodStart, saved.periodEnd)
     : 'the report period';
 
   var lines = [];
@@ -9890,6 +9908,9 @@ async function generateAllSectionDrafts() {
   var batchMaxTokens = Math.min(16000, 600 + jobs.reduce(function(t,j){ return t + (j.budget||400); }, 0));
   var applied = false;
   var raw = await _claudeNarrative(_claudeSectionSystemPrompt(), batchPrompt, batchMaxTokens);
+  console.log('AI draft-all: tasks=', jobs.length, 'maxTokens=', batchMaxTokens,
+              'responseChars=', raw ? String(raw).length : 0);
+  if (!raw) console.warn('AI draft-all: no response from Claude — falling back to template text.');
   if (raw) {
     try {
       var txt = String(raw).trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
@@ -9911,7 +9932,8 @@ async function generateAllSectionDrafts() {
         showToast(missed.length + ' section' + (missed.length!==1?'s':'') + ' came back without a narrative and show raw facts — use the section’s own AI Draft button to retry.', 'warn', 6000);
       }
     } catch(e) {
-      console.warn('Batched draft parse failed, falling back to per-section calls:', e.message);
+      console.warn('AI draft-all: could not parse the batched JSON reply — retrying per-section.', e.message);
+      console.warn('AI draft-all: raw reply was:', String(raw).slice(0, 2000));
     }
   }
 
@@ -9931,9 +9953,12 @@ async function generateAllSectionDrafts() {
         }).catch(function(){ progress(); });
     }));
   } else if (!applied) {
-    // The call failed outright — drop in the non-AI template text so the user
-    // still gets usable content, and let the progress bar complete.
-    jobs.forEach(function(j){ if (j.templateDraft && !j.ta.value) j.ta.value = j.templateDraft; progress(); });
+    // The call produced nothing usable. Fill the non-AI template text so the user
+    // still has content, but SAY SO — silently writing template text looks
+    // identical to a weak AI draft, which makes a failed call impossible to spot.
+    jobs.forEach(function(j){ if (j.templateDraft) j.ta.value = j.templateDraft; progress(); });
+    showToast('AI drafting did not run — the sections below are auto-generated template text, not AI prose. '
+      + 'Check the browser console (F12) for the error, then try again.', 'error', 9000);
   }
 
   if (allBtn) { allBtn.disabled = false; allBtn.textContent = '✦ AI: Draft all sections'; }
@@ -9962,7 +9987,7 @@ function _buildSectionDraft(secType) {
     return true;
   });
   var periodLabel = (saved.periodStart || saved.periodEnd)
-    ? ((saved.periodStart||'start') + ' to ' + (saved.periodEnd||'present'))
+    ? _fmtDateRange(saved.periodStart, saved.periodEnd)
     : 'the report period';
 
   var dels = DB.get('deliverables').filter(function(d){ return String(d.projectId)===String(projF); });
@@ -10214,7 +10239,7 @@ function _buildOverallDraft() {
   if (periodInts.length === 0 && ints.length === 0 && ps.length === 0) return null;
 
   var periodLabel = (saved.periodStart || saved.periodEnd)
-    ? (saved.periodStart||'start') + ' through ' + (saved.periodEnd||'present')
+    ? _fmtDateRange(saved.periodStart, saved.periodEnd)
     : 'the current report period';
 
   var lines = [];
@@ -12218,7 +12243,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
     if(sec.type==='auto-concerns'){
       // Period label
       if(saved.periodStart||saved.periodEnd){
-        var pLabel='Report period: '+(saved.periodStart||'—')+' to '+(saved.periodEnd||'—');
+        var pLabel='Report period: '+_fmtDateRange(saved.periodStart,saved.periodEnd);
         xml+=para(pLabel,italicGrayRpr);
       }
       if(sec.showTable){

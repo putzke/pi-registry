@@ -11397,14 +11397,32 @@ async function savePIReportDraft(){
 async function resetPIReportDraft(){
   if(!confirm('Reset the report editor? This will clear all saved content including section summaries, the overall summary, and restore default sections. This cannot be undone.')) return;
   var projF=S.projectFilter;
+
+  // Tear the editor session down FIRST. It holds a debounced auto-save timer and a
+  // presence heartbeat — if either fires between the delete and the reopen it
+  // re-creates the row we just removed and the "reset" silently undoes itself.
+  _rptTeardown();
+
   localStorage.removeItem('pir4_pi_reports_'+projF);
-  // Delete from Supabase
-  if(typeof sbDelete==='function'){
-    var existing=(_syncCache['reports']||[]).find(function(r){return String(r.projectId)===String(projF);});
-    if(existing&&existing.sbId) await sbDelete('reports',existing.sbId).catch(function(){});
+
+  // Delete the Supabase row. NOTE: cache records come from fromSB(), which sets
+  // `id` — not `sbId` (only the object built by loadReportSections carries sbId).
+  // This previously read existing.sbId, which was always undefined, so the DELETE
+  // never ran: localStorage and the cache were cleared, then openPIReport() simply
+  // refetched the surviving row and every section summary came back.
+  var existing=(_syncCache['reports']||[]).find(function(r){return String(r.projectId)===String(projF);});
+  var rowId = existing && (existing.id || existing.sbId);
+  if(typeof sbDelete==='function' && rowId){
+    var ok=false;
+    try { ok = await sbDelete('reports', rowId); } catch(e){ console.error('Reset: delete failed', e); }
+    if(!ok){
+      showToast('Could not clear the saved report on the server — it may reappear. Check your connection and try again.','error',6000);
+    }
   }
   if(_syncCache['reports'])_syncCache['reports']=_syncCache['reports'].filter(function(r){return String(r.projectId)!==String(projF);});
-  openPIReport();
+
+  await openPIReport();
+  showToast('Report editor reset.','info',2500);
 }
 
 

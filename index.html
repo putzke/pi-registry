@@ -11419,10 +11419,48 @@ async function resetPIReportDraft(){
       showToast('Could not clear the saved report on the server — it may reappear. Check your connection and try again.','error',6000);
     }
   }
+  // VERIFY the row is actually gone. openPIReport() refetches from Supabase, so a
+  // delete that silently failed (or was re-created by an in-flight write) would put
+  // every section summary straight back and the reset would look like it did nothing.
+  var survivor = null;
+  try { survivor = await _occFetchReportRow(projF); } catch(e){ /* best effort */ }
+  if (survivor && survivor.id) {
+    // Still there — blank it in place rather than leaving stale content behind.
+    console.warn('Reset: report row survived the delete; blanking it in place. id=', survivor.id);
+    try {
+      await _sbWrite(SUPA_REST+'/pi_reports?id=eq.'+survivor.id, 'PATCH', {
+        report_num:'', report_title:'', report_subtitle:'',
+        period_start:null, period_end:null, overall_summary:'', sections:[],
+        include_internal:false, dist_groups:null,
+        updated_at:new Date().toISOString(), updated_by:_rptMyEmail()
+      });
+    } catch(e){ console.error('Reset: blanking the surviving row failed', e); }
+  }
+
   if(_syncCache['reports'])_syncCache['reports']=_syncCache['reports'].filter(function(r){return String(r.projectId)!==String(projF);});
 
   await openPIReport();
+
+  // Final guarantee: blank the rendered fields. The re-render above builds from the
+  // (now empty) saved state, but clearing the DOM directly means a reset is always
+  // visible even if some other path repopulated the cache mid-reset.
+  var ovEl=document.getElementById('rpt-overall-summary'); if(ovEl) ovEl.value='';
+  document.querySelectorAll('.rpt-sec-summary').forEach(function(t){ t.value=''; });
+  document.querySelectorAll('.rpt-sec-content').forEach(function(t){ t.value=''; });
+  if (typeof schedulePreview==='function') schedulePreview();
+
   showToast('Report editor reset.','info',2500);
+}
+
+// Fetch the current pi_reports row for a project straight from Supabase (no cache).
+async function _occFetchReportRow(projF){
+  try{
+    var r=await fetch(SUPA_REST+'/pi_reports?project_id=eq.'+encodeURIComponent(projF)+'&select=*',
+                      {headers:getAuthHeaders()});
+    if(!r.ok) return null;
+    var rows=await r.json();
+    return rows[0]||null;
+  }catch(e){ return null; }
 }
 
 

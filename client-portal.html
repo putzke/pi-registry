@@ -540,7 +540,7 @@ async function bootApp() {
     const ids = access.map(r => r.project_id).join(',');
     const [projects, deliverables, clientSummaries, sharedReports] = await Promise.all([
       sbFetch(`pi_projects?id=in.(${ids})&select=id,name,pid,client,phase,status,start_date,end_date&order=name.asc`),
-      sbFetch(`pi_deliverables?project_id=in.(${ids})&select=id,project_id,title,deliverable_type,status,progress,due_date,milestone_end&order=due_date.asc.nullslast`),
+      sbFetch(`pi_deliverables?project_id=in.(${ids})&select=id,project_id,title,deliverable_type,status,progress,contracted_qty,delivered_count,due_date,milestone_end&order=due_date.asc.nullslast`),
       sbFetch(`pi_client_summaries?project_id=in.(${ids})&select=id,project_id,content_recent,content_full,period_start,period_end,published_at,published_by&order=published_at.desc`),
       sbFetch(`pi_report_archive?project_id=in.(${ids})&client_visible=eq.true&select=id,project_id,report_num,report_title,report_subtitle,period_start,period_end,overall_summary,sections,snapshot,archived_at&order=archived_at.desc`)
     ]);
@@ -575,7 +575,7 @@ async function bootFromToken(token) {
     const projId = rows[0].project_id;
     const [projects, deliverables, clientSummaries, sharedReports] = await Promise.all([
       sbFetch(`pi_projects?id=eq.${projId}&select=id,name,pid,client,phase,status,start_date,end_date`),
-      sbFetch(`pi_deliverables?project_id=eq.${projId}&select=id,project_id,title,deliverable_type,status,progress,due_date,milestone_end&order=due_date.asc.nullslast`),
+      sbFetch(`pi_deliverables?project_id=eq.${projId}&select=id,project_id,title,deliverable_type,status,progress,contracted_qty,delivered_count,due_date,milestone_end&order=due_date.asc.nullslast`),
       sbFetch(`pi_client_summaries?project_id=eq.${projId}&select=id,project_id,content_recent,content_full,period_start,period_end,published_at,published_by&order=published_at.desc`),
       sbFetch(`pi_report_archive?project_id=eq.${projId}&client_visible=eq.true&select=id,project_id,report_num,report_title,report_subtitle,period_start,period_end,overall_summary,sections,snapshot,archived_at&order=archived_at.desc`)
     ]);
@@ -774,7 +774,7 @@ async function renderOverview() {
         const daysLeft = Math.ceil((new Date(due+'T12:00:00') - new Date()) / 86400000);
         const dueCls = daysLeft <= 14 ? ' due-soon' : '';
         return `<li>
-          <span class="upcoming-title">${esc(d.title||'—')}</span>
+          <span class="upcoming-title">${esc(d.title||d.deliverable_type||'—')}</span>
           ${statusBadge(d.status)}
           <span class="upcoming-due${dueCls}">${fmt(due)}</span>
         </li>`;
@@ -868,7 +868,7 @@ function renderDeliverables() {
   const devs = _deliverables.filter(d => String(d.project_id) === String(_projId));
   const rows = devs.length
     ? devs.map(d => `<tr>
-        <td class="col-main">${esc(d.title||'—')}</td>
+        <td class="col-main">${esc(d.title||d.deliverable_type||'—')}</td>
         <td>${esc(d.deliverable_type||'—')}</td>
         <td>${statusBadge(d.status)}</td>
         <td>${progCell(d)}</td>
@@ -1153,8 +1153,19 @@ function tribalBadge(s) {
   return `<span class="badge badge-gray">${esc(s)}</span>`;
 }
 
+// Percent complete. Mirrors the desktop report table (_buildSectionPreviewTable,
+// 'auto-del'): when a contracted quantity is tracked, progress is delivered/
+// contracted; otherwise fall back to the manual progress field. Without this the
+// portal showed 0% for deliverables the report showed as 100% (e.g. 1 of 1
+// delivered but no manual progress value set).
 function progCell(d) {
-  const pct = parseInt(d.progress, 10);
+  const contracted = parseInt(d.contracted_qty, 10);
+  let pct;
+  if (!isNaN(contracted) && contracted > 0) {
+    pct = Math.min(100, Math.round((parseInt(d.delivered_count, 10) || 0) / contracted * 100));
+  } else {
+    pct = parseInt(d.progress, 10);
+  }
   if (!isNaN(pct)) {
     return `<div class="prog-wrap"><div class="prog-bar"><div class="prog-fill" style="width:${Math.min(100,Math.max(0,pct))}%"></div></div><span class="prog-lbl">${pct}%</span></div>`;
   }

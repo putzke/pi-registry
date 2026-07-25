@@ -9745,12 +9745,12 @@ async function generateAllSectionDrafts() {
   var overallTa = document.getElementById('rpt-overall-summary');
   var projF0 = S.projectFilter;
   var proj0 = projF0 && DB.get('projects').find(function(p){ return p.id===projF0; });
-  var overallTemplate = proj0
-    ? 'Project: ' + proj0.name + ' (' + proj0.pid + '). '
-      + 'Status: ' + (proj0.status||'Active') + '. '
-      + 'Stakeholders: ' + DB.get('stakeholders').filter(function(s){return s.projectId===projF0;}).length + '. '
-      + 'Interactions: ' + DB.get('interactions').filter(function(i){return i.projectId===projF0;}).length + '.'
-    : '';
+  // Use the SAME rich facts builder as the standalone "Generate Overall Summary"
+  // button. This path previously used a hardcoded 4-fact string (whose stakeholder
+  // count was always 0 — it filtered stakeholders by a projectId field they don't
+  // have; the link lives in project_stakeholders), which is why the batched
+  // overall summary read far thinner than the individual button's output.
+  var overallTemplate = _buildOverallDraft() || '';
 
   // Build one job per narrative we need, carrying the SAME instructions+facts
   // the individual calls would have used.
@@ -9759,14 +9759,19 @@ async function generateAllSectionDrafts() {
     var req = _sectionAIRequest(s.secType, templateDraft);
     return { key:'s'+n, ta:s.ta, templateDraft:templateDraft, instruction:req.userContent, secType:s.secType };
   });
-  if (doOverall && overallTa) {
+  if (doOverall && overallTa && overallTemplate) {
     jobs.push({
       key: 'overall', ta: overallTa, templateDraft: overallTemplate, secType: 'overall',
-      instruction: 'Write a 3-4 sentence executive summary for the overall section of a public involvement '
-        + 'progress report for FHWA/NEPA compliance. Synthesize the following facts into a cohesive narrative: '
-        + overallTemplate
+      instruction: 'Write a 3-4 sentence executive summary for a public involvement progress report for project "'
+        + ((proj0 && proj0.name) || 'this project') + '" (' + ((proj0 && proj0.pid) || '') + '). '
+        + 'Synthesize the following facts into a cohesive narrative: ' + overallTemplate
     });
   }
+
+  // Keep the progress bar honest — the overall summary is skipped when there
+  // isn't enough project data for a meaningful draft.
+  total = jobs.length;
+  if (!total) { if (allBtn) { allBtn.disabled = false; allBtn.textContent = '✦ AI: Draft all sections'; } if (bar) bar.style.display = 'none'; showToast('Not enough data yet to draft sections.', 'warn', 3000); return; }
 
   var batchPrompt = 'You are drafting several sections of ONE public involvement progress report.\n'
     + 'Below are ' + jobs.length + ' independent writing tasks, each with its own instructions and facts.\n'
@@ -9785,14 +9790,20 @@ async function generateAllSectionDrafts() {
       var first = txt.indexOf('{'), last = txt.lastIndexOf('}');
       if (first >= 0 && last > first) txt = txt.slice(first, last+1);
       var parsed = JSON.parse(txt);
-      var hits = 0;
+      var hits = 0, missed = [];
       jobs.forEach(function(j) {
         var v = parsed[j.key];
         if (typeof v === 'string' && v.trim()) { j.ta.value = v.trim(); hits++; }
-        else if (j.templateDraft) { j.ta.value = j.templateDraft; }
+        else { if (j.templateDraft) j.ta.value = j.templateDraft; missed.push(j.secType); }
         progress();
       });
       applied = hits > 0;   // treat a parse that filled nothing as a failure
+      // A section the model skipped falls back to raw facts text, which reads like
+      // a data dump rather than a narrative — say so instead of leaving it looking
+      // like a bad AI draft.
+      if (applied && missed.length) {
+        showToast(missed.length + ' section' + (missed.length!==1?'s':'') + ' came back without a narrative and show raw facts — use the section’s own AI Draft button to retry.', 'warn', 6000);
+      }
     } catch(e) {
       console.warn('Batched draft parse failed, falling back to per-section calls:', e.message);
     }

@@ -9720,9 +9720,9 @@ async function generateAllSectionDrafts() {
   var total = autoSections.length + (doOverall ? 1 : 0);
   if (total === 0) { showToast('No auto-generated sections to draft', 'info', 2000); return; }
 
-  if (!confirm('This will send ' + total + ' API call' + (total !== 1 ? 's' : '') + ' to Claude (Anthropic). '
-    + 'Each call costs approximately $0.01–0.02 (Claude Sonnet). '
-    + 'Total estimated cost: ~$' + (total * 0.02).toFixed(2) + ' or less.\n\n'
+  if (!confirm('This will draft ' + total + ' section' + (total !== 1 ? 's' : '') + ' in a single Claude '
+    + '(Anthropic) API call. Estimated cost: well under $0.01 (Claude Sonnet) — the project context is sent '
+    + 'once for the whole report rather than once per section.\n\n'
     + 'Make sure you have a spend cap set at console.anthropic.com.\n\nProceed?')) return;
 
   if (allBtn) { allBtn.disabled = true; allBtn.textContent = 'Drafting…'; }
@@ -9735,39 +9735,89 @@ async function generateAllSectionDrafts() {
     if (barLabel) barLabel.textContent = done + ' of ' + total + ' sections drafted';
   }
 
-  // Fire all section drafts in parallel
-  var sectionPromises = autoSections.map(function(s) {
+  // ── ONE batched call for the whole report ────────────────────────────────
+  // Previously this fired N+1 separate requests, each re-sending the system
+  // prompt and project context — so the shared context was billed once per
+  // section. Batching sends it ONCE and asks for every narrative back in a
+  // single JSON response. Same model (Sonnet), same per-section instructions
+  // and facts, so output quality is unchanged; it's just far cheaper and faster.
+  // Falls back to the original per-section calls if the batch fails.
+  var overallTa = document.getElementById('rpt-overall-summary');
+  var projF0 = S.projectFilter;
+  var proj0 = projF0 && DB.get('projects').find(function(p){ return p.id===projF0; });
+  var overallTemplate = proj0
+    ? 'Project: ' + proj0.name + ' (' + proj0.pid + '). '
+      + 'Status: ' + (proj0.status||'Active') + '. '
+      + 'Stakeholders: ' + DB.get('stakeholders').filter(function(s){return s.projectId===projF0;}).length + '. '
+      + 'Interactions: ' + DB.get('interactions').filter(function(i){return i.projectId===projF0;}).length + '.'
+    : '';
+
+  // Build one job per narrative we need, carrying the SAME instructions+facts
+  // the individual calls would have used.
+  var jobs = autoSections.map(function(s, n) {
     var templateDraft = _buildSectionDraft(s.secType) || '';
     var req = _sectionAIRequest(s.secType, templateDraft);
-    return _claudeNarrative(_claudeSystemPrompt(), req.userContent, req.maxTokens).then(function(narrative) {
-      if (narrative) s.ta.value = narrative;
-      else if (templateDraft) s.ta.value = templateDraft;
-      progress();
-    }).catch(function() { progress(); });
+    return { key:'s'+n, ta:s.ta, templateDraft:templateDraft, instruction:req.userContent, secType:s.secType };
   });
+  if (doOverall && overallTa) {
+    jobs.push({
+      key: 'overall', ta: overallTa, templateDraft: overallTemplate, secType: 'overall',
+      instruction: 'Write a 3-4 sentence executive summary for the overall section of a public involvement '
+        + 'progress report for FHWA/NEPA compliance. Synthesize the following facts into a cohesive narrative: '
+        + overallTemplate
+    });
+  }
 
-  // Overall summary draft
-  var overallPromise = (function() {
-    var ta2 = document.getElementById('rpt-overall-summary');
-    if (!ta2) { progress(); return Promise.resolve(); }
-    var projF = S.projectFilter;
-    var proj = projF && DB.get('projects').find(function(p){ return p.id===projF; });
-    var templateDraft = proj
-      ? 'Project: ' + proj.name + ' (' + proj.pid + '). '
-        + 'Status: ' + (proj.status||'Active') + '. '
-        + 'Stakeholders: ' + DB.get('stakeholders').filter(function(s){return s.projectId===projF;}).length + '. '
-        + 'Interactions: ' + DB.get('interactions').filter(function(i){return i.projectId===projF;}).length + '.'
-      : '';
-    var userContent = 'Write a 3-4 sentence executive summary for the overall section of a public involvement progress report for FHWA/NEPA compliance. '
-      + 'Synthesize the following facts into a cohesive narrative: ' + templateDraft;
-    return _claudeNarrative(_claudeSystemPrompt(), userContent).then(function(narrative) {
-      if (narrative) ta2.value = narrative;
-      else if (templateDraft) ta2.value = templateDraft;
-      progress();
-    }).catch(function() { progress(); });
-  })();
+  var batchPrompt = 'You are drafting several sections of ONE public involvement progress report.\n'
+    + 'Below are ' + jobs.length + ' independent writing tasks, each with its own instructions and facts.\n'
+    + 'Complete every task. Treat each strictly on its own facts — do not carry figures between tasks.\n\n'
+    + jobs.map(function(j){ return '=== TASK ' + j.key + ' ===\n' + j.instruction; }).join('\n\n')
+    + '\n\nReturn ONLY a JSON object mapping each task id to its finished narrative text, with no other '
+    + 'commentary and no markdown fences. Example: {"' + jobs[0].key + '": "The project team ..."}';
 
-  await Promise.all(sectionPromises.concat([overallPromise]));
+  // Roughly the sum of the per-section budgets, so nothing gets truncated.
+  var batchMaxTokens = Math.min(8000, 400 + jobs.length * 500);
+  var applied = false;
+  var raw = await _claudeNarrative(_claudeSystemPrompt(), batchPrompt, batchMaxTokens);
+  if (raw) {
+    try {
+      var txt = String(raw).trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
+      var first = txt.indexOf('{'), last = txt.lastIndexOf('}');
+      if (first >= 0 && last > first) txt = txt.slice(first, last+1);
+      var parsed = JSON.parse(txt);
+      var hits = 0;
+      jobs.forEach(function(j) {
+        var v = parsed[j.key];
+        if (typeof v === 'string' && v.trim()) { j.ta.value = v.trim(); hits++; }
+        else if (j.templateDraft) { j.ta.value = j.templateDraft; }
+        progress();
+      });
+      applied = hits > 0;   // treat a parse that filled nothing as a failure
+    } catch(e) {
+      console.warn('Batched draft parse failed, falling back to per-section calls:', e.message);
+    }
+  }
+
+  // Only retry per-section if we actually got a response we couldn't use. If the
+  // call itself failed (bad key, network, rate limit) _claudeNarrative already
+  // surfaced the error — firing N more doomed calls would just spam the user.
+  if (!applied && raw) {
+    // Fallback: the original one-call-per-section path.
+    done = 0;
+    if (barInner) barInner.style.width = '0%';
+    await Promise.all(jobs.map(function(j) {
+      return _claudeNarrative(_claudeSystemPrompt(), j.instruction, j.secType==='auto-concerns'?600:undefined)
+        .then(function(narrative) {
+          if (narrative) j.ta.value = narrative;
+          else if (j.templateDraft) j.ta.value = j.templateDraft;
+          progress();
+        }).catch(function(){ progress(); });
+    }));
+  } else if (!applied) {
+    // The call failed outright — drop in the non-AI template text so the user
+    // still gets usable content, and let the progress bar complete.
+    jobs.forEach(function(j){ if (j.templateDraft && !j.ta.value) j.ta.value = j.templateDraft; progress(); });
+  }
 
   if (allBtn) { allBtn.disabled = false; allBtn.textContent = '✦ AI: Draft all sections'; }
   showToast('All section drafts generated', 'success', 3000);

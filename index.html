@@ -6225,7 +6225,7 @@ async function openStakeModal(id){
     <div class="fr"><label>Email</label><input type="email" id="f-em" value="${s.email||''}"></div>
     <div class="fr"><label>Phone</label><input id="f-ph" value="${s.phone||''}"></div>
   </div>
-  <div class="fr"><label>Mailing address</label><input id="f-ad" value="${s.address||''}"></div>
+  <div class="fr"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Mailing address</span><span onclick="clearStakeAddress()" title="Remove the saved address" style="cursor:pointer;font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--fog)">✕ Clear</span></label><input id="f-ad" value="${escHtml(s.address||'')}"></div>
   <div class="fsec">Classification</div>
   <div class="fgrid fg3f">
     <div class="fr"><label>Stakeholder type</label><select id="f-st">${STAKE_TYPES.map(t=>`<option${s.type===t?' selected':''}>${t}</option>`).join('')}</select></div>
@@ -6328,6 +6328,32 @@ function _initPlaceAutocompleteEl(input) {
       if (place.formattedAddress) input.value = place.formattedAddress;
     } catch (e) { console.warn('Place selection error:', e); }
   });
+}
+
+// Blank out a saved mailing address.
+//
+// Needed because the Places widget can't be cleared by the user: the visible
+// PlaceAutocompleteElement is a SEPARATE element, and the real value lives in the
+// hidden <input id="f-ad"> (with the saved address shown only as the widget's
+// placeholder). Typing/deleting in the visible box therefore never clears the
+// stored value, so an address, once set, could never be removed.
+//
+// Rather than reach into the widget's shadow DOM, we drop it and rebuild a fresh
+// empty one — robust across both the new element and the legacy fallback.
+function clearStakeAddress() {
+  const input = document.getElementById('f-ad');
+  if (!input) return;
+  input.value = '';
+  const wrap = input.parentNode;
+  const el = wrap && wrap.querySelector('.pac-el');
+  if (el) {                       // new PlaceAutocompleteElement path
+    el.remove();
+    input.dataset.pacInit = '';
+    input.type = 'text';
+    initAddressAutocomplete(input);   // rebuilds with no placeholder
+  }
+  // Legacy path: f-ad is the visible input, so clearing .value above is enough.
+  if (typeof showToast === 'function') showToast('Address cleared — save to apply.', 'info', 2500);
 }
 
 // Legacy fallback (google.maps.places.Autocomplete) — used only when the new

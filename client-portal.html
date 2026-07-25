@@ -928,7 +928,7 @@ async function loadActivityData() {
           <td>${esc(m.location||'—')}</td>
           <td style="text-align:right">${m.attendance_count??'—'}</td>
         </tr>`).join('')
-      : '<tr><td colspan="5" class="empty-state">No public meetings in this period.</td></tr>';
+      : '<tr><td colspan="5" class="empty-state">No events in this period.</td></tr>';
 
     const intRows = interactions.length
       ? interactions.map(i => `<tr>
@@ -940,9 +940,9 @@ async function loadActivityData() {
       : '<tr><td colspan="4" class="empty-state">No outreach events in this period.</td></tr>';
 
     el.innerHTML = `
-      <div class="sub-heading">Public Meetings</div>
+      <div class="sub-heading">List of Events</div>
       <div class="tbl-wrap"><table>
-        <thead><tr><th>Date</th><th>Meeting</th><th>Type</th><th>Location</th><th style="text-align:right">Attendance</th></tr></thead>
+        <thead><tr><th>Date</th><th>Event</th><th>Type</th><th>Location</th><th style="text-align:right">Attendance</th></tr></thead>
         <tbody>${mtgRows}</tbody>
       </table></div>
       <div class="sub-heading">Stakeholder Outreach</div>

@@ -9593,6 +9593,17 @@ function _projHeaderLabel(name, pid) {
   return 'PIN # ' + pid + (name ? ' \u00b7 ' + name : '');
 }
 
+// Section drafting: same persona and factual rules as the shared prompt, but the
+// length comes from each task's own instruction instead of a blanket
+// "2-4 sentences" cap, which was truncating richer sections.
+function _claudeSectionSystemPrompt() {
+  return 'You are a professional public involvement coordinator at a transportation engineering firm. '
+    + 'Write professional narrative prose suitable for an FHWA project progress report, at the length '
+    + 'requested in the task. Use plain, factual language. Do not use headers, bullet points, or markdown. '
+    + 'Do not invent data — only summarize the facts provided. '
+    + 'Write in third person past or present tense as appropriate.';
+}
+
 function _claudeExecSystemPrompt() {
   return 'You are a professional public involvement coordinator at a transportation engineering firm. '
     + 'Write a polished executive summary of 4-6 sentences for an FHWA/NEPA project progress report. '
@@ -9600,7 +9611,8 @@ function _claudeExecSystemPrompt() {
     + 'stakeholders raised, and where things stand on deliverables, issues and commitments. '
     + 'Use plain, factual language. Do not use headers, bullet points, or markdown. '
     + 'Do not invent data — only summarize the facts and section narratives provided. '
-    + 'Do not simply restate the section text; synthesise it into a single coherent overview.';
+    + 'Do not simply restate the section text; synthesise it into a single coherent overview. '
+    + 'Do NOT state the reporting date range — the concerns section reports it and repeating it is redundant.';
 }
 
 // Collect whatever the report's section narratives currently say, so the executive
@@ -9685,13 +9697,23 @@ function _sectionAIRequest(secType, templateDraft) {
   if (secType === 'auto-concerns') {
     var facts = _buildConcernsAIFacts() || templateDraft || '';
     return {
-      userContent: 'Write a brief narrative (3-4 sentences) for the "Recent public concerns and inquiries" '
-        + 'section of a PI progress report. Summarize the main topics, concerns, questions, and requests that '
-        + 'stakeholders actually raised during the period, grouping recurring themes together, and weave in the '
-        + 'relevant counts (total interactions, primary contact channels, and how many still require follow-up). '
-        + 'Do not list interactions individually and do not include stakeholder names. Base it strictly on these '
-        + 'facts:\n\n' + facts,
-      maxTokens: 600
+      // This is the narrative heart of the report, and the facts include every
+      // in-period interaction's own summary text — so ask for real substance, not
+      // a 3-sentence stat recap. This section also OWNS the reporting date range;
+      // the executive summary is told not to repeat it.
+      userContent: 'Write the narrative (5-8 sentences) for the "Recent public concerns and inquiries" '
+        + 'section of a public involvement progress report.\n\n'
+        + 'Open by stating the reporting period explicitly (this section is where the date range is '
+        + 'reported). Then give a substantive account of what stakeholders actually raised, drawing on the '
+        + 'content of the individual interaction summaries below — the specific concerns, questions, '
+        + 'requests and complaints, and how they were addressed or resolved. Group recurring themes '
+        + 'together and give the more consequential items more room than routine ones. Weave in the '
+        + 'relevant counts (total interactions, primary contact channels, and how many still require '
+        + 'follow-up) as supporting detail rather than as the main point.\n\n'
+        + 'Do not produce a list or go interaction-by-interaction, and do not name individual '
+        + 'stakeholders — the data table below the narrative already carries those details. '
+        + 'Base it strictly on these facts:\n\n' + facts,
+      maxTokens: 900
     };
   }
   return {
@@ -9726,7 +9748,7 @@ async function generateSectionDraft(secType, textareaIdx) {
   if (btn) { btn.textContent = 'Generating…'; btn.disabled = true; }
 
   var req = _sectionAIRequest(secType, templateDraft);
-  var narrative = await _claudeNarrative(_claudeSystemPrompt(), req.userContent, req.maxTokens);
+  var narrative = await _claudeNarrative(_claudeSectionSystemPrompt(), req.userContent, req.maxTokens);
 
   if (btn) { btn.textContent = origText; btn.disabled = false; }
   ta.value = narrative || templateDraft;
@@ -9832,11 +9854,12 @@ async function generateAllSectionDrafts() {
   var jobs = autoSections.map(function(s, n) {
     var templateDraft = _buildSectionDraft(s.secType) || '';
     var req = _sectionAIRequest(s.secType, templateDraft);
-    return { key:'s'+n, ta:s.ta, templateDraft:templateDraft, instruction:req.userContent, secType:s.secType };
+    return { key:'s'+n, ta:s.ta, templateDraft:templateDraft, instruction:req.userContent,
+             secType:s.secType, budget:(req.maxTokens || 400) };
   });
   if (doOverall && overallTa && overallTemplate) {
     jobs.push({
-      key: 'overall', ta: overallTa, templateDraft: overallTemplate, secType: 'overall',
+      key: 'overall', ta: overallTa, templateDraft: overallTemplate, secType: 'overall', budget: 700,
       // Listed LAST in the batch on purpose: the model writes the JSON values in
       // order, so by the time it reaches this one it has already produced every
       // section narrative above and can synthesise them into a real executive
@@ -9860,13 +9883,19 @@ async function generateAllSectionDrafts() {
     + 'Below are ' + jobs.length + ' independent writing tasks, each with its own instructions and facts.\n'
     + 'Complete every task. Treat each strictly on its own facts — do not carry figures between tasks.\n\n'
     + jobs.map(function(j){ return '=== TASK ' + j.key + ' ===\n' + j.instruction; }).join('\n\n')
+    + '\n\nWrite each narrative at the FULL length its task asks for, exactly as you would if it were the '
+    + 'only task you had been given. Do not abbreviate, compress or summarise more tightly because several '
+    + 'tasks share this response.'
     + '\n\nReturn ONLY a JSON object mapping each task id to its finished narrative text, with no other '
     + 'commentary and no markdown fences. Example: {"' + jobs[0].key + '": "The project team ..."}';
 
-  // Roughly the sum of the per-section budgets, so nothing gets truncated.
-  var batchMaxTokens = Math.min(8000, 400 + jobs.length * 500);
+  // Give the batch the SUM of what each section would get on its own, plus room for
+  // the JSON scaffolding — otherwise the sections compete for a flat ceiling and the
+  // later ones come out clipped. Output tokens cost the same batched or not (the
+  // saving is on the shared input context), so there's no reason to be stingy here.
+  var batchMaxTokens = Math.min(16000, 600 + jobs.reduce(function(t,j){ return t + (j.budget||400); }, 0));
   var applied = false;
-  var raw = await _claudeNarrative(_claudeSystemPrompt(), batchPrompt, batchMaxTokens);
+  var raw = await _claudeNarrative(_claudeSectionSystemPrompt(), batchPrompt, batchMaxTokens);
   if (raw) {
     try {
       var txt = String(raw).trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');

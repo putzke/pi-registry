@@ -577,6 +577,131 @@ Functions; Jeff makes the vendor/billing/account decisions and holds the actual
 secrets. When Jeff says "we're ready to scale," walk him through the sequence
 above end to end.
 
+
+## PRODUCT DIFFERENTIATORS & COMPETITIVE CONTEXT (July 2026)
+
+This section gives Claude Code the strategic context needed to make good
+decisions when building new features, prioritizing work, and designing UX.
+Always reference this before suggesting new features or architectural changes.
+
+---
+
+### WHO HORIZON COMPASS IS COMPETING AGAINST
+
+**1. PublicInput (direct competitor — most important)**
+- Built for the AGENCY to collect public input at scale (surveys, SMS, hotlines,
+  geo-targeted outreach, meeting management)
+- Used by 12 state DOTs, 200+ consulting firms, enterprise SaaS $20K–$100K+/yr
+- Their compliance value is a BYPRODUCT of engagement data
+- DO NOT build: mass public engagement tools, SMS blasts, survey engines,
+  social monitoring, resident-facing input portals — PublicInput territory
+- Strategic framing: position HC as COMPLEMENTARY to PublicInput, not a
+  replacement. A DOT already running PublicInput is an easier sell.
+
+**2. Granicus (adjacent — not direct)**
+- Massive government IT platform: 7,000+ govt orgs, 330M people connected
+- EngagementHQ does online consultation hubs on agency websites
+- Reporting flows: AGENCY → PUBLIC (broadcast to residents)
+- HC Client Portal flows: PI CONSULTANT → AGENCY CLIENT (curated live view)
+- These are fundamentally different relationships — Granicus is NOT a threat
+- A DOT using Granicus for its public website + HC for its PI consultant's
+  workflow is the IDEAL joint-customer scenario — lean into this framing
+
+**3. Simply Stakeholders (second-tier)**
+- AI-equipped, general-purpose, ~30yr pedigree, NZ/AU focus, cheap entry pricing
+- No NEPA stage tagging, no U.S. Title VI/EJ compliance, no UDOT workflow
+
+**4. Not competitors: CivicPlus, OpenGov, Tractivity, Borealis, Jambo**
+- Different buyer, different category, different budget line entirely
+
+---
+
+### THE CORE DISTINCTION
+
+PublicInput  = built for the AGENCY to manage public input at scale
+Granicus     = built for the AGENCY to talk to residents
+Simply Stakeholders = general stakeholder relationship management
+
+Horizon COMPASS = built for the PI CONSULTANT's internal workflow +
+                  FHWA/NEPA compliance documentation +
+                  live reporting back to the PI consultant's CLIENT
+
+Nobody builds that third leg. That is the moat. Never drift from it.
+
+---
+
+### THE PI CLIENT PORTAL — PRIMARY DIFFERENTIATOR
+
+No competitor — PublicInput, Simply Stakeholders, Tractivity, Borealis,
+Granicus, EngagementHQ, Jambo, or Citizen Space — offers a live
+client-transparency layer between the PI consulting firm and their agency
+client. This is a structural product advantage, not a feature advantage.
+
+**Why this matters vs. Granicus specifically:**
+Granicus helps the DOT talk TO residents. HC Client Portal helps the PI
+consultant keep the DOT informed about the work being done ON THE DOT'S
+BEHALF. Especially valuable during construction when physical impacts are
+greatest and the client most wants visibility without a manual reporting cycle.
+
+**Portal improvements that would beat Granicus in the client-reporting space:**
+
+1. NEPA STAGE BANNER — visible indicator of current NEPA stage in the portal
+   ("Currently in: Construction Phase / Post-NEPA" or "EA Comment Period open
+   through [date]"). Granicus has zero NEPA concept. High priority.
+
+2. DELIVERABLE PROGRESS WITH % — completion percentage + due dates so the
+   client knows a deliverable is 80% done before the PI manager sends it.
+   Granicus shows published documents only — not work in progress.
+
+3. COMMITMENT VISIBILITY — expose commitments made to the public back to
+   the agency client in the portal. Granicus has no data model for this.
+
+4. INTERACTION VOLUME TREND LINE — weekly engagement trend chart in the
+   portal ("23 interactions this week, up from 14 last week"). Granicus
+   shows agency outreach analytics — nobody shows the agency what the
+   consultant's team is doing in the field week over week.
+
+5. FRICTIONLESS ACCESS — the magic-link OTP login (already built) is the
+   right pattern. Never add friction to client portal login. Granicus
+   requires agency to be a Granicus customer with IT-provisioned access.
+
+---
+
+### SCOPE BOUNDARIES — NEVER CROSS THESE (locked)
+
+- NO mass public engagement tools (surveys, SMS blasts, social monitoring)
+- NO resident-facing input portals
+- NO survey engine — ingestion BRIDGE only (pull from ArcGIS Survey123)
+- NO AI auto-generation of interaction records — interactions are compliance
+  claims, must be entered deliberately by the PI professional
+- Mobile = logging tool only, NOT an import tool
+- AI import = contacts only, desktop only, bulk-add grid only
+
+---
+
+### WHEN SUGGESTING OR BUILDING NEW FEATURES — ASK THESE QUESTIONS:
+
+1. Does this strengthen the PI consultant's internal workflow OR the
+   client portal transparency layer? → Good, build it
+2. Does this compete on public engagement scale with PublicInput/Granicus?
+   → Stop, do not build it
+3. Does this only solve a Sunrise-specific workflow problem, or is it a
+   pain point shared across PI consulting firms generally?
+   → If Sunrise-only, flag it to Jeff before building
+4. Does this require interactions to be auto-generated by AI without
+   deliberate PI professional review? → Stop, never auto-generate
+5. Does this add friction to the client portal login or client experience?
+   → Redesign, frictionless client access is non-negotiable
+
+---
+
+### WINNABLE MARKET SEGMENT
+
+Small-to-mid PI consulting firms (2–15 person teams) doing UDOT, county,
+and municipal infrastructure work. Fast adoption, no IT procurement cycle,
+$50–150/seat. Multi-tenant org_id isolation is the gate on paid launch.
+Target: 2027 availability.
+
 ## Supabase project
 - URL: `https://ncfbblhlsiglxkoiounv.supabase.co`
 - Anon key in `index.html` line ~505 (`SUPA_KEY`)

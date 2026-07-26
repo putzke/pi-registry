@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Horizon COMPASS — Client Portal</title>
+  <!-- Chart.js powers the 8-week engagement trend on the Overview. Loaded async
+       and treated as optional: if the CDN is unreachable (conference wifi), the
+       chart falls back to a self-contained inline SVG — see engagementChart(). -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f6fa; color: #1a1a2e; }
@@ -89,14 +93,61 @@
     .proj-meta strong { color: #374151; }
 
     /* ── Stat tiles ───────────────────────────────────────────────────── */
-    .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
-    .stat-tile { background: white; border-radius: 10px; padding: 18px 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
-    .stat-tile .stat-num { font-size: 28px; font-weight: 700; color: #111827; line-height: 1; margin-bottom: 6px; }
+    .stat-row { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 12px; margin-bottom: 20px; }
+    .stat-tile { background: white; border-radius: 10px; padding: 16px 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+    .stat-tile .stat-num { font-size: 26px; font-weight: 700; color: #111827; line-height: 1; margin-bottom: 6px; }
     .stat-tile .stat-lbl { font-size: 12px; color: #6b7280; font-weight: 500; }
     .stat-tile .stat-sub { font-size: 11px; color: #9ca3af; margin-top: 2px; }
     .stat-tile.stat-blue .stat-num { color: #3b5bdb; }
     .stat-tile.stat-green .stat-num { color: #2e7d32; }
     .stat-tile.stat-amber .stat-num { color: #b45309; }
+    .stat-tile.stat-teal .stat-num { color: #1d7f9e; }
+    /* Inline meter inside a stat tile (deliverable health at a glance) */
+    .tile-meter { margin-top: 9px; height: 5px; border-radius: 3px; background: #e5e7eb; overflow: hidden; }
+    .tile-meter-fill { height: 100%; border-radius: 3px; background: #35a5ca; transition: width .4s ease; }
+
+    /* ── NEPA stage banner ────────────────────────────────────────────── */
+    .nepa-banner { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px;
+      margin: 14px -24px -20px; padding: 11px 24px; border-radius: 0 0 10px 10px;
+      border-top: 1px solid rgba(0,0,0,0.06); }
+    .nepa-code { display: inline-flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 800; letter-spacing: 0.6px; padding: 3px 9px;
+      border-radius: 5px; background: rgba(255,255,255,0.55); }
+    .nepa-title { font-size: 13px; font-weight: 700; letter-spacing: 0.2px; }
+    .nepa-stage { font-size: 12px; font-weight: 600; opacity: 0.85; }
+    .nepa-stage::before { content: '·'; margin-right: 9px; opacity: 0.55; }
+    /* Palette by classification — set on the banner element */
+    .nepa-ce   { background: #eef1f5; color: #3f4c5c; }
+    .nepa-ce   .nepa-code { background: #d7dde5; color: #33404f; }
+    .nepa-ea   { background: #fef3c7; color: #7c4a03; }
+    .nepa-ea   .nepa-code { background: #fbdd8a; color: #6b3f02; }
+    .nepa-eis  { background: #d9f0f7; color: #0f5f78; }
+    .nepa-eis  .nepa-code { background: #b3e0ee; color: #0c4d61; }
+    .nepa-post { background: #dcfce7; color: #14532d; }
+    .nepa-post .nepa-code { background: #b7f0ca; color: #124a28; }
+    .nepa-na   { background: #f5f6f8; color: #6b7280; }
+    .nepa-na   .nepa-code { background: #e5e7eb; color: #6b7280; }
+
+    /* ── Deliverable health summary (Deliverables tab) ────────────────── */
+    .del-health { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+    .del-health-num { font-size: 30px; font-weight: 700; color: #1d7f9e; line-height: 1; }
+    .del-health-lbl { font-size: 12px; color: #6b7280; margin-top: 4px; }
+    .del-health-bar { flex: 1; min-width: 200px; }
+    .del-health-track { height: 10px; border-radius: 5px; background: #e5e7eb; overflow: hidden; }
+    .del-health-fill { height: 100%; border-radius: 5px; background: linear-gradient(90deg,#35a5ca,#1d7f9e); transition: width .5s ease; }
+    .del-health-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 9px; font-size: 12px; color: #6b7280; }
+    .del-health-legend b { color: #374151; font-weight: 600; }
+
+    /* ── Engagement trend chart ───────────────────────────────────────── */
+    .chart-wrap { position: relative; height: 190px; }
+    .chart-empty { text-align: center; padding: 34px 12px; color: #9ca3af; font-size: 13.5px; }
+    /* SVG fallback used when the Chart.js CDN can't be reached. Height comes
+       from the viewBox aspect ratio so the labels never get stretched. */
+    .svg-chart { width: 100%; height: auto; display: block; }
+    .svg-chart .sc-bar { fill: #35a5ca; }
+    .svg-chart .sc-lbl { font-size: 9px; fill: #9ca3af; }
+    .svg-chart .sc-val { font-size: 10px; font-weight: 700; fill: #4b5563; }
+    .svg-chart .sc-grid { stroke: #f3f4f6; stroke-width: 1; }
 
     /* ── Cards ────────────────────────────────────────────────────────── */
     .card { background: white; border-radius: 10px; padding: 22px 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); margin-bottom: 16px; }
@@ -214,7 +265,9 @@
       .card, .stat-tile, .proj-banner { box-shadow: none; border: 1px solid #e5e7eb; }
       /* Small self-contained elements: keep together */
       .proj-banner, .stat-tile { break-inside: avoid; }
-      .stat-row { grid-template-columns: repeat(4, 1fr); break-inside: avoid; }
+      .stat-row { grid-template-columns: repeat(5, minmax(0,1fr)); break-inside: avoid; }
+      .nepa-banner { break-inside: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .tile-meter-fill, .del-health-fill { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       /* Keep section / card headings glued to the content that follows */
       .card-title  { break-after: avoid; }
       .sub-heading { break-after: avoid; }
@@ -238,6 +291,9 @@
     .print-header { display: none; }
 
     /* ── Responsive ───────────────────────────────────────────────────── */
+    @media (max-width: 980px) {
+      .stat-row { grid-template-columns: repeat(3, minmax(0,1fr)); }
+    }
     @media (max-width: 768px) {
       html, body { height: auto; }
       #app.visible { height: auto; min-height: 100vh; }
@@ -246,14 +302,19 @@
       .chip-strip { display: flex; }
       .content { overflow: visible; flex: none; }
       .content-inner { padding: 16px; }
-      .stat-row { grid-template-columns: repeat(2, 1fr); }
+      .stat-row { grid-template-columns: repeat(2, minmax(0,1fr)); }
       .topbar { padding: 0 14px; }
       .btn-print-label { display: none; }
+      .nepa-banner { margin: 14px -20px -18px; padding: 10px 20px; }
+      .chart-wrap { height: 165px; }
     }
     @media (max-width: 480px) {
-      .stat-row { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+      .stat-row { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
       .proj-meta { gap: 10px 20px; }
       td, th { padding-right: 8px; }
+      .nepa-banner { margin: 12px -18px -16px; padding: 10px 18px; }
+      .del-health-num { font-size: 26px; }
+      .chart-wrap { height: 150px; }
     }
   </style>
 </head>
@@ -341,6 +402,7 @@ let _projects = [];
 let _deliverables = [];
 let _clientSummaries = [];
 let _sharedReports = [];
+let _trendChart = null;
 let _actFrom = dfltFrom();
 let _actTo   = dfltTo();
 let _tokenMode = false;
@@ -539,7 +601,7 @@ async function bootApp() {
     }
     const ids = access.map(r => r.project_id).join(',');
     const [projects, deliverables, clientSummaries, sharedReports] = await Promise.all([
-      sbFetch(`pi_projects?id=in.(${ids})&select=id,name,pid,client,phase,status,start_date,end_date&order=name.asc`),
+      sbFetch(`pi_projects?id=in.(${ids})&select=id,name,pid,client,phase,status,start_date,end_date,nepa_classification,nepa_stage&order=name.asc`),
       sbFetch(`pi_deliverables?project_id=in.(${ids})&select=id,project_id,title,deliverable_type,status,progress,contracted_qty,delivered_count,due_date,milestone_end&order=due_date.asc.nullslast`),
       sbFetch(`pi_client_summaries?project_id=in.(${ids})&select=id,project_id,content_recent,content_full,period_start,period_end,published_at,published_by&order=published_at.desc`),
       sbFetch(`pi_report_archive?project_id=in.(${ids})&client_visible=eq.true&select=id,project_id,report_num,report_title,report_subtitle,period_start,period_end,overall_summary,sections,snapshot,archived_at&order=archived_at.desc`)
@@ -574,7 +636,7 @@ async function bootFromToken(token) {
     }
     const projId = rows[0].project_id;
     const [projects, deliverables, clientSummaries, sharedReports] = await Promise.all([
-      sbFetch(`pi_projects?id=eq.${projId}&select=id,name,pid,client,phase,status,start_date,end_date`),
+      sbFetch(`pi_projects?id=eq.${projId}&select=id,name,pid,client,phase,status,start_date,end_date,nepa_classification,nepa_stage`),
       sbFetch(`pi_deliverables?project_id=eq.${projId}&select=id,project_id,title,deliverable_type,status,progress,contracted_qty,delivered_count,due_date,milestone_end&order=due_date.asc.nullslast`),
       sbFetch(`pi_client_summaries?project_id=eq.${projId}&select=id,project_id,content_recent,content_full,period_start,period_end,published_at,published_by&order=published_at.desc`),
       sbFetch(`pi_report_archive?project_id=eq.${projId}&client_visible=eq.true&select=id,project_id,report_num,report_title,report_subtitle,period_start,period_end,overall_summary,sections,snapshot,archived_at&order=archived_at.desc`)
@@ -677,6 +739,54 @@ function setContent(html) {
   document.getElementById('content').innerHTML = `<div class="content-inner">${html}</div>`;
 }
 
+// ── NEPA classification / stage banner ────────────────────────────────────────
+// The single most important thing a DOT client wants to see at a glance: where
+// this project sits in the federal environmental process. No competitor's
+// client-facing product models NEPA at all — see CLAUDE.md.
+//
+// Source columns are pi_projects.nepa_classification ('N/A'|'CE'|'EA'|'EIS') and
+// pi_projects.nepa_stage (e.g. 'EA - Draft', 'EIS - DEIS', 'Post-NEPA /
+// Construction'). nepa_process_stage is accepted as an alias so the banner keeps
+// working if the column is ever renamed.
+//
+// Colour is driven by classification, EXCEPT that a project which has cleared
+// NEPA reads green regardless of how it was cleared — that transition (into
+// construction, when physical impacts and public contact peak) is the thing the
+// client actually reacts to.
+function nepaBanner(p) {
+  const cls   = String(p.nepa_classification || '').trim().toUpperCase();
+  const stage = String(p.nepa_stage || p.nepa_process_stage || '').trim();
+  const post  = /post-?nepa|construction/i.test(stage);
+
+  // Strip the redundant classification prefix the desktop stores on the stage
+  // ('EIS - DEIS' → 'DEIS') so the banner doesn't say "EIS … EIS - DEIS".
+  const stageLabel = stage.replace(/^(CE|EA|EIS)\s*[-–]\s*/i, '').trim();
+
+  let tone, code, title;
+  if (post) {
+    tone = 'post'; code = cls && cls !== 'N/A' ? cls : 'NEPA';
+    title = 'Post-NEPA · Construction Phase';
+  } else if (cls === 'CE') {
+    tone = 'ce';  code = 'CE';  title = 'Categorical Exclusion (CE)';
+  } else if (cls === 'EA') {
+    tone = 'ea';  code = 'EA';  title = 'Environmental Assessment (EA)';
+  } else if (cls === 'EIS') {
+    tone = 'eis'; code = 'EIS'; title = 'Environmental Impact Statement (EIS)';
+  } else if (cls === 'N/A') {
+    tone = 'na';  code = 'N/A'; title = 'No Federal Nexus';
+  } else {
+    return '';   // classification never set — say nothing rather than guess
+  }
+
+  // For Post-NEPA the stage IS the title, so don't echo it as a secondary label.
+  const showStage = stageLabel && !post && !/^n\/?a$/i.test(stageLabel);
+  return `<div class="nepa-banner nepa-${tone}" role="status" aria-label="NEPA status">
+    <span class="nepa-code">${esc(code)}</span>
+    <span class="nepa-title">${esc(title)}</span>
+    ${showStage ? `<span class="nepa-stage">${esc(stageLabel)}</span>` : ''}
+  </div>`;
+}
+
 // ── Project banner (reused across sections) ───────────────────────────────────
 function projBanner() {
   const p = _projects.find(x => x.id === _projId);
@@ -689,7 +799,7 @@ function projBanner() {
     p.start_date ? `<span><strong>Start</strong> ${fmt(p.start_date)}</span>` : '',
     p.end_date   ? `<span><strong>End</strong> ${fmt(p.end_date)}</span>` : '',
   ].filter(Boolean).join('');
-  return `<div class="proj-banner"><h1>${esc(p.name || 'Project')}</h1><div class="proj-meta">${meta}</div></div>`;
+  return `<div class="proj-banner"><h1>${esc(p.name || 'Project')}</h1><div class="proj-meta">${meta}</div>${nepaBanner(p)}</div>`;
 }
 
 // ── Multi-project cards grid (for Overview) ───────────────────────────────────
@@ -762,10 +872,18 @@ async function renderOverview() {
         <div class="stat-num">${doneD}/${totalD}</div>
         <div class="stat-lbl">Deliverables Complete</div>
         <div class="stat-sub">${pctD}% overall</div>
+        <div class="tile-meter" role="img" aria-label="${pctD} percent of deliverables complete">
+          <div class="tile-meter-fill" style="width:${pctD}%"></div>
+        </div>
       </div>
       <div class="stat-tile" id="tile-issues"><div class="stat-num">—</div><div class="stat-lbl">Open Issues</div></div>
-      <div class="stat-tile" id="tile-meetings"><div class="stat-num">—</div><div class="stat-lbl">Recent Events</div></div>
-      <div class="stat-tile" id="tile-outreach"><div class="stat-num">—</div><div class="stat-lbl">Outreach Events</div></div>
+      <div class="stat-tile" id="tile-meetings"><div class="stat-num">—</div><div class="stat-lbl">Events</div></div>
+      <div class="stat-tile" id="tile-outreach"><div class="stat-num">—</div><div class="stat-lbl">Outreach</div></div>
+      <div class="stat-tile" id="tile-commitments"><div class="stat-num">—</div><div class="stat-lbl">Commitments</div></div>
+    </div>
+    <div class="card" id="ov-trend">
+      <div class="card-title">Engagement Activity — Last 8 Weeks</div>
+      <div class="loading-state" style="padding:34px">Loading&hellip;</div>
     </div>
     <div class="card">
       <div class="card-title">Upcoming Deadlines</div>
@@ -784,20 +902,32 @@ async function renderOverview() {
     <div class="card" id="ov-activity"><div class="loading-state" style="padding:24px">Loading recent activity&hellip;</div></div>`);
 
   // Fetch stats + recent activity + attention items in parallel
+  const projAtFetch = _projId;   // guard against a project switch mid-flight
   try {
-    const [issues, meetings, interactions, commitments, commentPeriods] = await Promise.all([
+    const weeks = engagementWeeks();
+    const [issues, meetings, interactions, commitments, commentPeriods, trendRows] = await Promise.all([
       sbFetch(`pi_issues?project_id=eq.${_projId}&select=id,status,title,priority`),
-      sbFetch(`pi_meetings?project_id=eq.${_projId}&select=id,meeting_date,title,meeting_type&order=meeting_date.desc&limit=5`),
+      sbFetch(`pi_meetings?project_id=eq.${_projId}&select=id,meeting_date,title,meeting_type&order=meeting_date.desc`),
       sbFetch(`pi_interactions?project_id=eq.${_projId}&select=id,interaction_date,channel,subject,summary&order=interaction_date.desc&limit=5`),
       sbFetch(`pi_commitments?project_id=eq.${_projId}&select=id,commitment,due_date,status`),
-      sbFetch(`pi_comment_periods?project_id=eq.${_projId}&select=id,title,status,end_date`)
+      sbFetch(`pi_comment_periods?project_id=eq.${_projId}&select=id,title,status,end_date`),
+      sbFetch(`pi_interactions?project_id=eq.${_projId}&interaction_date=gte.${weeks[0].start}&interaction_date=lte.${weeks[weeks.length-1].end}&select=interaction_date`)
     ]);
+    if (projAtFetch !== _projId) return;
     const openIssues = issues.filter(i => isIssueOpen(i.status)).length;
+    const commDone   = commitments.filter(c => isComplete(c.status)).length;
+    const commOpen   = commitments.length - commDone;
 
     const t = id => document.getElementById(id);
-    if (t('tile-issues'))   t('tile-issues').innerHTML   = `<div class="stat-num${openIssues > 0 ? ' ' : ''}" style="${openIssues>0?'color:#b45309':''}">${openIssues}</div><div class="stat-lbl">Open Issues</div>`;
-    if (t('tile-meetings'))  t('tile-meetings').innerHTML  = `<div class="stat-num">${meetings.length}</div><div class="stat-lbl">Recent Events</div>`;
-    if (t('tile-outreach'))  t('tile-outreach').innerHTML  = `<div class="stat-num">${interactions.length}</div><div class="stat-lbl">Recent Outreach</div>`;
+    if (t('tile-issues'))   t('tile-issues').innerHTML   = `<div class="stat-num" style="${openIssues>0?'color:#b45309':''}">${openIssues}</div><div class="stat-lbl">Open Issues</div><div class="stat-sub">${issues.length} logged to date</div>`;
+    if (t('tile-meetings'))  t('tile-meetings').innerHTML  = `<div class="stat-num">${meetings.length}</div><div class="stat-lbl">Events</div><div class="stat-sub">meetings &amp; outreach events</div>`;
+
+    // Bucket the 8-week window and render the trend chart.
+    const counts = weeks.map(w => trendRows.filter(r => r.interaction_date >= w.start && r.interaction_date <= w.end).length);
+    const total8 = counts.reduce((a,b) => a+b, 0);
+    if (t('tile-outreach'))  t('tile-outreach').innerHTML  = `<div class="stat-num">${total8}</div><div class="stat-lbl">Outreach</div><div class="stat-sub">contacts, last 8 weeks</div>`;
+    if (t('tile-commitments')) t('tile-commitments').innerHTML = `<div class="stat-num stat-teal" style="color:#1d7f9e">${commitments.length}</div><div class="stat-lbl">Commitments</div><div class="stat-sub">${commDone} fulfilled${commOpen ? ` &middot; ${commOpen} open` : ''}</div>`;
+    renderEngagementTrend(weeks, counts);
 
     // ── Needs Attention panel ───────────────────────────────────────────
     const today = isoDate(new Date());
@@ -833,7 +963,7 @@ async function renderOverview() {
 
     // Recent activity merged list
     const acts = [
-      ...meetings.map(m => ({ date: m.meeting_date, type: 'mtg', label: m.title || 'Meeting', sub: m.meeting_type || '' })),
+      ...meetings.slice(0, 8).map(m => ({ date: m.meeting_date, type: 'mtg', label: m.title || 'Meeting', sub: m.meeting_type || '' })),
       ...interactions.map(i => ({ date: i.interaction_date, type: 'int', label: i.subject || 'Interaction', sub: i.channel || '', note: i.summary || '' }))
     ].sort((a,b) => a.date < b.date ? 1 : -1).slice(0, 8);
 
@@ -855,15 +985,152 @@ async function renderOverview() {
     if (t('ov-activity')) t('ov-activity').innerHTML = `<div class="card-title">Recent Activity</div>${actHtml}`;
   } catch(err) {
     if (err.message !== 'session_expired') {
-      ['tile-issues','tile-meetings','tile-outreach'].forEach(id => {
+      ['tile-issues','tile-meetings','tile-outreach','tile-commitments'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.innerHTML = '<div class="stat-num">—</div><div class="stat-lbl" style="color:#c62828">Error</div>';
       });
+      const tr = document.getElementById('ov-trend');
+      if (tr) tr.innerHTML = '<div class="card-title">Engagement Activity — Last 8 Weeks</div>'
+        + '<div class="chart-empty">Engagement activity couldn\'t be loaded right now.</div>';
     }
   }
 }
 
+// ── 8-week engagement trend ───────────────────────────────────────────────────
+// Answers the question a client actually has between meetings: "is the PI team
+// doing work right now?" Weeks are ISO (Monday–Sunday) and the current, partial
+// week is included as the last bar.
+function engagementWeeks(n = 8) {
+  const now = new Date();
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));   // Sun=0 → 6
+  const weeks = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const s = new Date(monday); s.setDate(s.getDate() - i * 7);
+    const e = new Date(s);      e.setDate(e.getDate() + 6);
+    weeks.push({
+      start: isoDate(s),
+      end:   isoDate(e),
+      label: s.toLocaleDateString('en-US', { month:'short', day:'numeric' })
+    });
+  }
+  return weeks;
+}
+
+// Chart.js when it loaded, self-contained SVG when it didn't. The portal must
+// never show a blank box at a conference because a CDN was unreachable.
+function renderEngagementTrend(weeks, counts) {
+  const host = document.getElementById('ov-trend');
+  if (!host) return;
+  const title = '<div class="card-title">Engagement Activity — Last 8 Weeks</div>';
+  const total = counts.reduce((a,b) => a+b, 0);
+
+  if (!total) {
+    host.innerHTML = title + '<div class="chart-empty">No stakeholder contacts logged in the last 8 weeks.</div>';
+    return;
+  }
+
+  const latest = counts[counts.length-1], prev = counts[counts.length-2] ?? 0;
+  const delta = latest - prev;
+  const trendTxt = prev === 0 && latest === 0 ? ''
+    : delta > 0 ? `${latest} this week, up from ${prev} last week`
+    : delta < 0 ? `${latest} this week, down from ${prev} last week`
+    : `${latest} this week, level with last week`;
+  const sub = `<div style="font-size:12px;color:#6b7280;margin:-8px 0 14px">${esc(trendTxt)}${trendTxt ? ' &middot; ' : ''}${total} stakeholder contacts over 8 weeks</div>`;
+
+  if (window.Chart) {
+    host.innerHTML = title + sub + '<div class="chart-wrap"><canvas id="trend-canvas"></canvas></div>';
+    const ctx = document.getElementById('trend-canvas');
+    if (!ctx) return;
+    try {
+      if (_trendChart) { _trendChart.destroy(); _trendChart = null; }
+      _trendChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: weeks.map(w => w.label),
+          datasets: [{ data: counts, backgroundColor: '#35a5ca', hoverBackgroundColor: '#1d7f9e',
+                       borderRadius: 4, maxBarThickness: 46 }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, animation: { duration: 450 },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              displayColors: false, backgroundColor: '#111827', padding: 10, cornerRadius: 6,
+              callbacks: {
+                title: items => `Week of ${weeks[items[0].dataIndex].label}`,
+                label: item => `${item.parsed.y} interaction${item.parsed.y === 1 ? '' : 's'}`
+              }
+            }
+          },
+          scales: {
+            x: { grid: { display: false }, border: { display: false },
+                 ticks: { color: '#9ca3af', font: { size: 11 } } },
+            y: { beginAtZero: true, grid: { color: '#f3f4f6' }, border: { display: false },
+                 ticks: { color: '#9ca3af', font: { size: 11 }, precision: 0, maxTicksLimit: 5 } }
+          }
+        }
+      });
+      return;
+    } catch(_) { /* fall through to SVG */ }
+  }
+  host.innerHTML = title + sub + svgBarChart(weeks, counts);
+}
+
+// Dependency-free fallback bar chart. Same shape, same teal, no CDN.
+function svgBarChart(weeks, counts) {
+  const W = 640, H = 190, padL = 8, padR = 8, padT = 18, padB = 26;
+  const max = Math.max(1, ...counts);
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const slot  = plotW / counts.length;
+  const barW  = Math.min(46, slot * 0.62);
+  const grid = [0, 0.5, 1].map(f => {
+    const y = padT + plotH - f * plotH;
+    return `<line class="sc-grid" x1="${padL}" y1="${y.toFixed(1)}" x2="${W-padR}" y2="${y.toFixed(1)}"/>`;
+  }).join('');
+  const bars = counts.map((c, i) => {
+    const h  = c / max * plotH;
+    const x  = padL + slot * i + (slot - barW) / 2;
+    const y  = padT + plotH - h;
+    return `<rect class="sc-bar" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(h,1).toFixed(1)}" rx="4"/>`
+      + (c ? `<text class="sc-val" x="${(x+barW/2).toFixed(1)}" y="${(y-5).toFixed(1)}" text-anchor="middle">${c}</text>` : '')
+      + `<text class="sc-lbl" x="${(x+barW/2).toFixed(1)}" y="${H-8}" text-anchor="middle">${esc(weeks[i].label)}</text>`;
+  }).join('');
+  return `<svg class="svg-chart" viewBox="0 0 ${W} ${H}" role="img"
+    aria-label="Interactions per week for the last 8 weeks">${grid}${bars}</svg>`;
+}
+
 // ── Deliverables ──────────────────────────────────────────────────────────────
+// Project-health header: the client should read "where are we" off the bar
+// before reading a single table row.
+function deliverableHealth(devs) {
+  const total = devs.length;
+  if (!total) return '';
+  const done    = devs.filter(d => isComplete(d.status)).length;
+  const active  = devs.filter(d => !isComplete(d.status) && /progress|review|active/i.test(d.status || '')).length;
+  const pending = total - done - active;
+  const pct     = Math.round(done / total * 100);
+  return `<div class="card">
+    <div class="card-title">Overall Progress</div>
+    <div class="del-health">
+      <div>
+        <div class="del-health-num">${pct}%</div>
+        <div class="del-health-lbl">${done} of ${total} complete</div>
+      </div>
+      <div class="del-health-bar">
+        <div class="del-health-track" role="img" aria-label="${pct} percent of deliverables complete">
+          <div class="del-health-fill" style="width:${pct}%"></div>
+        </div>
+        <div class="del-health-legend">
+          <span><b>${done}</b> complete</span>
+          <span><b>${active}</b> in progress</span>
+          <span><b>${pending}</b> not started</span>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
 function renderDeliverables() {
   const devs = _deliverables.filter(d => String(d.project_id) === String(_projId));
   const rows = devs.length
@@ -876,7 +1143,7 @@ function renderDeliverables() {
       </tr>`).join('')
     : '<tr><td colspan="5" class="empty-state">No deliverables on record yet.</td></tr>';
 
-  setContent(`${projSelector()}${projBanner()}
+  setContent(`${projSelector()}${projBanner()}${deliverableHealth(devs)}
     <div class="card">
       <div class="card-title">Deliverable Progress</div>
       <div class="tbl-wrap"><table>

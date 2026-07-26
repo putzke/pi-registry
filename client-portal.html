@@ -1209,14 +1209,14 @@ function renderSummary() {
     const pd = fmt(current.published_at ? current.published_at.slice(0,10) : '');
     const pubBy = current.published_by ? `Published by ${esc(current.published_by)}` : 'Published';
     trendHtml = `<div class="card">
-      <div class="card-title">Project Trend Summary ${pl ? `<span style="font-size:12px;font-weight:400;color:#9ca3af">(${pl})</span>` : ''}</div>
+      <div class="card-title">Project Status ${pl ? `<span style="font-size:12px;font-weight:400;color:#9ca3af">(${pl})</span>` : ''}</div>
       <div style="font-size:12px;color:#9ca3af;margin-bottom:10px">${pubBy} · ${pd}</div>
       <div class="sum-text">${esc(current.content_full || '—')}</div>
     </div>`;
   } else {
     trendHtml = `<div class="card">
-      <div class="card-title">Project Trend Summary</div>
-      <div class="empty-state">No project trend has been published yet. Your project manager will publish one soon.</div>
+      <div class="card-title">Project Status</div>
+      <div class="empty-state">No project status update has been published yet. Your project manager will publish one soon.</div>
     </div>`;
   }
 

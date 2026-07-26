@@ -11770,7 +11770,7 @@ function _buildArchiveHTML(projF) {
     +(hasKey && archives.length >= 2
       ? '<button class="btn btn-sm" id="trend-btn" onclick="generateTrendSummary()" style="background:linear-gradient(135deg,#1e3a5f,#0f4c75);border-color:var(--sky-lt);color:var(--sky-lt);gap:6px">'
         +'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px"><path d="M2 12 L5 8 L8 10 L11 5 L14 3"/></svg>'
-        +'✦ AI: Summarize PI trend</button>'
+        +'✦ AI: Project Status Report</button>'
       : (archives.length >= 2 && !hasKey ? '<span style="font-size:11px;color:var(--fog)">Add Claude API key in Settings to enable trend analysis</span>' : ''))
     +'</div>'
     +(function(){
@@ -11910,11 +11910,12 @@ function printTrendAnalysis() {
   var dateStr = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
   var html = '<style>@media print{.page-break-before{page-break-before:always}}</style>'
     +'<div style="border-bottom:3px solid #1e3a5f;padding-bottom:14px;margin-bottom:20px">'
-    +'<div style="font-size:9px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Public Involvement — AI Trend Analysis</div>'
+    +'<div style="font-size:9px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Public Involvement — Project Status Report</div>'
     +'<div style="font-size:18px;font-weight:700;color:#1e3a5f">'+escHtml(r.projName)+'</div>'
     +'<div style="font-size:11px;color:#666;margin-top:5px">Based on '+r.total+' archived reports'+(r.dateSpan?' · '+escHtml(r.dateSpan):'')+'</div>'
     +'<div style="font-size:11px;color:#999;margin-top:2px">Generated: '+dateStr+'</div>'
     +'</div>'
+    +(r.scorecard||'')
     +'<div style="font-size:13px;color:#222;line-height:1.8">'
     +r.text.split('\n\n').map(function(p){ return '<p style="margin:0 0 12px">'+escHtml(p.trim())+'</p>'; }).join('')
     +'</div>'
@@ -11932,6 +11933,141 @@ function printTrendAnalysis() {
   }
 
   showInlineReport(html, 'PI Trend Analysis — '+r.projName);
+}
+
+// ── PROJECT STATUS REPORT ────────────────────────────────────────────────────
+// Replaces the old "trend" analysis. A trend is backward-looking and gets vaguer
+// as reports accumulate; what a client needs is POSITION — are we on track, and
+// what is my exposure. So this compares three fixed anchors (baseline / last
+// report / now) rather than N reports, which keeps the output the same size and
+// sharpness at report 30 as at report 3, and measures progress against the
+// project's own start and end dates.
+function _buildStatusMetrics(projF, archives) {
+  var proj = (DB.get('projects')||[]).find(function(p){ return String(p.id)===String(projF); }) || {};
+  var today = new Date(); today.setHours(0,0,0,0);
+  var parse = function(d){ if(!d) return null; var q=String(d).split('-'); if(q.length<3) return null;
+    var dt=new Date(+q[0],+q[1]-1,+q[2]); return isNaN(dt)?null:dt; };
+  var days = function(a,b){ return Math.round((b-a)/86400000); };
+
+  // ── Schedule position ──
+  var st = parse(proj.startDate), en = parse(proj.endDate);
+  var elapsedPct = null, daysLeft = null, totalDays = null;
+  if (st && en && en > st) {
+    totalDays = days(st,en);
+    elapsedPct = Math.max(0, Math.min(100, Math.round(days(st,today)/totalDays*100)));
+    daysLeft = days(today,en);
+  }
+
+  // ── Deliverables ──
+  var dels = DB.get('deliverables').filter(function(d){ return String(d.projectId)===String(projF); });
+  var delDone = dels.filter(function(d){ return /complet/i.test(d.status||''); }).length;
+  var delPct = dels.length ? Math.round(delDone/dels.length*100) : 0;
+  var delLeft = dels.length - delDone;
+
+  // Projected completion at the observed rate since project start.
+  var projected = null, monthsLeftNeeded = null;
+  if (st && delDone > 0 && dels.length) {
+    var monthsElapsed = Math.max(0.5, days(st,today)/30.44);
+    var perMonth = delDone/monthsElapsed;
+    if (perMonth > 0 && delLeft > 0) {
+      monthsLeftNeeded = delLeft/perMonth;
+      var pd = new Date(today.getTime()); pd.setDate(pd.getDate()+Math.round(monthsLeftNeeded*30.44));
+      projected = pd;
+    }
+  }
+  // On pace when delivery keeps up with the calendar (5-point tolerance).
+  var pace = null;
+  if (elapsedPct !== null && dels.length) {
+    pace = (delPct >= elapsedPct - 5) ? 'on' : (delPct >= elapsedPct - 20 ? 'slipping' : 'behind');
+  }
+
+  // ── Commitments (the trust metric) ──
+  var comms = DB.get('commitments').filter(function(c){ return String(c.projectId)===String(projF); });
+  var isDone = function(st2){ return /complet|fulfill|resolv|closed|done/i.test(st2||''); };
+  var commDone = comms.filter(function(c){ return isDone(c.status); }).length;
+  var todayIso = today.toISOString().slice(0,10);
+  var commOverdue = comms.filter(function(c){ return !isDone(c.status) && c.dueDate && c.dueDate < todayIso; }).length;
+
+  // ── Exposure: open issues and how long they have been open ──
+  var issues = DB.get('issues').filter(function(x){ return String(x.projectId)===String(projF); });
+  var openIssues = issues.filter(function(x){ return !/resolv|closed|complet/i.test(x.status||''); });
+  var oldestAge = 0, oldestTitle = '';
+  openIssues.forEach(function(x){
+    var r = parse(x.dateRaised); if(!r) return;
+    var age = days(r,today);
+    if (age > oldestAge) { oldestAge = age; oldestTitle = x.title||'Untitled'; }
+  });
+
+  // ── Engagement: latest archived period vs the one before ──
+  var withFacts = (archives||[]).filter(function(a){ return a.snapshot && a.snapshot.trendFacts; });
+  var cur = withFacts.length ? withFacts[withFacts.length-1].snapshot.trendFacts : null;
+  var prev = withFacts.length > 1 ? withFacts[withFacts.length-2].snapshot.trendFacts : null;
+  var base = withFacts.length ? withFacts[0].snapshot.trendFacts : null;
+
+  return {
+    proj: proj, reportCount: (archives||[]).length, factsCount: withFacts.length,
+    startDate: proj.startDate||'', endDate: proj.endDate||'',
+    elapsedPct: elapsedPct, daysLeft: daysLeft, totalDays: totalDays,
+    delTotal: dels.length, delDone: delDone, delLeft: delLeft, delPct: delPct,
+    pace: pace, projected: projected,
+    commTotal: comms.length, commDone: commDone, commOpen: comms.length-commDone, commOverdue: commOverdue,
+    issuesOpen: openIssues.length, issuesTotal: issues.length, oldestAge: oldestAge, oldestTitle: oldestTitle,
+    cur: cur, prev: prev, base: base,
+    intDelta: (cur && prev) ? (cur.interactions - prev.interactions) : null,
+    curInts: cur ? cur.interactions : null
+  };
+}
+
+// Scorecard. Rendered as an inline-styled TABLE rather than flex/CSS blocks: it
+// survives the print window, the client portal and a copy into Word unchanged,
+// which the app's own CSS classes would not.
+function _statusScorecardHTML(m) {
+  var bar = function(pct,color){
+    pct = Math.max(0,Math.min(100,pct||0));
+    return '<div style="display:inline-block;width:120px;height:9px;background:#e3e8ee;border-radius:5px;overflow:hidden;vertical-align:middle">'
+      + '<div style="width:'+pct+'%;height:100%;background:'+color+'"></div></div>';
+  };
+  var flag = function(txt,color){ return '<span style="font-size:11px;font-weight:700;color:'+color+'">'+escHtml(txt)+'</span>'; };
+  var row = function(label,visual,value,note){
+    return '<tr>'
+      + '<td style="padding:7px 10px;border-bottom:1px solid #e6ebf0;font-size:11px;color:#4a5b6b;text-transform:uppercase;letter-spacing:.4px;font-weight:700;white-space:nowrap">'+label+'</td>'
+      + '<td style="padding:7px 10px;border-bottom:1px solid #e6ebf0;white-space:nowrap">'+visual+'</td>'
+      + '<td style="padding:7px 10px;border-bottom:1px solid #e6ebf0;font-size:12px;color:#1a2c3d;white-space:nowrap">'+value+'</td>'
+      + '<td style="padding:7px 10px;border-bottom:1px solid #e6ebf0;font-size:11px">'+(note||'')+'</td></tr>';
+  };
+
+  var html = '<table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #cdd7e1;border-radius:6px;margin-bottom:14px">';
+
+  if (m.elapsedPct !== null) {
+    html += row('Schedule', bar(m.elapsedPct,'#5a7a99'), m.elapsedPct+'% elapsed',
+      (m.daysLeft>=0 ? m.daysLeft+' days remaining' : Math.abs(m.daysLeft)+' days past end date'));
+  }
+  if (m.delTotal) {
+    var paceTxt = m.pace==='on' ? flag('\u2713 On pace','#1a7a50')
+                : m.pace==='slipping' ? flag('\u26a0 Slipping','#b36b00')
+                : m.pace==='behind' ? flag('\u26a0 Behind pace','#a02020') : '';
+    var projTxt = (m.projected && m.pace!=='on')
+      ? ' \u00b7 <span style="font-size:11px;color:#5a6b7b">projects to '+_fmtMDY(m.projected.toISOString().slice(0,10))+'</span>' : '';
+    html += row('Deliverables', bar(m.delPct, m.pace==='on'?'#1a7a50':m.pace==='slipping'?'#d9a544':'#c0392b'),
+      m.delPct+'% complete', paceTxt+projTxt+'<div style="font-size:11px;color:#5a6b7b;margin-top:2px">'+m.delDone+' of '+m.delTotal+' delivered \u00b7 '+m.delLeft+' remaining</div>');
+  }
+  if (m.commTotal) {
+    html += row('Commitments', bar(Math.round(m.commDone/m.commTotal*100),'#2d7dd2'),
+      m.commDone+' of '+m.commTotal+' fulfilled',
+      m.commOverdue>0 ? flag('\u26a0 '+m.commOverdue+' overdue','#a02020') : (m.commOpen>0? '<span style="font-size:11px;color:#5a6b7b">'+m.commOpen+' outstanding</span>' : flag('\u2713 All fulfilled','#1a7a50')));
+  }
+  html += row('Open issues', '<span style="font-size:18px;font-weight:700;color:'+(m.issuesOpen>0?'#b36b00':'#1a7a50')+'">'+m.issuesOpen+'</span>',
+    (m.issuesTotal ? 'of '+m.issuesTotal+' logged' : 'none logged'),
+    m.oldestAge>0 ? '<span style="font-size:11px;color:#5a6b7b">oldest open '+m.oldestAge+' days \u2014 '+escHtml(m.oldestTitle)+'</span>' : '');
+  if (m.curInts !== null) {
+    var d = m.intDelta;
+    var dTxt = (d===null) ? '' : (d>0 ? flag('\u2191 +'+d+' vs last period','#1a7a50')
+                : d<0 ? flag('\u2193 '+d+' vs last period','#b36b00') : '<span style="font-size:11px;color:#5a6b7b">unchanged</span>');
+    html += row('Engagement', '<span style="font-size:18px;font-weight:700;color:#2d7dd2">'+m.curInts+'</span>',
+      'interactions last period', dTxt);
+  }
+  html += '</table>';
+  return html;
 }
 
 // Deterministically diff the frozen per-report facts. Matching and arithmetic are
@@ -12034,23 +12170,37 @@ async function generateTrendSummary() {
 
   // Deterministic period-over-period deltas (null for pre-trendFacts archives).
   var cmp = _buildTrendComparison(archives);
+  var metrics = _buildStatusMetrics(projF, archives);
 
-  var systemPrompt = 'You are a senior public involvement coordinator at a transportation engineering firm. '
-    +'You are writing a cross-report TREND analysis for a single project — the one thing the individual '
-    +'reports cannot show, because each sees only its own period. Do not re-summarise the reports.\n\n'
-    +'Cover, in this order, as flowing prose:\n'
-    +'1) TRAJECTORY — is public involvement intensifying, steady, or winding down, and what in the numbers says so.\n'
-    +'2) WHAT MOVED — items that changed state across the periods (issues resolved, commitments fulfilled, '
-    +'deliverables advanced). Name them specifically.\n'
-    +'3) WHAT IS PERSISTING — concerns or issues that recur across periods without resolution. Treat this as the '
-    +'most important part: unresolved recurring concerns are the compliance risk a single report never surfaces.\n'
-    +'4) WHAT IS NEW AND WHAT TO WATCH — items first appearing in the latest period, plus anything aging: '
-    +'overdue commitments, a growing follow-up backlog, deliverables that have not moved.\n\n'
-    +'CRITICAL: the movement facts given to you were computed programmatically and are authoritative. Use them '
-    +'exactly as stated — never assert that something closed, opened or changed unless it appears in those facts. '
-    +'If a category shows no movement, say so plainly or omit it; do not manufacture a trend. Some sections '
-    +'(manual narrative, contact rosters) cannot trend — ignore them rather than padding.\n\n'
-    +'Use plain, professional language, third person, 5-8 sentences. '
+  // Position-against-plan facts — the part a single report can never show.
+  var planFacts = 'PROJECT POSITION (computed — authoritative):\n'
+    + 'Project runs ' + (metrics.startDate?_fmtMDY(metrics.startDate):'?') + ' to ' + (metrics.endDate?_fmtMDY(metrics.endDate):'?') + '.\n'
+    + (metrics.elapsedPct!==null ? 'Calendar elapsed: ' + metrics.elapsedPct + '%; ' + (metrics.daysLeft>=0? metrics.daysLeft+' days remaining.' : Math.abs(metrics.daysLeft)+' days PAST the end date.') + '\n' : '')
+    + 'Deliverables: ' + metrics.delDone + ' of ' + metrics.delTotal + ' complete (' + metrics.delPct + '%), ' + metrics.delLeft + ' remaining.\n'
+    + (metrics.pace ? 'Pace assessment: ' + (metrics.pace==='on'?'ON PACE (delivery is keeping up with the calendar).':metrics.pace==='slipping'?'SLIPPING (delivery is behind the calendar).':'BEHIND PACE (delivery is well behind the calendar).') + '\n' : '')
+    + (metrics.projected && metrics.pace!=='on' ? 'At the rate observed since project start, the remaining deliverables project to complete around ' + _fmtMDY(metrics.projected.toISOString().slice(0,10)) + '.\n' : '')
+    + 'Commitments: ' + metrics.commDone + ' of ' + metrics.commTotal + ' fulfilled; ' + metrics.commOpen + ' outstanding; ' + metrics.commOverdue + ' overdue.\n'
+    + 'Open issues: ' + metrics.issuesOpen + ' of ' + metrics.issuesTotal + ' logged'
+    + (metrics.oldestAge>0 ? '; the oldest has been open ' + metrics.oldestAge + ' days ("' + metrics.oldestTitle + '").' : '.') + '\n'
+    + (metrics.intDelta!==null ? 'Engagement: ' + metrics.curInts + ' interactions in the latest period, a change of ' + (metrics.intDelta>=0?'+':'') + metrics.intDelta + ' versus the previous period.\n' : '');
+
+  var systemPrompt = 'You are a senior public involvement coordinator at a transportation engineering firm '
+    +'writing the narrative for a PROJECT STATUS report that accompanies a scorecard the client can already see. '
+    +'Your job is to explain POSITION and EXPOSURE — where the project stands against its own schedule and scope, '
+    +'and what needs attention. Do not re-summarise the individual reports and do not repeat the scorecard numbers '
+    +'mechanically; interpret them.\n\n'
+    +'Cover, as flowing prose, in this order:\n'
+    +'1) POSITION AGAINST PLAN — how delivery compares with how much of the schedule has elapsed, and what that '
+    +'means for finishing on time. If the project is behind, say so directly and give the projected completion.\n'
+    +'2) WHAT MOVED since the last report — issues resolved, commitments fulfilled, deliverables advanced. Name them.\n'
+    +'3) EXPOSURE — what is unresolved and aging: long-open issues, overdue commitments, concerns recurring across '
+    +'reports without resolution. This is the most important part; it is the risk no single report surfaces.\n'
+    +'4) WHAT TO EXPECT NEXT — what the remaining work and open items imply for the coming period.\n\n'
+    +'CRITICAL: every figure and movement fact given to you was computed programmatically and is authoritative. '
+    +'Never assert that something closed, opened or changed unless it appears in those facts, and never contradict '
+    +'a stated number. Where a category shows no movement, say so plainly or omit it — do not manufacture a trend. '
+    +'Be candid about being behind schedule; a client is better served by an honest status than a reassuring one.\n\n'
+    +'Use plain, professional language, third person, 6-9 sentences. '
     +'IMPORTANT: Output plain prose paragraphs only. No markdown, no hashtags, no headers, no bullet points, '
     +'no asterisks, no special formatting of any kind.';
 
@@ -12072,15 +12222,16 @@ async function generateTrendSummary() {
       + 'Base the analysis only on the narratives above, and say plainly where item-level movement cannot be determined.';
   }
 
-  var userContent = 'Project: '+projName+'\n\nArchived PI report narratives in chronological order:\n\n'+digest
+  var userContent = 'Project: '+projName+'\n\n'+planFacts
+    + '\nArchived PI report narratives in chronological order:\n\n'+digest
     + movement
-    + '\n\nWrite the trend analysis.';
+    + '\n\nWrite the project status narrative.';
 
   var total = archives.length;
   var estCost = (total * 0.01 + 0.02).toFixed(2);
   if (!confirm('This will send 1 API call to Claude (Sonnet) analyzing '+total+' archived reports.\n'
     +'Estimated cost: ~$'+estCost+' or less.\n\nProceed?')) {
-    if (btn) { btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px"><path d="M2 12 L5 8 L8 10 L11 5 L14 3"/></svg> ✦ AI: Summarize PI trend'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px"><path d="M2 12 L5 8 L8 10 L11 5 L14 3"/></svg> ✦ AI: Project Status Report'; }
     return;
   }
 
@@ -12121,32 +12272,32 @@ async function generateTrendSummary() {
     // Period span for the published trend: earliest report start → latest report end
     var trendStart = archives[0].periodStart || (archives[0].archivedAt||'').slice(0,10) || null;
     var trendEnd = archives[archives.length-1].periodEnd || (archives[archives.length-1].archivedAt||'').slice(0,10) || null;
-    _lastTrendResult = { text: cleanText, projName: projName, total: total, dateSpan: dateSpan, periodStart: trendStart, periodEnd: trendEnd, archives: archives.slice().reverse(), proj: proj||{} };
+    _lastTrendResult = { text: cleanText, scorecard: _statusScorecardHTML(metrics), metrics: metrics, projName: projName, total: total, dateSpan: dateSpan, periodStart: trendStart, periodEnd: trendEnd, archives: archives.slice().reverse(), proj: proj||{} };
     if (resultEl && cleanText) {
-      resultEl.innerHTML = _trendEditorHTML(cleanText, total, dateSpan);
+      resultEl.innerHTML = _trendEditorHTML(cleanText, total, dateSpan, _lastTrendResult.scorecard);
     }
   } catch(e) {
     showToast('Claude API error: '+e.message, 'error', 5000);
   }
 
-  if (btn) { btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px"><path d="M2 12 L5 8 L8 10 L11 5 L14 3"/></svg> ✦ AI: Re-analyze trend'; }
+  if (btn) { btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px"><path d="M2 12 L5 8 L8 10 L11 5 L14 3"/></svg> ✦ AI: Regenerate status report'; }
 }
 
 // Editable + publishable trend card (shown in #trend-result after generation).
 // The consultant reviews/edits, then publishes to the client portal — human gate.
-function _trendEditorHTML(text, total, dateSpan) {
+function _trendEditorHTML(text, total, dateSpan, scorecard) {
   return '<div style="margin-bottom:14px;padding:16px 18px;background:linear-gradient(135deg,rgba(45,125,210,.12),rgba(14,30,48,.8));border:1px solid rgba(45,125,210,.35);border-radius:10px">'
     +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
     +'<svg viewBox="0 0 16 16" fill="none" stroke="var(--sky-lt)" stroke-width="1.8" style="width:14px;height:14px"><path d="M2 12 L5 8 L8 10 L11 5 L14 3"/></svg>'
-    +'<span style="font-size:12px;font-weight:700;color:var(--sky-lt);text-transform:uppercase;letter-spacing:.5px">AI Trend Analysis</span>'
+    +'<span style="font-size:12px;font-weight:700;color:var(--sky-lt);text-transform:uppercase;letter-spacing:.5px">Project Status Report</span>'
     +'<span style="font-size:10px;color:var(--fog);margin-left:auto">Across '+total+' reports · '+dateSpan+'</span>'
     +'<button class="btn btn-xs" style="margin-left:10px;flex-shrink:0;background:rgba(74,155,232,.2);border-color:rgba(74,155,232,.5);color:var(--sky-lt)" onclick="printTrendAnalysis()">&#x1F5B6; Print</button>'
     +'</div>'
-    +'<div style="font-size:11px;color:var(--fog);margin-bottom:6px">Review and edit before publishing. This becomes the current project trend the client sees in their portal.</div>'
+    +(scorecard?'<div style="margin-bottom:10px">'+scorecard+'</div>':'')+'<div style="font-size:11px;color:var(--fog);margin-bottom:6px">Review and edit the narrative before publishing. This becomes the current project status the client sees in their portal.</div>'
     +'<textarea id="trend-edit" style="width:100%;box-sizing:border-box;min-height:130px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:8px;color:var(--white);padding:10px 12px;font-size:13px;line-height:1.6;resize:vertical;font-family:var(--font)">'+escHtml(text)+'</textarea>'
     +'<div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">'
     +'<input id="trend-pub-by" placeholder="Published by (your name)" style="flex:1;min-width:180px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:8px;color:var(--white);padding:8px 10px;font-size:12px;box-sizing:border-box">'
-    +'<button class="btn btn-primary btn-sm" onclick="publishClientTrend()">✦ Publish trend to client portal</button>'
+    +'<button class="btn btn-primary btn-sm" onclick="publishClientTrend()">✦ Publish status to client portal</button>'
     +'</div>'
     +'<div id="trend-pub-status" style="font-size:12px;margin-top:8px"></div>'
     +'</div>';

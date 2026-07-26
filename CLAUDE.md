@@ -535,11 +535,24 @@ links and grant-by-email rows. Built for the UDOT conference demo.
   deleted only when they are not linked to any other project; their ids are
   captured BEFORE the link rows are deleted (that's what identifies them) and
   deleted AFTER (foreign key).
-- **The last 26 weeks of interactions are dated relative to
-  `date_trunc('week', current_date)`**, not to fixed calendar dates, so the
-  engagement chart is always full and the timeline never gaps whichever week
-  the seed is run. Everything older uses fixed dates tied to real milestones.
-  **Re-run it the week of any demo.**
+- **Recent interactions are dated relative to `date_trunc('week', current_date)`**,
+  not to fixed calendar dates, so the engagement chart is always full whichever
+  week the seed is run. Everything before 2026-01-31 uses fixed dates tied to
+  real milestones. **Re-run it the week of any demo** — safe to run any number
+  of times.
+  - The relative block generates **45 weeks** but the INSERT filters out any
+    week landing on or before the fixed-history end (`2026-01-31`). Surplus
+    weeks are discarded on an early run and materialise on a later one, so the
+    seam between the fixed and relative blocks never opens into a gap and never
+    double-counts. Verified gapless for run dates through **early Dec 2026**;
+    past that a hole appears in Feb 2026 and the generator needs a wider window
+    (bump `range(45)` in the generator, or move the fixed-history cutoff).
+  - **Re-running wipes anything created against these two projects** —
+    `pi_reports` drafts, `pi_report_archive` rows (including `client_visible`
+    shares), `pi_client_summaries` trends, and any stakeholder added to a demo
+    project and not linked elsewhere. Do report-editor / share / publish-trend
+    demo prep AFTER the final re-run. Portal tokens and grant emails are fixed
+    literals in the file, so those survive re-runs and bookmarks keep working.
 - All organizations are real Utah entities; all individuals are fictional and
   use non-routable `demo`/`@demo-…` email domains.
 - Validated by running it against a local Postgres 16 with a schema derived

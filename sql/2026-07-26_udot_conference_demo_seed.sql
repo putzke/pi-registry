@@ -1200,17 +1200,51 @@ where date_trunc('week', current_date)::date - v.week_back * 7 + v.dow
 --     switches it to the 45-day DEIS requirement and extends the end date.
 -- ═══════════════════════════════════════════════════════════════════════════
 insert into pi_comment_periods
-  (id, project_id, title, period_type, description, start_date, end_date,
-   status, venue, hearing_date, first_ad_date)
+  (id, project_id, title, period_type, description, start_date, end_date, status)
 select
   'cp-sr154-deis-2025', p.id,
   'DEIS Comment Period',
   'EA-30DAY',
   'Public review period on the draft environmental document for the SR-154 corridor. Notice of availability published in local and regional outlets; formal public hearing held October 22, 2025 with a court reporter present.',
-  date '2025-10-15', date '2025-11-15', 'Closed',
-  'Herriman High School, 11917 S Mustang Trail Way, Herriman',
-  date '2025-10-22', date '2025-10-15'
+  date '2025-10-15', date '2025-11-15', 'Closed'
 from _seed_proj p where p.slug = 'sr154';
+
+-- venue / hearing_date / first_ad_date are written by the desktop app but were
+-- never migrated into the database (see
+-- sql/2026-07-26_comment_periods_missing_columns.sql). Set them only if the
+-- columns exist, so this seed runs correctly either before or after that
+-- migration instead of failing with 42703.
+do $$
+declare
+  vals constant jsonb := jsonb_build_object(
+    'venue',         'Herriman High School, 11917 S Mustang Trail Way, Herriman',
+    'hearing_date',  '2025-10-22',
+    'first_ad_date', '2025-10-15');
+  r record; applied text[] := '{}'; skipped text[] := '{}';
+begin
+  for r in
+    select e.key as col,
+           (select c.data_type from information_schema.columns c
+             where c.table_schema = 'public' and c.table_name = 'pi_comment_periods'
+               and c.column_name = e.key) as dtype
+      from jsonb_each_text(vals) e
+  loop
+    if r.dtype is null then
+      skipped := skipped || r.col;
+    else
+      -- cast through the column's real type; jsonb ->> yields text
+      execute format('update pi_comment_periods set %I = $1::%s where id = $2', r.col, r.dtype)
+        using (vals ->> r.col), 'cp-sr154-deis-2025';
+      applied := applied || r.col;
+    end if;
+  end loop;
+  if array_length(skipped, 1) > 0 then
+    raise notice 'comment period: set [%]; skipped [%] — run sql/2026-07-26_comment_periods_missing_columns.sql to add them',
+      array_to_string(applied, ', '), array_to_string(skipped, ', ');
+  else
+    raise notice 'comment period: all optional columns set (%).', array_to_string(applied, ', ');
+  end if;
+end $$;
 
 -- 23 comments received, 18 responded (matches the Comment Period Summary
 -- deliverable). Wrapped so a column-set mismatch warns instead of rolling back

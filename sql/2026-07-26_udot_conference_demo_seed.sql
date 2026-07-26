@@ -50,10 +50,12 @@ create temporary table _seed_stake (slug text primary key, id bigint not null);
 do $$
 declare
   demo_pids text[] := array['25-154-001','25-LC-400N'];
-  ids bigint[];
-  demo_stakes bigint[];
+  ids text[];          -- TEXT, not bigint: project_id is text on some of these
+  demo_stakes text[];  -- tables and bigint on others. Comparing as text works
+                       -- for both, the same way the RLS policies in
+                       -- sql/2026-07-04_portal_links.sql do.
 begin
-  select coalesce(array_agg(id), '{}'::bigint[]) into ids
+  select coalesce(array_agg(id::text), '{}'::text[]) into ids
     from pi_projects where pid = any(demo_pids);
   if coalesce(array_length(ids, 1), 0) = 0 then
     raise notice 'No previous demo projects found — nothing to purge.';
@@ -61,39 +63,43 @@ begin
   end if;
 
   delete from pi_issue_interactions
-   where interaction_id in (select id from pi_interactions where project_id = any(ids));
-  delete from pi_interactions        where project_id = any(ids);
-  delete from pi_public_comments     where project_id = any(ids);
-  delete from pi_comment_periods     where project_id = any(ids);
-  delete from pi_commitments         where project_id = any(ids);
-  delete from pi_deliverables        where project_id = any(ids);
-  delete from pi_meetings            where project_id = any(ids);
-  delete from pi_issues              where project_id = any(ids);
-  delete from pi_tribal_consultations where project_id = any(ids);
+   where interaction_id::text in (select id::text from pi_interactions
+                                   where project_id::text = any(ids));
+  delete from pi_interactions        where project_id::text = any(ids);
+  delete from pi_public_comments     where project_id::text = any(ids);
+  delete from pi_comment_periods     where project_id::text = any(ids);
+  delete from pi_commitments         where project_id::text = any(ids);
+  delete from pi_deliverables        where project_id::text = any(ids);
+  delete from pi_meetings            where project_id::text = any(ids);
+  delete from pi_issues              where project_id::text = any(ids);
+  delete from pi_tribal_consultations where project_id::text = any(ids);
   delete from pi_group_members
-   where group_id in (select id from pi_groups where project_id = any(ids));
-  delete from pi_groups              where project_id = any(ids);
-  delete from pi_reports             where project_id = any(ids);
-  delete from pi_report_archive      where project_id = any(ids);
-  delete from pi_client_summaries    where project_id = any(ids);
-  delete from pi_portal_links        where project_id = any(ids);
-  delete from pi_client_access       where project_id = any(ids);
+   where group_id::text in (select id::text from pi_groups
+                             where project_id::text = any(ids));
+  delete from pi_groups              where project_id::text = any(ids);
+  delete from pi_reports             where project_id::text = any(ids);
+  delete from pi_report_archive      where project_id::text = any(ids);
+  delete from pi_client_summaries    where project_id::text = any(ids);
+  delete from pi_portal_links        where project_id::text = any(ids);
+  delete from pi_client_access       where project_id::text = any(ids);
 
   -- Stakeholders that belong ONLY to the demo projects. A contact that has
   -- since been linked to a real project is left alone. The ids are captured
   -- BEFORE the link rows are deleted, because the link rows are what identify
   -- them — and they are deleted AFTER, because of the foreign key.
-  select coalesce(array_agg(s.id), '{}'::bigint[]) into demo_stakes
+  select coalesce(array_agg(s.id::text), '{}'::text[]) into demo_stakes
     from pi_stakeholders s
-   where s.id in (select stakeholder_id from pi_project_stakeholders where project_id = any(ids))
+   where s.id::text in (select stakeholder_id::text from pi_project_stakeholders
+                         where project_id::text = any(ids))
      and not exists (
        select 1 from pi_project_stakeholders ps
-        where ps.stakeholder_id = s.id and not (ps.project_id = any(ids)));
+        where ps.stakeholder_id::text = s.id::text
+          and not (ps.project_id::text = any(ids)));
 
-  delete from pi_project_stakeholders where project_id = any(ids);
-  delete from pi_group_members where stakeholder_id = any(demo_stakes);
-  delete from pi_stakeholders  where id             = any(demo_stakes);
-  delete from pi_projects             where id = any(ids);
+  delete from pi_project_stakeholders where project_id::text = any(ids);
+  delete from pi_group_members where stakeholder_id::text = any(demo_stakes);
+  delete from pi_stakeholders  where id::text        = any(demo_stakes);
+  delete from pi_projects             where id::text = any(ids);
   raise notice 'Purged % previous demo project(s) and % demo-only stakeholder(s).',
     array_length(ids, 1), coalesce(array_length(demo_stakes, 1), 0);
 end $$;
@@ -1329,16 +1335,16 @@ declare r record;
 begin
   for r in
     select pr.pid, pr.name,
-           (select count(*) from pi_project_stakeholders x where x.project_id = pr.id) as stakeholders,
-           (select count(*) from pi_interactions        x where x.project_id = pr.id) as interactions,
-           (select count(*) from pi_interactions        x where x.project_id = pr.id
+           (select count(*) from pi_project_stakeholders x where x.project_id::text = pr.id::text) as stakeholders,
+           (select count(*) from pi_interactions        x where x.project_id::text = pr.id::text) as interactions,
+           (select count(*) from pi_interactions        x where x.project_id::text = pr.id::text
               and x.interaction_date >= current_date - 55)                            as last_8_weeks,
-           (select count(*) from pi_deliverables        x where x.project_id = pr.id) as deliverables,
-           (select count(*) from pi_meetings            x where x.project_id = pr.id) as events,
-           (select count(*) from pi_issues              x where x.project_id = pr.id
+           (select count(*) from pi_deliverables        x where x.project_id::text = pr.id::text) as deliverables,
+           (select count(*) from pi_meetings            x where x.project_id::text = pr.id::text) as events,
+           (select count(*) from pi_issues              x where x.project_id::text = pr.id::text
               and x.status in ('Open','In Progress'))                                 as open_issues,
-           (select count(*) from pi_commitments         x where x.project_id = pr.id) as commitments,
-           (select count(*) from pi_public_comments     x where x.project_id = pr.id) as public_comments
+           (select count(*) from pi_commitments         x where x.project_id::text = pr.id::text) as commitments,
+           (select count(*) from pi_public_comments     x where x.project_id::text = pr.id::text) as public_comments
       from pi_projects pr
      where pr.pid in ('25-154-001','25-LC-400N')
      order by pr.pid

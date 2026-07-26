@@ -9621,6 +9621,16 @@ function _projHeaderLabel(name, pid) {
 // Section drafting: same persona and factual rules as the shared prompt, but the
 // length comes from each task's own instruction instead of a blanket
 // "2-4 sentences" cap, which was truncating richer sections.
+// mm/dd/yyyy for report TABLE cells. Table columns get scanned and compared, so a
+// fixed numeric format reads better there than fmt()'s "Jul 6, 2026" prose style —
+// and better than the raw ISO the tables were printing.
+function _fmtMDY(d){
+  if(!d) return '\u2014';
+  var m=String(d).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(!m) return String(d);
+  return m[2]+'/'+m[3]+'/'+m[1];
+}
+
 // Human date range for AI facts and report text: "July 6 – August 7, 2026".
 // The AI echoes whatever format we hand it, so passing raw ISO ("2026-07-06
 // through 2026-07-17") is what put ISO dates in the narratives.
@@ -10815,7 +10825,7 @@ function _buildSectionPreviewTable(secType, projF, pstart, pend, includeInternal
     if (!logInts.length) { tbl += '<tr><td colspan="4" style="'+tdStyle+';color:#aaa;font-style:italic">No interactions for this period.</td></tr>'; }
     logInts.forEach(function(i){
       var s = allStakes.find(function(x){ return String(x.id)===String(i.stakeholderId); });
-      tbl += '<tr><td style="'+tdStyle+';white-space:nowrap">'+escHtml(i.date)+'</td>'
+      tbl += '<tr><td style="'+tdStyle+';white-space:nowrap">'+escHtml(_fmtMDY(i.date))+'</td>'
         +'<td style="'+tdStyle+'"><strong>'+escHtml(s ? dispName(s) : (i.anonLabel||'Anonymous'))+'</strong>'
         +(s&&s.org?'<div style="font-size:10px;color:#595959">'+escHtml(s.org)+'</div>':'')+'</td>'
         +'<td style="'+tdStyle+'">'+escHtml(i.channel||'—')+'</td>'
@@ -10844,7 +10854,7 @@ function _buildSectionPreviewTable(secType, projF, pstart, pend, includeInternal
       +'<thead><tr><th style="'+thStyle+'">Date</th><th style="'+thStyle+'">Event</th><th style="'+thStyle+'">Type</th><th style="'+thStyle+'">Status</th><th style="'+thStyle+'">Attend.</th><th style="'+thStyle+'">Notes</th></tr></thead><tbody>';
     if (!evts.length) { tbl += '<tr><td colspan="6" style="'+tdStyle+';color:#aaa;font-style:italic">No events logged.</td></tr>'; }
     evts.forEach(function(m){
-      tbl += '<tr><td style="'+tdStyle+';white-space:nowrap">'+escHtml(m.date)+'</td>'
+      tbl += '<tr><td style="'+tdStyle+';white-space:nowrap">'+escHtml(_fmtMDY(m.date))+'</td>'
         +'<td style="'+tdStyle+'">'+escHtml(m.title||'—')+'<div style="font-size:10px;color:#595959">'+escHtml(m.location||'')+'</div></td>'
         +'<td style="'+tdStyle+'">'+escHtml(m.type||'Other')+'</td>'
         +'<td style="'+tdStyle+'">'+escHtml(m.status||'Planned')+'</td>'
@@ -10865,7 +10875,7 @@ function _buildSectionPreviewTable(secType, projF, pstart, pend, includeInternal
       var od = !i.followUpDone && i.followUpDue && i.followUpDue < nowStr;
       var statusTxt = i.followUpDone ? 'Resolved' : (od ? 'OVERDUE' : 'Open');
       var statusColor = i.followUpDone ? '#1a7a50' : (od ? '#c0392b' : '#b36b00');
-      tbl += '<tr><td style="'+tdStyle+';white-space:nowrap;color:'+statusColor+';font-weight:600">'+escHtml(i.followUpDue||'No date')+'</td>'
+      tbl += '<tr><td style="'+tdStyle+';white-space:nowrap;color:'+statusColor+';font-weight:600">'+escHtml(i.followUpDue?_fmtMDY(i.followUpDue):'No date')+'</td>'
         +'<td style="'+tdStyle+'">'+escHtml(i.followUpNote||'—')+'</td>'
         +'<td style="'+tdStyle+'">'+escHtml(s ? dispName(s) : (i.anonLabel||'Anonymous'))+'</td>'
         +'<td style="'+tdStyle+';color:'+statusColor+';font-weight:600">'+statusTxt+'</td></tr>';
@@ -10881,7 +10891,7 @@ function _buildSectionPreviewTable(secType, projF, pstart, pend, includeInternal
     if (!comments.length) { tbl += '<tr><td colspan="5" style="'+tdStyle+';color:#aaa;font-style:italic">No public comments.</td></tr>'; }
     comments.forEach(function(i){
       var s = allStakes.find(function(x){ return String(x.id)===String(i.stakeholderId); });
-      tbl += '<tr><td style="'+tdStyle+';white-space:nowrap">'+escHtml(i.date)+'</td>'
+      tbl += '<tr><td style="'+tdStyle+';white-space:nowrap">'+escHtml(_fmtMDY(i.date))+'</td>'
         +'<td style="'+tdStyle+'">'+escHtml(s ? dispName(s) : (i.anonLabel||'Anonymous'))+'</td>'
         +'<td style="'+tdStyle+'">'+escHtml(i.channel||'—')+'</td>'
         +'<td style="'+tdStyle+'">'+escHtml((i.summary||'—').slice(0,150))+'</td>'
@@ -10948,7 +10958,7 @@ function _buildSectionPreviewTable(secType, projF, pstart, pend, includeInternal
       tbl += '<tr><td style="'+tdStyle+'">'+escHtml(c.category||'—')+'</td>'
         +'<td style="'+tdStyle+'">'+escHtml((c.commitment||'—').slice(0,100))+'</td>'
         +'<td style="'+tdStyle+'">'+escHtml(madeTo.slice(0,40))+'</td>'
-        +'<td style="'+tdStyle+';white-space:nowrap">'+escHtml(c.dueDate||'—')+'</td>'
+        +'<td style="'+tdStyle+';white-space:nowrap">'+escHtml(_fmtMDY(c.dueDate))+'</td>'
         +'<td style="'+tdStyle+';color:'+statusColor+';font-weight:600">'+escHtml(c.status||'Open')+'</td></tr>';
     });
 
@@ -12336,7 +12346,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
           var sk=allStakes.find(function(x){return x.id===int.stakeholderId});
           var nm=sk?sk.firstName+' '+sk.lastName:(int.anonLabel||'Anonymous');
           var org=sk?sk.org||'':'';
-          cRows+=tblDataRow([int.date,nm+(org?' ('+org+')':''),int.channel||'\u2014',int.summary||'\u2014'],cCols,ri%2!==0);
+          cRows+=tblDataRow([_fmtMDY(int.date),nm+(org?' ('+org+')':''),int.channel||'\u2014',int.summary||'\u2014'],cCols,ri%2!==0);
         });
         xml+=tblWrap(9460,cCols,cRows); xml+=spacer();
       } else if(periodInts.length===0){
@@ -12428,7 +12438,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
           var sk=allStakes.find(function(x){return x.id===int.stakeholderId});
           var nm=sk?sk.firstName+' '+sk.lastName:(int.anonLabel||'Anonymous');
           var org=sk?sk.org||'':'';
-          ilRows+=tblDataRow([int.date,nm+(org?' ('+org+')':''),int.channel||'—',int.summary||'—'],ilCols,ri%2!==0);
+          ilRows+=tblDataRow([_fmtMDY(int.date),nm+(org?' ('+org+')':''),int.channel||'—',int.summary||'—'],ilCols,ri%2!==0);
         });
         xml+=tblWrap(9560,ilCols,ilRows); xml+=spacer();
       } else if(sorted.length===0){
@@ -12461,7 +12471,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
           var nm=sk?sk.firstName+' '+sk.lastName:(i.anonLabel||'Anonymous');
           var od=!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<now;
           var st=i.followUpDone?'Resolved':(od?'OVERDUE':'Open');
-          fuRows+=tblDataRow([i.followUpDue||'No date',i.followUpNote||'\u2014',nm,st],fuCols,ri%2!==0);
+          fuRows+=tblDataRow([i.followUpDue?_fmtMDY(i.followUpDue):'No date',i.followUpNote||'\u2014',nm,st],fuCols,ri%2!==0);
         });
         xml+=tblWrap(9560,fuCols,fuRows); xml+=spacer();
       } else {
@@ -12582,7 +12592,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
             var nm=sk?sk.firstName+' '+sk.lastName:(i.anonLabel||'Anonymous');
             var org=sk?sk.org||'':'';
             var st=i.followUpDone?'Responded':'Pending';
-            pcRows+=tblDataRow([i.date,nm,org,i.channel||'—',(i.summary||'—').slice(0,200),st],pcCols,ri%2!==0);
+            pcRows+=tblDataRow([_fmtMDY(i.date),nm,org,i.channel||'—',(i.summary||'—').slice(0,200),st],pcCols,ri%2!==0);
           });
           xml+=tblWrap(9560,pcCols,pcRows); xml+=spacer();
         } else {
@@ -12651,7 +12661,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
           var evCols=[1300,2900,1400,1200,900,1860]; var evHdrs=['Date','Event','Type','Status','Attend.','Notes'];
           var evRows=tblHdrRow(evHdrs,evCols);
           projEvts.forEach(function(m,ri){
-            evRows+=tblDataRow([m.date,m.title+(m.location?' — '+m.location:''),m.type||'Other',m.status||'Planned',String(m.attendanceCount||'—'),(m.notes||'—').slice(0,100)],evCols,ri%2!==0);
+            evRows+=tblDataRow([_fmtMDY(m.date),m.title+(m.location?' — '+m.location:''),m.type||'Other',m.status||'Planned',String(m.attendanceCount||'—'),(m.notes||'—').slice(0,100)],evCols,ri%2!==0);
           });
           xml+=tblWrap(9560,evCols,evRows); xml+=spacer();
         } else {
@@ -12681,7 +12691,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
         sortedComm.forEach(function(c,ri){
           var sk=c.stakeholderId?allStakesC.find(function(s){return String(s.id)===String(c.stakeholderId)}):null;
           var madeTo=sk?((sk.firstName||'')+' '+(sk.lastName||'')).trim()||(sk.org||''):(c.madeTo||'—');
-          comRows+=tblDataRow([c.category||'—',(c.commitment||'—').slice(0,120),madeTo.slice(0,40),c.dueDate||'—',c.status||'Open'],comCols,ri%2!==0);
+          comRows+=tblDataRow([c.category||'—',(c.commitment||'—').slice(0,120),madeTo.slice(0,40),_fmtMDY(c.dueDate),c.status||'Open'],comCols,ri%2!==0);
         });
         xml+=tblWrap(9560,comCols,comRows); xml+=spacer();
       } else {

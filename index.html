@@ -11951,7 +11951,15 @@ async function generateTrendSummary() {
       throw new Error((err.error && err.error.message) || ('API error '+resp.status));
     }
     var data = await resp.json();
-    var text = (data.content && data.content[0] && data.content[0].text) || '';
+    // Collect every text block — reading only content[0] returns nothing when the
+    // first block isn't text (the same silent failure that broke draft-all).
+    var text = ((data && data.content) || [])
+      .filter(function(b){ return b && b.type==='text' && typeof b.text==='string'; })
+      .map(function(b){ return b.text; }).join('\n').trim();
+    if (!text) {
+      console.warn('Trend: response had no text block. stop_reason=', data && data.stop_reason, data);
+      showToast('Claude returned no usable text for the trend summary — see console.', 'error', 6000);
+    }
     // Strip any markdown headers Claude returns despite instructions
     var cleanText = text.split('\n').filter(function(l){ return !/^#{1,3}\s/.test(l.trim()); }).join('\n').trim();
     var dateSpan = (archives[0].archivedAt ? fmt(archives[0].archivedAt.slice(0,10)) : '')

@@ -438,7 +438,7 @@ group/coalition management. Do NOT build mass public engagement tooling
 that's PublicInput/Granicus/EngagementHQ territory; Horizon COMPASS stays
 internal-facing.
 
-## PI Client Portal — BUILT (`client-portal.html`, ~1,120 lines)
+## PI Client Portal — BUILT (`client-portal.html`, ~1,470 lines)
 
 **Status: shipped and working.** The strategic bet (the "third leg" no
 competitor has — keeping the PI firm's client continuously informed) is live.
@@ -486,6 +486,80 @@ competitor has — keeping the PI firm's client continuously informed) is live.
 Deliverables, Engagement (date-ranged), Issues, Commitments, Comment Periods,
 and the AI Summary tab. Field curation is done per-fetch (only client-safe
 columns queried).
+
+### Portal demo polish (July 2026) — four additions, all on the client-facing side
+
+1. **NEPA stage banner (`nepaBanner(p)`)** — colour-coded strip inside
+   `projBanner()`, so it appears on EVERY tab. Reads `pi_projects
+   .nepa_classification` + `.nepa_stage` (`nepa_process_stage` accepted as an
+   alias). **Both boot paths now select those two columns** — if you add a
+   project field the portal shows, remember there are TWO fetches to update
+   (`bootApp` and `bootFromToken`). Palette: CE slate, EA amber, EIS teal,
+   Post-NEPA/Construction green, N/A light gray; classification drives the
+   colour EXCEPT that any project whose stage matches `/post-?nepa|construction/i`
+   reads green regardless of how it cleared NEPA. The stage label strips the
+   redundant `EA - ` / `EIS - ` prefix the desktop stores, so the banner never
+   says "EIS … EIS - DEIS". Returns `''` when classification is unset — say
+   nothing rather than guess. **No competitor models NEPA at all; this is the
+   single highest-signal thing on the client's screen.**
+2. **Deliverable progress** — a `.tile-meter` bar inside the Overview
+   deliverables tile, plus an "Overall Progress" health card at the top of the
+   Deliverables tab (`deliverableHealth(devs)`): big %, X-of-Y, teal bar, and a
+   complete / in progress / not started legend.
+3. **8-week engagement trend** (`engagementWeeks()` → `renderEngagementTrend()`)
+   — ISO weeks (Mon–Sun), current partial week included as the last bar.
+   Chart.js 4.4.1 from jsDelivr, loaded `defer` so it is always ready before
+   the Overview renders. **`svgBarChart()` is a dependency-free fallback** that
+   renders if `window.Chart` is missing or `new Chart` throws — the portal must
+   never show a blank box at a conference because a CDN was unreachable. The
+   Chart instance is held in `_trendChart` and destroyed before re-creating
+   (project switch would otherwise leak canvases).
+4. **Commitments tile** — 5th Overview tile: total, `N fulfilled · M open`.
+   `.stat-row` is now `repeat(5, …)` with breakpoints at 980px (3-up) and
+   768px (2-up); the print rule was updated to match.
+
+   Two accuracy fixes came with this, both using data already fetched: the
+   meetings query dropped its `limit=5` so the **Events** tile shows the real
+   count (the activity list slices to 8 client-side), and the **Outreach** tile
+   now shows the true 8-week contact count instead of the capped `5`. A
+   `projAtFetch !== _projId` guard bails out if the user switches project
+   mid-flight.
+
+### Demo dataset — `sql/2026-07-26_udot_conference_demo_seed.sql`
+Two realistic Utah projects (SR-154 / UDOT Region 2, EA; Logan City 400 North /
+CE, construction) with ~52 stakeholders, ~586 interactions, deliverables,
+events, issues, commitments, a comment period with 23 public comments, portal
+links and grant-by-email rows. Built for the UDOT conference demo.
+- **Idempotent** — re-running purges its own prior output (matched on project
+  number `25-154-001` / `25-LC-400N`) and rebuilds. Demo-only stakeholders are
+  deleted only when they are not linked to any other project; their ids are
+  captured BEFORE the link rows are deleted (that's what identifies them) and
+  deleted AFTER (foreign key).
+- **Recent interactions are dated relative to `date_trunc('week', current_date)`**,
+  not to fixed calendar dates, so the engagement chart is always full whichever
+  week the seed is run. Everything before 2026-01-31 uses fixed dates tied to
+  real milestones. **Re-run it the week of any demo** — safe to run any number
+  of times.
+  - The relative block generates **45 weeks** but the INSERT filters out any
+    week landing on or before the fixed-history end (`2026-01-31`). Surplus
+    weeks are discarded on an early run and materialise on a later one, so the
+    seam between the fixed and relative blocks never opens into a gap and never
+    double-counts. Verified gapless for run dates through **early Dec 2026**;
+    past that a hole appears in Feb 2026 and the generator needs a wider window
+    (bump `range(45)` in the generator, or move the fixed-history cutoff).
+  - **Re-running wipes anything created against these two projects** —
+    `pi_reports` drafts, `pi_report_archive` rows (including `client_visible`
+    shares), `pi_client_summaries` trends, and any stakeholder added to a demo
+    project and not linked elsewhere. Do report-editor / share / publish-trend
+    demo prep AFTER the final re-run. Portal tokens and grant emails are fixed
+    literals in the file, so those survive re-runs and bookmarks keep working.
+- All organizations are real Utah entities; all individuals are fictional and
+  use non-routable `demo`/`@demo-…` email domains.
+- Validated by running it against a local Postgres 16 with a schema derived
+  from `SB_TO_INT`, then rendering the portal against the result headless.
+- Project A is classified EA per spec but carries DEIS/FEIS-flavoured
+  artifacts; a commented-out block at the bottom of the file converts it to a
+  full EIS (and to the 45-day DEIS comment period) in one paste.
 
 **Security note (unchanged / known):** token isolation is client-side; the
 anon key is public and RLS is permissive (blanket anon read on portal tables).

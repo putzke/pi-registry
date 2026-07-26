@@ -124,6 +124,43 @@ pi_report_archive   -- exported report snapshots (up to 50 per project)
   it identically without duplicating desktop CSS. `_rptBrandHeader(modeOverride)`
   takes an optional brand so archived copies keep the letterhead they were issued
   under.
+- **Project Status Report (replaced the AI trend analysis, July 2026).** Button in
+  the Report Archive: `generateTrendSummary()` (name kept; UI says "AI: Project
+  Status Report"). A trend gets vaguer as reports accumulate, so this reports
+  POSITION instead: it compares three fixed anchors (baseline / last report / now)
+  rather than N reports, so output stays constant-size at report 30.
+  - `_buildStatusMetrics(projF, archives)` — schedule % elapsed vs deliverable %
+    complete, pace verdict (on/slipping/behind), projected completion at the rate
+    since project start, commitments fulfilled/outstanding/overdue, open issues +
+    age of oldest, engagement delta vs previous period. Most rows compute from LIVE
+    project data, so the scorecard works even with no archive history.
+  - `_statusScorecardHTML(m)` — inline-styled TABLE (not flex/CSS classes) so it
+    survives the print window, the portal and a paste into Word.
+  - `_buildTrendComparison(archives)` — deterministic diff of the frozen
+    `snapshot.trendFacts` across archives (issues closed / persisting / new,
+    commitments fulfilled vs outstanding, deltas). **Matching and arithmetic are done
+    in code, never by the model** — an LLM asked to diff lists mis-states which item
+    closed, which a compliance document cannot carry. The model narrates computed
+    facts it is told are authoritative.
+  - `snapshot.trendFacts` (added to `_buildReportSnapshot`) freezes per-period:
+    interactions + channel mix, open follow-ups, issues (title/status), commitments
+    (text/status/due), deliverables (title/status/pct), sentiment split, external
+    contact count, events. Archives predating it degrade to narrative-only and the
+    prompt says so rather than inventing movement.
+  - Delivery is deliberate: generated on demand, held in `_lastTrendResult`,
+    editable, printable — persisted ONLY via `publishClientTrend()` to the portal.
+    The status report is derived analysis; the archived reports are the record.
+- **Report prompt architecture (July 2026).** Three distinct system prompts so the
+  sections don't compete: `_claudeSystemPrompt()` (generic), `_claudeSectionSystemPrompt()`
+  (defers to each task's stated length — the shared one's "2-4 sentences" cap was
+  truncating richer sections), `_claudeExecSystemPrompt()` (executive summary:
+  3-4 sentences that ORIENT, explicitly NOT a section recap, no counts, no date
+  range). **The concerns section owns the reporting date range**; the exec summary is
+  told not to repeat it. "Draft all sections" is ONE batched call whose token
+  ceiling is the sum of the per-section budgets.
+- **`_fmtMDY(d)`** → mm/dd/yyyy for table cells; **`_fmtDateRange(a,b)`** → "July 6 –
+  August 7, 2026" for prose/AI facts; `fmt(d)` → "Jul 6, 2026" for headers. Feeding
+  raw ISO to the AI makes it echo ISO in the narrative.
 - `ARCHIVE_LIMIT = 50` per project
 - `_archiveReport(projF)` — async, called inside `exportPIDocx()` before download
 - `deleteArchivedReport(archiveId)` — async, re-renders `#rpt-archive-panel` in place
@@ -223,7 +260,13 @@ shipped. Grep the actual functions before planning work off this list.
 5. **Client reporting redesign — end-to-end test** (redesign section below, step 5):
    confirm `sql/2026-07-06_portal_shared_reports.sql` was run, then share a report +
    publish a trend and confirm both render in the portal. Shipped-but-untested; client-facing.
-6. **REMIND JEFF: remove verbose `SB UPDATE` debug logging before go-live.** `sbUpdate()`
+6. **REMIND JEFF: remove debug logging before go-live (TWO sets, both kept deliberately).**
+   (a) The `AI draft-all:` / `Claude:` diagnostics in `generateAllSectionDrafts` and
+   `_claudeNarrative` — added July 2026 after a silent `content[0]` bug wasted a
+   testing cycle. Recommendation when the time comes: keep the *warnings* (they only
+   fire on failure and are how a silent AI failure is diagnosable) and drop only the
+   routine `console.log('AI draft-all: tasks=…')`. (b) The `SB UPDATE` pair below.
+   `sbUpdate()`
    in `index.html` has two `console.log` calls (`'SB UPDATE sending:'` and
    `'SB UPDATE response:'`) left in as instrumentation while chasing save bugs.
    Jeff explicitly chose to KEEP them for now (still in testing, July 2026) and

@@ -11592,7 +11592,61 @@ function _buildReportSnapshot(projF, saved) {
     };
   });
 
+  // ── Structured facts for cross-report TREND analysis ──────────────────────
+  // Frozen alongside the rendered report. The trend tool compares these
+  // period-over-period, which is the only way to say "this issue was open in
+  // report 1 and is resolved in report 3" — narrative prose alone can't support
+  // that, and recomputing from live data would rewrite history.
+  var _tfInts = ints.filter(function(i){
+    if (!includeInternal && externalIds.indexOf(i.stakeholderId) < 0) return false;
+    if (pstart && i.date < pstart) return false;
+    if (pend   && i.date > pend)   return false;
+    return true;
+  });
+  var _tfChan = {};
+  _tfInts.forEach(function(i){ var c=i.channel||'Unknown'; _tfChan[c]=(_tfChan[c]||0)+1; });
+  var _tfIssues = DB.get('issues').filter(function(x){ return String(x.projectId)===String(projF); })
+    .map(function(x){ return { title:(x.title||'Untitled').slice(0,90), status:x.status||'Open',
+                               priority:x.priority||'', category:x.category||'' }; });
+  var _tfComm = DB.get('commitments').filter(function(c){ return String(c.projectId)===String(projF); })
+    .map(function(c){ return { text:(c.commitment||'Untitled').slice(0,90), status:c.status||'Open',
+                               dueDate:c.dueDate||'' }; });
+  var _tfDelsAll = DB.get('deliverables').filter(function(d){ return String(d.projectId)===String(projF); });
+  var _tfDels = _tfDelsAll.map(function(d){
+    var pct = d.contractedQty>0 ? Math.min(100, Math.round((d.deliveredCount||0)/d.contractedQty*100)) : (d.progress||0);
+    return { title:(d.title||d.type||'Untitled').slice(0,70), status:d.status||'', pct:pct };
+  });
+  var _tfSent = {champion:0, neutral:0, opponent:0};
+  ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; })
+    .forEach(function(lk){
+      var v=(lk.support||'Neutral').toLowerCase();
+      if(v.indexOf('champ')>=0) _tfSent.champion++;
+      else if(v.indexOf('oppon')>=0) _tfSent.opponent++;
+      else _tfSent.neutral++;
+    });
+  var _tfMeet = DB.get('meetings').filter(function(m){
+    if (String(m.projectId)!==String(projF)) return false;
+    if (pstart && m.date && m.date < pstart) return false;
+    if (pend   && m.date && m.date > pend)   return false;
+    return true;
+  });
+
+  var trendFacts = {
+    interactions: _tfInts.length,
+    channels: _tfChan,
+    followUpsOpen: _tfInts.filter(function(i){ return i.followUp && !i.followUpDone; }).length,
+    issues: _tfIssues,
+    commitments: _tfComm,
+    deliverables: _tfDels,
+    deliverablePct: _tfDelsAll.length ? Math.round(_tfDels.filter(function(d){ return /complet/i.test(d.status); }).length / _tfDelsAll.length * 100) : 0,
+    sentiment: _tfSent,
+    externalContacts: externalIds.length,
+    eventsInPeriod: _tfMeet.length,
+    eventsCompleted: _tfMeet.filter(function(m){ return /complet/i.test(m.status||''); }).length
+  };
+
   return {
+    trendFacts: trendFacts,
     projName: proj.name || '', projPid: proj.pid || '',
     // Freeze the letterhead choice so the archived copy keeps the branding it
     // was issued under, even if the selector is changed later.
@@ -11880,6 +11934,71 @@ function printTrendAnalysis() {
   showInlineReport(html, 'PI Trend Analysis — '+r.projName);
 }
 
+// Deterministically diff the frozen per-report facts. Matching and arithmetic are
+// done in code, NOT by the model — an LLM asked to diff lists will quietly
+// mis-state which issue closed, and on a compliance document that is the one kind
+// of error you cannot ship. The model only narrates the deltas computed here.
+function _buildTrendComparison(archives) {
+  var withFacts = archives.filter(function(a){ return a.snapshot && a.snapshot.trendFacts; });
+  if (withFacts.length < 2) return null;
+
+  var norm = function(t){ return String(t||'').trim().toLowerCase(); };
+  var first = withFacts[0].snapshot.trendFacts;
+  var last  = withFacts[withFacts.length-1].snapshot.trendFacts;
+  var isDone = function(st){ return /complet|resolv|closed|done|fulfill/i.test(st||''); };
+
+  // ── Issues: closed / still open / newly raised ──
+  var firstIssues = {}; (first.issues||[]).forEach(function(i){ firstIssues[norm(i.title)] = i; });
+  var lastIssues  = {}; (last.issues||[]).forEach(function(i){ lastIssues[norm(i.title)]  = i; });
+  var closed = [], persisting = [], added = [];
+  Object.keys(firstIssues).forEach(function(k){
+    var a = firstIssues[k], b = lastIssues[k];
+    if (!b) return;                                   // no longer tracked — say nothing
+    if (!isDone(a.status) && isDone(b.status)) closed.push(b.title);
+    else if (!isDone(a.status) && !isDone(b.status)) persisting.push(b.title + ' (' + b.status + ')');
+  });
+  Object.keys(lastIssues).forEach(function(k){
+    if (!firstIssues[k]) added.push(lastIssues[k].title + ' (' + lastIssues[k].status + ')');
+  });
+
+  // ── Commitments: fulfilled since the first report / still outstanding ──
+  var firstComm = {}; (first.commitments||[]).forEach(function(c){ firstComm[norm(c.text)] = c; });
+  var commFulfilled = [], commOutstanding = [];
+  (last.commitments||[]).forEach(function(c){
+    var a = firstComm[norm(c.text)];
+    if (a && !isDone(a.status) && isDone(c.status)) commFulfilled.push(c.text);
+    else if (!isDone(c.status)) commOutstanding.push(c.text + (c.dueDate ? ' (due ' + _fmtMDY(c.dueDate) + ')' : ''));
+  });
+
+  // ── Per-period series so the model can describe direction, not just endpoints ──
+  var series = withFacts.map(function(a, i){
+    var f = a.snapshot.trendFacts;
+    var per = a.snapshot.periodLabel || ('Report ' + (i+1));
+    var ch = Object.keys(f.channels||{}).sort(function(x,y){ return f.channels[y]-f.channels[x]; })
+              .slice(0,3).map(function(k){ return k+' '+f.channels[k]; }).join(', ');
+    return 'Report ' + (i+1) + ' (#' + (a.reportNum||'?') + ', ' + per + '): '
+      + f.interactions + ' interactions'
+      + (ch ? ' [' + ch + ']' : '')
+      + '; ' + f.followUpsOpen + ' follow-ups open'
+      + '; deliverables ' + f.deliverablePct + '% complete'
+      + '; issues ' + (f.issues||[]).filter(function(x){ return !isDone(x.status); }).length + ' open of ' + (f.issues||[]).length
+      + '; sentiment ' + f.sentiment.champion + ' champion / ' + f.sentiment.neutral + ' neutral / ' + f.sentiment.opponent + ' opponent'
+      + ' across ' + f.externalContacts + ' external contacts'
+      + '; ' + f.eventsInPeriod + ' events in period';
+  });
+
+  return {
+    count: withFacts.length,
+    series: series,
+    closed: closed, persisting: persisting, added: added,
+    commFulfilled: commFulfilled, commOutstanding: commOutstanding,
+    deliverableDelta: (last.deliverablePct||0) - (first.deliverablePct||0),
+    interactionDelta: (last.interactions||0) - (first.interactions||0),
+    followUpDelta: (last.followUpsOpen||0) - (first.followUpsOpen||0),
+    skipped: archives.length - withFacts.length
+  };
+}
+
 async function generateTrendSummary() {
   var projF = S.projectFilter;
   if (!projF) return;
@@ -11913,14 +12032,49 @@ async function generateTrendSummary() {
   var proj = (DB.get('projects')||[]).find(function(p){return p.id===projF;});
   var projName = proj ? proj.name : 'this project';
 
-  var systemPrompt = 'You are a senior public involvement coordinator at a transportation engineering firm. '
-    +'Analyze multiple PI progress report snapshots for a single project and write a 3-5 sentence trend summary. '
-    +'Focus on: changes in stakeholder engagement, sentiment shifts, comment response progress, key issues evolving over time, and overall PI health trajectory. '
-    +'Use plain, professional language. Write in third person. '
-    +'IMPORTANT: Output plain prose paragraphs only. No markdown, no hashtags, no headers, no bullet points, no asterisks, no special formatting of any kind.';
+  // Deterministic period-over-period deltas (null for pre-trendFacts archives).
+  var cmp = _buildTrendComparison(archives);
 
-  var userContent = 'Project: '+projName+'\n\nArchived PI report summaries in chronological order:\n\n'+digest
-    +'\n\nWrite a trend analysis narrative covering how PI engagement has evolved across these reporting periods.';
+  var systemPrompt = 'You are a senior public involvement coordinator at a transportation engineering firm. '
+    +'You are writing a cross-report TREND analysis for a single project — the one thing the individual '
+    +'reports cannot show, because each sees only its own period. Do not re-summarise the reports.\n\n'
+    +'Cover, in this order, as flowing prose:\n'
+    +'1) TRAJECTORY — is public involvement intensifying, steady, or winding down, and what in the numbers says so.\n'
+    +'2) WHAT MOVED — items that changed state across the periods (issues resolved, commitments fulfilled, '
+    +'deliverables advanced). Name them specifically.\n'
+    +'3) WHAT IS PERSISTING — concerns or issues that recur across periods without resolution. Treat this as the '
+    +'most important part: unresolved recurring concerns are the compliance risk a single report never surfaces.\n'
+    +'4) WHAT IS NEW AND WHAT TO WATCH — items first appearing in the latest period, plus anything aging: '
+    +'overdue commitments, a growing follow-up backlog, deliverables that have not moved.\n\n'
+    +'CRITICAL: the movement facts given to you were computed programmatically and are authoritative. Use them '
+    +'exactly as stated — never assert that something closed, opened or changed unless it appears in those facts. '
+    +'If a category shows no movement, say so plainly or omit it; do not manufacture a trend. Some sections '
+    +'(manual narrative, contact rosters) cannot trend — ignore them rather than padding.\n\n'
+    +'Use plain, professional language, third person, 5-8 sentences. '
+    +'IMPORTANT: Output plain prose paragraphs only. No markdown, no hashtags, no headers, no bullet points, '
+    +'no asterisks, no special formatting of any kind.';
+
+  var movement = '';
+  if (cmp) {
+    movement = '\n\nCOMPUTED MOVEMENT FACTS (authoritative — do not contradict):\n'
+      + 'Per-period measures:\n' + cmp.series.join('\n') + '\n'
+      + '\nIssues resolved since the first report: ' + (cmp.closed.length ? cmp.closed.join('; ') : 'none') + '\n'
+      + 'Issues still open across every report: ' + (cmp.persisting.length ? cmp.persisting.join('; ') : 'none') + '\n'
+      + 'Issues newly raised since the first report: ' + (cmp.added.length ? cmp.added.join('; ') : 'none') + '\n'
+      + 'Commitments fulfilled since the first report: ' + (cmp.commFulfilled.length ? cmp.commFulfilled.join('; ') : 'none') + '\n'
+      + 'Commitments still outstanding: ' + (cmp.commOutstanding.length ? cmp.commOutstanding.join('; ') : 'none') + '\n'
+      + 'Change first report to latest: deliverable completion ' + (cmp.deliverableDelta>=0?'+':'') + cmp.deliverableDelta + ' points; '
+      + 'interactions per period ' + (cmp.interactionDelta>=0?'+':'') + cmp.interactionDelta + '; '
+      + 'open follow-ups ' + (cmp.followUpDelta>=0?'+':'') + cmp.followUpDelta + '.\n'
+      + (cmp.skipped>0 ? '\nNote: '+cmp.skipped+' earlier report(s) predate structured capture and contribute narrative only.\n' : '');
+  } else {
+    movement = '\n\nNo structured movement data is available (these reports predate structured capture). '
+      + 'Base the analysis only on the narratives above, and say plainly where item-level movement cannot be determined.';
+  }
+
+  var userContent = 'Project: '+projName+'\n\nArchived PI report narratives in chronological order:\n\n'+digest
+    + movement
+    + '\n\nWrite the trend analysis.';
 
   var total = archives.length;
   var estCost = (total * 0.01 + 0.02).toFixed(2);
@@ -11941,7 +12095,7 @@ async function generateTrendSummary() {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-5',
-        max_tokens: 600,
+        max_tokens: 1200,
         system: systemPrompt,
         messages: [{ role: 'user', content: userContent }]
       })

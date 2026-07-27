@@ -731,6 +731,7 @@ const SB_TO_INT = {
     date:'interaction_date', channel:'channel', subject:'subject',
     nature:'nature', direction:'direction', summary:'summary',
     loggedBy:'logged_by', followUp:'follow_up', followUpDue:'follow_up_due',
+    followUpAssignedTo:'follow_up_assigned_to',
     followUpNote:'follow_up_note', followUpDone:'follow_up_done', followUpResolved:'follow_up_resolved', meetingId:'meeting_id'
   },
   pi_deliverables: {
@@ -1783,7 +1784,8 @@ function refreshBadges(){
   const all=DB.getActive('stakeholders');
   const masterCount=all.filter(s=>s.isMaster).length;
   const ints=DB.get('interactions');
-  const openFU=ints.filter(i=>i.followUp&&!i.followUpDone).length;
+  const _meB=getLoggedBy();
+  const openFU=ints.filter(i=>i.followUp&&!i.followUpDone&&(!_meB||_fuOwner(i)===_meB)).length;
   document.getElementById('nb-master').textContent=masterCount;
   const fuEl=document.getElementById('nb-fu');
   fuEl.textContent=openFU;
@@ -1866,8 +1868,17 @@ function renderDash(el){
   const stakes=DB.getActive('stakeholders');
   const ints=DB.get('interactions');
   const ps=DB.get('project_stakeholders');
-  const openFUCt=ints.filter(i=>i.followUp&&!i.followUpDone).length;
-  const overdueCt=ints.filter(i=>i.followUp&&!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<new Date()).length;
+  // Follow-up counts lead with what the signed-in user owns — a dashboard number
+  // is only actionable if it's about you. The team total rides along as context
+  // so nobody loses sight of the backlog. Falls back to team-wide when there's
+  // no session (getLoggedBy() is '').
+  const _me=getLoggedBy();
+  const _openFUAll=ints.filter(i=>i.followUp&&!i.followUpDone);
+  const _isOverdue=i=>i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<new Date();
+  const _openFUMine=_me?_openFUAll.filter(i=>_fuOwner(i)===_me):_openFUAll;
+  const openFUCt=_openFUMine.length;
+  const openFUTeamCt=_openFUAll.length;
+  const overdueCt=_openFUMine.filter(_isOverdue).length;
   const todayStr=localToday();
   const projF=null;
   const allCommD=DB.get('commitments').filter(c=>!projF||String(c.projectId)===String(projF));
@@ -2206,9 +2217,9 @@ function renderDash(el){
         <div class="stat-sub">${recent30} in last 30 days</div>
       </div>
       <div class="stat-card sc-amber dash-anim" style="cursor:pointer;animation-delay:180ms" onclick="setView('followups')">
-        <div class="stat-lbl">Open / overdue follow-ups</div>
+        <div class="stat-lbl">${_me?'My open / overdue follow-ups':'Open / overdue follow-ups'}</div>
         <div class="stat-val sv-amber" id="sv-fu">0</div>
-        <div class="stat-sub" style="color:${overdueCt>0?'var(--red)':'var(--fog)'}">${overdueCt>0?overdueCt+' overdue':'All on track'}</div>
+        <div class="stat-sub" style="color:${overdueCt>0?'var(--red)':'var(--fog)'}">${overdueCt>0?overdueCt+' overdue':'All on track'}${_me&&openFUTeamCt!==openFUCt?'<span style="color:var(--fog)"> &middot; '+openFUTeamCt+' team-wide</span>':''}</div>
       </div>
       <div class="stat-card sc-purple dash-anim" style="cursor:pointer;animation-delay:220ms" onclick="setView('commitments')">
         <div class="stat-lbl">Open commitments</div>
@@ -5185,7 +5196,8 @@ function renderFollowups(el){
   else if(statusF==='overdue')ints=ints.filter(i=>!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<now);
   else if(statusF==='resolved')ints=ints.filter(i=>i.followUpDone);
   if(projF)ints=ints.filter(i=>String(i.projectId)===String(projF));
-  if(userF==='mine'&&myLoggedBy)ints=ints.filter(i=>i.loggedBy===myLoggedBy);
+  if(myLoggedBy&&userF==='mine')        ints=ints.filter(i=>_fuOwner(i)===myLoggedBy);
+  else if(myLoggedBy&&userF==='logged') ints=ints.filter(i=>i.loggedBy===myLoggedBy);
   if(search)ints=ints.filter(i=>{
     const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
     return(i.followUpNote||'').toLowerCase().includes(search)||(s&&(s.firstName+' '+s.lastName).toLowerCase().includes(search));
@@ -5195,7 +5207,9 @@ function renderFollowups(el){
   const stakes_fu=DB.getActive('stakeholders');
   ints=sortFollowups(ints,stakes_fu);
 
-  const allFU=DB.get('interactions').filter(i=>i.followUp&&(!projF||String(i.projectId)===String(projF))&&(userF!=='mine'||!myLoggedBy||i.loggedBy===myLoggedBy));
+  const _fuScope=i=>!myLoggedBy||userF==='all'
+    ||(userF==='logged'?i.loggedBy===myLoggedBy:_fuOwner(i)===myLoggedBy);
+  const allFU=DB.get('interactions').filter(i=>i.followUp&&(!projF||String(i.projectId)===String(projF))&&_fuScope(i));
   const openCt=allFU.filter(i=>!i.followUpDone).length;
   const overdueCt=allFU.filter(i=>!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<now).length;
   const resolvedCt=allFU.filter(i=>i.followUpDone).length;
@@ -5234,7 +5248,8 @@ function renderFollowups(el){
     <div class="srch" style="min-width:260px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4"/><path d="M10 10l3 3"/></svg>
       <input id="fu-search" placeholder="Search action, name…" value="${S.fuSearch||''}" oninput="S.fuSearch=this.value;renderFollowups(document.getElementById('main'))"></div>
     <select class="fsel" id="fu-user" onchange="S.fuUser=this.value;renderFollowups(document.getElementById('main'))">
-      <option value="mine"${(S.fuUser||'mine')==='mine'?' selected':''}>My follow-ups</option>
+      <option value="mine"${(S.fuUser||'mine')==='mine'?' selected':''}>Assigned to me</option>
+      <option value="logged"${(S.fuUser||'')==='logged'?' selected':''}>I logged</option>
       <option value="all"${(S.fuUser||'')==='all'?' selected':''}>All follow-ups</option>
     </select>
     <select class="fsel" id="fu-status" onchange="S.fuStatus=this.value;renderFollowups(document.getElementById('main'))">
@@ -5276,6 +5291,7 @@ function renderFollowups(el){
                 <col style="width:150px">
                 <col>
                 <col style="width:80px">
+                <col style="width:110px">
                 <col style="width:160px">
               </colgroup>
               <thead><tr>
@@ -5284,6 +5300,7 @@ function renderFollowups(el){
                 <th style="cursor:pointer;user-select:none" onclick="setFuSort('stakeholder')">${S.fuSortCol==='stakeholder'?(S.fuSortDir==='asc'?' ▲':' ▼'):''} Stakeholder</th>
                 <th style="cursor:pointer;user-select:none" onclick="setFuSort('summary')">${S.fuSortCol==='summary'?(S.fuSortDir==='asc'?' ▲':' ▼'):''} Interaction summary</th>
                 <th style="cursor:pointer;user-select:none" onclick="setFuSort('loggedBy')">${S.fuSortCol==='loggedBy'?(S.fuSortDir==='asc'?' ▲':' ▼'):''} Logged by</th>
+                <th>Assigned to</th>
                 <th></th>
               </thead>
               <tbody>
@@ -5304,6 +5321,14 @@ function renderFollowups(el){
 
                   <td style="min-width:180px"><div style="font-size:12px;color:var(--slate);white-space:normal;line-height:1.5">${i.summary}</div></td>
                   <td style="font-size:12px;color:var(--slate)">${i.loggedBy||'—'}</td>
+                  <td>
+                    <select class="fsel" style="font-size:11px;padding:3px 6px;width:100%;max-width:100px"
+                            title="Reassign this follow-up. Does not change who logged the interaction."
+                            onchange="assignFollowUp('${i.id}',this.value)">
+                      <option value=""${!i.followUpAssignedTo?' selected':''}>${i.loggedBy?'— '+i.loggedBy+' —':'— Unassigned —'}</option>
+                      ${_fuTeam().map(u=>`<option value="${u}"${i.followUpAssignedTo===u?' selected':''}>${u}</option>`).join('')}
+                    </select>
+                  </td>
 
                   <td style="white-space:nowrap">
                     ${!i.followUpDone
@@ -7090,7 +7115,41 @@ function resolveFollowUp(id){
 function reopenFollowUp(id){
   const all=DB.get('interactions');
   const i=all.findIndex(x=>x.id===id);
-  if(i>-1) all[i]={...all[i], followUpDone:false};
+  // Clear followUpResolved too — without it a reopened follow-up shows as open
+  // while still carrying the date it was previously resolved on.
+  if(i>-1) all[i]={...all[i], followUpDone:false, followUpResolved:''};
+  DB.set('interactions',all);refreshBadges();render();
+}
+
+// ── Follow-up ownership ────────────────────────────────────────────────────
+// A follow-up belongs to whoever it was assigned to; if nobody was assigned it
+// stays with whoever logged the interaction. This fallback is what lets the
+// feature ship without touching a single existing row — every follow-up that
+// predates assignment keeps behaving exactly as it did.
+//
+// NOTE: assignment is deliberately a SEPARATE field from loggedBy. loggedBy is
+// provenance on a compliance record and flows into archived PI reports, so it
+// must never be rewritten to re-route a task.
+function _fuOwner(i){ return (i && (i.followUpAssignedTo || i.loggedBy)) || ''; }
+
+// Team roster, derived from data rather than a users table: every initial that
+// has ever logged or been assigned something, plus the current user. Keeps this
+// zero-schema until pi_users exists for the multi-tenant work.
+function _fuTeam(){
+  const set=new Set();
+  (DB.get('interactions')||[]).forEach(i=>{
+    if(i.loggedBy) set.add(i.loggedBy);
+    if(i.followUpAssignedTo) set.add(i.followUpAssignedTo);
+  });
+  const me=getLoggedBy(); if(me) set.add(me);
+  return [...set].sort();
+}
+
+function assignFollowUp(id,val){
+  const all=DB.get('interactions');
+  const i=all.findIndex(x=>String(x.id)===String(id));
+  if(i<0) return;
+  all[i]={...all[i], followUpAssignedTo:(val||'').trim()};
   DB.set('interactions',all);refreshBadges();render();
 }
 

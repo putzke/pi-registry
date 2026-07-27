@@ -5327,6 +5327,7 @@ function renderFollowups(el){
                             onchange="assignFollowUp('${i.id}',this.value)">
                       <option value=""${!i.followUpAssignedTo?' selected':''}>${i.loggedBy?'— '+i.loggedBy+' —':'— Unassigned —'}</option>
                       ${_fuTeam().map(u=>`<option value="${u}"${i.followUpAssignedTo===u?' selected':''}>${u}</option>`).join('')}
+                      <option value="__new">＋ Someone else…</option>
                     </select>
                   </td>
 
@@ -7146,6 +7147,13 @@ function _fuTeam(){
 }
 
 function assignFollowUp(id,val){
+  // '__new' lets you assign to a teammate who has never logged an interaction —
+  // without it the derived roster is a chicken-and-egg trap on a fresh team.
+  if(val==='__new'){
+    const who=(prompt('Assign to — enter initials or a short name (e.g. SHA):')||'').trim();
+    if(!who){ render(); return; }          // cancelled: repaint to reset the select
+    val=who.slice(0,20);
+  }
   const all=DB.get('interactions');
   const i=all.findIndex(x=>String(x.id)===String(id));
   if(i<0) return;

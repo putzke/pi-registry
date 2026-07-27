@@ -7002,6 +7002,7 @@ function openIntModal(preStake){
     <div class="fr"><label>Follow-up action</label><input id="f-ifun" placeholder="What needs to be done?"></div>
     <div class="fr"><label>Due date</label><input type="date" id="f-ifud"></div>
   </div>
+  <div class="fr"><label>Assign to <span style="font-weight:400;color:var(--fog)">(defaults to you)</span></label><select id="f-ifua" onchange="_fuAssignPick(this)">${_fuAssignOptions('')}</select></div>
   <div class="fr"><div class="fcheck"><input type="checkbox" id="f-ifudo" onchange="document.getElementById('fu-rdate').style.display=this.checked?'':'none'"><label for="f-ifudo">Follow-up resolved</label></div></div>
   <div id="fu-rdate" style="display:none"><div class="fr"><label>Date resolved</label><input type="date" id="f-ifudr" value="${localToday()}"></div></div></div>`,
   `<button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-primary" onclick="saveInt()">Save interaction</button>`,true);
@@ -7065,7 +7066,9 @@ async function openEditIntModal(id){
       <div style="flex:1"><label>Due date</label><input type="date" id="f-ifud" value="${i.followUpDue||''}"></div>
       <div id="fu-rdate" style="${i.followUpDone?'flex:1':'display:none'}"><label>Date resolved</label><input type="date" id="f-ifudr" value="${i.followUpResolved||localToday()}"></div>
     </div>
-  </div></div>`,
+  </div>
+  <div class="fr"><label>Assign to <span style="font-weight:400;color:var(--fog)">(defaults to whoever logged it)</span></label><select id="f-ifua" onchange="_fuAssignPick(this)">${_fuAssignOptions(i.followUpAssignedTo)}</select></div>
+  </div>`,
   `<button class="btn btn-danger" onclick="delInt('${id}')">Delete</button>
   <button class="btn" onclick="closeM()">Cancel</button>
   <button class="btn btn-primary" onclick="saveInt()">Save changes</button>`,true);
@@ -7076,12 +7079,16 @@ function saveInt(){
   const projId=v('f-ip'),stakeId=v('f-is')||null;
   if(!projId){alert('Project required.');return}
   if(!v('f-isu')){alert('Summary required.');return}
+  const _fuOn=document.getElementById('f-ifu')?.checked||false;
   const fuDone=document.getElementById('f-ifudo')?.checked||false;
   const fuResolved=fuDone?(vDate('f-ifudr')||localToday()):'';
   const anonLbl = !stakeId ? getAnonLabel(projId, S.editId||null) : '';
   const _existingInt=S.editId?(DB.get('interactions')||[]).find(x=>x.id===S.editId):null;
   const _nepaStageVal=S.editId?(_existingInt?.nepaStage||''):v('f-inepastage');
-  const data={id:S.editId||DB.uid(),projectId:projId,stakeholderId:stakeId,anonLabel:anonLbl,date:vDate('f-id'),channel:v('f-ic'),direction:v('f-idr'),subject:v('f-isub')||'General',nature:v('f-inat')||'Inquiry',summary:v('f-isu'),loggedBy:v('f-il'),nepaStage:_nepaStageVal,followUp:document.getElementById('f-ifu')?.checked||false,followUpNote:v('f-ifun'),followUpDue:vDate('f-ifud'),followUpDone:fuDone,followUpResolved:fuResolved};
+  const data={id:S.editId||DB.uid(),projectId:projId,stakeholderId:stakeId,anonLabel:anonLbl,date:vDate('f-id'),channel:v('f-ic'),direction:v('f-idr'),subject:v('f-isub')||'General',nature:v('f-inat')||'Inquiry',summary:v('f-isu'),loggedBy:v('f-il'),nepaStage:_nepaStageVal,followUp:_fuOn,followUpNote:v('f-ifun'),followUpDue:vDate('f-ifud'),followUpDone:fuDone,followUpResolved:fuResolved,
+    // Clearing the follow-up clears its owner too — an assignment on a
+    // non-follow-up would be invisible and unresolvable.
+    followUpAssignedTo:_fuOn?((v('f-ifua')==='__new'?'':v('f-ifua'))||''):''};
   const psAll=DB.get('project_stakeholders');
   if(stakeId&&!psAll.find(x=>x.projectId===projId&&x.stakeholderId===stakeId)){
     psAll.push({id:DB.uid(),projectId:projId,stakeholderId:stakeId,support:'Neutral',issueTags:'',addedDate:data.date,notes:'Auto-linked via interaction log.',distributionGroups:'',stakeholderRole:'External'});
@@ -7144,6 +7151,36 @@ function _fuTeam(){
   });
   const me=getLoggedBy(); if(me) set.add(me);
   return [...set].sort();
+}
+
+// Options for the modal's "Assign to" picker.
+// The empty value means UNASSIGNED, which _fuOwner() resolves to whoever logged
+// the interaction — i.e. you. Defaulting to empty rather than stamping your own
+// initials keeps one representation of "mine" instead of two, and matches every
+// row that predates assignment. Explicitly picking yourself normalises back to
+// empty for the same reason.
+function _fuAssignOptions(cur){
+  const me=getLoggedBy();
+  cur=(cur||'').trim();
+  const team=_fuTeam().filter(u=>u!==me);
+  if(cur&&cur!==me&&team.indexOf(cur)<0) team.push(cur);   // keep an off-roster assignee
+  team.sort();
+  let html='<option value=""'+((!cur||cur===me)?' selected':'')+'>'
+    +(me?'Me ('+escHtml(me)+')':'— Unassigned —')+'</option>';
+  team.forEach(u=>{ html+='<option value="'+escHtml(u)+'"'+(cur===u?' selected':'')+'>'+escHtml(u)+'</option>'; });
+  return html+'<option value="__new">＋ Someone else…</option>';
+}
+
+// Same escape hatch as the Follow-ups table: assign to a teammate who has never
+// logged an interaction and so isn't in the derived roster yet.
+function _fuAssignPick(sel){
+  if(sel.value!=='__new') return;
+  const who=(prompt('Assign to — enter initials or a short name (e.g. SHA):')||'').trim().slice(0,20);
+  if(!who){ sel.value=''; return; }
+  const o=document.createElement('option');
+  o.value=who; o.textContent=who;
+  sel.insertBefore(o, sel.lastElementChild);
+  sel.value=who;
 }
 
 function assignFollowUp(id,val){

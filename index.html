@@ -300,10 +300,21 @@ select optgroup{background:var(--navy-mid);color:var(--sky-lt);font-weight:700;f
 .tpl-card:hover{border-color:var(--sky-lt)}
 
 /* SCROLLBARS */
-::-webkit-scrollbar{width:10px;height:10px}
-::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:rgba(255,255,255,.25);border-radius:4px;border:2px solid transparent;background-clip:padding-box}
-::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.4);background-clip:padding-box}
+::-webkit-scrollbar{width:14px;height:14px}
+::-webkit-scrollbar-track{background:rgba(0,0,0,.25);border-radius:7px}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.45);border-radius:7px;border:3px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.68);background-clip:padding-box}
+::-webkit-scrollbar-thumb:active{background:var(--sky-lt);background-clip:padding-box}
+::-webkit-scrollbar-corner{background:transparent}
+/* Firefox has no ::-webkit pseudo-elements — scrollbar-color is the only knob it
+   exposes. Scope it to Firefox: Chromium also understands these properties and
+   they WIN over the ::-webkit rules above, so applying them unconditionally
+   silently forced the bar back to the narrow 'thin' width. */
+@supports not selector(::-webkit-scrollbar){
+  *{scrollbar-width:auto;scrollbar-color:rgba(255,255,255,.45) rgba(0,0,0,.25)}
+}
+/* Keep the gutter reserved so content doesn't shift when a scrollbar appears. */
+.content{scrollbar-gutter:stable}
 
 /* DASHBOARD ANIMATIONS */
 @keyframes countUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
@@ -17163,6 +17174,7 @@ function renderSettings(m) {
     <div class="topbar-title">Settings</div>
     <div class="topbar-sub">App configuration and data tools</div>
   </div>
+  <div class="content" style="display:block;overflow-y:auto">
   <div style="padding:24px;max-width:800px;margin:0 auto">
 
     <!-- Claude AI -->
@@ -17236,6 +17248,7 @@ function renderSettings(m) {
       <button class="btn" style="border-color:rgba(192,57,43,.4);color:var(--red)" onclick="if(confirm('Clear ALL local cache and reload from Supabase? This will not delete any data.')){Object.keys(_syncCache).forEach(k=>delete _syncCache[k]);loadAllData().then(()=>{showToast('Cache cleared and reloaded','info');renderSettings(document.getElementById(\'main\'));});}">Clear cache &amp; reload</button>
     </div>
 
+  </div>
   </div>`;
   setTimeout(function(){ if(document.getElementById('client-access-panel')) renderClientAccessPanel(); }, 0);
 }

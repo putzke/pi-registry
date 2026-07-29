@@ -1,0 +1,20 @@
+pi_client_access|id, user_id, project_id, org_id, created_at, email
+pi_comment_periods|id, project_id, title, description, start_date, end_date, status, created_at, period_type
+pi_commitments|id, project_id, stakeholder_id, commitment, made_to, made_by, date_made, due_date, category, status, fulfilled_date, fulfilled_notes, notes, created_at
+pi_deliverables|id, project_id, deliverable_type, scope_type, status, contracted_qty, delivered_count, freq, milestone_start, milestone_end, dist_list, notes, created_at, due_date, title, progress
+pi_group_members|id, group_id, stakeholder_id, created_at
+pi_groups|id, project_id, name, color, spatial_label, spatial_value, description, sort_order, created_at
+pi_interactions|id, project_id, stakeholder_id, interaction_date, channel, subject, nature, direction, summary, logged_by, follow_up, follow_up_due, follow_up_note, follow_up_done, meeting_id, created_at, follow_up_resolved, anon_label, nepa_stage, equity_form_submitted, updated_at, updated_by
+pi_issue_interactions|id, issue_id, interaction_id, created_at
+pi_issues|id, project_id, title, category, description, status, priority, date_raised, date_resolved, assigned_to, resolution_summary, created_by, notes, created_at, updated_at, updated_by
+pi_meetings|id, project_id, title, meeting_date, meeting_type, location, status, attendance_count, comment_cards, format, key_concerns, action_items, notes, created_at, handouts, agenda, attendee_ids, additional_attendees, equity_form_submitted
+pi_portal_links|token, project_id, label, created_at
+pi_project_stakeholders|id, project_id, stakeholder_id, stakeholder_role, support, distribution_groups, issue_tags, added_date, notes, created_at, influence
+pi_projects|id, name, pid, client, project_type, county, phase, status, start_date, end_date, precon_date, notes, created_at, last_exported, nepa_classification, nepa_stage, nepa_checklist, phase_history, nepa_stage_history
+pi_public_comments|id, project_id, period_id, comment_date, comment_type, commenter, affiliation, channel, summary, category, sentiment, response_status, response_text, response_date, linked_stakeholder_id, created_at
+pi_stakeholders|id, first_name, last_name, org, title, email, phone, address, parcel_id, stakeholder_type, influence_tier, pref_contact, is_master, notes, created_at, is_archived, is_lep, is_ej, stakeholder_role, lep, underserved, updated_at, updated_by
+pi_client_summaries|id, project_id, content_recent, content_full, period_start, period_end, published_at, published_by
+pi_dismissed_pairs|id, id_a, id_b
+pi_report_archive|id, project_id, report_num, report_title, report_subtitle, period_start, period_end, overall_summary, sections, archived_at, archived_by, client_visible, snapshot
+pi_reports|id, project_id, report_num, report_title, report_subtitle, period_start, period_end, overall_summary, sections, updated_at, updated_by, editing_email, editing_session, editing_at, include_internal, dist_groups
+pi_tribal_consultations|id, project_id, tribe_name, tribe_type, thpo_contact, thpo_email, thpo_phone, consultation_type, phase, section106_phase, notification_date, response_deadline, response_date, response_status, tribal_official, tribal_official_email, tribal_official_phone, agency_official, fhwa_liaison, consultation_trigger, language_access_needed, moa_required, bia_involvement, near_tribal_lands, cfr710_review, row_type, ura_notice_date, bia_approval_status, utah_pa_ref, certification_status, included_in_annual_report, annual_report_year, next_action, follow_up_date, notes, created_at

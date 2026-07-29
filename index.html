@@ -1242,6 +1242,43 @@ async function _bgRefreshTick(){
   } finally { _bgRefreshBusy = false; }
 }
 
+// Locally-created records carry a temporary id until Supabase hands back the
+// real one. pi_issues and pi_interactions both use integer auto-increment PKs,
+// so a link row created before either side has synced holds ids that are about
+// to change underneath it.
+const _isTmpId = v => /^tmp_/.test(String(v == null ? '' : v));
+
+// Repoint issue_interactions rows after one end gets its real id, then persist
+// them. Previously only interactionId was handled, so anything that created an
+// issue and a link together left the link pointing at a tmp_ id that never
+// resolved — the interaction silently vanished from the issue.
+async function _relinkIssueInteractions(field, oldTmpId, newId) {
+  const links = _syncCache['issue_interactions'] || [];
+  const touched = [];
+  links.forEach((lnk, i) => {
+    if (String(lnk[field]) === String(oldTmpId)) {
+      links[i] = { ...links[i], [field]: newId };
+      touched.push(links[i]);
+    }
+  });
+  for (const lnk of touched) {
+    // Don't write a half-resolved link. If issue_id or interaction_id is a TEXT
+    // column, a still-temp value would be accepted as legitimate data rather
+    // than rejected — a dangling link that looks valid. The other end's sync
+    // will come back through here and finish the job.
+    if (_isTmpId(lnk.issueId) || _isTmpId(lnk.interactionId)) continue;
+    if (_isTmpId(lnk.id)) {
+      const newLinkId = await sbAdd('issue_interactions', lnk);   // never persisted yet
+      if (newLinkId) {
+        const j = links.findIndex(x => x.id === lnk.id);
+        if (j > -1) links[j].id = newLinkId;
+      }
+    } else {
+      await sbUpdate('issue_interactions', lnk.id, lnk);          // already there — correct it
+    }
+  }
+}
+
 // ── DB SHIM ────────────────────────────────────────────────────────
 const DB = {
   get(k) { return JSON.parse(JSON.stringify(_syncCache[k] || [])); },
@@ -1268,23 +1305,12 @@ const DB = {
             const mainEl = document.getElementById('main');
             if (mainEl && (S.view === 'master' || S.view === 'stakeholders')) render();
           }
-          // Fix issue_interactions links referencing this tmp interaction ID and retry insert
-          if (table === 'interactions') {
-            const toRetry = [];
-            (_syncCache['issue_interactions'] || []).forEach((lnk, i) => {
-              if (String(lnk.interactionId) === String(oldTmpId)) {
-                _syncCache['issue_interactions'][i] = {..._syncCache['issue_interactions'][i], interactionId: newId};
-                toRetry.push(_syncCache['issue_interactions'][i]);
-              }
-            });
-            for (const lnk of toRetry) {
-              const retryId = await sbAdd('issue_interactions', lnk);
-              if (retryId) {
-                const idx2 = _syncCache['issue_interactions'].findIndex(x => x.id === lnk.id);
-                if (idx2 > -1) _syncCache['issue_interactions'][idx2].id = retryId;
-              }
-            }
-          }
+          // Repoint issue_interactions links that referenced this tmp id.
+          // BOTH ends need this: a link created alongside a brand-new issue
+          // carries two temp ids, and whichever side syncs second is what makes
+          // the row writable.
+          if (table === 'interactions')  await _relinkIssueInteractions('interactionId', oldTmpId, newId);
+          else if (table === 'issues')   await _relinkIssueInteractions('issueId',       oldTmpId, newId);
         }
       } else if (JSON.stringify(oldMap[item.id]) !== JSON.stringify(item) && isNumeric) {
         // Pass the pre-edit updated_at as the OCC baseline (ignored for non-OCC tables).

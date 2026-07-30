@@ -15,11 +15,11 @@ const path = require('path');
 const REPO = path.join(__dirname, '..', '..');
 const APPS = ['index.html', 'mobile.html', 'importer.html'];
 
-// mobile.html maps raisedBy -> pi_issues.raised_by, which does not exist. It is
-// harmless today because mobile never writes issues (it only renders the field,
-// which therefore stays blank). Listed here so the test stays green while the
-// dead mapping is still present, and so removing it doesn't silently pass.
-const KNOWN = { 'mobile.html': { pi_issues: ['raised_by'] } };
+// Per-app allowances for mappings that intentionally point at a column the
+// database doesn't have. Empty, and it should stay that way — mobile's
+// raisedBy -> raised_by lived here until it was repointed at created_by, the
+// column that actually holds who logged the issue.
+const KNOWN = {};
 
 function extractMap(html) {
   const i = html.indexOf('const SB_TO_INT');

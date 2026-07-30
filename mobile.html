@@ -1011,7 +1011,7 @@ const SB_TO_INT = {
   pi_issues: {
     id:'id', projectId:'project_id', title:'title', category:'category',
     status:'status', priority:'priority', description:'description',
-    raisedBy:'raised_by', dateRaised:'date_raised', resolutionSummary:'resolution_summary',
+    raisedBy:'created_by', dateRaised:'date_raised', resolutionSummary:'resolution_summary',
     notes:'notes'
   },
   pi_issue_interactions: {
@@ -1097,6 +1097,9 @@ async function sbGet(table) {
   const cached = cacheGet(table);
   if (cached) return cached;
   const sbTable = SB_TABLES[table];
+  // Matches index.html: without this an unmapped name builds a request to
+  // /rest/v1/undefined instead of failing fast.
+  if (!sbTable) { console.warn('sbGet: no Supabase mapping for table', table); return []; }
   const r = await fetch(SUPA_REST + '/' + sbTable + '?select=*&order=id.asc&limit=5000', {
     headers: getAuthHeaders()
   });
@@ -1151,7 +1154,11 @@ function cacheClear(k) { delete _cache[k]; delete _cacheTime[k]; }
 const _syncCache = {};
 
 async function loadAllData() {
-  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','dismissed_pairs','public_comments'];
+  // public_comments was in this list but has no SB_TABLES entry and is never
+  // read anywhere in this file, so every boot fired a doomed request at
+  // /rest/v1/undefined — a wasted round trip on cellular plus a console error
+  // that masked real ones.
+  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','dismissed_pairs'];
   await Promise.all(tables.map(async t => { _syncCache[t] = await sbGet(t); }));
 }
 

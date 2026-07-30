@@ -1,0 +1,114 @@
+// The pick-lists a user chooses from are duplicated across four places, and
+// none of them imports the others: index.html, mobile.html, importer.html, and
+// the .xlsx template embedded as base64 inside importer.html's
+// downloadTemplate(). CLAUDE.md warns about this; the warning is only as good
+// as somebody remembering it.
+//
+// Drift here is quiet and one-directional: the .xlsx offered "Letter" and
+// "Text" as interaction channels that the app has never had, and the importer
+// writes channel values verbatim — so an import from the firm's own template
+// produced interactions the app's channel filter could not select. It also
+// omitted "Public event" and the "In-person" direction, so those were
+// unreachable from the template.
+//
+// index.html is canonical. This test says so mechanically.
+const fs = require('fs');
+const path = require('path');
+const zlib = require('zlib');
+
+const REPO = path.join(__dirname, '..', '..');
+const read = f => fs.readFileSync(path.join(REPO, f), 'utf8');
+
+// Minimal zip reader — enough to pull one file out of the xlsx. Avoids adding a
+// dependency for what is a handful of bytes of central-directory parsing.
+function unzip(buf, want) {
+  const eocd = buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  if (eocd < 0) throw new Error('not a zip');
+  let off = buf.readUInt32LE(eocd + 16);
+  const count = buf.readUInt16LE(eocd + 10);
+  const names = [];
+  let found = null;
+  for (let i = 0; i < count; i++) {
+    const nLen = buf.readUInt16LE(off + 28), xLen = buf.readUInt16LE(off + 30),
+          cLen = buf.readUInt16LE(off + 32);
+    const name = buf.slice(off + 46, off + 46 + nLen).toString();
+    names.push(name);
+    if (name === want) {
+      const lho = buf.readUInt32LE(off + 42);
+      const lnLen = buf.readUInt16LE(lho + 26), lxLen = buf.readUInt16LE(lho + 28);
+      const start = lho + 30 + lnLen + lxLen;
+      const comp = buf.readUInt16LE(off + 10);
+      const size = buf.readUInt32LE(off + 20);
+      const raw = buf.slice(start, start + size);
+      // Keep walking rather than returning here — the caller checks the full
+      // entry count to prove no sheet was lost when the template was rebuilt.
+      found = comp === 0 ? raw : zlib.inflateRawSync(raw);
+    }
+    off += 46 + nLen + xLen + cLen;
+  }
+  return { names, data: found };
+}
+
+const jsList = (html, re) => { const m = html.match(re); return m ? eval(m[1]) : null; };
+const sorted = a => (a || []).slice().sort();
+
+module.exports = {
+  name: 'shared lists — index.html vs mobile, importer, and the .xlsx template',
+  async run({ t }) {
+    const idx = read('index.html'), mob = read('mobile.html'), imp = read('importer.html');
+
+    // ── canonical, from index.html ──────────────────────────────────────
+    const canon = {
+      types:   jsList(idx, /const STAKE_TYPES=(\[[^\]]*\])/),
+      dist:    jsList(idx, /const DIST_GROUPS=(\[[^\]]*\])/),
+      channel: jsList(idx, /id="f-ic">\$\{(\[[^\]]*\])/),
+      dir:     jsList(idx, /id="f-idr">\$\{(\[[^\]]*\])/),
+      support: jsList(idx, /id="f-ls">\$\{(\[[^\]]*\])/),
+    };
+    t.eq(canon.types && canon.types.length, 13, 'canonical STAKE_TYPES found (13)');
+    t.eq(canon.dist && canon.dist.length, 4, 'canonical DIST_GROUPS found (4)');
+    t.ok(canon.channel && canon.channel.length, 'canonical channel list found');
+    t.ok(canon.dir && canon.dir.length, 'canonical direction list found');
+
+    // ── mobile.html: the #add-type dropdown ─────────────────────────────
+    const sel = mob.slice(mob.indexOf('id="add-type"'));
+    const mobileTypes = [...sel.slice(0, sel.indexOf('</select>'))
+      .matchAll(/<option[^>]*>([^<]+)</g)].map(m => m[1].trim());
+    t.eq(sorted(mobileTypes), sorted(canon.types), 'mobile #add-type matches STAKE_TYPES');
+
+    // ── importer.html: normalizeType's own canonical copy ───────────────
+    const impTypes = jsList(imp, /const STAKE_TYPES = (\[[\s\S]*?\]);/);
+    t.eq(sorted(impTypes), sorted(canon.types), 'importer STAKE_TYPES matches');
+
+    // Unrecognised input must land on a valid type, not pass through as junk.
+    const i0 = imp.indexOf('function normalizeType');
+    const normalizeType = eval('(' + imp.slice(i0, imp.indexOf('\n}', i0) + 2)
+      .replace('function normalizeType', 'function') + ')');
+    global.STAKE_TYPES = impTypes;
+    t.eq(normalizeType('zzz not a type'), 'Other', 'unknown type falls back to Other');
+    t.eq(normalizeType('Contractor'), 'Contractor', 'a valid type with no keyword rule survives');
+    t.eq(normalizeType('Nonprofit'), 'Non-profit', 'a spelling variant normalises');
+    for (const ty of canon.types) {
+      t.ok(canon.types.includes(normalizeType(ty)), `normalizeType("${ty}") stays canonical`);
+    }
+
+    // ── the .xlsx template embedded in downloadTemplate() ───────────────
+    const b64 = (imp.match(/const b64 = '([A-Za-z0-9+/=]+)';/) || [])[1];
+    t.ok(b64, 'template base64 blob found');
+    const { names, data } = unzip(Buffer.from(b64, 'base64'), 'xl/worksheets/sheet3.xml');
+    t.eq(names.length, 19, 'template still has all 19 zip entries');
+    t.ok(names.includes('xl/worksheets/sheet2.xml') && data, 'template sheets readable');
+
+    const dropdowns = xml => [...xml.matchAll(/<formula1>"([^"]*)"<\/formula1>/g)]
+      .map(m => m[1].replace(/&amp;/g, '&').split(','));
+    const sheet2 = unzip(Buffer.from(b64, 'base64'), 'xl/worksheets/sheet2.xml').data.toString();
+    const s2 = dropdowns(sheet2), s3 = dropdowns(data.toString());
+    const has = (lists, want) => lists.some(l => sorted(l).join('|') === sorted(want).join('|'));
+
+    t.ok(has(s2, canon.types),   '.xlsx stakeholder-type dropdown matches STAKE_TYPES');
+    t.ok(has(s2, canon.dist),    '.xlsx distribution-group dropdown matches DIST_GROUPS');
+    t.ok(has(s2, canon.support), '.xlsx support dropdown matches');
+    t.ok(has(s3, canon.channel), '.xlsx channel dropdown matches the app');
+    t.ok(has(s3, canon.dir),     '.xlsx direction dropdown matches the app');
+  },
+};

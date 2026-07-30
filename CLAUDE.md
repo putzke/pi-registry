@@ -183,10 +183,15 @@ pi_report_archive   -- exported report snapshots (up to 50 per project)
 - After every edit, run the syntax check before committing
 - Push to `main` branch: `git push origin HEAD:main`
 - Working branch also: `claude/pi-registry-scroll-fixes-c2i1cc`
-- **Shared lists live in 3 separate files — update all together.** `index.html`,
+- **Shared lists live in 4 places — update all together.** `index.html`,
   `mobile.html`, and `importer.html` are standalone; none imports the others,
-  so any list a user picks from is duplicated. When changing one, grep all three
-  (+ the importer's embedded `.xlsx` template) and reconcile. Known duplicated lists:
+  so any list a user picks from is duplicated — and the importer's embedded
+  `.xlsx` template is a fourth copy. **`test/tests/06-shared-lists.test.js` now
+  enforces this mechanically** (it decodes the base64 `.xlsx` and diffs every
+  dropdown against `index.html`), so run `node test/run.js` after touching a
+  list rather than relying on remembering. It caught the `.xlsx` offering
+  `Letter`/`Text` channels the app never had while omitting `Public event`, and
+  a missing `In-person` direction. Known duplicated lists:
   - **Stakeholder types** — canonical `STAKE_TYPES` in `index.html` (13: Business,
     Elected Official, Agency, Community Group, Contractor, Engineering, Media,
     Property Owner, Resident, Tribal, Utility, Non-profit, Other). Mirrored in
@@ -195,8 +200,16 @@ pi_report_archive   -- exported report snapshots (up to 50 per project)
   - **Distribution groups** — `DIST_GROUPS` in `index.html` (Project team, Agency
     contacts, Media, Other). Importer normalizes to it (`normalizeDistributionGroups`)
     + `.xlsx` dropdown. Report filtering matches these strings exactly.
+  - **Interaction channels + direction** — the `f-ic` / `f-idr` selects in
+    `index.html` are canonical; mirrored in the `.xlsx` template (sheet3).
   - Editing the `.xlsx` template = decode the base64 in `downloadTemplate()`
-    (importer), edit the sheet XML, re-zip, re-base64. Verify all sheets survive.
+    (importer), edit the sheet XML, re-zip, re-base64. Verify all sheets survive
+    — the test asserts the entry count (19) precisely because a bad re-zip
+    silently drops sheets.
+  - `normalizeType()` in the importer matches an exact canonical type first,
+    then keyword rules, then falls back to `Other`. It used to return the raw
+    input unchanged, which let `Nonprofit` or `Contracting` into the database as
+    stakeholder types nothing could filter on.
 
 ## CSP (line 6)
 ```

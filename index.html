@@ -619,7 +619,6 @@ async function refreshSession() {
         return false;
       }
       setSession({ access_token: data.access_token, refresh_token: data.refresh_token, user: data.user });
-      console.log('Session refreshed successfully');
       return true;
     } catch(e) {
       // Network error — don't sign out, will retry next interval
@@ -1029,12 +1028,10 @@ async function sbUpdate(table, sbId, obj, baseTs) {
   const useOCC = occ && baseTs;                 // only guard when we have a baseline to compare
   const url = SUPA_REST + '/' + sbTable + '?id=eq.' + sbId
             + (useOCC ? '&updated_at=eq.' + encodeURIComponent(baseTs) : '');
-  console.log('SB UPDATE sending:', sbTable, 'id=', sbId, JSON.stringify(body));
   let r;
   try { r = await _sbWrite(url, 'PATCH', body); }
   catch (e) { console.error('SB UPDATE network error:', sbTable, e.message); _sbNetworkWarn(); return false; }
   const responseText = await r.text();
-  console.log('SB UPDATE response:', r.status, responseText);
   if (!r.ok) {
     console.error('SB UPDATE error:', r.status, sbTable, responseText);
     return false;
@@ -10084,8 +10081,6 @@ async function generateAllSectionDrafts() {
   var batchMaxTokens = Math.min(16000, 600 + jobs.reduce(function(t,j){ return t + (j.budget||400); }, 0));
   var applied = false;
   var raw = await _claudeNarrative(_claudeSectionSystemPrompt(), batchPrompt, batchMaxTokens);
-  console.log('AI draft-all: tasks=', jobs.length, 'maxTokens=', batchMaxTokens,
-              'responseChars=', raw ? String(raw).length : 0);
   if (!raw) console.warn('AI draft-all: no response from Claude — falling back to template text.');
   if (raw) {
     try {

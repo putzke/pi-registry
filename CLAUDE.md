@@ -273,20 +273,19 @@ shipped. Grep the actual functions before planning work off this list.
 5. **Client reporting redesign — end-to-end test** (redesign section below, step 5):
    confirm `sql/2026-07-06_portal_shared_reports.sql` was run, then share a report +
    publish a trend and confirm both render in the portal. Shipped-but-untested; client-facing.
-6. **REMIND JEFF: remove debug logging before go-live (TWO sets, both kept deliberately).**
-   (a) The `AI draft-all:` / `Claude:` diagnostics in `generateAllSectionDrafts` and
-   `_claudeNarrative` — added July 2026 after a silent `content[0]` bug wasted a
-   testing cycle. Recommendation when the time comes: keep the *warnings* (they only
-   fire on failure and are how a silent AI failure is diagnosable) and drop only the
-   routine `console.log('AI draft-all: tasks=…')`. (b) The `SB UPDATE` pair below.
-   `sbUpdate()`
-   in `index.html` has two `console.log` calls (`'SB UPDATE sending:'` and
-   `'SB UPDATE response:'`) left in as instrumentation while chasing save bugs.
-   Jeff explicitly chose to KEEP them for now (still in testing, July 2026) and
-   asked to be reminded to strip them "some day in the future." When reminding,
-   remove only those two success-path logs — keep the error logging (`SB UPDATE
-   error`, `SB ADD/DELETE network error`, `_sbNetworkWarn`). If asked to reduce
-   console noise or prep for production/go-live, surface this proactively.
+6. **Debug logging — index.html is clean (July 2026).** The four routine
+   `console.log` calls are gone: the `SB UPDATE sending:` / `SB UPDATE response:`
+   pair in `sbUpdate()`, the `AI draft-all:` diagnostic, and the session-refresh
+   happy path. They printed whole request/response bodies — a stakeholder's
+   name, email, phone, address and LEP/EJ flags on every save — and the harness
+   now gives better instrumentation (`shim.calls`, `VERBOSE=1`) without shipping
+   it to users. **All 45 `console.error`/`console.warn` paths were kept
+   deliberately**; they only fire on failure and are how a silent failure stays
+   diagnosable. Do not "tidy" them away.
+   **STILL OUTSTANDING — `importer.html` has four of the same kind**:
+   `[sbAdd]` (logs the request body), `[sbAdd] OK`, `[Int insert]` (logs the
+   whole interaction record) and `[Auto-link]`. Higher exposure than the
+   index.html pair was, because a bulk import prints every contact in the file.
 
 ## PARKED — Survey/public-input ingestion bridge (validate first, July 2026)
 

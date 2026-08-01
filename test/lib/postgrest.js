@@ -75,6 +75,24 @@ function buildWhere(params, startIdx, types) {
   return { sql: clauses.length ? ' where ' + clauses.join(' and ') : '', values };
 }
 
+// Honour ?select=a,b,c. The shim used to always `select *`, which meant a
+// narrowed select looked identical to a full one — so the lazily-fetched
+// pi_report_archive.snapshot still arrived and the app could not be tested for
+// what it does when a column is genuinely absent. An unknown column is a hard
+// error rather than a silent pass, since that is exactly the drift worth
+// catching. Embedded resources (`select=a(b)`) remain unsupported.
+function buildSelect(sp, types) {
+  const s = (sp.get('select') || '*').trim();
+  if (!s || s === '*') return '*';
+  if (/[()]/.test(s)) throw new Error('postgrest shim: embedded resources in select are not supported');
+  const cols = s.split(',').map(c => c.trim()).filter(Boolean);
+  for (const c of cols) {
+    if (!/^[a-z_][a-z0-9_]*$/.test(c)) throw new Error(`postgrest shim: bad column in select "${c}"`);
+    if (types && !(c in types)) throw new Error(`postgrest shim: unknown column in select "${c}"`);
+  }
+  return cols.join(',');
+}
+
 function buildOrder(params) {
   const o = params.get('order');
   if (!o) return '';
@@ -101,7 +119,7 @@ async function handle(pool, req, body) {
   if (req.method === 'GET') {
     const { sql, values } = buildWhere(params, 1, types);
     const limit = sp.get('limit') ? ` limit ${parseInt(sp.get('limit'), 10)}` : '';
-    const q = `select * from ${table}${sql}${buildOrder(sp)}${limit}`;
+    const q = `select ${buildSelect(sp, types)} from ${table}${sql}${buildOrder(sp)}${limit}`;
     const { rows } = await pool.query(q, values);
     return { status: 200, body: rows };
   }

@@ -84,6 +84,12 @@ straight after a UI action is a race, and a fixed sleep only moves the flake
 around. Use `t.until(fn)`; it polls for up to 5s and returns `fn()`'s value or
 `null`.
 
+`?select=a,b,c` is honoured, and an unknown column in a select is a hard error
+rather than a silent pass. The shim used to always `select *`, which made a
+narrowed select indistinguishable from a full one — so lazily-fetched columns
+still arrived and the app could not be tested for what it does when a column is
+genuinely absent.
+
 Not implemented, because nothing calls it: embedded resources (`select=a(b)`),
 `or=`, range headers, RPC, and RLS. RLS in particular means these tests say
 nothing about the portal's access isolation.

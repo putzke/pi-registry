@@ -169,9 +169,29 @@ pi_report_archive   -- exported report snapshots (up to 50 per project)
   downloaded on every page load. Measured on the demo seed: ~6 kB raw per
   snapshot, up to 27 kB for a whole row, and a real report with a long
   interaction table will be bigger (the frozen `tableHtml` is inline-styled on
-  purpose so the portal renders it standalone). Before raising this past 30, make
-  the archive list fetch metadata only and load `snapshot` on demand.
-- `_archiveReport(projF)` — async, called inside `exportPIDocx()` before download
+  purpose so the portal renders it standalone). **The boot payload is now fixed**
+  — see the `SB_LAZY_COLS` note below — so raising this further is no longer
+  gated on it.
+- `_archiveReport(projF)` — async. **`exportPIDocx()` does NOT call it** (this
+  line used to claim it did); archiving is deliberate, via the "Save to archive"
+  button → `manualArchiveReport()`. Returns **true only if a snapshot actually
+  reached the database**, and reports its own failure — the caller must not
+  announce success on its own. It previously swallowed both the empty-draft and
+  the failed-insert cases while `manualArchiveReport()` said "Draft saved to
+  archive" regardless, i.e. it told the consultant a compliance record existed
+  when none did.
+- **Snapshots are fetched lazily** (`SB_LAZY_COLS` + `_sbSelect()`): the boot
+  `sbGet` for `report_archive` selects every mapped column EXCEPT `snapshot`, and
+  `_archiveEnsureSnapshots(recs)` pulls them by id when a report is previewed or
+  the status report runs. `fromSB` leaves a lazy column's key **absent** rather
+  than defaulting it, so callers can tell "not loaded" from "stored as null" (a
+  null snapshot is a genuine pre-snapshot row and renders an honest note).
+  Safe because `report_archive` never goes through `DB.set`/`DB._sync`, and
+  `toSB` omits undefined values, so a partial `sbUpdate` (e.g. the share toggle)
+  cannot null the column. Covered by `test/tests/08-archive-lazy.test.js`.
+  **`client-portal.html` still fetches snapshots eagerly** — it only pulls
+  `client_visible` rows for one project, so the payload is small, but the same
+  treatment applies if that ever grows.
 - `deleteArchivedReport(archiveId)` — async, re-renders `#rpt-archive-panel` in place
 - `_buildArchiveHTML(projF)` — renders archive list + AI trend button (shown when 2+ archives)
 - `generateTrendSummary()` — async, sends all archived report digests to Claude Haiku, renders trend narrative in `#trend-result`

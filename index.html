@@ -843,6 +843,24 @@ const SB_TO_INT = {
   }
 };
 
+// Columns deliberately NOT fetched by the bulk startup load.
+//
+// pi_report_archive.snapshot is a self-contained frozen copy of an entire
+// rendered report (every section's inline-styled tableHtml), so `select=*` meant
+// every snapshot for every project downloaded on every page load — the real
+// ceiling on ARCHIVE_LIMIT. Nothing in the archive LIST needs it; it is pulled
+// on demand by _archiveEnsureSnapshots() when a report is previewed, printed, or
+// fed to the status report.
+const SB_LAZY_COLS = { pi_report_archive: ['snapshot'] };
+
+// Derived from SB_TO_INT rather than hard-coded, so adding a column to the
+// mapping can't leave it silently unfetched. PostgREST has no "all except X".
+function _sbSelect(sbTable) {
+  const lazy = SB_LAZY_COLS[sbTable], map = SB_TO_INT[sbTable];
+  if (!lazy || !map) return '*';
+  return Object.values(map).filter(c => lazy.indexOf(c) < 0).join(',');
+}
+
 // Convert our internal object to Supabase column names
 // Date fields that must be null (not '') when empty
 // Returns today's date in YYYY-MM-DD using LOCAL timezone (not UTC)
@@ -906,8 +924,14 @@ function fromSB(table, row) {
   const map = SB_TO_INT[sbTable];
   if (!map) return row; // table not in SB schema — pass through as-is
   const result = {};
+  const lazy = SB_LAZY_COLS[sbTable] || [];
   for (const [intKey, sbCol] of Object.entries(map)) {
     if (intKey === 'id') { result.id = String(row.id || ''); continue; }
+    // A lazy column the server wasn't asked for: leave the key ABSENT rather
+    // than defaulting it. Callers need to tell "not loaded yet" from "stored as
+    // null" — a null snapshot means a pre-snapshot archive row, which renders
+    // with an honest note instead of full fidelity.
+    if (lazy.indexOf(sbCol) > -1 && row[sbCol] === undefined) continue;
     result[intKey] = row[sbCol] !== undefined ? row[sbCol] : (intKey.startsWith('is') ? false : '');
   }
   // Normalize booleans
@@ -930,7 +954,7 @@ async function sbGet(table) {
   if (cached) return cached;
   const sbTable = SB_TABLES[table];
   if (!sbTable) { console.warn('sbGet: no Supabase mapping for table', table); return []; }
-  const r = await fetch(SUPA_REST + '/' + sbTable + '?select=*&order=id.asc&limit=5000', {
+  const r = await fetch(SUPA_REST + '/' + sbTable + '?select=' + _sbSelect(sbTable) + '&order=id.asc&limit=5000', {
     headers: getAuthHeaders()
   });
   if (!r.ok) {
@@ -11906,8 +11930,10 @@ async function manualArchiveReport() {
   if (existing.length >= ARCHIVE_LIMIT) {
     showToast('Archive limit ('+ARCHIVE_LIMIT+') reached. Delete old snapshots first.', 'warn', 5000); return;
   }
-  await _archiveReport(projF);
-  showToast('Draft saved to archive.', 'success', 3000);
+  // Only claim success if a snapshot actually landed — _archiveReport() reports
+  // its own failure, so a false here has already been explained to the user.
+  if (!(await _archiveReport(projF))) return;
+  showToast('Draft saved to archive.', 'info', 3000);
   // Refresh archive panel if visible
   var panel = document.getElementById('rpt-archive-panel');
   if (panel) panel.innerHTML = _buildArchiveHTML(projF);
@@ -12080,16 +12106,23 @@ function _buildReportSnapshot(projF, saved) {
   };
 }
 
+// Returns true only if a snapshot actually reached the database. Callers must
+// not announce success on their own — an archived report is a compliance record,
+// and telling the consultant one exists when it doesn't is the worst failure
+// this function has.
 async function _archiveReport(projF) {
-  if (typeof sbAdd !== 'function') return;
+  if (typeof sbAdd !== 'function') return false;
   var saved = JSON.parse(localStorage.getItem('pir4_pi_reports_'+projF)||'{}');
-  if (!saved.reportTitle && !saved.sections) return; // nothing to archive
+  if (!saved.reportTitle && !saved.sections) {
+    showToast('Nothing to archive yet — the report draft is empty.', 'warn', 4000);
+    return false;
+  }
 
-  // Enforce limit: warn at 2 slots remaining, block at 10
+  // Enforce limit: warn at 2 slots remaining, block at ARCHIVE_LIMIT
   var existing = (_syncCache['report_archive']||[]).filter(function(r){ return String(r.projectId)===String(projF); });
   if (existing.length >= ARCHIVE_LIMIT) {
     showToast('Archive limit ('+ARCHIVE_LIMIT+') reached for this project. Delete old reports to continue archiving.', 'warn', 5000);
-    return;
+    return false;
   }
   if (existing.length >= ARCHIVE_LIMIT - 2) {
     showToast('Archive approaching limit: '+(ARCHIVE_LIMIT-existing.length)+' slot'+(ARCHIVE_LIMIT-existing.length===1?'':'s')+' remaining.', 'warn', 4000);
@@ -12113,12 +12146,14 @@ async function _archiveReport(projF) {
 
   try {
     var newId = await sbAdd('report_archive', payload);
-    if (newId) {
-      if (!_syncCache['report_archive']) _syncCache['report_archive'] = [];
-      _syncCache['report_archive'].push(Object.assign({}, payload, {id: newId}));
-    }
+    if (!newId) { showToast('Could not save the archive snapshot — nothing was archived.', 'error', 6000); return false; }
+    if (!_syncCache['report_archive']) _syncCache['report_archive'] = [];
+    _syncCache['report_archive'].push(Object.assign({}, payload, {id: newId}));
+    return true;
   } catch(e) {
     console.warn('Archive snapshot failed:', e.message);
+    showToast('Could not save the archive snapshot: '+e.message, 'error', 6000);
+    return false;
   }
 }
 
@@ -12236,9 +12271,43 @@ function _buildArchiveHTML(projF) {
   return html;
 }
 
-function previewArchivedReport(archiveId) {
+// Pull the frozen snapshots for specific archive rows on demand (see
+// SB_LAZY_COLS) and merge them into the cache. Cheap to call repeatedly — rows
+// already carrying a snapshot are skipped, so a second preview of the same
+// report is instant.
+async function _archiveEnsureSnapshots(recs) {
+  var need = (recs||[]).filter(function(r){ return r && !('snapshot' in r); });
+  if (!need.length) return true;
+  var ids = need.map(function(r){ return encodeURIComponent(String(r.id)); }).join(',');
+  try {
+    var r = await fetch(SUPA_REST + '/pi_report_archive?select=id,snapshot&id=in.(' + ids + ')',
+                        { headers: getAuthHeaders() });
+    if (!r.ok) { console.error('SB GET error:', r.status, 'report_archive snapshots'); return false; }
+    var byId = {};
+    (await r.json()).forEach(function(x){ byId[String(x.id)] = x.snapshot === undefined ? null : x.snapshot; });
+    (_syncCache['report_archive']||[]).forEach(function(rec){
+      if (Object.prototype.hasOwnProperty.call(byId, String(rec.id))) rec.snapshot = byId[String(rec.id)];
+    });
+    // A row the server didn't return no longer exists. Record null so we render
+    // the honest pre-snapshot note instead of refetching forever.
+    need.forEach(function(rec){ if (!('snapshot' in rec)) rec.snapshot = null; });
+    return true;
+  } catch(e) {
+    console.error('Snapshot fetch failed:', e.message);
+    return false;
+  }
+}
+
+async function previewArchivedReport(archiveId) {
   var rec = (_syncCache['report_archive']||[]).find(function(r){ return String(r.id)===String(archiveId); });
   if (!rec) { showToast('Archive record not found', 'error'); return; }
+  // The snapshot IS the archived report — without it there is nothing faithful
+  // to render, so fail loudly rather than falling through to the "archived
+  // before snapshots were captured" note, which would be a lie about this row.
+  if (!(await _archiveEnsureSnapshots([rec]))) {
+    showToast('Could not load the archived report. Check your connection and try again.', 'error', 5000);
+    return;
+  }
   var proj = (DB.get('projects')||[]).find(function(p){ return String(p.id)===String(rec.projectId); }) || {};
   showInlineReport(_buildArchivedPreviewHTML(rec, proj), (rec.reportTitle||'Archived Report')+(rec.reportNum?' #'+rec.reportNum:''));
 }
@@ -12572,6 +12641,16 @@ async function generateTrendSummary() {
   var resultEl = document.getElementById('trend-result');
   if (btn) { btn.disabled = true; btn.textContent = '✦ Analyzing…'; }
   if (resultEl) resultEl.innerHTML = '';
+
+  // The comparison reads snapshot.trendFacts, which isn't in the startup fetch
+  // (SB_LAZY_COLS). Load it before diffing — without this every archive would
+  // look like a pre-trendFacts row and the report would degrade to narrative
+  // only, quietly, with no sign anything was missing.
+  if (!(await _archiveEnsureSnapshots(archives))) {
+    if (btn) { btn.disabled = false; btn.textContent = '✦ AI: Project Status Report'; }
+    showToast('Could not load archived report data. Check your connection and try again.', 'error', 5000);
+    return;
+  }
 
   // Build a compact digest of each archived report for the prompt
   var digest = archives.map(function(r, i) {

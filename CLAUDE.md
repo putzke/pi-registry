@@ -161,7 +161,16 @@ pi_report_archive   -- exported report snapshots (up to 50 per project)
 - **`_fmtMDY(d)`** → mm/dd/yyyy for table cells; **`_fmtDateRange(a,b)`** → "July 6 –
   August 7, 2026" for prose/AI facts; `fmt(d)` → "Jul 6, 2026" for headers. Feeding
   raw ISO to the AI makes it echo ISO in the narrative.
-- `ARCHIVE_LIMIT = 50` per project
+- **`ARCHIVE_LIMIT = 30` per project** (was 10 until Aug 2026; this line used to
+  say 50, which was never true in code). The limit BLOCKS rather than evicting —
+  an archived report is a compliance record, so nothing is auto-deleted.
+  **Storage is not the constraint; the boot payload is.** `loadAllData()` fetches
+  `report_archive` with `select=*`, so every frozen snapshot for every project is
+  downloaded on every page load. Measured on the demo seed: ~6 kB raw per
+  snapshot, up to 27 kB for a whole row, and a real report with a long
+  interaction table will be bigger (the frozen `tableHtml` is inline-styled on
+  purpose so the portal renders it standalone). Before raising this past 30, make
+  the archive list fetch metadata only and load `snapshot` on demand.
 - `_archiveReport(projF)` — async, called inside `exportPIDocx()` before download
 - `deleteArchivedReport(archiveId)` — async, re-renders `#rpt-archive-panel` in place
 - `_buildArchiveHTML(projF)` — renders archive list + AI trend button (shown when 2+ archives)

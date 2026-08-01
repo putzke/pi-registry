@@ -11889,7 +11889,14 @@ async function _occFetchReportRow(projF){
 
 
 // ── Report Archive ──────────────────────────────────────────────────────────
-const ARCHIVE_LIMIT = 10;
+// Raised 10 → 30 (Aug 2026). Monthly reports means 30 is ~2.5 years on one
+// project; 10 was a wall a long-running project could actually hit.
+//
+// The binding constraint is NOT storage — it is the boot payload. loadAllData()
+// pulls report_archive with select=*, so every frozen snapshot for every project
+// is downloaded on every page load. Going higher than this wants the archive
+// list to fetch metadata only and load `snapshot` on demand.
+const ARCHIVE_LIMIT = 30;
 
 async function manualArchiveReport() {
   var projF = S.projectFilter;

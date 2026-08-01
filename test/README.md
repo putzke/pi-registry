@@ -71,6 +71,18 @@ test failures. Three cases cost real debugging time and are worth knowing:
 - **Filters compare as text** (`col::text = $1`) because this schema genuinely
   mixes `text` and `bigint` for `project_id`. Temporal columns are the
   exception and compare natively — see the first note.
+- **`project_id` columns must be `text`.** `fromSB()` stringifies `id` but
+  passes foreign keys through raw, and the app then compares them strictly
+  (`x.projectId === S.projectFilter`, and `S.projectFilter` always comes from a
+  `<select>`, so it is always a string). Typing `project_id` as `bigint` in
+  `build-schema.js` made the shim return numbers, and every project-scoped list
+  came back empty for reasons that had nothing to do with the code under test.
+
+Writes are local-first — `DB.set()` updates `_syncCache` immediately and
+`DB._sync()` reaches Postgres a moment later — so asserting on the database
+straight after a UI action is a race, and a fixed sleep only moves the flake
+around. Use `t.until(fn)`; it polls for up to 5s and returns `fn()`'s value or
+`null`.
 
 Not implemented, because nothing calls it: embedded resources (`select=a(b)`),
 `or=`, range headers, RPC, and RLS. RLS in particular means these tests say

@@ -4,7 +4,7 @@
 create table pi_client_access (
   id bigint generated always as identity primary key,
   user_id uuid,
-  project_id bigint,
+  project_id text,
   org_id bigint,
   created_at timestamptz default now(),
   email text
@@ -12,7 +12,7 @@ create table pi_client_access (
 
 create table pi_comment_periods (
   id text primary key,
-  project_id bigint,
+  project_id text,
   title text,
   description text,
   start_date date,
@@ -24,7 +24,7 @@ create table pi_comment_periods (
 
 create table pi_commitments (
   id bigserial primary key,
-  project_id bigint,
+  project_id text,
   stakeholder_id bigint,
   commitment text,
   made_to text,
@@ -41,7 +41,7 @@ create table pi_commitments (
 
 create table pi_deliverables (
   id bigserial primary key,
-  project_id bigint,
+  project_id text,
   deliverable_type text,
   scope_type text,
   status text,
@@ -67,7 +67,7 @@ create table pi_group_members (
 
 create table pi_groups (
   id bigserial primary key,
-  project_id bigint,
+  project_id text,
   name text,
   color text,
   spatial_label text,
@@ -79,7 +79,7 @@ create table pi_groups (
 
 create table pi_interactions (
   id bigserial primary key,
-  project_id bigint,
+  project_id text,
   stakeholder_id bigint,
   interaction_date date,
   channel text,
@@ -111,7 +111,7 @@ create table pi_issue_interactions (
 
 create table pi_issues (
   id bigserial primary key,
-  project_id bigint,
+  project_id text,
   title text,
   category text,
   description text,
@@ -130,7 +130,7 @@ create table pi_issues (
 
 create table pi_meetings (
   id bigserial primary key,
-  project_id bigint,
+  project_id text,
   title text,
   meeting_date date,
   meeting_type text,
@@ -152,14 +152,14 @@ create table pi_meetings (
 
 create table pi_portal_links (
   token uuid primary key,
-  project_id bigint,
+  project_id text,
   label text,
   created_at timestamptz default now()
 );
 
 create table pi_project_stakeholders (
   id bigserial primary key,
-  project_id bigint,
+  project_id text,
   stakeholder_id bigint,
   stakeholder_role text,
   support text,
@@ -195,7 +195,7 @@ create table pi_projects (
 
 create table pi_public_comments (
   id text primary key,
-  project_id bigint,
+  project_id text,
   period_id text,
   comment_date date,
   comment_type text,
@@ -240,7 +240,7 @@ create table pi_stakeholders (
 
 create table pi_client_summaries (
   id bigserial primary key,
-  project_id bigint,
+  project_id text,
   content_recent text,
   content_full text,
   period_start date,
@@ -257,7 +257,7 @@ create table pi_dismissed_pairs (
 
 create table pi_report_archive (
   id bigserial primary key,
-  project_id bigint,
+  project_id text,
   report_num int,
   report_title text,
   report_subtitle text,
@@ -273,7 +273,7 @@ create table pi_report_archive (
 
 create table pi_reports (
   id bigserial primary key,
-  project_id bigint,
+  project_id text,
   report_num int,
   report_title text,
   report_subtitle text,
@@ -292,7 +292,7 @@ create table pi_reports (
 
 create table pi_tribal_consultations (
   id text primary key,
-  project_id bigint,
+  project_id text,
   tribe_name text,
   tribe_type text,
   thpo_contact text,

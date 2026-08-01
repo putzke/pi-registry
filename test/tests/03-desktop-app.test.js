@@ -53,35 +53,31 @@ module.exports = {
       const target = (await t.sql(
         `select id, logged_by from pi_interactions
           where follow_up and not coalesce(follow_up_done,false)
-            and follow_up_assigned_to is null limit 1`))[0];
+            and follow_up_assigned_to is null order by id limit 1`))[0];
       t.ok(target, 'found an unassigned open follow-up to reassign');
       if (target) {
         await app.page.evaluate(id => assignFollowUp(id, 'SHA'), String(target.id));
         await app.page.waitForFunction(
           id => (_syncCache.interactions.find(i => String(i.id) === id) || {}).followUpAssignedTo === 'SHA',
           String(target.id), { timeout: 5000 });
-        const row = (await t.sql('select follow_up_assigned_to a from pi_interactions where id::text=$1',
-                                 [String(target.id)]))[0];
-        t.eq(row.a, 'SHA', 'reassignment persisted to the database');
+        const fu = q => t.sql(
+          'select follow_up_assigned_to a, follow_up_done d, follow_up_resolved rd '
+          + 'from pi_interactions where id::text=$1', [String(target.id)]).then(r => r[0]);
+        t.ok(await t.until(async () => (await fu()).a === 'SHA'),
+             'reassignment persisted to the database');
         const patched = shim.calls.some(c => c.method === 'PATCH' && /pi_interactions/.test(c.url) && c.status < 400);
         t.ok(patched, 'it went through a real PATCH, not just the local cache');
-      }
 
-      // ── resolve / reopen, including the stale-date fix ──────────────────
-      if (target) {
+        // ── resolve / reopen, including the stale-date fix ────────────────
         await app.page.evaluate(id => resolveFollowUp(id), String(target.id));
-        await app.page.waitForTimeout(600);
-        let r = (await t.sql('select follow_up_done d, follow_up_resolved rd from pi_interactions where id::text=$1',
-                             [String(target.id)]))[0];
-        t.eq(r.d, true, 'resolve persisted');
-        t.ok(r.rd, 'resolve stamped a resolution date');
+        let r = await t.until(async () => { const x = await fu(); return x.d === true ? x : null; });
+        t.ok(r, 'resolve persisted');
+        t.ok(r && r.rd, 'resolve stamped a resolution date');
 
         await app.page.evaluate(id => reopenFollowUp(id), String(target.id));
-        await app.page.waitForTimeout(600);
-        r = (await t.sql('select follow_up_done d, follow_up_resolved rd from pi_interactions where id::text=$1',
-                         [String(target.id)]))[0];
-        t.eq(r.d, false, 'reopen persisted');
-        t.eq(r.rd, null, 'reopen cleared the stale resolution date');
+        r = await t.until(async () => { const x = await fu(); return x.d === false ? x : null; });
+        t.ok(r, 'reopen persisted');
+        t.eq(r && r.rd, null, 'reopen cleared the stale resolution date');
       }
 
       t.eq(app.errors, [], 'no page errors during the run');

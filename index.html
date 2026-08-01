@@ -1223,6 +1223,10 @@ function _bgRefreshOK(){
   if (Date.now() - _lastLocalWriteAt < 6000) return false;              // let our just-made write settle
   const ov = document.getElementById('modal-ov');
   if (ov && ov.classList.contains('open')) return false;               // don't yank data mid-edit
+  // Both entry grids hold unsaved rows in the DOM, not in _syncCache, so a
+  // re-render throws away everything typed so far. The activeElement check
+  // below only covers the moment the user is actually in a field.
+  if (S.showQuickLog || S.showBulkAdd) return false;
   const ae = document.activeElement;
   if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return false;  // user is typing / filtering
   return true;
@@ -1747,7 +1751,7 @@ function initDashRows(){
     }
   });
 }
-function setView(v){if(v==='tribal'){showToast('Tribal consultation module is not available yet.','info',2500);return;}S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.showBulkAdd=false;S.showEmailPanel=false;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;S.cmtSearch='';S.cmtProj='';S.cmtStatus='';S.cmtPeriod='';S.cmtPeriodId='';S.cmtTab='comments';
+function setView(v){if(v==='tribal'){showToast('Tribal consultation module is not available yet.','info',2500);return;}S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.showBulkAdd=false;S.showQuickLog=false;S.showEmailPanel=false;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;S.cmtSearch='';S.cmtProj='';S.cmtStatus='';S.cmtPeriod='';S.cmtPeriodId='';S.cmtTab='comments';
   S.view=v;S.mapPicked=undefined;S.selStakeholder=null;S.selInteraction=null;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const navId=v==='commitments'?'nav-commitments':v==='comments'?'nav-comments':v==='tribal'?'nav-tribal':('nav-'+v);
@@ -5416,6 +5420,7 @@ function setIntSort(col){
   renderInteractions(document.getElementById('main'));
 }
 function renderInteractions(el){
+  if(S.showQuickLog){renderQuickLog(el);return;}
   const projs=DB.get('projects'),stakes=DB.getActive('stakeholders');
   let ints=DB.get('interactions');
   if(S.projectFilter)ints=ints.filter(i=>i.projectId===S.projectFilter);
@@ -5444,6 +5449,7 @@ function renderInteractions(el){
       <select class="fsel" id="int-proj" onchange="S.projectFilter=this.value;renderInteractions(document.getElementById('main'))">
         <option value="">All projects</option>${projs.map(p=>`<option value="${p.id}"${p.id===S.projectFilter?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}
       </select>
+      ${S.projectFilter?`<button class="btn" onclick="openQuickLog()" title="Enter several interactions at once for this project"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 4h12M2 8h12M2 12h8"/></svg>Quick log</button>`:''}
       <button class="btn btn-primary" onclick="openIntModal()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v10M3 8h10"/></svg>Log interaction</button>
     </div>
   </div>
@@ -6977,6 +6983,278 @@ async function intAddNewContact(){
   if(linkId){ link.id=linkId; const pArr=(_syncCache['project_stakeholders']||[]).slice(); pArr.push(link); _syncCache['project_stakeholders']=pArr; }
   selectIntStake(realId, dispName(stake)+(org?' — '+org:''));
   showToast('✓ '+dispName(stake)+' added to project','info',2500);
+}
+
+// ── QUICK LOG (multi-row manual interaction entry) ─────────────────────────
+// A PI manager accumulates a day's worth of calls and doorstep conversations and
+// enters them in one sitting; the full modal costs an open/save round-trip per
+// record. This grid removes that round-trip and nothing else.
+//
+// It is deliberately NOT an import tool. An interaction is a compliance claim
+// (date, who, what, logged-by) that flows into FHWA/NEPA reports, so every field
+// here is typed by a person — no scan, no AI extraction, no fuzzy matching. The
+// scope is locked in CLAUDE.md: project-scoped, and the stakeholder picker only
+// offers contacts ALREADY linked to the project. Creating a contact, linking one
+// from the master list, follow-ups, issue links and the subject/nature detail all
+// stay on the full modal, which is where those decisions belong.
+let QL_ROWS = 12;
+const QL_ROWS_MAX = 50;
+const QL_CHANNELS = ['Phone','Email','In-person','Public meeting','Public event','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'];
+const QL_DIRECTIONS = ['Incoming','Outgoing','In-person'];
+const QL_INP = 'width:100%;font-size:11px;padding:4px 5px;height:28px;background:var(--navy-mid);border:1px solid var(--border);border-radius:4px;color:var(--white);box-sizing:border-box';
+
+function openQuickLog(){
+  if(!S.projectFilter){ showToast('Select a project first — quick log only offers contacts already on the project.','warn'); return; }
+  S.showQuickLog=true; QL_ROWS=12;
+  renderInteractions(document.getElementById('main'));
+}
+function closeQuickLog(){
+  S.showQuickLog=false;
+  renderInteractions(document.getElementById('main'));
+}
+
+function _qlEsc(s){ return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+
+function _qlRowHTML(i){
+  const inp=QL_INP, sel=QL_INP+';padding:4px 2px';
+  const dn='style="position:absolute;right:2px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:11px;color:var(--sky-lt)"';
+  const chOpts=QL_CHANNELS.map(c=>`<option${c==='Phone'?' selected':''}>${c}</option>`).join('');
+  const drOpts=QL_DIRECTIONS.map(d=>`<option${d==='Incoming'?' selected':''}>${d}</option>`).join('');
+  return `<tr id="qlrow${i}">`
+    + `<td style="text-align:center;padding:3px 2px;width:40px;white-space:nowrap"><span style="font-size:11px;color:var(--fog)">${i+1}</span> <span onclick="qlClearRow(${i})" title="Clear row ${i+1}" style="cursor:pointer;font-size:14px;color:var(--fog);vertical-align:middle" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--fog)'">×</span></td>`
+    + `<td style="padding:3px 3px"><div style="position:relative"><input id="qld${i}" type="date" value="${localToday()}" style="${inp};padding-right:16px" onchange="qlRowTouch(${i})"><span onclick="qlApplyDown('qld',${i})" title="Copy date down" ${dn}>⇩</span></div></td>`
+    + `<td style="padding:3px 3px"><input id="qls${i}" type="text" autocomplete="off" placeholder="Anonymous — search…" style="${inp}" oninput="document.getElementById('qlsid${i}').value='';qlStakeInput(this,${i})" onfocus="qlStakeInput(this,${i})" onblur="qlStakeBlur(${i})"><input type="hidden" id="qlsid${i}"></td>`
+    + `<td style="padding:3px 3px"><div style="position:relative"><select id="qlc${i}" style="${sel};padding-right:16px" onchange="qlRowTouch(${i})">${chOpts}</select><span onclick="qlApplyDown('qlc',${i})" title="Copy channel down" ${dn}>⇩</span></div></td>`
+    + `<td style="padding:3px 3px"><div style="position:relative"><select id="qldr${i}" style="${sel};padding-right:16px" onchange="qlRowTouch(${i})">${drOpts}</select><span onclick="qlApplyDown('qldr',${i})" title="Copy direction down" ${dn}>⇩</span></div></td>`
+    + `<td style="padding:3px 3px"><textarea id="qlsu${i}" rows="1" placeholder="What was said / done…" style="${inp};height:28px;min-height:28px;resize:vertical;line-height:1.45;font-family:inherit" oninput="qlGrow(this);qlRowTouch(${i})" onkeydown="qlSummaryKey(event,${i})"></textarea></td>`
+    + `<td style="padding:3px 3px"><div style="position:relative"><input id="qlby${i}" type="text" maxlength="20" value="${escHtml(getLoggedBy())}" style="${inp};padding-right:16px;text-transform:uppercase" oninput="qlRowTouch(${i})"><span onclick="qlApplyDown('qlby',${i})" title="Copy logged-by down" ${dn}>⇩</span></div></td>`
+    + `</tr>`;
+}
+
+function renderQuickLog(el){
+  const proj=(DB.get('projects')||[]).find(p=>p.id===S.projectFilter);
+  if(!proj){ S.showQuickLog=false; renderInteractions(el); return; }
+  const linked=DB.get('project_stakeholders').filter(x=>String(x.projectId)===String(S.projectFilter)).length;
+
+  let rows='';
+  for(let i=0;i<QL_ROWS;i++) rows+=_qlRowHTML(i);
+
+  const th='font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--fog);padding:0 3px 6px;text-align:left';
+  el.innerHTML=`<div class="topbar">
+    <div><div class="topbar-title">Quick log</div><div class="topbar-sub">${escHtml(proj.pid)} — ${escHtml(proj.name)}</div></div>
+    <div class="topbar-sp"></div>
+    <div class="topbar-acts"><button class="btn btn-ghost" onclick="closeQuickLog()">← Back to interaction log</button></div>
+  </div>
+  <div class="toolbar" style="gap:10px;flex-wrap:wrap">
+    <span style="font-size:12px;color:var(--mist)">Logging to:</span>
+    <span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:4px;background:rgba(55,138,221,.2);color:#85b7eb">${escHtml(proj.pid)} — ${escHtml(proj.name)}</span>
+    <span style="font-size:11px;color:var(--fog)">${linked} contact${linked!==1?'s':''} on this project</span>
+    <div class="tb-sp" style="flex:1"></div>
+    <span class="tb-info">Blank rows are skipped</span>
+  </div>
+  <div id="ql-stake-dropdown" style="display:none;position:fixed;z-index:99999;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;max-height:240px;overflow-y:auto;min-width:220px;box-shadow:0 4px 16px rgba(0,0,0,.5)"></div>
+  <div class="content">
+    <div style="overflow-x:auto;width:100%;box-sizing:border-box;padding:12px 20px">
+      <table style="border-collapse:collapse;width:100%;min-width:900px">
+        <colgroup><col style="width:40px"><col style="width:128px"><col style="width:200px"><col style="width:118px"><col style="width:106px"><col><col style="width:96px"></colgroup>
+        <thead><tr style="border-bottom:1px solid var(--border)">
+          <th style="${th};padding-left:2px"></th>
+          <th style="${th}">Date <span style="color:var(--sky-lt)" title="Copy down">⇩</span></th>
+          <th style="${th}">Stakeholder</th>
+          <th style="${th}">Channel <span style="color:var(--sky-lt)" title="Copy down">⇩</span></th>
+          <th style="${th}">Direction <span style="color:var(--sky-lt)" title="Copy down">⇩</span></th>
+          <th style="${th}">Summary</th>
+          <th style="${th}">Logged by <span style="color:var(--sky-lt)" title="Copy down">⇩</span></th>
+        </tr></thead>
+        <tbody id="ql-body">${rows}</tbody>
+      </table>
+      <div style="font-size:11px;color:var(--fog);margin-top:8px;padding-left:26px">
+        Leave the stakeholder blank to log an anonymous contact · ⇩ copies a value down to every row below ·
+        Enter moves to the next row, Shift+Enter adds a line break.<br>
+        Subject and nature default to General / Inquiry, and no follow-up is created —
+        use <b>Log interaction</b> for anything needing a follow-up, an issue link, or a new contact.
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;padding:12px 20px;border-top:1px solid var(--border);background:var(--navy-mid)">
+    <button id="ql-save-btn" class="btn btn-primary" onclick="saveQuickLog()">Save interactions</button>
+    <button class="btn btn-ghost" onclick="qlClearAll()">Clear all</button>
+    <button class="btn btn-ghost" onclick="qlAddMoreRows()" title="Add 10 more empty rows">+ Add rows</button>
+    <div style="flex:1"></div>
+    <span id="ql-footer-info" style="font-size:12px;color:var(--fog)"></span>
+  </div>`;
+  _qlUpdateFooter();
+}
+
+function qlGrow(ta){ ta.style.height='28px'; ta.style.height=Math.min(ta.scrollHeight,120)+'px'; }
+
+// Enter advances to the next row (grid convention); Shift+Enter is the escape
+// hatch for a genuine line break inside a summary.
+function qlSummaryKey(e,i){
+  if(e.key!=='Enter'||e.shiftKey) return;
+  e.preventDefault();
+  if(i+1>=QL_ROWS) qlAddMoreRows();
+  const nxt=document.getElementById('qls'+(i+1));
+  if(nxt) nxt.focus();
+}
+
+function qlAddMoreRows(){
+  const tb=document.getElementById('ql-body');
+  if(!tb) return;
+  if(QL_ROWS>=QL_ROWS_MAX){ showToast('Maximum '+QL_ROWS_MAX+' rows per batch — save these first.','warn'); return; }
+  const from=QL_ROWS, to=Math.min(QL_ROWS+10,QL_ROWS_MAX);
+  let html='';
+  for(let i=from;i<to;i++) html+=_qlRowHTML(i);
+  // Append rather than re-render: a re-render would wipe every row the user has
+  // already typed.
+  tb.insertAdjacentHTML('beforeend',html);
+  QL_ROWS=to;
+  _qlUpdateFooter();
+}
+
+function _qlGetRows(){
+  const v=id=>(document.getElementById(id)||{}).value||'';
+  const rows=[];
+  for(let i=0;i<QL_ROWS;i++){
+    rows.push({idx:i,date:v('qld'+i),stakeId:v('qlsid'+i),channel:v('qlc'+i),
+               direction:v('qldr'+i),summary:v('qlsu'+i).trim(),by:v('qlby'+i).trim().toUpperCase()});
+  }
+  return rows;
+}
+// A row is in play once it names somebody or says something. Date/channel/
+// direction/logged-by all carry defaults, so they can't signal intent.
+function _qlInPlay(r){ return !!(r.summary||r.stakeId); }
+
+function qlRowTouch(){ _qlUpdateFooter(); }
+
+function _qlUpdateFooter(){
+  const n=_qlGetRows().filter(_qlInPlay).length;
+  const info=document.getElementById('ql-footer-info');
+  if(info) info.textContent=n+' of '+QL_ROWS+' rows filled';
+  const b=document.getElementById('ql-save-btn');
+  if(b){
+    b.disabled=!n;
+    b.style.opacity=n?'':'.5';
+    b.textContent=n?('Save '+n+' interaction'+(n>1?'s':'')):'Save interactions';
+  }
+}
+
+function _qlMark(idx,missing){
+  const d=document.getElementById('qld'+idx), s=document.getElementById('qlsu'+idx);
+  if(d) d.style.borderColor=missing.indexOf('date')>-1?'var(--red)':'';
+  if(s) s.style.borderColor=missing.indexOf('summary')>-1?'var(--red)':'';
+}
+
+function qlApplyDown(field,i){
+  const src=document.getElementById(field+i);
+  if(!src) return;
+  for(let j=i+1;j<QL_ROWS;j++){ const e=document.getElementById(field+j); if(e) e.value=src.value; }
+  _qlUpdateFooter();
+}
+
+function qlClearRow(i){
+  const t=document.getElementById('qls'+i); if(t) t.value='';
+  const h=document.getElementById('qlsid'+i); if(h) h.value='';
+  const s=document.getElementById('qlsu'+i); if(s){ s.value=''; s.style.borderColor=''; s.style.height='28px'; }
+  const d=document.getElementById('qld'+i); if(d){ d.value=localToday(); d.style.borderColor=''; }
+  _qlUpdateFooter();
+}
+
+function qlClearAll(){
+  if(!_qlGetRows().some(_qlInPlay)) return;
+  if(!confirm('Clear all rows? Nothing has been saved yet.')) return;
+  for(let i=0;i<QL_ROWS;i++) qlClearRow(i);
+}
+
+// Typeahead over the project's linked contacts only. No "add to project" and no
+// "new contact" entries — that is the locked constraint, and it is also what
+// makes the batch safe to write without touching pi_project_stakeholders.
+function qlStakeInput(inp,i){
+  const dd=document.getElementById('ql-stake-dropdown');
+  if(!dd) return;
+  const term=(inp.value||'').trim().toLowerCase();
+  const linked=DB.get('project_stakeholders')
+    .filter(x=>String(x.projectId)===String(S.projectFilter)).map(x=>String(x.stakeholderId));
+  const list=DB.getActive('stakeholders')
+    .filter(s=>linked.indexOf(String(s.id))>-1)
+    .filter(s=>!term||(dispName(s)+' '+(s.org||'')).toLowerCase().includes(term))
+    .sort((a,b)=>((a.lastName||'')+(a.firstName||'')).localeCompare((b.lastName||'')+(b.firstName||'')))
+    .slice(0,40);
+  const r=inp.getBoundingClientRect();
+  dd.style.top=(r.bottom+2)+'px'; dd.style.left=r.left+'px'; dd.style.width=Math.max(r.width,220)+'px';
+  const row='padding:7px 11px;cursor:pointer;font-size:12px;color:var(--mist);border-bottom:1px solid rgba(255,255,255,.06)';
+  const hov='onmouseover="this.style.background=\'rgba(255,255,255,.08)\'" onmouseout="this.style.background=\'\'"';
+  let html=`<div onclick="qlPickStake(${i},'','')" style="${row};color:var(--fog);font-style:italic" ${hov}>— Anonymous —</div>`;
+  html+=list.map(s=>`<div onclick="qlPickStake(${i},'${_qlEsc(s.id)}','${_qlEsc(dispName(s)+(s.org?' — '+s.org:''))}')" style="${row}" ${hov}>${escHtml(dispName(s))}${s.org?` <span style="color:var(--fog)">· ${escHtml(s.org)}</span>`:''}</div>`).join('');
+  if(!list.length) html+=`<div style="padding:8px 11px;font-size:11px;color:var(--fog);font-style:italic">No matching contact on this project — use <b>Log interaction</b> to add someone new.</div>`;
+  dd.innerHTML=html; dd.style.display='block';
+}
+
+function qlPickStake(i,id,label){
+  const h=document.getElementById('qlsid'+i), t=document.getElementById('qls'+i);
+  if(h) h.value=id;
+  if(t) t.value=id?label:'';
+  const dd=document.getElementById('ql-stake-dropdown'); if(dd) dd.style.display='none';
+  _qlUpdateFooter();
+  const su=document.getElementById('qlsu'+i); if(su) su.focus();
+}
+
+function qlStakeBlur(i){
+  setTimeout(function(){
+    const dd=document.getElementById('ql-stake-dropdown'); if(dd) dd.style.display='none';
+    const h=document.getElementById('qlsid'+i), t=document.getElementById('qls'+i);
+    // Text that was typed but never resolved to a contact is not a selection.
+    // Clearing it stops a row from looking like it names somebody it doesn't.
+    if(h&&t&&!h.value&&t.value) t.value='';
+    _qlUpdateFooter();
+  },200);
+}
+
+function saveQuickLog(){
+  const projId=S.projectFilter;
+  if(!projId){ showToast('Select a project first.','warn'); return; }
+  const rows=_qlGetRows().filter(_qlInPlay);
+  if(!rows.length){ showToast('Nothing to save — fill in at least one summary.','warn'); return; }
+
+  // Validate the whole batch before writing any of it. A partial save would
+  // leave the consultant guessing which rows made it into the log.
+  const bad=[];
+  rows.forEach(r=>{
+    const missing=[];
+    if(!r.summary) missing.push('summary');
+    if(!r.date) missing.push('date');
+    _qlMark(r.idx,missing);
+    if(missing.length) bad.push(r.idx+1);
+  });
+  if(bad.length){
+    showToast('Row'+(bad.length>1?'s ':' ')+bad.join(', ')+' need a date and a summary.','warn',4500);
+    const first=document.getElementById('qlsu'+(bad[0]-1)); if(first) first.focus();
+    return;
+  }
+
+  const all=DB.get('interactions');
+  // getAnonLabel() counts what is already stored, so calling it per row would
+  // hand every anonymous row in this batch the same label. Carry the counter.
+  let anonN=all.filter(i=>!i.stakeholderId&&String(i.projectId)===String(projId)).length;
+  const nepaStage=((DB.get('projects')||[]).find(p=>p.id===projId)||{}).nepaStage||'';
+  const me=getLoggedBy();
+  rows.forEach(r=>{
+    let anonLbl='';
+    if(!r.stakeId){ anonN++; anonLbl=anonN===1?'Anonymous':'Anonymous '+anonN; }
+    all.push({id:DB.uid(),projectId:projId,stakeholderId:r.stakeId||null,anonLabel:anonLbl,
+      date:r.date,channel:r.channel,direction:r.direction,
+      // Same defaults saveInt() writes when its selects are untouched, so a
+      // quick-logged row is indistinguishable from a modal-logged one in filters.
+      subject:'General',nature:'Inquiry',summary:r.summary,
+      loggedBy:r.by||me,nepaStage:nepaStage,
+      followUp:false,followUpNote:'',followUpDue:null,followUpDone:false,
+      followUpResolved:'',followUpAssignedTo:''});
+  });
+  DB.set('interactions',all);
+  showToast('✓ '+rows.length+' interaction'+(rows.length>1?'s':'')+' logged.','info');
+  S.showQuickLog=false;
+  refreshBadges();
+  render();
 }
 
 function openIntModal(preStake){

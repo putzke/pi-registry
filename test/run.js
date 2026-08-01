@@ -74,6 +74,20 @@ class Assert {
       shim.calls.length = 0;
     };
     t.sql = (q, v) => db.pool.query(q, v).then(r => r.rows);
+    // Writes are local-first: DB.set() updates _syncCache immediately and
+    // DB._sync() reaches Postgres a moment later. Asserting on the database
+    // straight after a UI action is therefore a race, and a fixed sleep only
+    // moves the flake around. Poll for the condition instead; returns whatever
+    // fn() produced, or null on timeout so the caller asserts once.
+    t.until = async (fn, ms = 5000) => {
+      const deadline = Date.now() + ms;
+      for (;;) {
+        const got = await fn();
+        if (got) return got;
+        if (Date.now() > deadline) return null;
+        await new Promise(r => setTimeout(r, 100));
+      }
+    };
     t.seed = () => db.runSqlFile(path.join(SQL, '2026-07-26_udot_conference_demo_seed.sql'));
     t.open = (file, opts) => openApp(file, { shimOrigin: shim.origin, ...opts });
 

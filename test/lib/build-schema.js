@@ -19,7 +19,14 @@ const fs = require('fs');
 const path = require('path');
 
 const TYPES = {
-  id: 'bigint', project_id: 'bigint', stakeholder_id: 'bigint', group_id: 'bigint',
+  // project_id is TEXT, not bigint. fromSB() stringifies `id` but passes foreign
+  // keys through raw, and the app compares them strictly — `p.id === x.projectId`
+  // in _getIntStakeList(), `i.projectId === S.projectFilter` in renderInteractions.
+  // Those work against the live database, which only holds if the column comes
+  // back as a string. Typing it bigint here made the shim return numbers and
+  // every project-scoped list came back empty for reasons that had nothing to do
+  // with the code under test. (The live "text = bigint" seed error says the same.)
+  id: 'bigint', project_id: 'text', stakeholder_id: 'bigint', group_id: 'bigint',
   issue_id: 'bigint', interaction_id: 'bigint', meeting_id: 'bigint', period_id: 'text',
   linked_stakeholder_id: 'bigint', org_id: 'bigint', user_id: 'uuid', token: 'uuid',
   sort_order: 'int', attendance_count: 'int', comment_cards: 'int', progress: 'int',

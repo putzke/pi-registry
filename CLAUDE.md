@@ -363,15 +363,38 @@ notice covers uploaded images. Model-string note: the code uses
 3. **Mobile stays a logging tool, NOT an import tool.** Do not add scanners or
    AI importers to `mobile.html`. Field logging in the moment is its job.
 
-**Deferred (decoupled, do NOT entangle with the importer work):** an optional
-desktop **quick-log interaction grid** — a rapid multi-row manual entry surface
-(date · stakeholder typeahead over the project's existing linked stakeholders ·
-channel · summary · logged-by initials) that writes to the same `pi_interactions`
-table with the other fields defaulted (`direction`/`subject`/`category` blank,
-`sentiment` 'Neutral', `followUp` false). Constrained to stakeholders that
-ALREADY exist at the project level — no new-contact creation, no fuzzy matching.
-Build only after the contact importer proves itself; keep it a separate, small,
-desktop-only feature.
+**Quick-log interaction grid — SHIPPED (Aug 2026), desktop only.** "Quick log"
+button on the Interactions view (shown only when a project is selected) →
+`openQuickLog()` → `renderQuickLog()` replaces `#main`. 12 rows, cap
+`QL_ROWS_MAX = 50`, "+ Add rows" **appends to `#ql-body` rather than
+re-rendering** (a re-render would wipe everything typed).
+- Columns: date · stakeholder typeahead · channel · direction · summary ·
+  logged-by. `⇩` on date/channel/direction/logged-by copies down to every row
+  below. Enter advances a row, Shift+Enter is a line break.
+- **Deviation from the original spec, deliberate:** the spec said direction
+  blank, `subject`/`category` blank, `sentiment` 'Neutral'. `pi_interactions`
+  has no `sentiment` and no `category` column (it's `nature`), and a blank
+  direction renders as an empty badge in the interaction list. So: direction is
+  a per-row select (default Incoming) and subject/nature are written as
+  `General`/`Inquiry` — **the same defaults `saveInt()` writes** when its selects
+  are untouched, which keeps a quick-logged row indistinguishable from a
+  modal-logged one in every filter.
+- **Locked constraints held:** the picker only offers stakeholders ALREADY
+  linked to the project (no create, no master-list link, no fuzzy matching), so
+  a save never touches `pi_project_stakeholders`. Blank stakeholder = anonymous.
+  No follow-up, no issue link — those stay on the full modal. Nothing is scanned
+  or AI-extracted; every field is typed.
+- **Anonymous labels carry a batch counter.** `getAnonLabel()` counts what is
+  already STORED, so calling it per row hands every anonymous row in one batch
+  the same label. `saveQuickLog()` seeds a counter once and increments it.
+- Validates the whole batch before writing any of it — a partial save leaves the
+  consultant guessing which rows made it in.
+- `_bgRefreshOK()` now stands down while either entry grid is open
+  (`S.showQuickLog || S.showBulkAdd`); both hold unsaved rows in the DOM, and the
+  60s refresh would re-render them away the moment focus left a field. That
+  hazard already existed for bulk-add.
+- Covered by `test/tests/07-quick-log.test.js` (32 checks), including that the
+  picker never offers an unlinked contact.
 
 ## Competitive positioning (researched June 29, 2026)
 
@@ -629,19 +652,46 @@ single current trend, prior ones kept as history.
 **Cross-app:** reports module is desktop-only — mobile/importer unaffected.
 
 
-## FUTURE — ArcGIS Survey123 Integration (in development)
+## FUTURE — ArcGIS Survey123 Integration (DESIGN LOCKED, blocked on a sample export)
 
-Import public outreach survey responses directly from ArcGIS Survey123 into
-Horizon COMPASS as interaction log entries. Goal: eliminate manual re-entry
-of field survey data, closing the gap between DOT/agency field outreach data
-collection tools and the internal PI stakeholder record. Integration via
-ArcGIS Survey123 API — pull completed survey responses, map fields to
-Horizon COMPASS interaction schema (stakeholder, date, subject, channel,
-summary), and create draft interactions for PI manager review before saving.
+**Status (July 2026): waiting on a sample Survey123 CSV export.** A real project
+is coming where ESRI runs the survey and produces its own reports. Building the
+column mapping without a real export means guessing, so this is parked until
+Jeff can supply one — even a header row is enough.
 
-Relevant because ArcGIS Survey123 is already widely used by transportation
-agencies and field teams; this positions Horizon COMPASS as compatible with
-the DOT technology ecosystem rather than requiring a separate workflow.
+**The validation gate in the PARKED section above is considered MET for the
+ingestion direction**: a live project with a paying client where ESRI is
+already the survey vendor is stronger evidence than 3–5 interviews. Keep the
+build thin anyway — it validates the need on one project, not industry-wide.
+
+**Framing — do NOT rebuild ESRI's analytics.** ESRI answers "what did the public
+say" and will do it better. COMPASS answers "what did we do about it, and can we
+prove it to FHWA". ESRI is the instrument; COMPASS is the system of record.
+
+**Locked design decisions:**
+1. **Target table is `pi_public_comments`, NOT `pi_interactions`.** It already
+   has `period_id`, `category`, `sentiment` and `response_status` — the last of
+   which is the compliance hook ("23 received, 18 responded") that no survey
+   tool models.
+2. **CSV first, API later.** Survey123 exports CSV natively and `importer.html`
+   already has a column-mapping wizard. No API keys, no ArcGIS procurement, no
+   OAuth; runs on the live project in days. The API pull is the same mapping
+   logic with a different source, so nothing is wasted. Build the API only after
+   the CSV path is proven against real responses.
+3. **The invariant columns are the anchor.** Per-question columns vary by survey
+   design, but `GlobalID`, `CreationDate`, `Creator` and the `x`/`y` coordinate
+   columns do not. Auto-detect those; let the wizard handle the rest.
+4. **Geometry is the differentiator.** `pi_public_comments` has NO lat/lng —
+   needs a migration adding `latitude`/`longitude` (plus probably a `source`
+   column so survey-imported rows are distinguishable from hand-logged ones).
+   Plotting public comment on the existing stakeholder Map view is the thing
+   ESRI has the coordinates for but will never show alongside your commitments
+   and issues.
+5. **Then a portal "Public Input" section** — volume, themes, geography, and
+   responded-vs-outstanding. That is the peer-to-ESRI client reporting story:
+   one link showing the survey AND what the PI team did with it.
+
+**Build order:** CSV ingestion → geometry + map layer → portal section → API pull.
 
 ## FUTURE — Phone Hotline Voicemail Transcription (in development, vendor TBD)
 

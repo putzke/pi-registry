@@ -161,17 +161,17 @@ pi_report_archive   -- exported report snapshots (up to 50 per project)
 - **`_fmtMDY(d)`** → mm/dd/yyyy for table cells; **`_fmtDateRange(a,b)`** → "July 6 –
   August 7, 2026" for prose/AI facts; `fmt(d)` → "Jul 6, 2026" for headers. Feeding
   raw ISO to the AI makes it echo ISO in the narrative.
-- **`ARCHIVE_LIMIT = 30` per project** (was 10 until Aug 2026; this line used to
-  say 50, which was never true in code). The limit BLOCKS rather than evicting —
+- **`ARCHIVE_LIMIT = 50` per project** (10 → 30 → 50 during Aug 2026; this line
+  claimed 50 long before it was true in code). The limit BLOCKS rather than evicting —
   an archived report is a compliance record, so nothing is auto-deleted.
   **Storage is not the constraint; the boot payload is.** `loadAllData()` fetches
   `report_archive` with `select=*`, so every frozen snapshot for every project is
   downloaded on every page load. Measured on the demo seed: ~6 kB raw per
   snapshot, up to 27 kB for a whole row, and a real report with a long
   interaction table will be bigger (the frozen `tableHtml` is inline-styled on
-  purpose so the portal renders it standalone). **The boot payload is now fixed**
-  — see the `SB_LAZY_COLS` note below — so raising this further is no longer
-  gated on it.
+  purpose so the portal renders it standalone). **50 is only safe because the
+  boot payload was fixed** — see the `SB_LAZY_COLS` note below. Do not put
+  `snapshot` back into the bulk fetch.
 - `_archiveReport(projF)` — async. **`exportPIDocx()` does NOT call it** (this
   line used to claim it did); archiving is deliberate, via the "Save to archive"
   button → `manualArchiveReport()`. Returns **true only if a snapshot actually

@@ -11913,14 +11913,19 @@ async function _occFetchReportRow(projF){
 
 
 // ── Report Archive ──────────────────────────────────────────────────────────
-// Raised 10 → 30 (Aug 2026). Monthly reports means 30 is ~2.5 years on one
-// project; 10 was a wall a long-running project could actually hit.
+// Raised 10 → 30 → 50 (Aug 2026). Monthly reports means 50 is roughly four
+// years on one project; 10 was a wall a long-running project could actually hit.
 //
-// The binding constraint is NOT storage — it is the boot payload. loadAllData()
-// pulls report_archive with select=*, so every frozen snapshot for every project
-// is downloaded on every page load. Going higher than this wants the archive
-// list to fetch metadata only and load `snapshot` on demand.
-const ARCHIVE_LIMIT = 30;
+// The binding constraint was never storage — a frozen snapshot is a few kB
+// compressed. It was the boot payload: loadAllData() pulled report_archive with
+// select=*, so every snapshot for every project downloaded on every page load.
+// That is fixed (SB_LAZY_COLS — the boot select omits `snapshot`, and
+// _archiveEnsureSnapshots() fetches it by id on demand), which is what makes 50
+// safe. Do not put `snapshot` back into the bulk fetch.
+//
+// The limit BLOCKS rather than evicting the oldest: an archived report is a
+// compliance record, so nothing here is ever auto-deleted.
+const ARCHIVE_LIMIT = 50;
 
 async function manualArchiveReport() {
   var projF = S.projectFilter;

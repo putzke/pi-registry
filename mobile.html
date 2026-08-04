@@ -993,7 +993,8 @@ const SB_TO_INT = {
     date:'interaction_date', channel:'channel', subject:'subject',
     nature:'nature', direction:'direction', summary:'summary',
     loggedBy:'logged_by', followUp:'follow_up', followUpDue:'follow_up_due',
-    followUpNote:'follow_up_note', followUpDone:'follow_up_done', followUpResolved:'follow_up_resolved', meetingId:'meeting_id'
+    followUpNote:'follow_up_note', followUpDone:'follow_up_done', followUpResolved:'follow_up_resolved',
+    followUpAssignedTo:'follow_up_assigned_to', meetingId:'meeting_id'
   },
   pi_deliverables: {
     id:'id', projectId:'project_id', type:'deliverable_type', scopeType:'scope_type',
@@ -1748,7 +1749,7 @@ function renderFollowupsList(){
   const projs=DB.get('projects');
   let ints=DB.get('interactions').filter(i=>i.followUp&&!i.followUpDone);
   if(pF) ints=ints.filter(i=>i.projectId===pF);
-  if(userF==='mine'&&myLoggedBy) ints=ints.filter(i=>i.loggedBy===myLoggedBy);
+  if(userF==='mine'&&myLoggedBy) ints=ints.filter(i=>_fuOwner(i)===myLoggedBy);
 
   ints.sort((a,b)=>{
     const aOd=isOverdue(a.followUpDue),bOd=isOverdue(b.followUpDue);
@@ -1776,10 +1777,25 @@ function renderFollowupsList(){
   el.innerHTML=html;
 }
 
+// A follow-up belongs to whoever it was assigned to; unassigned, it stays with
+// whoever logged the interaction. Must match index.html's _fuOwner() exactly —
+// mobile is where a field worker checks what is theirs, so if this diverges,
+// work assigned to them on the desktop never reaches the phone.
+//
+// Reassignment stays desktop-only on purpose: mobile is a logging tool, not an
+// admin surface. It reads the assignment, it doesn't change it.
+function _fuOwner(i){ return (i && (i.followUpAssignedTo || i.loggedBy)) || ''; }
+
 function fuItemHTML(i,stakes,projs,resolved){
   const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
   const p=projs.find(x=>x.id===i.projectId);
   const od=isOverdue(i.followUpDue);
+  // Say who assigned it when that isn't the logger, so a follow-up appearing in
+  // your list has a visible reason for being there.
+  const asg=(i.followUpAssignedTo&&i.followUpAssignedTo!==i.loggedBy)
+    ?'<span style="color:var(--sky);font-weight:600">'+escHtml(i.followUpAssignedTo)+'</span>'
+      +'<span style="color:#8a94a6"> &larr; assigned by '+escHtml(i.loggedBy||'—')+'</span>'
+    :'';
   const resolveBtn=resolved
     ?'<span style="color:var(--green);font-size:13px;font-weight:600">&#10003; Resolved</span>'
     :'<button class="fu-btn fu-btn-resolve" onclick="resolveFollowup(\''+i.id+'\')">&#10003; Mark resolved</button>';
@@ -1788,6 +1804,7 @@ function fuItemHTML(i,stakes,projs,resolved){
     '<div class="fu-due '+(od?'overdue':'open')+'">'+(od?'OVERDUE &middot; ':'')+( i.followUpDue?fmt(i.followUpDue):'No due date')+'</div>'+
     '<div class="fu-note">'+(i.followUpNote||i.summary)+'</div>'+
     '<div class="fu-meta">'+(s?s.firstName+' '+s.lastName:'—')+(p?' &middot; '+p.pid+' '+p.name:'')+'</div>'+
+    (asg?'<div class="fu-meta" style="margin-top:2px">'+asg+'</div>':'')+
     '<div class="fu-actions">'+resolveBtn+editBtn+'</div>'+
   '</div>';
 }

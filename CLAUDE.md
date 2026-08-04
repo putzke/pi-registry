@@ -80,7 +80,8 @@ pi_report_archive   -- exported report snapshots (up to 50 per project)
 - `renderInteractions()` — 4494
 - `renderReports()` — 6652: Reports view with 3-tab layout (Quick Reports / PI Report Editor / Archive)
 - `openPIReport()` — 8311: replaces main area with split-pane PI report editor
-- `exportPIDocx()` — 8848: async, auto-archives then exports Word file
+- `exportPIDocx()` — 8848: async, exports the Word file. Does NOT archive —
+  archiving is deliberate, via "Save to archive" (`manualArchiveReport()`).
 - `renderMeetings()` — 10308
 - `renderTribal()` — 11827
 - `renderComments()` — 12183
@@ -250,6 +251,13 @@ Field companion for logging interactions, managing contacts, follow-ups, and iss
 - **Status: current** — LEP, EJ (`underserved`), and `equityFormSubmitted` fields are all implemented
 - Has its own `SB_TABLES`, `SB_TO_INT`, `toSB()`, `fromSB()`, `sbGet/Add/Update/Delete()`, `loadAllData()`
 - Does NOT have the reports module — reports are desktop-only
+- **Follow-up assignment (Aug 2026):** mobile maps `followUpAssignedTo` and has its
+  own `_fuOwner()` that must stay identical to index.html's. Its "Mine" filter
+  compared `loggedBy` only, so a follow-up a teammate assigned to you on the
+  desktop never reached the phone — the exact case the feature exists for. The
+  follow-up card now names the assignee and who assigned it. **Reassignment stays
+  desktop-only**: mobile reads the assignment, it doesn't change it. Guarded by
+  `test/tests/05-mobile.test.js`.
 - **OCC participation (July 2026):** mobile stamps `updated_at`/`updated_by` on every
   write to the OCC tables (`stakeholders`, `interactions`, `issues`) via `_occStamp()`
   in `sbAdd`/`sbUpdate` — REQUIRED so desktop's optimistic-concurrency guard sees

@@ -70,11 +70,23 @@ module.exports = {
     t.ok(canon.channel && canon.channel.length, 'canonical channel list found');
     t.ok(canon.dir && canon.dir.length, 'canonical direction list found');
 
-    // ── mobile.html: the #add-type dropdown ─────────────────────────────
-    const sel = mob.slice(mob.indexOf('id="add-type"'));
-    const mobileTypes = [...sel.slice(0, sel.indexOf('</select>'))
-      .matchAll(/<option[^>]*>([^<]+)</g)].map(m => m[1].trim());
+    // ── mobile.html: its own copies of the dropdowns ────────────────────
+    // Mobile logs interactions, so it duplicates the channel and direction
+    // lists too — not just stakeholder types. Only #add-type was checked here
+    // before, which left the two lists a field worker actually picks from every
+    // day unguarded.
+    const mobileSelect = id => {
+      const i = mob.indexOf(`id="${id}"`);
+      if (i < 0) return null;
+      return [...mob.slice(i, mob.indexOf('</select>', i))
+        .matchAll(/<option[^>]*>([^<]+)</g)].map(m => m[1].trim());
+    };
+    const mobileTypes = mobileSelect('add-type');
     t.eq(sorted(mobileTypes), sorted(canon.types), 'mobile #add-type matches STAKE_TYPES');
+    t.eq(sorted(mobileSelect('log-channel')), sorted(canon.channel),
+         'mobile #log-channel matches the app channel list');
+    t.eq(sorted(mobileSelect('log-direction')), sorted(canon.dir),
+         'mobile #log-direction matches the app direction list');
 
     // ── importer.html: normalizeType's own canonical copy ───────────────
     const impTypes = jsList(imp, /const STAKE_TYPES = (\[[\s\S]*?\]);/);

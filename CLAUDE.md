@@ -69,35 +69,6 @@ pi_reports,         -- PI report drafts (one per project)
 pi_report_archive   -- exported report snapshots (up to 50 per project)
 ```
 
-### Sidebar (Aug 2026 — replaced the Active/On-Hold project list)
-- **Project switcher** (`buildProjSwitch` / `buildProjSwitchList` / `pickProject`) —
-  one row under the brand, with a search popup. It replaced an uncapped list that
-  rendered EVERY project including every Complete/Cancelled one forever, which
-  crowded itself out as projects accumulated and duplicated the topbar's project
-  select. **Archived projects appear only when searched for.** `pickProject()`
-  keeps you on the current view — the old list called `setView('stakeholders')`
-  on every click, so changing project from Reports dropped you into Contacts.
-- **"Next up" deadline panel** (`buildDeadlines`) — the freed space. Shows the
-  next dated obligations, which is the thing a nav badge structurally cannot
-  express: badges give volume, this gives proximity. Sources (all from
-  `_syncCache`, no extra fetch, rides the 60s `_bgRefreshTick`): comment-period
-  end dates, commitment due dates, and follow-ups owned by the current user via
-  `_fuOwner()` — the same ownership rule as the nav badge, so the two can never
-  disagree.
-  - `DL_HORIZON = 60` days forward, `DL_SHOW = 5` rows.
-  - **`DL_STALE = 90`** — anything more than 90 days overdue is summarised into a
-    single "N long overdue" row rather than listed. Without this the five slots
-    fill permanently with abandoned follow-ups from two years ago and the panel
-    never shows what is actually coming (the demo seed has exactly this). They
-    are summarised, NOT hidden — a long-overdue commitment is still a compliance
-    gap, it just isn't "next up".
-  - Row handlers are held in `window._dlGo` by index rather than serialised into
-    `onclick`, so a project name containing a quote can't break the markup.
-- `buildSidebar()` calls both; it replaced `buildProjList()` at both call sites.
-- "Import stakeholders" moved into the nav box beside Settings — it is a utility
-  action, and under the deadline list it was stealing vertical space.
-- Covered by `test/tests/09-sidebar.test.js`.
-
 ### Navigation views
 `dashboard | projects | master | stakeholders | interactions | followups | commitments | comments | tribal | deliverables | meetings | issues | map | reports | settings`
 

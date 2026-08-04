@@ -1,3 +1,7 @@
 node_modules/
 package-lock.json
 package.json
+
+# Scratch output from the test harness (screenshots, preview builds)
+test/_*.png
+preview.html

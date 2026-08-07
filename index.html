@@ -17150,8 +17150,16 @@ function renderCommitments(m) {
     </div>
   </div>`;
 
-  // Filter bar
+  // Filter bar. The project select writes S.projectFilter — the same state the
+  // Projects view and the other list views set — so scoping is consistent
+  // wherever you change it. Without it, the only way to reach this view scoped
+  // to a project was to select the project elsewhere first and navigate in.
+  const _commSel='font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)';
   html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+    <select style="${_commSel}" onchange="S.projectFilter=this.value;renderCommitments(document.getElementById('main'))">
+      <option value="" ${!projF?'selected':''}>All projects</option>
+      ${allProjs.map(p=>`<option value="${p.id}" ${String(projF)===String(p.id)?'selected':''}>${escHtml(p.pid||'')} — ${escHtml(p.name||'')}</option>`).join('')}
+    </select>
     <select style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)" onchange="S.commStatus=this.value;renderCommitments(document.getElementById('main'))">
       <option value="" ${!statusF?'selected':''}>All statuses</option>
       ${COMM_STATUSES.map(s=>`<option value="${s}" ${statusF===s?'selected':''}>${s}</option>`).join('')}

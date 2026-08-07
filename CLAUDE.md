@@ -80,6 +80,16 @@ and several views. "Import stakeholders" now sits in the nav box beside Settings
 The freed height is deliberately left to the nav box (`overflow-y:auto`) so the
 Views list has room to grow.
 
+### Project scoping per view
+`S.projectFilter` is the shared scope, written by the project select in the
+topbar/filter bar of **interactions, followups, deliverables, reports, meetings
+and commitments**. Two views deliberately keep their OWN filter state instead —
+issues (`S.issViewProj`) and comments (`S.cmtProj`) — and `master` is the
+cross-project list by definition. Commitments was the one list view with no
+selector at all until Aug 2026: the only way to scope it was to pick a project
+in another view and navigate in, with no way back to "all projects" without
+leaving. If you add a list view, give it a selector.
+
 ### Navigation views
 `dashboard | projects | master | stakeholders | interactions | followups | commitments | comments | tribal | deliverables | meetings | issues | map | reports | settings`
 

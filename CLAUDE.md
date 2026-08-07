@@ -99,10 +99,20 @@ Reasons, in order of severity:
 - The hint said only the first line was tracked; the loop ran over every line.
 
 **A follow-up belongs to an interaction or an issue** — those carry a
-stakeholder, an owner and a due date. Events stay independent. `meetingId` is
-still mapped and still read (the "N open actions" event-card badge, and
-`delMeeting`'s cascade) so legacy rows stay visible, but nothing writes it now.
+stakeholder, an owner and a due date. Events stay independent.
 Guarded by `test/tests/11-events.test.js`.
+
+**No data was ever created this way.** Checked against production on 2026-08-07:
+zero rows match `summary like 'Event action item:%'`, `direction='Inbound'`, or
+`meeting_id is not null`. The action-items text visible on demo events comes from
+the seed, which writes `action_items` straight into `pi_meetings` and never runs
+`saveMeeting()` — so the modal promised a follow-up that never materialised,
+which is the likeliest source of the staff confusion that prompted the removal.
+`meetingId` is still mapped and still read (the "N open actions" event-card badge
+and `delMeeting`'s cascade), but since nothing writes it and no row carries it,
+**both of those are dead paths** — remove them if you touch this area. Do not
+re-introduce the cascade without checking it first: `delMeeting` deletes every
+interaction sharing the meeting id.
 
 ### Project scoping per view
 `S.projectFilter` is the shared scope, written by the project select in the

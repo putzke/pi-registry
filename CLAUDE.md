@@ -80,6 +80,30 @@ and several views. "Import stakeholders" now sits in the nav box beside Settings
 The freed height is deliberately left to the nav box (`overflow-y:auto`) so the
 Views list has room to grow.
 
+### Events do NOT create follow-ups (Aug 2026)
+The Edit-event modal's "Action items" textarea used to create a `pi_interactions`
+row per line. Removed — the field is now documentation on the event record only.
+Reasons, in order of severity:
+- **The edit path deleted data.** It ran
+  `DB.get('interactions').filter(x=>x.meetingId!==S.editId)` before recreating
+  from the textarea, so re-saving an event destroyed every interaction linked to
+  it (including hand-logged ones) and resurrected resolved follow-ups as open.
+- **It inflated a reported metric.** Nothing anywhere excluded these rows, so
+  every action item counted as an interaction in the log, the dashboard stat and
+  PI report interaction tables.
+- The rows had **no `loggedBy`**, so `_fuOwner()` returned `''` and the follow-up
+  belonged to nobody — it could never appear in anyone's "Assigned to me".
+- **No due date** (never overdue, never sorted), **no stakeholder** (rendered
+  "Anonymous"), and `direction:'Inbound'` — not one of the app's three direction
+  values, so the interaction filter couldn't select them.
+- The hint said only the first line was tracked; the loop ran over every line.
+
+**A follow-up belongs to an interaction or an issue** — those carry a
+stakeholder, an owner and a due date. Events stay independent. `meetingId` is
+still mapped and still read (the "N open actions" event-card badge, and
+`delMeeting`'s cascade) so legacy rows stay visible, but nothing writes it now.
+Guarded by `test/tests/11-events.test.js`.
+
 ### Project scoping per view
 `S.projectFilter` is the shared scope, written by the project select in the
 topbar/filter bar of **interactions, followups, deliverables, reports, meetings

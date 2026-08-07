@@ -14675,7 +14675,7 @@ function openMeetingModal(id){
   </div>
   <div class="fr"><label>Purpose / agenda</label><textarea id="f-mga" style="height:60px">${m.agenda||''}</textarea></div>
   <div class="fr"><label>Key concerns raised</label><textarea id="f-mkc" style="height:60px">${m.keyConcerns||''}</textarea></div>
-  <div class="fr"><label>Action items / follow-ups</label><textarea id="f-mai" style="height:60px" placeholder="Enter one action item — it will be added as a follow-up interaction">${m.actionItems||''}</textarea><div style="font-size:11px;color:var(--slate);margin-top:4px;">⚠ One action item per event. Only the first line will be tracked as a follow-up.</div></div>
+  <div class="fr"><label>Action items agreed</label><textarea id="f-mai" style="height:60px" placeholder="What the team committed to at this event — one per line">${m.actionItems||''}</textarea><div style="font-size:11px;color:var(--slate);margin-top:4px;">Recorded on this event only. To put one of these on someone's plate, log it as an interaction with a follow-up, or raise an issue — those carry a stakeholder, an owner and a due date.</div></div>
   <div class="fr"><label>Notes</label><textarea id="f-mno">${m.notes||''}</textarea></div>`,
   `${id?`<button class="btn btn-danger btn-sm" onclick="delMeeting('${id}')">Delete</button>`:''}
    <button class="btn" onclick="closeM()">Cancel</button>
@@ -14717,63 +14717,34 @@ async function saveMeeting(){
   };
 
   const all=DB.get('meetings')||[];
-  if(S.editId){
-    // EDIT PATH: meeting already has a real numeric ID — safe to write interactions immediately
-    const i=all.findIndex(x=>x.id===S.editId);
-    if(i>-1)all[i]=data;else all.push(data);
-    DB.set('meetings',all);
-    // Remove old auto-created follow-ups for this meeting, then recreate
-    let ints=DB.get('interactions').filter(x=>x.meetingId!==S.editId);
-    if(actionItemsText&&data.projectId){
-      actionItemsText.split('\n').filter(l=>l.trim()).forEach(line=>{
-        ints.push({
-          id:DB.uid(),
-          projectId:data.projectId,
-          stakeholderId:null,
-          date:date,
-          channel:'Public event',
-          direction:'Inbound',
-          summary:'Event action item: '+line.trim(),
-          followUp:true,
-          followUpDone:false,
-          followUpNote:line.trim(),
-          meetingId:data.id,
-          notes:'Auto-created from event: '+title
-        });
-      });
-    }
-    DB.set('interactions',ints);
-  } else {
-    // NEW RECORD PATH: await the meeting sync so _syncCache gets the real numeric ID
-    // before we write interactions that reference it via meetingId
-    all.push(data);
-    await DB.set('meetings',all);
-    if(actionItemsText&&data.projectId){
-      // Read the real ID from _syncCache (tmp_ has been replaced by sbAdd by now)
-      const savedMeeting=(_syncCache['meetings']||[]).find(x=>x.title===data.title&&x.date===data.date);
-      const realMeetingId=savedMeeting?.id||data.id;
-      const ints=DB.get('interactions');
-      actionItemsText.split('\n').filter(l=>l.trim()).forEach(line=>{
-        ints.push({
-          id:DB.uid(),
-          projectId:data.projectId,
-          stakeholderId:null,
-          date:date,
-          channel:'Public event',
-          direction:'Inbound',
-          summary:'Event action item: '+line.trim(),
-          followUp:true,
-          followUpDone:false,
-          followUpNote:line.trim(),
-          meetingId:realMeetingId,
-          notes:'Auto-created from event: '+title
-        });
-      });
-      DB.set('interactions',ints);
-    }
-  }
+  // Action items are documentation ON the event, not interactions.
+  //
+  // This used to create a pi_interactions row per line, and the cost outweighed
+  // the convenience by a wide margin:
+  //   - the rows had no loggedBy, so _fuOwner() returned '' and the follow-up
+  //     belonged to nobody — it could never appear in anyone's "Assigned to me";
+  //   - no due date, so it could never go overdue or sort meaningfully;
+  //   - no stakeholder, so it showed as Anonymous;
+  //   - direction was written as 'Inbound', which is not one of the app's three
+  //     direction values, so the interaction filter could not select these rows;
+  //   - nothing anywhere excluded them, so every action item inflated the
+  //     interaction count that flows into FHWA/NEPA reports;
+  //   - and the edit path DELETED every interaction carrying this meetingId
+  //     before recreating from the textarea, so re-saving an event destroyed
+  //     hand-logged interactions linked to it and resurrected resolved
+  //     follow-ups as open.
+  // The hint text also promised only the first line was tracked, while the loop
+  // ran over every line.
+  //
+  // A follow-up is an obligation arising from a conversation with someone (an
+  // interaction) or a tracked problem (an issue). Events stay independent.
+  const i=all.findIndex(x=>x.id===S.editId);
+  if(S.editId){ if(i>-1)all[i]=data; else all.push(data); }
+  else all.push(data);
+  await DB.set('meetings',all);
+
   closeM();
-  showToast(S.editId?'Event updated.':'Event logged.'+(actionItemsText?' Action items added to follow-ups.':''));
+  showToast(S.editId?'Event updated.':'Event logged.');
   S.editId=null;
   renderMeetings(document.getElementById('main'));
 }

@@ -419,6 +419,15 @@ re-rendering** (a re-render would wipe everything typed).
 - Columns: date · stakeholder typeahead · channel · direction · summary ·
   logged-by. `⇩` on date/channel/direction/logged-by copies down to every row
   below. Enter advances a row, Shift+Enter is a line break.
+- **Every one of those four columns opens pre-filled** (today / Phone / Incoming
+  / your initials). The `⇩` is for propagating a CHANGED value — set row 1 to
+  yesterday's date, click ⇩ — not for the initial state, so date is treated no
+  differently from Channel. Blanking rows 2+ was considered and rejected: it
+  costs a click or twelve date entries in the common "today's batch" case, and
+  save requires a date (correctly — it's a compliance field, so silently
+  defaulting a blank one would mis-date the record). `_qlDnRefresh()` hides the
+  arrows on whichever row is last, since they'd copy to nothing, and re-runs
+  after "+ Add rows".
 - **Deviation from the original spec, deliberate:** the spec said direction
   blank, `subject`/`category` blank, `sentiment` 'Neutral'. `pi_interactions`
   has no `sentiment` and no `category` column (it's `nature`), and a blank

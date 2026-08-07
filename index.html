@@ -6996,7 +6996,12 @@ function _qlEsc(s){ return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); 
 
 function _qlRowHTML(i){
   const inp=QL_INP, sel=QL_INP+';padding:4px 2px';
-  const dn='style="position:absolute;right:2px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:11px;color:var(--sky-lt)"';
+  // The copy-down arrows are for propagating a CHANGED value (log yesterday's
+  // batch: set row 1's date, click ⇩). They are not about the initial state —
+  // every column here opens pre-filled, date no differently from Channel.
+  // On the last row there is nothing below to copy to, so _qlDnRefresh() hides
+  // that row's arrows rather than leaving four dead controls on screen.
+  const dn='class="ql-dn" style="position:absolute;right:2px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:11px;color:var(--sky-lt)"';
   const chOpts=QL_CHANNELS.map(c=>`<option${c==='Phone'?' selected':''}>${c}</option>`).join('');
   const drOpts=QL_DIRECTIONS.map(d=>`<option${d==='Incoming'?' selected':''}>${d}</option>`).join('');
   return `<tr id="qlrow${i}">`
@@ -7063,6 +7068,15 @@ function renderQuickLog(el){
     <span id="ql-footer-info" style="font-size:12px;color:var(--fog)"></span>
   </div>`;
   _qlUpdateFooter();
+  _qlDnRefresh();
+}
+
+function _qlDnRefresh(){
+  for(let i=0;i<QL_ROWS;i++){
+    const row=document.getElementById('qlrow'+i);
+    if(!row) continue;
+    row.querySelectorAll('.ql-dn').forEach(a=>{ a.style.display=(i===QL_ROWS-1)?'none':''; });
+  }
 }
 
 function qlGrow(ta){ ta.style.height='28px'; ta.style.height=Math.min(ta.scrollHeight,120)+'px'; }
@@ -7089,6 +7103,7 @@ function qlAddMoreRows(){
   tb.insertAdjacentHTML('beforeend',html);
   QL_ROWS=to;
   _qlUpdateFooter();
+  _qlDnRefresh();
 }
 
 function _qlGetRows(){

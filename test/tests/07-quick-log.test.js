@@ -40,6 +40,28 @@ module.exports = {
       await app.page.waitForSelector('#ql-body tr', { timeout: 5000 });
       t.eq(await app.page.$$eval('#ql-body tr', r => r.length), 12, 'grid opens with 12 rows');
 
+      // The copy-down arrows propagate a changed value downward, so the last
+      // row's four arrows would copy to nothing. They are hidden, and "+ Add
+      // rows" has to give them back to the row that is no longer last.
+      const arrows = await app.page.evaluate(() => {
+        const vis = i => [...document.getElementById('qlrow' + i).querySelectorAll('.ql-dn')]
+          .filter(a => a.style.display !== 'none').length;
+        return { first: vis(0), last: vis(11) };
+      });
+      t.eq(arrows.first, 4, 'row 1 offers copy-down on all four defaulted columns');
+      t.eq(arrows.last, 0, 'the last row has no copy-down arrows');
+
+      await app.page.evaluate(() => qlAddMoreRows());
+      const grown = await app.page.evaluate(() => {
+        const vis = i => [...document.getElementById('qlrow' + i).querySelectorAll('.ql-dn')]
+          .filter(a => a.style.display !== 'none').length;
+        return { rows: document.querySelectorAll('#ql-body tr').length,
+                 wasLast: vis(11), nowLast: vis(21) };
+      });
+      t.eq(grown.rows, 22, '+ Add rows appended 10 more');
+      t.eq(grown.wasLast, 4, 'the previously-last row got its arrows back');
+      t.eq(grown.nowLast, 0, 'and the new last row has none');
+
       // ── the picker is confined to contacts already on the project ────────
       const picker = await app.page.evaluate(id => {
         const inp = document.getElementById('qls0');
@@ -109,7 +131,7 @@ module.exports = {
                  footer: document.getElementById('ql-footer-info').textContent,
                  btn: document.getElementById('ql-save-btn').textContent };
       });
-      t.ok(/^4 of 12/.test(filled.footer), `footer counts filled rows (${filled.footer})`);
+      t.ok(/^4 of 22/.test(filled.footer), `footer counts filled rows (${filled.footer})`);
       t.eq(filled.btn, 'Save 4 interactions', 'save button names the batch size');
 
       // ── a row missing its summary blocks the whole batch ─────────────────

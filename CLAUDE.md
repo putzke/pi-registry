@@ -69,6 +69,17 @@ pi_reports,         -- PI report drafts (one per project)
 pi_report_archive   -- exported report snapshots (up to 50 per project)
 ```
 
+### Sidebar
+Brand, then the Views nav box, then the footer. The **Active / On-Hold Projects
+list was removed (Aug 2026)** — it was redundant with the project select five
+views already carry in their topbar (`S.projectFilter` is the same state either
+way), it grew unbounded as projects accumulated, and it truncated every name.
+`buildProjList()` and the `.proj-btn`/`.proj-box`/`.proj-scroll` styles went with
+it. `filterByProject()` stays — it is still called from project cards, the map,
+and several views. "Import stakeholders" now sits in the nav box beside Settings.
+The freed height is deliberately left to the nav box (`overflow-y:auto`) so the
+Views list has room to grow.
+
 ### Navigation views
 `dashboard | projects | master | stakeholders | interactions | followups | commitments | comments | tribal | deliverables | meetings | issues | map | reports | settings`
 

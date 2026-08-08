@@ -205,6 +205,7 @@ body{padding:0}
   <div class="imp-tabs">
     <div class="imp-tab active" id="tab-stakeholders" onclick="switchImpTab('stakeholders')">Stakeholders</div>
     <div class="imp-tab" id="tab-interactions" onclick="switchImpTab('interactions')">Interactions</div>
+    <div class="imp-tab" id="tab-parcels" onclick="switchImpTab('parcels')">Parcels</div>
   </div>
 
   <!-- TAB: STAKEHOLDERS -->
@@ -532,8 +533,102 @@ body{padding:0}
     </div><!-- end int-body -->
   </div><!-- end tabpane-interactions -->
 
+  <!-- TAB: PARCELS -->
+  <div class="imp-tab-pane" id="tabpane-parcels">
+    <div class="step-nav">
+      <button class="btn" id="parc-nav-back-btn" onclick="parcNavBack()" style="visibility:hidden">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3l-5 5 5 5"/></svg>
+        Back
+      </button>
+      <div style="flex:1;display:flex;justify-content:center">
+        <div class="steps" id="parc-steps" style="border-bottom:none;padding:0;margin:0">
+          <div class="step active" id="parc-step-1"><div class="step-num">1</div>Upload file</div>
+          <div class="step-sep"></div>
+          <div class="step" id="parc-step-2"><div class="step-num">2</div>Map columns</div>
+          <div class="step-sep"></div>
+          <div class="step" id="parc-step-3"><div class="step-num">3</div>Review</div>
+          <div class="step-sep"></div>
+          <div class="step" id="parc-step-4"><div class="step-num">4</div>Import complete</div>
+        </div>
+      </div>
+      <button class="btn btn-primary" id="parc-nav-next-btn" onclick="parcNavNext()" disabled>
+        Next
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+      </button>
+    </div>
+
+    <!-- PARC STEP 1: UPLOAD -->
+    <div id="parc-pane-1">
+      <div class="card">
+        <div class="card-title">Upload your parcel list</div>
+        <div class="card-sub">Accepts CSV or Excel (.xlsx). First row must be column headers. One row per parcel — not one row per owner.</div>
+        <div style="background:rgba(45,125,210,.06);border:1px solid rgba(45,125,210,.2);border-radius:8px;padding:10px 14px;margin-top:10px">
+          <div style="font-size:12px;color:var(--mist);line-height:1.5"><strong style="color:var(--sky)">Required:</strong> a Parcel # column. <span style="color:var(--slate)">Everything else is optional — situs address, coordinates, acquisition type, status, notice date, notes.</span></div>
+          <div style="font-size:12px;color:var(--mist);line-height:1.5;margin-top:6px"><strong style="color:var(--sky)">Owners:</strong> map an Owner email or Owner name column and each parcel is attached to that contact — but only on an exact match against contacts already on this project. Nothing is guessed, and unmatched rows still create the parcel so you can attach the owner by hand.</div>
+          <div style="font-size:12px;color:var(--mist);line-height:1.5;margin-top:6px"><strong style="color:var(--sky)">Several owners on one parcel?</strong> Import the parcel once, then attach the co-owners in the Parcels view. A second row with the same parcel number is treated as a duplicate and skipped.</div>
+        </div>
+        <div class="fi-row" style="margin-bottom:16px">
+          <div class="fi-lbl">Project</div>
+          <select class="fi-sel" id="parc-project-select" onchange="updateParcProject()">
+            <option value="">— select a project —</option>
+          </select>
+        </div>
+        <div class="dropzone" id="parc-dropzone" ondragover="parcDragOver(event)" ondragleave="parcDragLeave()" ondrop="parcDropFile(event)" onclick="document.getElementById('parc-file-input').click()">
+          <input type="file" id="parc-file-input" accept=".csv,.xlsx,.xls" onchange="parcFileChosen(this.files[0])" style="display:none">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <div class="dropzone-title">Drop your file here, or click to browse</div>
+          <div class="dropzone-sub">CSV or Excel · Max 5,000 rows</div>
+        </div>
+        <div id="parc-file-status" class="hidden" style="margin-top:12px"></div>
+      </div>
+    </div>
+
+    <!-- PARC STEP 2: MAP -->
+    <div id="parc-pane-2" class="hidden">
+      <div class="card">
+        <div class="card-title">Map your columns to parcel fields</div>
+        <div class="card-sub">Match each column to the corresponding field. Only Parcel # is required.</div>
+        <div id="parc-auto-mapped-notice" class="hidden"></div>
+        <div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-lg)">
+          <div class="mapper-grid" id="parc-mapper-grid">
+            <div class="mapper-hdr"><div class="mhdr">Your column</div><div class="mhdr" style="text-align:center">→</div><div class="mhdr">Parcel field</div></div>
+          </div>
+        </div>
+        <div class="sec-t" style="margin-top:18px">Data preview (first 3 rows)</div>
+        <div style="overflow-x:auto"><table class="preview-table" id="parc-preview-table"></table></div>
+      </div>
+    </div>
+
+    <!-- PARC STEP 3: REVIEW -->
+    <div id="parc-pane-3" class="hidden">
+      <div class="card" style="max-height:calc(100vh - 200px);overflow-y:auto">
+        <div class="card-title">Review parcels</div>
+        <div class="card-sub">Rows in red will be skipped. A parcel number already on this project is skipped rather than duplicated — one row per parcel is the point of the table.</div>
+        <div id="parc-review-summary"></div>
+        <div style="overflow-x:auto;margin-top:12px"><table class="preview-table" id="parc-review-table"></table></div>
+        <div style="display:flex;justify-content:flex-end;margin-top:16px">
+          <button class="btn btn-primary" id="parc-btn-import" onclick="runParcImport()">Import parcels</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PARC STEP 4: DONE -->
+    <div id="parc-pane-4" class="hidden">
+      <div class="card" style="text-align:center;padding:40px">
+        <div style="font-size:40px;margin-bottom:8px">✓</div>
+        <div class="card-title" style="justify-content:center">Parcel import complete</div>
+        <div class="summary-grid" id="parc-complete-summary"></div>
+        <div style="display:flex;gap:10px;justify-content:center;margin-top:20px">
+          <button class="btn btn-primary" onclick="resetParcImport()">Import another file</button>
+          <button class="btn btn-success" onclick="goToApp()">Open Horizon COMPASS</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 
 </div>
+
 
 <script>
 
@@ -692,10 +787,22 @@ const DEV_BYPASS = false;
 const SB_TABLES = {
   projects:             'pi_projects',
   stakeholders:         'pi_stakeholders',
-  project_stakeholders: 'pi_project_stakeholders'
+  project_stakeholders: 'pi_project_stakeholders',
+  parcels:              'pi_parcels',
+  parcel_owners:        'pi_parcel_owners'
 };
 
 const SB_TO_INT = {
+  pi_parcels: {
+    id:'id', projectId:'project_id', parcelNumber:'parcel_number',
+    situsAddress:'situs_address', latitude:'latitude', longitude:'longitude',
+    acquisitionType:'acquisition_type', status:'status', noticeDate:'notice_date',
+    notes:'notes'
+  },
+  pi_parcel_owners: {
+    id:'id', parcelId:'parcel_id', stakeholderId:'stakeholder_id',
+    ownershipRole:'ownership_role'
+  },
   pi_projects: {
     id:'id', name:'name', pid:'pid', client:'client', type:'project_type',
     county:'county', phase:'phase', status:'status', startDate:'start_date',
@@ -1602,11 +1709,322 @@ function goToApp() {
 }
 
 // ── TAB SWITCHING ─────────────────────────────────────────────
+// ── PARCEL IMPORT ───────────────────────────────────────────────────────────
+// Third import mode, deliberately separate from stakeholders and interactions
+// because a parcel is a different kind of record: one row per PARCEL, not one
+// per owner. pi_stakeholders.parcel_id is a contact-level reference; this writes
+// pi_parcels, which is what the Parcels view counts and reports on.
+//
+// Owner attachment is EXACT-MATCH ONLY, against contacts already linked to the
+// chosen project. No fuzzy matching and no contact creation — same constraint as
+// the quick-log picker. A row whose owner doesn't match still creates the
+// parcel; it just lands in the Parcels view flagged "no owner attached", which
+// is a visible to-do rather than a silent wrong link.
+const PARCEL_FIELDS = [
+  {key:'ignore',          label:'— ignore —'},
+  {key:'parcelNumber',    label:'Parcel # *'},
+  {key:'situsAddress',    label:'Situs address'},
+  {key:'latitude',        label:'Latitude'},
+  {key:'longitude',       label:'Longitude'},
+  {key:'acquisitionType', label:'Acquisition type'},
+  {key:'status',          label:'Status'},
+  {key:'noticeDate',      label:'Notice sent date'},
+  {key:'notes',           label:'Notes'},
+  {key:'ownerEmail',      label:'Owner email (matches more reliably)'},
+  {key:'ownerName',       label:'Owner name'},
+];
+const PARC_AUTO_MAP = {
+  'parcel':'parcelNumber', 'apn':'parcelNumber', 'pin':'parcelNumber',
+  'tax id':'parcelNumber', 'taxid':'parcelNumber', 'serial':'parcelNumber',
+  'situs':'situsAddress', 'address':'situsAddress', 'location':'situsAddress',
+  'lat':'latitude', 'lon':'longitude', 'lng':'longitude',
+  'acquisition':'acquisitionType', 'take':'acquisitionType',
+  'status':'status', 'notice':'noticeDate',
+  'note':'notes', 'comment':'notes',
+  'owner email':'ownerEmail', 'owneremail':'ownerEmail',
+  'owner':'ownerName', 'grantee':'ownerName', 'grantor':'ownerName',
+};
+const PARCEL_STATUSES_IMP = ['Not started','Notice sent','Contacted','Negotiating','Acquired','Declined'];
+const PARCEL_ACQ_IMP = ['Full take','Partial take','Temporary construction easement','Permanent easement','Access only','None'];
+
+const parcState = { step:1, rawHeaders:[], rawRows:[], columnMap:[], parsed:[],
+                    projectId:'', existingParcels:[], projectContacts:[], result:null };
+
+function syncParcNavBar(step){
+  const back=document.getElementById('parc-nav-back-btn'), next=document.getElementById('parc-nav-next-btn');
+  back.style.visibility = step>1 && step<4 ? 'visible' : 'hidden';
+  next.style.display = step>=3 ? 'none' : '';
+  if(step===1) next.disabled = !(parcState.rawRows.length && parcState.projectId);
+  else if(step===2) next.disabled = !parcState.columnMap.includes('parcelNumber');
+  for(let i=1;i<=4;i++){
+    const el=document.getElementById('parc-step-'+i);
+    if(el) el.classList.toggle('active', i===step);
+  }
+}
+function parcNavBack(){ if(parcState.step>1) parcGoToStep(parcState.step-1); }
+function parcNavNext(){ if(parcState.step<4) parcGoToStep(parcState.step+1); }
+
+async function populateParcProjectSelect(){
+  const sel=document.getElementById('parc-project-select');
+  if(!sel) return;
+  const projs=await cacheLoad('projects');
+  sel.innerHTML='<option value="">— select a project —</option>'
+    + projs.map(p=>`<option value="${p.id}">${sanitizeHTML(p.pid||'')} — ${sanitizeHTML(p.name||'')}</option>`).join('');
+}
+function updateParcProject(){
+  parcState.projectId=document.getElementById('parc-project-select').value;
+  syncParcNavBar(parcState.step);
+}
+
+function parcDragOver(e){ e.preventDefault(); document.getElementById('parc-dropzone').classList.add('drag'); }
+function parcDragLeave(){ document.getElementById('parc-dropzone').classList.remove('drag'); }
+function parcDropFile(e){
+  e.preventDefault(); parcDragLeave();
+  if(e.dataTransfer.files.length) parcFileChosen(e.dataTransfer.files[0]);
+}
+function parcFileChosen(file){
+  if(!file) return;
+  const rd=new FileReader();
+  if(/\.(xlsx|xls)$/i.test(file.name)){
+    rd.onload=e=>parcParseXLSX(e.target.result);
+    rd.readAsArrayBuffer(file);
+  } else {
+    rd.onload=e=>parcParseCSV(e.target.result);
+    rd.readAsText(file);
+  }
+}
+function parcShowFileError(msg){
+  const el=document.getElementById('parc-file-status');
+  el.className=''; el.innerHTML='<div style="color:var(--red);font-size:13px">'+sanitizeHTML(msg)+'</div>';
+}
+function parcParseCSV(text){
+  const lines=text.split(/\r?\n/).filter(l=>l.trim());
+  const rows=lines.map(line=>{
+    const cells=[]; let cur='', inQ=false;
+    for(let i=0;i<line.length;i++){
+      if(line[i]==='"') inQ=!inQ;
+      else if(line[i]===','&&!inQ){ cells.push(cur.trim()); cur=''; }
+      else cur+=line[i];
+    }
+    cells.push(cur.trim());
+    return cells;
+  });
+  if(rows.length<2){ parcShowFileError('File appears empty or has only one row.'); return; }
+  parcState.rawHeaders=rows[0];
+  parcState.rawRows=rows.slice(1).filter(r=>r.some(c=>c));
+  parcOnFileParsed();
+}
+function parcParseXLSX(buffer){
+  try{
+    const wb=XLSX.read(buffer,{type:'arraybuffer'});
+    const sheetName=wb.SheetNames.find(n=>/parcel/i.test(n))||wb.SheetNames[0];
+    const data=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,defval:''});
+    if(!data||data.length<2){ parcShowFileError('Sheet appears empty.'); return; }
+    let headerRow=0;
+    for(let i=0;i<Math.min(5,data.length);i++){
+      const row=data[i].map(c=>String(c||'').toLowerCase());
+      if(row.some(c=>/parcel|apn|pin/.test(c))){ headerRow=i; break; }
+    }
+    parcState.rawHeaders=(data[headerRow]||[]).map(c=>String(c||''));
+    parcState.rawRows=data.slice(headerRow+1)
+      .filter(r=>r&&r.some(c=>c!=null&&c!==''))
+      .map(r=>r.map(c=>c==null?'':String(c)));
+    parcOnFileParsed();
+  }catch(e){ parcShowFileError('Could not read Excel file: '+e.message); }
+}
+function parcAutoSuggest(header){
+  const h=(header||'').toLowerCase().trim();
+  if(!h) return 'ignore';
+  for(const [frag,key] of Object.entries(PARC_AUTO_MAP)) if(h.includes(frag)) return key;
+  return 'ignore';
+}
+function parcOnFileParsed(){
+  const el=document.getElementById('parc-file-status');
+  el.className='';
+  el.innerHTML='<div style="color:var(--green);font-size:13px">✓ '+parcState.rawRows.length
+    +' row'+(parcState.rawRows.length!==1?'s':'')+' read, '+parcState.rawHeaders.length+' columns.</div>';
+  parcState.columnMap=parcState.rawHeaders.map(parcAutoSuggest);
+  syncParcNavBar(parcState.step);
+}
+
+async function parcGoToStep(n){
+  if(n===3){
+    parcState.existingParcels=await cacheLoad('parcels');
+    const links=await cacheLoad('project_stakeholders');
+    const stakes=await cacheLoad('stakeholders');
+    const ids=links.filter(l=>String(l.projectId)===String(parcState.projectId))
+                   .map(l=>String(l.stakeholderId));
+    parcState.projectContacts=stakes.filter(s=>ids.indexOf(String(s.id))>-1);
+    parcBuildParsed();
+    parcRenderReview();
+  }
+  parcState.step=n;
+  for(let i=1;i<=4;i++){
+    const p=document.getElementById('parc-pane-'+i);
+    if(p) p.classList.toggle('hidden', i!==n);
+  }
+  if(n===2) parcBuildMapper();
+  syncParcNavBar(n);
+}
+
+function parcBuildMapper(){
+  const grid=document.getElementById('parc-mapper-grid');
+  grid.innerHTML='<div class="mapper-hdr"><div class="mhdr">Your column</div><div class="mhdr" style="text-align:center">→</div><div class="mhdr">Parcel field</div></div>'
+    + parcState.rawHeaders.map((h,i)=>
+      '<div class="mapper-row"><div class="mcol">'+sanitizeHTML(h||'(blank)')+'</div>'
+      +'<div style="text-align:center;color:var(--slate)">→</div>'
+      +'<div><select class="fi-sel" onchange="parcState.columnMap['+i+']=this.value;parcUpdatePreview();syncParcNavBar(2)">'
+      + PARCEL_FIELDS.map(f=>'<option value="'+f.key+'"'+(parcState.columnMap[i]===f.key?' selected':'')+'>'+f.label+'</option>').join('')
+      +'</select></div></div>').join('');
+  parcUpdatePreview();
+}
+function parcUpdatePreview(){
+  const mapped=parcState.columnMap.map((f,i)=>({field:f,idx:i,header:parcState.rawHeaders[i]}))
+    .filter(m=>m.field!=='ignore');
+  const head='<thead><tr>'+mapped.map(m=>'<th>'+sanitizeHTML(m.header)+' → '
+    +(PARCEL_FIELDS.find(f=>f.key===m.field)||{}).label+'</th>').join('')+'</tr></thead>';
+  const body='<tbody>'+parcState.rawRows.slice(0,3).map(r=>'<tr>'
+    +mapped.map(m=>'<td>'+sanitizeHTML(r[m.idx]||'')+'</td>').join('')+'</tr>').join('')+'</tbody>';
+  document.getElementById('parc-preview-table').innerHTML=head+body;
+}
+
+function parcNormalizeDate(val){
+  if(!val) return '';
+  const s=String(val).trim();
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const d=new Date(s);
+  if(isNaN(d.getTime())) return '';
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function parcNormalizePick(val,list,dflt){
+  const s=(val||'').trim();
+  if(!s) return dflt;
+  const hit=list.find(x=>x.toLowerCase()===s.toLowerCase());
+  return hit||dflt;
+}
+
+function parcBuildParsed(){
+  const get=(row,field)=>{ const i=parcState.columnMap.indexOf(field); return i<0?'':String(row[i]||'').trim(); };
+  const seen={};
+  const existing={};
+  parcState.existingParcels
+    .filter(p=>String(p.projectId)===String(parcState.projectId))
+    .forEach(p=>{ existing[(p.parcelNumber||'').trim().toLowerCase()]=true; });
+
+  parcState.parsed=parcState.rawRows.map((row,n)=>{
+    const num=get(row,'parcelNumber');
+    const key=num.toLowerCase();
+    const rec={
+      rowNum:n+1, parcelNumber:num,
+      situsAddress:get(row,'situsAddress'),
+      latitude:get(row,'latitude'), longitude:get(row,'longitude'),
+      acquisitionType:parcNormalizePick(get(row,'acquisitionType'),PARCEL_ACQ_IMP,''),
+      status:parcNormalizePick(get(row,'status'),PARCEL_STATUSES_IMP,'Not started'),
+      noticeDate:parcNormalizeDate(get(row,'noticeDate')),
+      notes:get(row,'notes'),
+      ownerEmail:get(row,'ownerEmail'), ownerName:get(row,'ownerName'),
+      owner:null, skip:false, reason:''
+    };
+    if(!num){ rec.skip=true; rec.reason='No parcel number'; }
+    else if(existing[key]){ rec.skip=true; rec.reason='Already on this project'; }
+    else if(seen[key]){ rec.skip=true; rec.reason='Duplicate of row '+seen[key]; }
+    else seen[key]=rec.rowNum;
+
+    // Exact match only — email first, then normalised full name.
+    if(!rec.skip&&(rec.ownerEmail||rec.ownerName)){
+      const em=normalizeEmail(rec.ownerEmail);
+      let hit=em?parcState.projectContacts.find(s=>normalizeEmail(s.email)===em):null;
+      if(!hit&&rec.ownerName){
+        const nm=normalizeName(rec.ownerName);
+        const cands=parcState.projectContacts.filter(s=>
+          normalizeName((s.firstName||'')+' '+(s.lastName||''))===nm || normalizeName(s.org||'')===nm);
+        if(cands.length===1) hit=cands[0];
+      }
+      rec.owner=hit||null;
+      if(!hit) rec.ownerWarn=true;
+    }
+    return rec;
+  });
+}
+
+function parcRenderReview(){
+  const p=parcState.parsed;
+  const ok=p.filter(r=>!r.skip), skipped=p.filter(r=>r.skip);
+  const matched=ok.filter(r=>r.owner).length;
+  const unmatched=ok.filter(r=>r.ownerWarn).length;
+  document.getElementById('parc-review-summary').innerHTML=
+    '<div style="display:flex;gap:10px;flex-wrap:wrap">'
+    +'<span class="badge" style="background:rgba(40,168,112,.15);color:var(--green);padding:4px 10px;border-radius:6px;font-size:12px">'+ok.length+' to import</span>'
+    +(skipped.length?'<span class="badge" style="background:rgba(192,57,43,.15);color:var(--red);padding:4px 10px;border-radius:6px;font-size:12px">'+skipped.length+' skipped</span>':'')
+    +(matched?'<span class="badge" style="background:rgba(45,125,210,.15);color:var(--sky);padding:4px 10px;border-radius:6px;font-size:12px">'+matched+' owner'+(matched!==1?'s':'')+' matched</span>':'')
+    +(unmatched?'<span class="badge" style="background:rgba(232,160,32,.15);color:var(--amber);padding:4px 10px;border-radius:6px;font-size:12px">'+unmatched+' owner'+(unmatched!==1?'s':'')+' not matched — attach by hand</span>':'')
+    +'</div>';
+  document.getElementById('parc-review-table').innerHTML=
+    '<thead><tr><th>Row</th><th>Parcel #</th><th>Location</th><th>Status</th><th>Notice</th><th>Owner</th><th>Result</th></tr></thead><tbody>'
+    + p.map(r=>{
+      const loc=r.situsAddress||((r.latitude&&r.longitude)?r.latitude+', '+r.longitude:'');
+      const colour=r.skip?'color:var(--red)':(r.ownerWarn?'color:var(--amber)':'');
+      return '<tr style="'+colour+'"><td>'+r.rowNum+'</td>'
+        +'<td>'+sanitizeHTML(r.parcelNumber||'—')+'</td>'
+        +'<td>'+sanitizeHTML(loc)+'</td>'
+        +'<td>'+sanitizeHTML(r.status)+'</td>'
+        +'<td>'+sanitizeHTML(r.noticeDate||'—')+'</td>'
+        +'<td>'+(r.owner?sanitizeHTML(((r.owner.firstName||'')+' '+(r.owner.lastName||'')).trim()||r.owner.org||'')
+                :(r.ownerWarn?'no match':'—'))+'</td>'
+        +'<td>'+(r.skip?sanitizeHTML(r.reason):'Import')+'</td></tr>';
+    }).join('')+'</tbody>';
+  document.getElementById('parc-btn-import').disabled = ok.length===0;
+}
+
+async function runParcImport(){
+  const btn=document.getElementById('parc-btn-import');
+  btn.disabled=true; btn.textContent='Importing…';
+  const rows=parcState.parsed.filter(r=>!r.skip);
+  let created=0, owners=0, failed=0;
+  for(const r of rows){
+    try{
+      const newId=await sbAdd('parcels',{
+        projectId:parcState.projectId, parcelNumber:r.parcelNumber,
+        situsAddress:r.situsAddress, latitude:r.latitude, longitude:r.longitude,
+        acquisitionType:r.acquisitionType, status:r.status,
+        noticeDate:r.noticeDate||null, notes:r.notes
+      });
+      if(!newId){ failed++; continue; }
+      created++;
+      if(r.owner){
+        const link=await sbAdd('parcel_owners',{
+          parcelId:String(newId), stakeholderId:String(r.owner.id), ownershipRole:'Owner'
+        });
+        if(link) owners++;
+      }
+    }catch(e){ console.warn('parcel import row failed:', e.message); failed++; }
+  }
+  cacheClear('parcels'); cacheClear('parcel_owners');
+  parcState.result={created:created,owners:owners,failed:failed,skipped:parcState.parsed.length-rows.length};
+  document.getElementById('parc-complete-summary').innerHTML=
+    '<div class="sum-item"><div class="sum-num">'+created+'</div><div class="sum-lbl">Parcels created</div></div>'
+    +'<div class="sum-item"><div class="sum-num">'+owners+'</div><div class="sum-lbl">Owners attached</div></div>'
+    +'<div class="sum-item"><div class="sum-num">'+parcState.result.skipped+'</div><div class="sum-lbl">Rows skipped</div></div>'
+    +(failed?'<div class="sum-item"><div class="sum-num" style="color:var(--red)">'+failed+'</div><div class="sum-lbl">Failed</div></div>':'');
+  btn.textContent='Import parcels';
+  parcGoToStep(4);
+}
+
+function resetParcImport(){
+  parcState.step=1; parcState.rawHeaders=[]; parcState.rawRows=[];
+  parcState.columnMap=[]; parcState.parsed=[]; parcState.result=null;
+  const st=document.getElementById('parc-file-status');
+  if(st){ st.className='hidden'; st.innerHTML=''; }
+  const fi=document.getElementById('parc-file-input'); if(fi) fi.value='';
+  parcGoToStep(1);
+}
+
 function switchImpTab(tab) {
-  ['stakeholders','interactions'].forEach(t => {
+  ['stakeholders','interactions','parcels'].forEach(t => {
     document.getElementById('tab-'+t).classList.toggle('active', t===tab);
     document.getElementById('tabpane-'+t).classList.toggle('active', t===tab);
   });
+  if (tab === 'parcels') populateParcProjectSelect();
 }
 
 // ── INTERACTION FIELDS ────────────────────────────────────────

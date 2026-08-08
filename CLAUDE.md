@@ -164,10 +164,25 @@ there was nothing to count.
   the parcel. Its free-text parcel input was removed for the same
   two-sources-of-truth reason as the desktop's, and `_mobExistingParcelId()`
   carries the column forward so an edit can't blank it.
-- **Not yet built:** importer support, map layer, report section, portal
-  exposure. Manual entry is the stated normal workflow, so those are follow-ups.
-  Importer → `pi_parcels` is the highest-value one: an import currently writes
-  only the contact-level reference, not real parcel records.
+- **Importer: a third tab (`parcels`), Aug 2026.** Separate from the stakeholder
+  and interaction imports because a parcel is a different record — **one row per
+  PARCEL, not one per owner**. `parcState` / `PARCEL_FIELDS` / `PARC_AUTO_MAP`
+  mirror the interactions wizard's shape; auto-detects `parcel`/`apn`/`pin`/
+  `serial`/`tax id` headers. Guardrails, all covered by
+  `test/tests/14-parcel-import.test.js` (36 checks):
+  - a parcel number **already on the project is skipped**, never duplicated —
+    that is the table's whole reason for existing;
+  - a repeat **within the same file** is skipped and names the row it duplicates;
+  - **owner attachment is EXACT-MATCH ONLY** (email, then normalised full name or
+    org, and only when exactly one contact matches), against contacts already
+    linked to the project. No fuzzy matching, no contact creation — same
+    constraint as the quick-log picker. An unmatched owner still creates the
+    parcel and is flagged amber, so it becomes a visible to-do rather than a
+    silently wrong link.
+  - Several owners on one parcel: import the parcel once, attach co-owners in the
+    Parcels view. A second row with the same number is a duplicate by design.
+- **Still not built:** map layer, report section, portal exposure. Manual entry
+  is the stated normal workflow, so those remain follow-ups.
 
 ### Project scoping per view
 `S.projectFilter` is the shared scope, written by the project select in the

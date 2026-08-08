@@ -28,6 +28,7 @@ const TYPES = {
   // with the code under test. (The live "text = bigint" seed error says the same.)
   id: 'bigint', project_id: 'text', stakeholder_id: 'bigint', group_id: 'bigint',
   issue_id: 'bigint', interaction_id: 'bigint', meeting_id: 'bigint', period_id: 'text',
+  parcel_id: 'text',
   linked_stakeholder_id: 'bigint', org_id: 'bigint', user_id: 'uuid', token: 'uuid',
   sort_order: 'int', attendance_count: 'int', comment_cards: 'int', progress: 'int',
   contracted_qty: 'int', delivered_count: 'int', report_num: 'int', annual_report_year: 'int',
@@ -43,13 +44,19 @@ const DATES = new Set(['start_date','end_date','precon_date','last_exported','du
   'milestone_start','milestone_end','added_date','interaction_date','follow_up_due',
   'follow_up_resolved','meeting_date','date_raised','date_resolved','date_made',
   'fulfilled_date','comment_date','response_date','notification_date','response_deadline',
-  'ura_notice_date','follow_up_date','period_start','period_end','hearing_date',
+  'ura_notice_date','follow_up_date','period_start','period_end','hearing_date','notice_date',
   'first_ad_date','second_ad_date','federal_register_date']);
 // OCC columns default to now() in sql/2026-07-24_app_wide_occ.sql — the guard
 // depends on that, so the test schema has to match.
 const TIMESTAMPS = new Set(['created_at','updated_at','published_at','editing_at','archived_at']);
 const TEXT_PK = new Set(['pi_comment_periods','pi_public_comments','pi_tribal_consultations']);
-const IDENTITY_PK = new Set(['pi_projects','pi_stakeholders','pi_client_access']);
+const IDENTITY_PK = new Set(['pi_projects','pi_stakeholders','pi_client_access','pi_parcels','pi_parcel_owners']);
+
+// Per-table overrides where a column's name-based type is wrong for that table.
+// pi_parcel_owners is a pure join written from the app, which holds every id as
+// a string (fromSB stringifies `id`), so both sides are text — matching
+// sql/2026-08-07_parcels.sql.
+const TABLE_TYPES = { pi_parcel_owners: { stakeholder_id: 'text' } };
 
 const here = path.join(__dirname, '..');
 const out = [];
@@ -65,11 +72,14 @@ for (const line of fs.readFileSync(path.join(here, 'schema-columns.txt'), 'utf8'
     if (c === 'token') return 'token uuid primary key';
     if (TIMESTAMPS.has(c)) return `${c} timestamptz default now()`;
     if (DATES.has(c)) return `${c} date`;
-    return `${c} ${TYPES[c] || 'text'}`;
+    const over = (TABLE_TYPES[table] || {})[c];
+    return `${c} ${over || TYPES[c] || 'text'}`;
   });
   out.push(`create table ${table} (\n  ${defs.join(',\n  ')}\n);`);
 }
 out.push('create unique index pi_portal_links_proj_uniq on pi_portal_links(project_id);');
+out.push('create unique index pi_parcels_proj_number_uniq on pi_parcels (project_id, lower(trim(parcel_number)));');
+out.push('create unique index pi_parcel_owners_uniq on pi_parcel_owners (parcel_id, stakeholder_id);');
 out.push('alter table pi_client_access add constraint pi_client_access_email_project_uniq unique (email, project_id);');
 
 const dest = path.join(here, 'schema.sql');

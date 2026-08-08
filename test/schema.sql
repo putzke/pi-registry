@@ -329,6 +329,34 @@ create table pi_tribal_consultations (
   created_at timestamptz default now()
 );
 
+create table pi_parcels (
+  id bigint generated always as identity primary key,
+  project_id text,
+  parcel_number text,
+  situs_address text,
+  latitude text,
+  longitude text,
+  acquisition_type text,
+  status text,
+  notice_date date,
+  notes text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  updated_by text
+);
+
+create table pi_parcel_owners (
+  id bigint generated always as identity primary key,
+  parcel_id text,
+  stakeholder_id text,
+  ownership_role text,
+  created_at timestamptz default now()
+);
+
 create unique index pi_portal_links_proj_uniq on pi_portal_links(project_id);
+
+create unique index pi_parcels_proj_number_uniq on pi_parcels (project_id, lower(trim(parcel_number)));
+
+create unique index pi_parcel_owners_uniq on pi_parcel_owners (parcel_id, stakeholder_id);
 
 alter table pi_client_access add constraint pi_client_access_email_project_uniq unique (email, project_id);

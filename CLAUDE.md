@@ -126,6 +126,35 @@ sits under Mailing address, and `parcelId` was added to the search filter in the
 master list, the stakeholders view and `filterMasterList()` so a campaign can be
 worked by parcel number. Guarded by `test/tests/12-parcel.test.js`.
 
+### Parcels (`pi_parcels` + `pi_parcel_owners`, Aug 2026)
+Right-of-way tracking. Migration: `sql/2026-08-07_parcels.sql`.
+**Why a table and not the contact field:** a ROW campaign is a many-to-many —
+one owner holds several parcels, one parcel has several owners (co-owners,
+heirs, an LLC plus its manager). `pi_stakeholders.parcel_id` is one text column
+on one side and cannot represent that. Worse, with several owners the number got
+typed once per owner, so a single typo split the parcel into two groups that
+never appeared together again. **And the compliance unit is the parcel**: "was
+every affected parcel's owner noticed, and when" is a count over parcels, and
+there was nothing to count.
+- `pi_stakeholders.parcel_id` is deliberately KEPT — it still displays, exports
+  and imports. It is now a convenience label; `pi_parcels` is the record.
+- **`pi_parcels_proj_number_uniq`** on `(project_id, lower(trim(parcel_number)))`
+  is the typo guard, enforced in the database as well as in `saveParcel()`. That
+  duplicate-splitting is the failure the table exists to prevent.
+- **Coordinates are first-class** (`latitude`/`longitude` text): unsubdivided
+  land with no dwelling can only be designated by coordinates. Same fields the
+  Map view and the planned Survey123 ingestion want.
+- Owner attachment is parcel-first (`_parcelOwnerRowsHTML` re-renders in place
+  inside the modal, so three co-owners cost one round-trip) and reads
+  contact-first via `_parcelsFor(stakeholderId)` on the stakeholder detail pane.
+  The picker only offers contacts already linked to the project.
+- The nav badge counts parcels with NO owner attached — the one that silently
+  misses a notice sweep.
+- Search matches parcel number, situs address AND owner names.
+- Covered by `test/tests/13-parcels.test.js` (18 checks, both directions).
+- **Not yet built:** importer support, map layer, report section, portal
+  exposure. Manual entry is the stated normal workflow, so those are follow-ups.
+
 ### Project scoping per view
 `S.projectFilter` is the shared scope, written by the project select in the
 topbar/filter bar of **interactions, followups, deliverables, reports, meetings

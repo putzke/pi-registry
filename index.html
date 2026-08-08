@@ -402,6 +402,11 @@ window.onGoogleMapsReady = function() {
       Master List
       <span class="nav-badge" id="nb-master">0</span>
     </button>
+    <button class="nav-btn" id="nav-parcels" onclick="setView('parcels')">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1.5 4.5 6 2.5l4 2 4.5-2v9l-4.5 2-4-2-4.5 2v-9z"/><path d="M6 2.5v9M10 4.5v9"/></svg>
+      Parcels
+      <span class="nav-badge warn hide" id="nb-parc">0</span>
+    </button>
     <button class="nav-btn" id="nav-interactions" onclick="setView('interactions')">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 3H2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h3l2 2 2-2h5a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1z"/></svg>
       Interactions
@@ -687,7 +692,9 @@ const SB_TABLES = {
   tribal_consultations: 'pi_tribal_consultations',
   reports:              'pi_reports',
   report_archive:       'pi_report_archive',
-  client_summaries:     'pi_client_summaries'
+  client_summaries:     'pi_client_summaries',
+  parcels:              'pi_parcels',
+  parcel_owners:        'pi_parcel_owners'
 };
 
 // Map our internal field names to Supabase column names
@@ -816,6 +823,16 @@ const SB_TO_INT = {
     archivedAt:'archived_at', archivedBy:'archived_by', clientVisible:'client_visible',
     snapshot:'snapshot'
   },
+  pi_parcels: {
+    id:'id', projectId:'project_id', parcelNumber:'parcel_number',
+    situsAddress:'situs_address', latitude:'latitude', longitude:'longitude',
+    acquisitionType:'acquisition_type', status:'status', noticeDate:'notice_date',
+    notes:'notes'
+  },
+  pi_parcel_owners: {
+    id:'id', parcelId:'parcel_id', stakeholderId:'stakeholder_id',
+    ownershipRole:'ownership_role'
+  },
   pi_client_summaries: {
     id:'id', projectId:'project_id', contentRecent:'content_recent',
     contentFull:'content_full', periodStart:'period_start', periodEnd:'period_end',
@@ -852,7 +869,7 @@ function localToday(){
   return y+'-'+m+'-'+day;
 }
 
-const DATE_FIELDS = new Set(['interaction_date','follow_up_due','follow_up_resolved','due_date','start_date','end_date','precon_date','added_date','meeting_date','date_raised','date_resolved','date_made','fulfilled_date','last_exported','comment_date','response_date','notification_date','response_deadline','ura_notice_date','follow_up_date','period_start','period_end','hearing_date','first_ad_date','second_ad_date','federal_register_date']);
+const DATE_FIELDS = new Set(['interaction_date','follow_up_due','follow_up_resolved','due_date','start_date','end_date','precon_date','added_date','meeting_date','date_raised','date_resolved','date_made','fulfilled_date','last_exported','comment_date','response_date','notification_date','response_deadline','ura_notice_date','follow_up_date','period_start','period_end','hearing_date','first_ad_date','second_ad_date','federal_register_date','notice_date']);
 
 // Integer FK columns that Supabase expects as numbers
 const SB_INT_FIELDS = new Set(['project_id','stakeholder_id','issue_id','interaction_id','meeting_id']);
@@ -1166,7 +1183,7 @@ function cacheClear(k) { delete _cache[k]; delete _cacheTime[k]; }
 const _syncCache = {};
 
 async function loadAllData() {
-  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments','comment_periods','tribal_consultations','reports','report_archive','client_summaries'];
+  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments','comment_periods','tribal_consultations','reports','report_archive','client_summaries','parcels','parcel_owners'];
   await Promise.all(tables.map(async t => { _syncCache[t] = await sbGet(t); }));
   // Load dismissed_pairs separately so a 403 doesn't block everything else
   try { _syncCache['dismissed_pairs'] = await sbGet('dismissed_pairs'); }
@@ -1755,7 +1772,7 @@ function initDashRows(){
     }
   });
 }
-function setView(v){if(v==='tribal'){showToast('Tribal consultation module is not available yet.','info',2500);return;}S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.showBulkAdd=false;S.showQuickLog=false;S.showEmailPanel=false;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;S.cmtSearch='';S.cmtProj='';S.cmtStatus='';S.cmtPeriod='';S.cmtPeriodId='';S.cmtTab='comments';
+function setView(v){if(v==='tribal'){showToast('Tribal consultation module is not available yet.','info',2500);return;}S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.showBulkAdd=false;S.showQuickLog=false;S.showEmailPanel=false;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;S.cmtSearch='';S.cmtProj='';S.cmtStatus='';S.cmtPeriod='';S.cmtPeriodId='';S.cmtTab='comments';S.parcSearch='';S.parcStatus='';
   S.view=v;S.mapPicked=undefined;S.selStakeholder=null;S.selInteraction=null;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const navId=v==='commitments'?'nav-commitments':v==='comments'?'nav-comments':v==='tribal'?'nav-tribal':('nav-'+v);
@@ -1851,6 +1868,15 @@ function refreshBadges(){
   const pendingPcomm=(DB.get('public_comments')||[]).filter(c=>c.responseStatus==='Pending').length;
   const pcommEl=document.getElementById('nb-pcomm');
   if(pcommEl){pcommEl.textContent=pendingPcomm;pcommEl.classList.toggle('hide',pendingPcomm===0);}
+  // Parcels badge — parcels with nobody attached. A parcel with no owner is the
+  // one that silently misses a notice sweep, so that is what is worth counting.
+  const _pf=S.projectFilter;
+  const _parcOrphan=(DB.get('parcels')||[])
+    .filter(p=>!_pf||String(p.projectId)===String(_pf))
+    .filter(p=>!(DB.get('parcel_owners')||[]).some(l=>String(l.parcelId)===String(p.id))).length;
+  const parcEl=document.getElementById('nb-parc');
+  if(parcEl){parcEl.textContent=_parcOrphan;parcEl.classList.toggle('hide',_parcOrphan===0);}
+
   // Tribal badge — open/pending consultations
   const today2=localToday();
   const pendingTribal=(DB.get('tribal_consultations')||[]).filter(c=>c.phase!=='Closed'&&c.phase!=='Concurrence received'&&c.responseDeadline&&c.responseDeadline<today2&&!c.responseDate).length;
@@ -1873,6 +1899,7 @@ function render(){
   else if(S.view==='meetings')renderMeetings(m);
   else if(S.view==='issues')renderIssuesView(m);
   else if(S.view==='commitments')renderCommitments(m);
+  else if(S.view==='parcels')renderParcels(m);
   else if(S.view==='comments')renderComments(m);
   else if(S.view==='tribal')renderTribal(m);
   else if(S.view==='settings')renderSettings(m);
@@ -4968,6 +4995,16 @@ function renderStakeDetail(s,link){
     </div>
     ${s.address?`<div style="margin-bottom:14px"><div class="fl">Address</div><div class="fv">${s.address}</div></div>`:''}
     ${s.parcelId?`<div style="margin-bottom:14px"><div class="fl">Parcel ID</div><div class="fv">${s.parcelId}</div></div>`:''}
+    ${(function(){
+      const held=_parcelsFor(s.id);
+      if(!held.length) return '';
+      return '<div style="margin-bottom:14px"><div class="fl">Parcels</div><div class="fv">'
+        + held.map(h=>'<span class="badge b-dark td-mono" style="margin:1px 4px 1px 0;cursor:pointer" onclick="S.projectFilter=\''+(h.parcel.projectId||'')+'\';setView(\'parcels\');S.parcSearch=\''+escHtml(h.parcel.parcelNumber||'')+'\';renderParcels(document.getElementById(\'main\'))">'
+             + escHtml(h.parcel.parcelNumber||'?')
+             + ((h.link.ownershipRole&&h.link.ownershipRole!=='Owner')?' · '+escHtml(h.link.ownershipRole):'')
+             + '</span>').join('')
+        + '</div></div>';
+    })()}
     ${s.notes?`<div class="fl" style="margin-bottom:5px">Notes</div><div class="fnotes">${s.notes}</div>`:''}
     ${link?`<hr class="div"><div class="sec-hd"><span class="sec-t">Project context — <span style="font-family:var(--mono);font-size:11px">${(projs.find(p=>p.id===S.projectFilter)||{}).pid||''}</span></span><button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="openEditLinkModal('${link.id}')">Edit project context</button> <button class="btn btn-xs" style="background:rgba(220,60,60,.15);border-color:rgba(220,60,60,.4);color:#f87171" onclick="unlinkFromProject('${link.id}')">Unlink</button></div>
     <div class="fg fg3" style="margin-bottom:10px">
@@ -17062,6 +17099,251 @@ function delComment(id){
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ── PARCELS ────────────────────────────────────────────────────────────────
+// A right-of-way campaign is tracked by PARCEL, not by contact. One owner can
+// hold several parcels and one parcel can have several owners, which is a
+// many-to-many that pi_stakeholders.parcel_id (a single text column on the
+// contact) cannot represent — and the compliance question, "was every affected
+// parcel's owner noticed, and when", is a count over parcels.
+//
+// pi_stakeholders.parcel_id stays as a convenience label on the contact; it
+// still displays, exports and imports. pi_parcels is the record.
+const PARCEL_STATUSES = ['Not started','Notice sent','Contacted','Negotiating','Acquired','Declined'];
+const PARCEL_ACQ = ['','Full take','Partial take','Temporary construction easement','Permanent easement','Access only','None'];
+const OWNER_ROLES = ['Owner','Co-owner','Tenant','Agent','Heir','Unknown'];
+
+function _parcOwners(parcelId){
+  const links=(DB.get('parcel_owners')||[]).filter(l=>String(l.parcelId)===String(parcelId));
+  const stakes=DB.get('stakeholders');
+  return links.map(l=>({link:l,stake:stakes.find(s=>String(s.id)===String(l.stakeholderId))||null}))
+              .filter(x=>x.stake);
+}
+function _parcelsFor(stakeholderId){
+  const links=(DB.get('parcel_owners')||[]).filter(l=>String(l.stakeholderId)===String(stakeholderId));
+  const parcels=DB.get('parcels')||[];
+  return links.map(l=>({link:l,parcel:parcels.find(p=>String(p.id)===String(l.parcelId))||null}))
+              .filter(x=>x.parcel);
+}
+function _parcStatusColor(st){
+  if(st==='Acquired')  return 'b-green';
+  if(st==='Declined')  return 'b-red';
+  if(st==='Not started')return 'b-dark';
+  return 'b-amber';
+}
+
+function renderParcels(el){
+  const projs=DB.get('projects')||[];
+  const projF=S.projectFilter||'';
+  const search=(S.parcSearch||'').toLowerCase();
+  const statusF=S.parcStatus||'';
+  let list=(DB.get('parcels')||[]).filter(p=>!projF||String(p.projectId)===String(projF));
+
+  // Searching an owner's name has to find their parcels — that is the whole
+  // point of the join, and a parcel-number-only search would miss it.
+  if(search) list=list.filter(p=>{
+    const owners=_parcOwners(p.id).map(o=>dispName(o.stake)+' '+(o.stake.org||'')).join(' ');
+    return ((p.parcelNumber||'')+' '+(p.situsAddress||'')+' '+owners).toLowerCase().includes(search);
+  });
+  if(statusF) list=list.filter(p=>(p.status||'Not started')===statusF);
+  list=list.slice().sort((a,b)=>(a.parcelNumber||'').localeCompare(b.parcelNumber||'',undefined,{numeric:true}));
+
+  const scoped=(DB.get('parcels')||[]).filter(p=>!projF||String(p.projectId)===String(projF));
+  const noticed=scoped.filter(p=>!!p.noticeDate).length;
+  const unowned=scoped.filter(p=>_parcOwners(p.id).length===0).length;
+
+  const selStyle='font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)';
+  el.innerHTML=`
+  <div class="topbar">
+    <div><div class="topbar-title">Parcels</div>
+    <div class="topbar-sub">Right-of-way tracking — owners attach to parcels, not the other way round</div></div>
+    <div class="topbar-sp"></div>
+    <div class="topbar-acts">
+      <select class="fsel" onchange="S.projectFilter=this.value;renderParcels(document.getElementById('main'))">
+        <option value="">All projects</option>${projs.map(p=>`<option value="${p.id}"${String(projF)===String(p.id)?' selected':''}>${escHtml(p.pid||'')} — ${escHtml(p.name||'')}</option>`).join('')}
+      </select>
+      <button class="btn btn-primary" onclick="openParcelModal()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v10M3 8h10"/></svg>Add parcel</button>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:16px 20px 0">
+    <div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+      <div style="font-size:28px;font-weight:700;color:var(--sky-lt)">${scoped.length}</div>
+      <div style="font-size:11px;color:var(--fog);margin-top:2px">Parcels tracked</div>
+    </div>
+    <div style="background:rgba(40,168,112,.08);border:1px solid rgba(40,168,112,.25);border-radius:10px;padding:14px 16px">
+      <div style="font-size:28px;font-weight:700;color:var(--green)">${noticed}<span style="font-size:14px;color:var(--fog);font-weight:400"> / ${scoped.length}</span></div>
+      <div style="font-size:11px;color:var(--fog);margin-top:2px">Notice sent</div>
+    </div>
+    <div style="background:${unowned?'rgba(192,57,43,.1)':'rgba(255,255,255,.04)'};border:1px solid ${unowned?'rgba(192,57,43,.3)':'var(--border)'};border-radius:10px;padding:14px 16px">
+      <div style="font-size:28px;font-weight:700;color:${unowned?'var(--red)':'var(--fog)'}">${unowned}</div>
+      <div style="font-size:11px;color:var(--fog);margin-top:2px">No owner attached yet</div>
+    </div>
+  </div>
+  <div class="toolbar" style="gap:8px;flex-wrap:wrap">
+    <div class="srch"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4"/><path d="M10 10l3 3"/></svg>
+      <input id="parc-search" placeholder="Search parcel #, address, owner…" value="${escHtml(S.parcSearch||'')}" oninput="S.parcSearch=this.value;renderParcels(document.getElementById('main'))"></div>
+    <select style="${selStyle}" onchange="S.parcStatus=this.value;renderParcels(document.getElementById('main'))">
+      <option value="">All statuses</option>
+      ${PARCEL_STATUSES.map(x=>`<option${statusF===x?' selected':''}>${x}</option>`).join('')}
+    </select>
+    <div class="tb-sp" style="flex:1"></div>
+    <span class="tb-info">${list.length} parcel${list.length!==1?'s':''}</span>
+  </div>
+  <div class="content">
+    <div class="tbl-wrap">
+      <table class="dtable">
+        <thead><tr>
+          <th style="width:140px">Parcel #</th>
+          <th style="width:190px">Location</th>
+          <th>Owners</th>
+          <th style="width:160px">Acquisition</th>
+          <th style="width:120px">Status</th>
+          <th style="width:100px">Notice sent</th>
+          <th style="width:60px"></th>
+        </tr></thead>
+        <tbody>${list.length===0?`<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--fog)">${scoped.length===0?(projF?'No parcels on this project yet. Add the first with the button above.':'No parcels tracked yet.'):'No parcels match your filters.'}</td></tr>`
+        :list.map(p=>{
+          const owners=_parcOwners(p.id);
+          const loc=p.situsAddress||((p.latitude&&p.longitude)?`${p.latitude}, ${p.longitude}`:'');
+          return `<tr>
+            <td class="td-mono" style="white-space:nowrap"><div class="td-link" onclick="openParcelModal('${p.id}')">${escHtml(p.parcelNumber||'—')}</div></td>
+            <td style="font-size:12px;color:var(--mist)">${loc?escHtml(loc):'<span style="color:var(--fog);font-style:italic">Not located</span>'}${(!p.situsAddress&&p.latitude&&p.longitude)?'<div style="font-size:10px;color:var(--fog)">coordinates</div>':''}</td>
+            <td>${owners.length===0?'<span style="color:var(--red);font-size:12px">⚠ No owner attached</span>'
+              :owners.map(o=>`<span class="badge b-dark" style="margin:1px 3px 1px 0;cursor:pointer" onclick="selectStake('${o.stake.id}');setView('stakeholders')">${escHtml(dispName(o.stake))}${o.link.ownershipRole&&o.link.ownershipRole!=='Owner'?' · '+escHtml(o.link.ownershipRole):''}</span>`).join('')}</td>
+            <td style="font-size:12px;color:var(--mist)">${escHtml(p.acquisitionType||'—')}</td>
+            <td><span class="badge ${_parcStatusColor(p.status||'Not started')}">${escHtml(p.status||'Not started')}</span></td>
+            <td class="td-mono" style="font-size:12px;color:${p.noticeDate?'var(--mist)':'var(--fog)'}">${p.noticeDate?fmt(p.noticeDate):'—'}</td>
+            <td><button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="openParcelModal('${p.id}')">Edit</button></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>
+  </div>`;
+  requestAnimationFrame(()=>{
+    const si=document.getElementById('parc-search');
+    if(si&&S.parcSearch){si.focus();si.setSelectionRange(si.value.length,si.value.length);}
+  });
+}
+
+function openParcelModal(id){
+  S.editId=id||null;
+  const p=id?(DB.get('parcels')||[]).find(x=>String(x.id)===String(id))||{}:{};
+  const projs=DB.get('projects')||[];
+  const pF=p.projectId||S.projectFilter||'';
+  openM(id?'Edit parcel':'Add parcel',`
+  <div class="fgrid fg2f">
+    <div class="fr"><label>Project *</label><select id="f-pcp">${projs.map(x=>`<option value="${x.id}"${String(pF)===String(x.id)?' selected':''}>${escHtml(x.pid||'')} — ${escHtml(x.name||'')}</option>`).join('')}</select></div>
+    <div class="fr"><label>Parcel # *</label><input id="f-pcn" value="${escHtml(p.parcelNumber||'')}" placeholder="e.g. 13-112-0002"></div>
+  </div>
+  <div class="fr"><label>Situs address <span style="font-weight:400;color:var(--fog)">(leave blank if the parcel has no address yet)</span></label><input id="f-pca" value="${escHtml(p.situsAddress||'')}"></div>
+  <div class="fgrid fg2f">
+    <div class="fr"><label>Latitude</label><input id="f-pclat" value="${escHtml(p.latitude||'')}" placeholder="40.5231"></div>
+    <div class="fr"><label>Longitude</label><input id="f-pclng" value="${escHtml(p.longitude||'')}" placeholder="-111.9385"></div>
+  </div>
+  <div style="font-size:11px;color:var(--fog);margin:-4px 0 10px">Unsubdivided land with no dwelling can only be designated by coordinates — enter them here and the parcel still tracks normally.</div>
+  <div class="fgrid fg3f">
+    <div class="fr"><label>Acquisition</label><select id="f-pcacq">${PARCEL_ACQ.map(a=>`<option value="${escHtml(a)}"${(p.acquisitionType||'')===a?' selected':''}>${a||'—'}</option>`).join('')}</select></div>
+    <div class="fr"><label>Status</label><select id="f-pcst">${PARCEL_STATUSES.map(x=>`<option${(p.status||'Not started')===x?' selected':''}>${x}</option>`).join('')}</select></div>
+    <div class="fr"><label>Notice sent</label><input type="date" id="f-pcnd" value="${p.noticeDate||''}"></div>
+  </div>
+  <div class="fr"><label>Notes</label><textarea id="f-pcno" style="height:56px">${escHtml(p.notes||'')}</textarea></div>
+  <div class="fsec">Property owners</div>
+  <div id="f-pc-owners">${id?_parcelOwnerRowsHTML(id):'<div style="font-size:12px;color:var(--fog);padding:4px 0">Save the parcel first, then attach its owners.</div>'}</div>`,
+  `${id?`<button class="btn btn-danger btn-sm" onclick="delParcel('${id}')">Delete</button>`:''}
+  <button class="btn" onclick="closeM()">Cancel</button>
+  <button class="btn btn-primary" onclick="saveParcel()">${id?'Save changes':'Add parcel'}</button>`,true);
+}
+
+// Owner rows live inside the parcel modal and re-render in place, so attaching
+// three co-owners doesn't cost three modal round-trips.
+function _parcelOwnerRowsHTML(parcelId){
+  const owners=_parcOwners(parcelId);
+  let html=owners.map(o=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+    <span style="flex:1;font-size:13px;color:var(--mist)">${escHtml(dispName(o.stake))}${o.stake.org?` <span style="color:var(--fog)">· ${escHtml(o.stake.org)}</span>`:''}</span>
+    <select style="font-size:11px;padding:3px 6px;background:var(--navy-mid);border:1px solid var(--border);border-radius:4px;color:var(--white)" onchange="setOwnerRole('${o.link.id}',this.value)">
+      ${OWNER_ROLES.map(r=>`<option${(o.link.ownershipRole||'Owner')===r?' selected':''}>${r}</option>`).join('')}
+    </select>
+    <span onclick="detachOwner('${o.link.id}','${parcelId}')" title="Remove from this parcel" style="cursor:pointer;color:var(--fog);font-size:16px">×</span>
+  </div>`).join('');
+  if(!owners.length) html='<div style="font-size:12px;color:var(--red);padding:4px 0">⚠ No owner attached yet.</div>';
+  const parcel=(DB.get('parcels')||[]).find(x=>String(x.id)===String(parcelId))||{};
+  const linked=(DB.get('project_stakeholders')||[]).filter(l=>String(l.projectId)===String(parcel.projectId))
+    .map(l=>String(l.stakeholderId));
+  const already=_parcOwners(parcelId).map(o=>String(o.stake.id));
+  const opts=DB.getActive('stakeholders')
+    .filter(s=>linked.indexOf(String(s.id))>-1&&already.indexOf(String(s.id))<0)
+    .sort((a,b)=>((a.lastName||'')+(a.firstName||'')).localeCompare((b.lastName||'')+(b.firstName||'')));
+  html+=`<div style="display:flex;gap:8px;align-items:center;margin-top:10px">
+    <select id="f-pc-addowner" style="flex:1;font-size:12px;padding:6px 8px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)">
+      <option value="">${opts.length?'— Add an owner from this project —':'— No unattached contacts on this project —'}</option>
+      ${opts.map(s=>`<option value="${s.id}">${escHtml(dispName(s))}${s.org?' — '+escHtml(s.org):''}</option>`).join('')}
+    </select>
+    <button class="btn btn-sm" onclick="attachOwner('${parcelId}')">Attach</button>
+  </div>
+  <div style="font-size:11px;color:var(--fog);margin-top:6px">Owners come from the contacts already on this project. Add a new property owner from the Contacts view first, then attach them here.</div>`;
+  return html;
+}
+
+async function attachOwner(parcelId){
+  const sel=document.getElementById('f-pc-addowner');
+  const sid=sel?sel.value:'';
+  if(!sid){ showToast('Pick a contact to attach.','warn'); return; }
+  const all=DB.get('parcel_owners')||[];
+  if(all.some(l=>String(l.parcelId)===String(parcelId)&&String(l.stakeholderId)===String(sid))){
+    showToast('That contact is already on this parcel.','warn'); return;
+  }
+  all.push({id:DB.uid(),parcelId:String(parcelId),stakeholderId:String(sid),ownershipRole:'Owner'});
+  await DB.set('parcel_owners',all);
+  const box=document.getElementById('f-pc-owners');
+  if(box) box.innerHTML=_parcelOwnerRowsHTML(parcelId);
+}
+
+async function detachOwner(linkId,parcelId){
+  await DB.set('parcel_owners',(DB.get('parcel_owners')||[]).filter(l=>String(l.id)!==String(linkId)));
+  const box=document.getElementById('f-pc-owners');
+  if(box) box.innerHTML=_parcelOwnerRowsHTML(parcelId);
+}
+
+async function setOwnerRole(linkId,role){
+  const all=DB.get('parcel_owners')||[];
+  const i=all.findIndex(l=>String(l.id)===String(linkId));
+  if(i<0) return;
+  all[i]={...all[i],ownershipRole:role};
+  await DB.set('parcel_owners',all);
+}
+
+async function saveParcel(){
+  const v=id=>document.getElementById(id)?.value||'';
+  const projId=v('f-pcp'), num=v('f-pcn').trim();
+  if(!projId){ alert('Project required.'); return; }
+  if(!num){ alert('Parcel number required.'); return; }
+
+  // The whole point of the table is that one parcel is one row. Catch the
+  // duplicate here so a typo'd second entry never splits the parcel in two.
+  const dupe=(DB.get('parcels')||[]).find(p=>String(p.projectId)===String(projId)
+    && (p.parcelNumber||'').trim().toLowerCase()===num.toLowerCase()
+    && String(p.id)!==String(S.editId||''));
+  if(dupe){ alert('Parcel '+num+' already exists on this project. Open that record instead of creating a second one.'); return; }
+
+  const data={
+    id:S.editId||DB.uid(), projectId:projId, parcelNumber:num,
+    situsAddress:v('f-pca').trim(), latitude:v('f-pclat').trim(), longitude:v('f-pclng').trim(),
+    acquisitionType:v('f-pcacq'), status:v('f-pcst')||'Not started',
+    noticeDate:v('f-pcnd')||null, notes:v('f-pcno')
+  };
+  const all=DB.get('parcels')||[];
+  if(S.editId){ const i=all.findIndex(x=>String(x.id)===String(S.editId)); if(i>-1)all[i]=data; else all.push(data); }
+  else all.push(data);
+  await DB.set('parcels',all);
+  closeM(); S.editId=null; refreshBadges(); renderParcels(document.getElementById('main'));
+}
+
+async function delParcel(id){
+  if(!confirm('Delete this parcel? Its owner links go too. The contacts themselves are not affected.')) return;
+  await DB.set('parcel_owners',(DB.get('parcel_owners')||[]).filter(l=>String(l.parcelId)!==String(id)));
+  await DB.set('parcels',(DB.get('parcels')||[]).filter(p=>String(p.id)!==String(id)));
+  closeM(); S.editId=null; refreshBadges(); renderParcels(document.getElementById('main'));
+}
+
 function renderCommitments(m) {
   const projF = S.projectFilter || '';
   const today = localToday();

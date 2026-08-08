@@ -114,6 +114,18 @@ and `delMeeting`'s cascade), but since nothing writes it and no row carries it,
 re-introduce the cascade without checking it first: `delMeeting` deletes every
 interaction sharing the meeting id.
 
+### Parcel ID (`pi_stakeholders.parcel_id` → `parcelId`)
+The field a ROW/property-owner campaign is tracked by. Mobile (`#add-parcel`) and
+the importer (auto-detects `parcel` / `apn` / `pin` headers) always wrote it, and
+the stakeholder detail pane and CSV export always displayed it — but **index.html
+had no input for it**. `saveStake()` read `v('f-parc')` and no element with that
+id existed, so `v()` returned `''` and **every desktop save silently blanked the
+parcel id**. Import a few dozen parcel numbers, edit one of those contacts on the
+desktop, and the number was gone with no warning. Fixed Aug 2026: the input now
+sits under Mailing address, and `parcelId` was added to the search filter in the
+master list, the stakeholders view and `filterMasterList()` so a campaign can be
+worked by parcel number. Guarded by `test/tests/12-parcel.test.js`.
+
 ### Project scoping per view
 `S.projectFilter` is the shared scope, written by the project select in the
 topbar/filter bar of **interactions, followups, deliverables, reports, meetings

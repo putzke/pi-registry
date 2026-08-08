@@ -3832,7 +3832,7 @@ function renderMaster(el){
   const search=(S.masterSearch||document.getElementById('ms-search')?.value||'').toLowerCase();
   const typeF=S.masterType||'';
   if(masterOnly){const ps=DB.get('project_stakeholders');stakes=stakes.filter(s=>ps.filter(x=>String(x.stakeholderId)===String(s.id)).length>=2);}
-  if(search)stakes=stakes.filter(s=>(s.firstName+' '+s.lastName+' '+(s.org||'')).toLowerCase().includes(search));
+  if(search)stakes=stakes.filter(s=>(s.firstName+' '+s.lastName+' '+(s.org||'')+' '+(s.parcelId||'')).toLowerCase().includes(search));
   if(typeF)stakes=stakes.filter(s=>s.type===typeF);
   if(S.msOrgOnly)stakes=stakes.filter(s=>isOrgContact(s));
   // Sort by last name
@@ -3864,7 +3864,7 @@ function renderMaster(el){
   </div>
   <div class="toolbar">
     <div class="srch"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4"/><path d="M10 10l3 3"/></svg>
-      <input id="ms-search" placeholder="Search name, org…" oninput="filterMasterList()"></div>
+      <input id="ms-search" placeholder="Search name, org, parcel…" oninput="filterMasterList()"></div>
     <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mist);cursor:pointer;white-space:nowrap"><input type="checkbox" id="ms-org-only" onchange="S.msOrgOnly=this.checked;renderMaster(document.getElementById('main'))" style="accent-color:var(--sky)"${S.msOrgOnly?' checked':''}> Org only</label>
     <select class="fsel" id="ms-type" onchange="S.masterType=this.value;renderMaster(document.getElementById('main'))">
       <option value="">All types</option>
@@ -3975,7 +3975,7 @@ function renderStakeholders(el){
   const projLabel=S.projectFilter?(projs.find(p=>p.id===S.projectFilter)||{}).name||'':'';
   const search=(S.stakeSearch||document.getElementById('sk-search')?.value||'').toLowerCase();
   const typeF=S.stakeType||'';
-  if(search)listItems=listItems.filter(s=>(s.firstName+' '+s.lastName+' '+(s.org||'')).toLowerCase().includes(search));
+  if(search)listItems=listItems.filter(s=>(s.firstName+' '+s.lastName+' '+(s.org||'')+' '+(s.parcelId||'')).toLowerCase().includes(search));
   if(typeF)listItems=listItems.filter(s=>s.type===typeF);
   if(S.skOrgOnly)listItems=listItems.filter(s=>isOrgContact(s));
   if(S.skLEP)listItems=listItems.filter(s=>s.lep);
@@ -4029,7 +4029,7 @@ function renderStakeholders(el){
   </div>` : `
   <div class="toolbar">
     <div class="srch"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4"/><path d="M10 10l3 3"/></svg>
-      <input id="sk-search" placeholder="Search name, org…" value="${S.stakeSearch||''}" oninput="S.stakeSearch=this.value;var _ss=this.selectionStart,_se=this.selectionEnd;renderStakeholders(document.getElementById('main'));var _si=document.getElementById('sk-search');if(_si){_si.focus();try{_si.setSelectionRange(_ss,_se);}catch(e){}}"></div>
+      <input id="sk-search" placeholder="Search name, org, parcel…" value="${S.stakeSearch||''}" oninput="S.stakeSearch=this.value;var _ss=this.selectionStart,_se=this.selectionEnd;renderStakeholders(document.getElementById('main'));var _si=document.getElementById('sk-search');if(_si){_si.focus();try{_si.setSelectionRange(_ss,_se);}catch(e){}}"></div>
     <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mist);cursor:pointer;white-space:nowrap"><input type="checkbox" id="sk-org-only" onchange="S.skOrgOnly=this.checked;renderStakeholders(document.getElementById('main'))" style="accent-color:var(--sky)"${S.skOrgOnly?' checked':''}> Org only</label>
     <select class="fsel" id="sk-type" onchange="S.stakeType=this.value;renderStakeholders(document.getElementById('main'))">
       <option value="">All types</option>
@@ -4475,7 +4475,7 @@ function toggleMasterSelectAll() {
   let filtered = allStakes;
   if (S.masterSearch) {
     const q = S.masterSearch.toLowerCase();
-    filtered = filtered.filter(s => (s.firstName+' '+s.lastName+' '+(s.org||'')).toLowerCase().includes(q));
+    filtered = filtered.filter(s => (s.firstName+' '+s.lastName+' '+(s.org||'')+' '+(s.parcelId||'')).toLowerCase().includes(q));
   }
   if (S.masterType === '__internal') {
     const ps = DB.get('project_stakeholders');
@@ -6275,6 +6275,7 @@ async function openStakeModal(id){
     <div class="fr"><label>Phone</label><input id="f-ph" value="${s.phone||''}"></div>
   </div>
   <div class="fr"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Mailing address</span><span onclick="clearStakeAddress()" title="Remove the saved address" style="cursor:pointer;font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--fog)">✕ Clear</span></label><input id="f-ad" value="${escHtml(s.address||'')}"></div>
+  <div class="fr"><label>Parcel ID <span style="font-weight:400;color:var(--fog)">(for property owners — APN / PIN)</span></label><input id="f-parc" value="${escHtml(s.parcelId||'')}" placeholder="e.g. 13-112-0002"></div>
   <div class="fsec">Classification</div>
   <div class="fgrid fg3f">
     <div class="fr"><label>Stakeholder type</label><select id="f-st">${STAKE_TYPES.map(t=>`<option${s.type===t?' selected':''}>${t}</option>`).join('')}</select></div>

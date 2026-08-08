@@ -158,8 +158,16 @@ there was nothing to count.
   misses a notice sweep.
 - Search matches parcel number, situs address AND owner names.
 - Covered by `test/tests/13-parcels.test.js` (18 checks, both directions).
+- **Mobile reads, desktop manages** — same rule as follow-up assignment. Mobile
+  loads both tables and shows a contact's parcels (number, location, status,
+  notice date) read-only on the detail screen, which is what you want standing at
+  the parcel. Its free-text parcel input was removed for the same
+  two-sources-of-truth reason as the desktop's, and `_mobExistingParcelId()`
+  carries the column forward so an edit can't blank it.
 - **Not yet built:** importer support, map layer, report section, portal
   exposure. Manual entry is the stated normal workflow, so those are follow-ups.
+  Importer → `pi_parcels` is the highest-value one: an import currently writes
+  only the contact-level reference, not real parcel records.
 
 ### Project scoping per view
 `S.projectFilter` is the shared scope, written by the project select in the

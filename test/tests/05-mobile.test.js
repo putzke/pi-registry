@@ -87,6 +87,35 @@ module.exports = {
       t.ok(kept, 'a mobile edit reached the database');
       t.eq(kept && kept.a, before, 'the edit preserved the assignment');
 
+      // ── parcels: mobile reads them, it does not manage them ─────────────
+      // Same rule as follow-up assignment. Letting the phone type a parcel into
+      // the contact column would recreate the two-sources-of-truth problem the
+      // desktop input was removed to end.
+      const parc = await app.page.evaluate(() => ({
+        loadsParcels: Array.isArray(_syncCache.parcels),
+        loadsOwners: Array.isArray(_syncCache.parcel_owners),
+        hasInput: !!document.getElementById('add-parcel'),
+        mapsParcels: !!(SB_TO_INT.pi_parcels && SB_TO_INT.pi_parcel_owners),
+      }));
+      t.ok(parc.loadsParcels && parc.loadsOwners, 'mobile loads both parcel tables');
+      t.ok(parc.mapsParcels, 'and maps their columns');
+      t.eq(parc.hasInput, false, 'the contact form has no free-text parcel input');
+
+      // An edit must carry the stored parcel reference forward, not blank it —
+      // the element is gone, and reading a missing one is how this column wiped
+      // itself on the desktop.
+      const st = (await t.sql('select id from pi_stakeholders order by id limit 1'))[0];
+      await t.sql('update pi_stakeholders set parcel_id=$1 where id=$2',
+                  ['13-112-0777', st.id]);
+      const carried = await app.page.evaluate(id => {
+        window._editStakeId = id;
+        // Through _syncCache — DB.get() hands back a copy.
+        const cur = _syncCache.stakeholders.find(x => String(x.id) === id);
+        if (cur) cur.parcelId = '13-112-0777';
+        return _mobExistingParcelId();
+      }, String(st.id));
+      t.eq(carried, '13-112-0777', 'a mobile edit carries the parcel reference forward');
+
       t.eq(app.errors, [], 'no page errors on boot');
     } finally {
       await app.close();

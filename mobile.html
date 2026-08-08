@@ -718,10 +718,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
           <label class="form-label">Phone <span style="color:var(--red)">*</span></label>
           <input type="tel" class="form-input" id="add-phone" placeholder="(xxx) xxx-xxxx">
         </div>
-        <div class="form-group">
-          <label class="form-label">Parcel ID <span style="color:var(--text3);font-weight:400">(optional)</span></label>
-          <input type="text" class="form-input" id="add-parcel" placeholder="e.g. 13-112-0002">
-        </div>
+        
         <div class="form-group">
           <label class="form-label">Stakeholder type</label>
           <select class="form-input form-select" id="add-type">
@@ -963,11 +960,23 @@ const SB_TABLES = {
   meetings:             'pi_meetings',
   issues:               'pi_issues',
   issue_interactions:   'pi_issue_interactions',
-  dismissed_pairs:      'pi_dismissed_pairs'
+  dismissed_pairs:      'pi_dismissed_pairs',
+  parcels:              'pi_parcels',
+  parcel_owners:        'pi_parcel_owners'
 };
 
 // Map our internal field names to Supabase column names
 const SB_TO_INT = {
+  pi_parcels: {
+    id:'id', projectId:'project_id', parcelNumber:'parcel_number',
+    situsAddress:'situs_address', latitude:'latitude', longitude:'longitude',
+    acquisitionType:'acquisition_type', status:'status', noticeDate:'notice_date',
+    notes:'notes'
+  },
+  pi_parcel_owners: {
+    id:'id', parcelId:'parcel_id', stakeholderId:'stakeholder_id',
+    ownershipRole:'ownership_role'
+  },
   pi_projects: {
     id:'id', name:'name', pid:'pid', client:'client', type:'project_type',
     county:'county', phase:'phase', status:'status', startDate:'start_date',
@@ -1159,7 +1168,7 @@ async function loadAllData() {
   // read anywhere in this file, so every boot fired a doomed request at
   // /rest/v1/undefined — a wasted round trip on cellular plus a console error
   // that masked real ones.
-  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','dismissed_pairs'];
+  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','dismissed_pairs','parcels','parcel_owners'];
   await Promise.all(tables.map(async t => { _syncCache[t] = await sbGet(t); }));
 }
 
@@ -1601,7 +1610,24 @@ function showContactDetail(id){
       ${s.phone?`<div class="list-item" style="cursor:default"><div style="font-size:12px;color:var(--text3);width:70px">Phone</div><div style="font-size:14px">${s.phone}</div></div>`:''}
       ${s.email?`<div class="list-item" style="cursor:default"><div style="font-size:12px;color:var(--text3);width:70px">Email</div><div style="font-size:14px;word-break:break-all">${s.email}</div></div>`:''}
       ${s.address?`<div class="list-item" style="cursor:default"><div style="font-size:12px;color:var(--text3);width:70px">Address</div><div style="font-size:14px">${s.address}</div></div>`:''}
-      ${s.parcelId?`<div class="list-item" style="cursor:default"><div style="font-size:12px;color:var(--text3);width:70px">Parcel ID</div><div style="font-size:14px">${s.parcelId}</div></div>`:''}
+      ${s.parcelId?`<div class="list-item" style="cursor:default"><div style="font-size:12px;color:var(--text3);width:70px">Parcel ref</div><div style="font-size:14px">${s.parcelId}</div></div>`:''}
+      ${(function(){
+        const links=(DB.get('parcel_owners')||[]).filter(l=>String(l.stakeholderId)===String(s.id));
+        if(!links.length) return '';
+        const parcels=DB.get('parcels')||[];
+        const rows=links.map(l=>{
+          const p=parcels.find(x=>String(x.id)===String(l.parcelId));
+          if(!p) return '';
+          const where=p.situsAddress||((p.latitude&&p.longitude)?p.latitude+', '+p.longitude:'');
+          return '<div style="font-size:14px">'+(p.parcelNumber||'?')
+            +(l.ownershipRole&&l.ownershipRole!=='Owner'?' <span style="color:var(--text3);font-size:12px">('+l.ownershipRole+')</span>':'')
+            +(where?'<div style="font-size:12px;color:var(--text3)">'+where+'</div>':'')
+            +(p.status?'<div style="font-size:12px;color:var(--text3)">'+p.status+(p.noticeDate?' · noticed '+fmtShort(p.noticeDate):'')+'</div>':'')
+            +'</div>';
+        }).filter(Boolean).join('<div style="height:6px"></div>');
+        if(!rows) return '';
+        return '<div class="list-item" style="cursor:default;align-items:flex-start"><div style="font-size:12px;color:var(--text3);width:70px;flex-shrink:0">Parcels</div><div>'+rows+'</div></div>';
+      })()}
     </div>
     <!-- Projects -->
     ${ps.length>0?`<div class="section-hdr">Projects</div>
@@ -2156,7 +2182,7 @@ async function saveStakeholder(){
     firstName:fn,
     lastName:ln,
     org:document.getElementById('add-org').value.trim(),
-    parcelId:document.getElementById('add-parcel').value.trim(),
+    parcelId:'',
     title:document.getElementById('add-title').value.trim(),
     email,
     phone,
@@ -2215,7 +2241,6 @@ function openEditStakeholder(id){
   document.getElementById('add-title').value=s.title||'';
   document.getElementById('add-email').value=s.email||'';
   document.getElementById('add-phone').value=s.phone||'';
-  document.getElementById('add-parcel').value=s.parcelId||'';
   document.getElementById('add-type').value=s.type||'Property Owner';
   if(document.getElementById('add-lep'))document.getElementById('add-lep').checked=!!s.lep;
   if(document.getElementById('add-underserved'))document.getElementById('add-underserved').checked=!!s.underserved;
@@ -2229,6 +2254,16 @@ function openEditStakeholder(id){
   btn.textContent='Save changes';
   btn.onclick=updateStakeholder;
   openSheet('sheet-add-stakeholder');
+}
+
+// pi_stakeholders.parcel_id has no input on mobile any more — pi_parcels is the
+// record. The column is still written by the importer and still displays, so an
+// edit carries the stored value forward instead of clearing it.
+function _mobExistingParcelId(){
+  const id=window._editStakeId;
+  if(!id) return '';
+  const cur=(DB.get('stakeholders')||[]).find(x=>String(x.id)===String(id));
+  return (cur&&cur.parcelId)||'';
 }
 
 async function updateStakeholder(){
@@ -2255,7 +2290,7 @@ async function updateStakeholder(){
     title:document.getElementById('add-title').value.trim(),
     email,
     phone,
-    parcelId:document.getElementById('add-parcel').value.trim(),
+    parcelId:_mobExistingParcelId(),
     type:document.getElementById('add-type').value,
     lep:document.getElementById('add-lep')?.checked||false,
     underserved:document.getElementById('add-underserved')?.checked||false,

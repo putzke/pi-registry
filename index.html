@@ -4994,7 +4994,7 @@ function renderStakeDetail(s,link){
       <div class="fi"><div class="fl">Phone</div><div class="fv">${s.phone||'—'}</div></div>
     </div>
     ${s.address?`<div style="margin-bottom:14px"><div class="fl">Address</div><div class="fv">${s.address}</div></div>`:''}
-    ${s.parcelId?`<div style="margin-bottom:14px"><div class="fl">Parcel ID</div><div class="fv">${s.parcelId}</div></div>`:''}
+    ${s.parcelId?`<div style="margin-bottom:14px"><div class="fl">Parcel ID <span style="font-weight:400;color:var(--fog);text-transform:none;letter-spacing:0">(imported reference — manage in Parcels)</span></div><div class="fv">${escHtml(s.parcelId)}</div></div>`:''}
     ${(function(){
       const held=_parcelsFor(s.id);
       if(!held.length) return '';
@@ -6312,7 +6312,6 @@ async function openStakeModal(id){
     <div class="fr"><label>Phone</label><input id="f-ph" value="${s.phone||''}"></div>
   </div>
   <div class="fr"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Mailing address</span><span onclick="clearStakeAddress()" title="Remove the saved address" style="cursor:pointer;font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--fog)">✕ Clear</span></label><input id="f-ad" value="${escHtml(s.address||'')}"></div>
-  <div class="fr"><label>Parcel ID <span style="font-weight:400;color:var(--fog)">(for property owners — APN / PIN)</span></label><input id="f-parc" value="${escHtml(s.parcelId||'')}" placeholder="e.g. 13-112-0002"></div>
   <div class="fsec">Classification</div>
   <div class="fgrid fg3f">
     <div class="fr"><label>Stakeholder type</label><select id="f-st">${STAKE_TYPES.map(t=>`<option${s.type===t?' selected':''}>${t}</option>`).join('')}</select></div>
@@ -6459,6 +6458,17 @@ function _initLegacyAutocomplete(input) {
   });
 }
 
+// pi_stakeholders.parcel_id has no input any more — pi_parcels is the record and
+// a contact can hold several parcels. The column stays because the importer
+// auto-detects parcel/apn/pin headers, mobile writes it, and the CSV export
+// carries it, so the value is carried forward rather than overwritten with the
+// empty string a missing field would yield.
+function _existingParcelId(){
+  if(!S.editId) return '';
+  const cur=(DB.get('stakeholders')||[]).find(x=>String(x.id)===String(S.editId));
+  return (cur&&cur.parcelId)||'';
+}
+
 async function saveStake(){
   const v=id=>document.getElementById(id)?.value||'';
   const rawPhone=v('f-ph');
@@ -6468,7 +6478,7 @@ async function saveStake(){
   _markF('f-ph',phoneErr);
   _markF('f-em',emailErr);
   if(phoneErr||emailErr)return;
-  const data={id:S.editId||DB.uid(),firstName:document.getElementById('f-fn')?.value||'',lastName:document.getElementById('f-ln')?.value||'',org:v('f-org'),title:v('f-ti'),email:v('f-em'),phone:rawPhone.trim()?formatPhone(cleanPhone(rawPhone)):'',address:v('f-ad'),parcelId:v('f-parc'),type:v('f-st'),lep:!!(document.getElementById('f-slep')?.checked),underserved:!!(document.getElementById('f-sund')?.checked),isMaster:!!(document.getElementById('f-smaster')?.checked),notes:v('f-no'),isAnonymous:false};
+  const data={id:S.editId||DB.uid(),firstName:document.getElementById('f-fn')?.value||'',lastName:document.getElementById('f-ln')?.value||'',org:v('f-org'),title:v('f-ti'),email:v('f-em'),phone:rawPhone.trim()?formatPhone(cleanPhone(rawPhone)):'',address:v('f-ad'),parcelId:_existingParcelId(),type:v('f-st'),lep:!!(document.getElementById('f-slep')?.checked),underserved:!!(document.getElementById('f-sund')?.checked),isMaster:!!(document.getElementById('f-smaster')?.checked),notes:v('f-no'),isAnonymous:false};
   if(!data.firstName&&!data.lastName&&!data.org){alert('First and last name, or Organization name required.');return}
 
   // ── Duplicate detection (new contacts only) ───────────────────

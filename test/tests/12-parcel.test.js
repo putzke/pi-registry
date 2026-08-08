@@ -26,35 +26,40 @@ module.exports = {
         (DB.get('stakeholders').find(s => String(s.id) === id) || {}).parcelId, String(target.id));
       t.eq(loaded, '13-112-0002', 'the parcel id loads into the cache');
 
-      // ── the edit modal must show it ─────────────────────────────────────
-      const shown = await app.page.evaluate(async id => {
+      // ── the modal no longer offers an editable field ────────────────────
+      // pi_parcels is the record now, and one text box on the contact can only
+      // ever be wrong for an owner holding several parcels. Two places to record
+      // the same fact diverge.
+      const hasInput = await app.page.evaluate(async id => {
         await openStakeModal(id);
-        const el = document.getElementById('f-parc');
-        return el ? el.value : null;
+        return !!document.getElementById('f-parc');
       }, String(target.id));
-      t.eq(shown, '13-112-0002', 'the modal renders the parcel id in an editable field');
+      t.eq(hasInput, false, 'the stakeholder modal has no parcel input');
 
-      // ── and saving without touching it must not blank it ────────────────
+      // ── but a save must not blank the column ────────────────────────────
+      // Reading a missing element yields '', which is exactly how this field
+      // silently wiped itself before. The value has to be carried forward.
       await app.page.evaluate(() => { saveStake(); });
-      await app.page.waitForTimeout(1200);
+      await app.page.waitForTimeout(1400);
       let row = (await t.sql('select parcel_id p from pi_stakeholders where id=$1',
                              [target.id]))[0];
-      t.eq(row.p, '13-112-0002', 'an unrelated save leaves the parcel id intact');
+      t.eq(row.p, '13-112-0002', 'saving a contact preserves its imported parcel id');
 
-      // ── editing it writes through ───────────────────────────────────────
-      await app.page.evaluate(async id => {
-        await openStakeModal(id);
-        document.getElementById('f-parc').value = '13-112-0099';
-        saveStake();
+      // It still displays, labelled as the reference value it now is.
+      const pane = await app.page.evaluate(id => {
+        closeM();
+        setView('master');
+        selectStake(id);
+        renderMaster(document.getElementById('main'));
+        return document.getElementById('main').innerHTML;
       }, String(target.id));
-      await app.page.waitForTimeout(1200);
-      row = (await t.sql('select parcel_id p from pi_stakeholders where id=$1', [target.id]))[0];
-      t.eq(row.p, '13-112-0099', 'a changed parcel id persists');
+      t.ok(/13-112-0002/.test(pane), 'the detail pane still shows it');
+      t.ok(/imported reference/i.test(pane), 'and marks it as a reference, not the record');
 
       // ── searchable, so a campaign can be worked by parcel ────────────────
       const found = await app.page.evaluate(() => {
         setView('master');
-        S.masterSearch = '13-112-0099';
+        S.masterSearch = '13-112-0002';
         renderMaster(document.getElementById('main'));
         const stakes = DB.getActive('stakeholders');
         const q = S.masterSearch.toLowerCase();

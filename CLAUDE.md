@@ -136,8 +136,14 @@ typed once per owner, so a single typo split the parcel into two groups that
 never appeared together again. **And the compliance unit is the parcel**: "was
 every affected parcel's owner noticed, and when" is a count over parcels, and
 there was nothing to count.
-- `pi_stakeholders.parcel_id` is deliberately KEPT — it still displays, exports
-  and imports. It is now a convenience label; `pi_parcels` is the record.
+- `pi_stakeholders.parcel_id` is deliberately KEPT as a column — it still
+  displays (labelled "imported reference"), exports, and is written by the
+  importer and mobile. But the **desktop input was removed** the same day it was
+  added: two places to record the same fact diverge, and one text box can only
+  ever be wrong for an owner holding several parcels. `saveStake()` now carries
+  the value forward via `_existingParcelId()` rather than reading the missing
+  element — reading it would return `''` and silently blank the column, which is
+  precisely the bug that was fixed hours earlier.
 - **`pi_parcels_proj_number_uniq`** on `(project_id, lower(trim(parcel_number)))`
   is the typo guard, enforced in the database as well as in `saveParcel()`. That
   duplicate-splitting is the failure the table exists to prevent.

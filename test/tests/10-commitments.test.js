@@ -20,7 +20,12 @@ module.exports = {
       t.gt(totals.length, 1, 'seed has commitments across more than one project');
       const grand = totals.reduce((a, r) => a + r.n, 0);
 
-      await app.page.evaluate(() => { S.projectFilter = null; setView('commitments'); });
+      // The status filter defaults to "Open & overdue" (see below), so widen it
+      // to All statuses first — these checks are about the PROJECT selector.
+      await app.page.evaluate(() => {
+        S.projectFilter = null; setView('commitments');
+        S.commStatus = ''; renderCommitments(document.getElementById('main'));
+      });
       await app.page.waitForTimeout(200);
 
       const sel = () => app.page.evaluate(() => {
@@ -65,6 +70,70 @@ module.exports = {
       await app.page.waitForTimeout(200);
       v = await sel();
       t.ok(v.count.includes(String(grand)), 'selecting All projects restores the full list');
+
+      // ── status filter: the nav badge has to be reachable ────────────────
+      // The badge counts open + overdue. The filter select was built from
+      // COMM_STATUSES (['Open','Fulfilled']), so "Overdue" could not be picked
+      // and no single choice matched the badge — an overdue commitment was
+      // counted in the sidebar and invisible in every selectable filter.
+      const stored = (await t.sql(`
+        select count(*) filter (where status='Open')::int open_stored,
+               count(*) filter (where status='Open' and due_date < current_date)::int overdue,
+               count(*) filter (where status='Fulfilled')::int fulfilled
+          from pi_commitments`))[0];
+      t.gt(stored.overdue, 0, 'seed has at least one overdue commitment');
+      const open = stored.open_stored - stored.overdue;   // Open but not yet past due
+
+      const view = () => app.page.evaluate(() => {
+        const s = [...document.querySelectorAll('#main select')]
+          .find(x => /All statuses/.test(x.innerHTML));
+        const txt = document.getElementById('main').textContent;
+        return {
+          value: s ? s.value : null,
+          options: s ? [...s.options].map(o => o.value) : [],
+          labels: s ? [...s.options].map(o => o.text) : [],
+          shown: (/(\d+) commitments?/.exec(txt) || [])[1],
+          badge: (document.getElementById('nb-comm') || {}).textContent,
+          rowsOverdue: (txt.match(/Overdue/g) || []).length,
+        };
+      });
+
+      // Arriving through the nav is the case that matters.
+      await app.page.evaluate(() => { S.projectFilter = null; setView('commitments'); });
+      await app.page.waitForTimeout(200);
+      let s = await view();
+      t.eq(s.value, 'open-overdue', 'the view opens on "Open & overdue"');
+      t.ok(s.options.includes('Overdue'), 'Overdue is now a selectable option');
+      t.ok(s.labels.some(l => /open & overdue/i.test(l)), 'so is the combined choice');
+      t.eq(s.shown, String(open + stored.overdue),
+           'the default list is exactly what the nav badge counts');
+      t.eq(s.badge, String(open + stored.overdue),
+           'and the badge agrees with it');
+      t.gt(s.rowsOverdue, 0, 'the overdue commitment is visible on arrival');
+
+      // Each narrower choice still works, and the select stops lying about it.
+      for (const [val, want] of [['Open', open], ['Overdue', stored.overdue],
+                                 ['Fulfilled', stored.fulfilled]]) {
+        await app.page.evaluate(v => {
+          const el = [...document.querySelectorAll('#main select')]
+            .find(x => /All statuses/.test(x.innerHTML));
+          el.value = v; el.dispatchEvent(new Event('change'));
+        }, val);
+        await app.page.waitForTimeout(150);
+        s = await view();
+        t.eq(s.shown, String(want), `filtering to ${val} shows ${want}`);
+        t.eq(s.value, val, `and the select still reads "${val}" after re-render`);
+      }
+
+      // Clicking the red tile is the other way in, and it used to leave the
+      // select displaying "All statuses" while showing only overdue rows.
+      await app.page.evaluate(() => {
+        S.commStatus = 'Overdue'; renderCommitments(document.getElementById('main'));
+      });
+      await app.page.waitForTimeout(150);
+      s = await view();
+      t.eq(s.value, 'Overdue', 'the tile shortcut is reflected in the select');
+      t.eq(s.shown, String(stored.overdue), 'and shows the overdue commitments');
 
       t.eq(app.errors, [], 'no page errors during the run');
     } finally {

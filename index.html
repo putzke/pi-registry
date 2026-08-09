@@ -1772,7 +1772,7 @@ function initDashRows(){
     }
   });
 }
-function setView(v){if(v==='tribal'){showToast('Tribal consultation module is not available yet.','info',2500);return;}S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.showBulkAdd=false;S.showQuickLog=false;S.showEmailPanel=false;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;S.cmtSearch='';S.cmtProj='';S.cmtStatus='';S.cmtPeriod='';S.cmtPeriodId='';S.cmtTab='comments';S.parcSearch='';S.parcStatus='';
+function setView(v){if(v==='tribal'){showToast('Tribal consultation module is not available yet.','info',2500);return;}S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.showBulkAdd=false;S.showQuickLog=false;S.showEmailPanel=false;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;S.cmtSearch='';S.cmtProj='';S.cmtStatus='';S.cmtPeriod='';S.cmtPeriodId='';S.cmtTab='comments';S.parcSearch='';S.parcStatus='';S.commStatus=COMM_FILTER_DEFAULT;S.commCat='';
   S.view=v;S.mapPicked=undefined;S.selStakeholder=null;S.selInteraction=null;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const navId=v==='commitments'?'nav-commitments':v==='comments'?'nav-comments':v==='tribal'?'nav-tribal':('nav-'+v);
@@ -1861,7 +1861,7 @@ function refreshBadges(){
   }
   // Commitments badge — open/overdue
   const today=localToday();
-  const openComm=(DB.get('commitments')||[]).filter(c=>c.status==='Open'||c.status==='Overdue').length;
+  const openComm=(DB.get('commitments')||[]).filter(c=>_commIsOutstanding(c,today)).length;
   const commEl=document.getElementById('nb-comm');
   if(commEl){commEl.textContent=openComm;commEl.classList.toggle('hide',openComm===0);}
   // Public comments badge — pending
@@ -16308,7 +16308,41 @@ async function _smapGeocodeAndRenderInEl(containerId, loadingId, errorsId, proje
 // ══════════════════════════════════════════════════════════════════
 
 const COMM_CATS = ['Access / Traffic','Agency Coordination','Cultural / Historic Resources','Drainage / Flooding','Environmental','Meeting Follow-up','Noise / Hours','Notification','Restoration / Landscaping','ROW / Property','Schedule / Timeline','Utilities / Service Interruption','Other'];
+// What a user can SET on a commitment. Overdue is deliberately not here: it is
+// derived from Open + a due date in the past, never stored, so offering it in
+// the edit modal would let someone save a status the app recomputes away.
 const COMM_STATUSES = ['Open','Fulfilled'];
+
+// What a user can FILTER by, which is a different list — and conflating the two
+// is what hid the overdue commitment. The filter select was built from
+// COMM_STATUSES, so "Overdue" could not be chosen; worse, clicking the red
+// Overdue tile set the filter to a value the select had no option for, so the
+// select displayed "All statuses" while showing only overdue rows.
+//
+// 'open-overdue' is the set the nav badge counts. It is the default because the
+// badge is how you arrive here: landing on a list that doesn't add up to the
+// number you just clicked is the whole complaint.
+const COMM_FILTERS = [
+  { v:'open-overdue', l:'Open & overdue' },
+  { v:'Open',         l:'Open' },
+  { v:'Overdue',      l:'Overdue' },
+  { v:'Fulfilled',    l:'Fulfilled' },
+];
+const COMM_FILTER_DEFAULT = 'open-overdue';
+
+// The single definition of a commitment's effective status. The nav badge, the
+// summary tiles and the filter all read it, so they cannot disagree — before
+// this, the badge counted stored status while the view promoted overdue rows on
+// its own copy, and the two agreed only by coincidence.
+function _commStatus(c, today) {
+  const t = today || localToday();
+  if (c.status === 'Open' && c.dueDate && c.dueDate < t) return 'Overdue';
+  return c.status || 'Open';
+}
+function _commIsOutstanding(c, today) {
+  const s = _commStatus(c, today);
+  return s === 'Open' || s === 'Overdue';
+}
 
 // ── PUBLIC COMMENT LOG ────────────────────────────────────────────────────────
 const CMT_METHODS=['Mail','Email','Online form','Public hearing','Comment card','Phone','In-person','Other'];
@@ -17669,19 +17703,20 @@ function renderCommitments(m) {
   const allProjs = DB.get('projects');
   const allStakes = DB.getActive('stakeholders');
 
-  // Auto-update overdue status
-  allComm.forEach(c => {
-    if (c.status === 'Open' && c.dueDate && c.dueDate < today) c.status = 'Overdue';
-  });
+  // Promote overdue rows for display. allComm is a deep copy (DB.get), so this
+  // never reaches the database — Overdue stays derived, and _commStatus is the
+  // one place that derives it.
+  allComm.forEach(c => { c.status = _commStatus(c, today); });
 
   // Filters
-  const statusF = S.commStatus || '';
+  const statusF = S.commStatus === undefined ? COMM_FILTER_DEFAULT : S.commStatus;
   const catF = S.commCat || '';
   const projFilter = projF;
 
   let filtered = allComm.filter(c => {
     if (projFilter && String(c.projectId) !== String(projFilter)) return false;
-    if (statusF && c.status !== statusF) return false;
+    if (statusF === 'open-overdue') { if (c.status !== 'Open' && c.status !== 'Overdue') return false; }
+    else if (statusF && c.status !== statusF) return false;
     if (catF && c.category !== catF) return false;
     return true;
   });
@@ -17706,20 +17741,22 @@ function renderCommitments(m) {
     <button class="btn btn-primary" onclick="openCommModal()">+ Add commitment</button>
   </div>`;
 
-  // Summary cards
+  // Summary cards. A tile is marked when the active filter INCLUDES it, so the
+  // default "Open & overdue" lights both — which is what the nav badge counts,
+  // and the point of the whole change: the list you land on has to visibly add
+  // up to the number you clicked to get here.
+  const _tileOn = s => statusF === s || (statusF === 'open-overdue' && (s === 'Open' || s === 'Overdue'));
+  const _tile = (s, bg, bd, col, n, label) => `
+    <div style="background:${bg};border:1px solid ${_tileOn(s)?col:bd};border-radius:10px;padding:14px 16px;cursor:pointer;${_tileOn(s)?'box-shadow:0 0 0 1px '+col+' inset;':''}"
+         title="Show only ${label.toLowerCase()} commitments"
+         onclick="S.commStatus='${s}';renderCommitments(document.getElementById('main'))">
+      <div style="font-size:28px;font-weight:700;color:${col}">${n}</div>
+      <div style="font-size:11px;color:var(--fog);margin-top:2px">${label}${_tileOn(s)?' ·  showing':''}</div>
+    </div>`;
   html += `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px">
-    <div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;padding:14px 16px;cursor:pointer" onclick="S.commStatus='Open';renderCommitments(document.getElementById('main'))">
-      <div style="font-size:28px;font-weight:700;color:var(--sky-lt)">${openCount}</div>
-      <div style="font-size:11px;color:var(--fog);margin-top:2px">Open</div>
-    </div>
-    <div style="background:rgba(192,57,43,.1);border:1px solid rgba(192,57,43,.3);border-radius:10px;padding:14px 16px;cursor:pointer" onclick="S.commStatus='Overdue';renderCommitments(document.getElementById('main'))">
-      <div style="font-size:28px;font-weight:700;color:var(--red)">${overdueCount}</div>
-      <div style="font-size:11px;color:var(--fog);margin-top:2px">Overdue</div>
-    </div>
-    <div style="background:rgba(40,168,112,.08);border:1px solid rgba(40,168,112,.25);border-radius:10px;padding:14px 16px;cursor:pointer" onclick="S.commStatus='Fulfilled';renderCommitments(document.getElementById('main'))">
-      <div style="font-size:28px;font-weight:700;color:var(--green)">${fulfilledCount}</div>
-      <div style="font-size:11px;color:var(--fog);margin-top:2px">Fulfilled</div>
-    </div>
+    ${_tile('Open','rgba(255,255,255,.04)','var(--border)','var(--sky-lt)',openCount,'Open')}
+    ${_tile('Overdue','rgba(192,57,43,.1)','rgba(192,57,43,.3)','var(--red)',overdueCount,'Overdue')}
+    ${_tile('Fulfilled','rgba(40,168,112,.08)','rgba(40,168,112,.25)','var(--green)',fulfilledCount,'Fulfilled')}
   </div>`;
 
   // Filter bar. The project select writes S.projectFilter — the same state the
@@ -17734,13 +17771,13 @@ function renderCommitments(m) {
     </select>
     <select style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)" onchange="S.commStatus=this.value;renderCommitments(document.getElementById('main'))">
       <option value="" ${!statusF?'selected':''}>All statuses</option>
-      ${COMM_STATUSES.map(s=>`<option value="${s}" ${statusF===s?'selected':''}>${s}</option>`).join('')}
+      ${COMM_FILTERS.map(f=>`<option value="${f.v}" ${statusF===f.v?'selected':''}>${f.l}</option>`).join('')}
     </select>
     <select style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)" onchange="S.commCat=this.value;renderCommitments(document.getElementById('main'))">
       <option value="" ${!catF?'selected':''}>All categories</option>
       ${COMM_CATS.map(c=>`<option value="${c}" ${catF===c?'selected':''}>${c}</option>`).join('')}
     </select>
-    ${statusF||catF?`<button class="btn btn-ghost btn-sm" onclick="S.commStatus='';S.commCat='';renderCommitments(document.getElementById('main'))">Clear filters</button>`:''}
+    ${statusF!==COMM_FILTER_DEFAULT||catF?`<button class="btn btn-ghost btn-sm" onclick="S.commStatus=COMM_FILTER_DEFAULT;S.commCat='';renderCommitments(document.getElementById('main'))">Reset filters</button>`:''}
     <span style="margin-left:auto;font-size:12px;color:var(--fog)">${filtered.length} commitment${filtered.length!==1?'s':''}</span>
   </div>`;
 

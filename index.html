@@ -15777,6 +15777,13 @@ function renderMapView(m) {
   var fSearch  = S.mapFSearch  || '';
   var fRole    = S.mapFRole !== undefined ? S.mapFRole : 'External';
   var colorBy  = S.mapColorBy  || 'support';
+  // Which layers are drawn. Contacts plot a MAILING address, which for an
+  // absentee owner, an LLC or three heirs is nowhere near the land — so a ROW
+  // campaign needs the parcels themselves, not the people.
+  var layer    = S.mapLayer || 'contacts';
+  var showC    = layer !== 'parcels';
+  var showP    = layer !== 'contacts';
+  var fParcSt  = S.mapFParcSt || '';
 
   var allStakes = DB.getActive('stakeholders');
   var psLinks   = DB.get('project_stakeholders');
@@ -15818,6 +15825,30 @@ function renderMapView(m) {
     ? psLinks.filter(function(x){return String(x.projectId)===String(projF);}).map(function(lk){return allStakes.find(function(x){return String(x.id)===String(lk.stakeholderId);});}).filter(function(s){return s&&s.address&&s.address.trim();})
     : allStakes.filter(function(s){return s.address&&s.address.trim();})
   ).length;
+  if (!showC) withAddr = [];
+
+  // ── parcel layer ──────────────────────────────────────────────────────────
+  // A parcel is plottable if it carries survey coordinates OR a situs address.
+  // Coordinates cost nothing — they are stored — and are the only way an
+  // unsubdivided parcel can be placed at all. A situs address has to be
+  // geocoded like any other, because the situs field deliberately does NOT
+  // auto-fill coordinates from the Places pick: a place centroid is not where
+  // an unsubdivided parcel sits, and a coordinate on this record is expected to
+  // come from survey.
+  var allParcels = DB.get('parcels') || [];
+  var parcScoped = allParcels.filter(function(p){ return !projF || String(p.projectId)===String(projF); });
+  var parcList = showP ? parcScoped.slice() : [];
+  if (fParcSt) parcList = parcList.filter(function(p){ return (p.status||'Not started')===fParcSt; });
+  if (fSearch) {
+    var pq = fSearch.toLowerCase();
+    parcList = parcList.filter(function(p){
+      var owners = _parcOwners(p.id).map(function(o){return dispName(o.stake)+' '+(o.stake.org||'');}).join(' ');
+      return ((p.parcelNumber||'')+' '+(p.situsAddress||'')+' '+owners).toLowerCase().includes(pq);
+    });
+  }
+  var parcPlot   = parcList.filter(function(p){ return _parcHasLoc(p); });
+  var parcNoLoc  = parcList.filter(function(p){ return !_parcHasLoc(p); });
+  var parcTotal  = parcScoped.filter(function(p){ return _parcHasLoc(p); }).length;
 
   // STAKE_TYPES defined at top-level const
   var INF_LEVELS  = ['High','Medium','Low'];
@@ -15838,9 +15869,26 @@ function renderMapView(m) {
         </select>
       </div>
       <div>
-        <div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Search</div>
-        <input id="mv-search" value="${fSearch}" oninput="S.mapFSearch=this.value;_mapApplyFilters()" placeholder="Name, org, address…" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:var(--white);font-size:12px;padding:6px 9px;outline:none">
+        <div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Layers</div>
+        <div style="display:flex;border:1px solid rgba(255,255,255,.15);border-radius:6px;overflow:hidden;font-size:12px">
+          ${[['contacts','Contacts'],['parcels','Parcels'],['both','Both']].map(function(o,i){
+            return `<button onclick="S.mapLayer='${o[0]}';_mapApplyFilters()" title="${o[0]==='contacts'?'Stakeholder mailing addresses':o[0]==='parcels'?'Parcel situs addresses and survey coordinates':'Both layers together'}" style="flex:1;padding:5px 0;border:none;${i?'border-left:1px solid rgba(255,255,255,.1);':''}cursor:pointer;font-size:12px;font-family:inherit;background:${layer===o[0]?'rgba(45,125,210,.4)':'rgba(255,255,255,.05)'};color:${layer===o[0]?'var(--white)':'var(--mist)'};transition:background .12s">${o[1]}</button>`;
+          }).join('')}
+        </div>
+        ${showP?`<div style="font-size:10px;color:var(--fog);margin-top:5px;line-height:1.4">Parcels plot by situs address or survey coordinates — not the owner's mailing address.</div>`:''}
       </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Search</div>
+        <input id="mv-search" value="${fSearch}" oninput="S.mapFSearch=this.value;_mapApplyFilters()" placeholder="${showP&&!showC?'Parcel #, address, owner…':'Name, org, address…'}" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:var(--white);font-size:12px;padding:6px 9px;outline:none">
+      </div>
+      ${showP?`<div>
+        <div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Parcel status</div>
+        <select onchange="S.mapFParcSt=this.value;_mapApplyFilters()" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:var(--white);font-size:12px;padding:6px 8px;box-sizing:border-box">
+          <option value="">All statuses</option>
+          ${PARCEL_STATUSES.map(function(t){return `<option value="${t}" ${fParcSt===t?'selected':''}>${t}</option>`;}).join('')}
+        </select>
+      </div>`:''}
+      ${showC?`
       <div>
         <div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Support level</div>
         <div style="display:flex;flex-direction:column;gap:4px">
@@ -15894,9 +15942,9 @@ function renderMapView(m) {
           <option value="type" ${colorBy==='type'?'selected':''}>Stakeholder type</option>
           <option value="ej" ${colorBy==='ej'?'selected':''}>EJ / LEP status</option>
         </select>
-      </div>
+      </div>`:''}
       <div style="margin-top:auto;padding-top:10px;border-top:1px solid rgba(255,255,255,.08)">
-        <button class="btn btn-ghost" style="width:100%;font-size:12px;margin-bottom:6px" onclick="S.mapFSupport='';S.mapFType='';S.mapFInf='';S.mapFEJ=false;S.mapFLEP=false;S.mapFSearch='';S.mapFRole='External';S.mapColorBy='support';renderMapView(document.getElementById('main'))">
+        <button class="btn btn-ghost" style="width:100%;font-size:12px;margin-bottom:6px" onclick="S.mapFSupport='';S.mapFType='';S.mapFInf='';S.mapFEJ=false;S.mapFLEP=false;S.mapFSearch='';S.mapFRole='External';S.mapColorBy='support';S.mapFParcSt='';renderMapView(document.getElementById('main'))">
           Clear all filters
         </button>
         <button class="btn btn-primary" style="width:100%;font-size:12px" onclick="_mapPrint()">
@@ -15910,10 +15958,15 @@ function renderMapView(m) {
       <!-- Status bar -->
       <div style="display:flex;align-items:center;gap:12px;padding:8px 16px;background:#0e1e30;border-bottom:1px solid rgba(255,255,255,.1);flex-shrink:0;flex-wrap:wrap">
         <div style="font-size:12px;color:var(--slate)">
-          ${chosen ? `${withAddr.length} of ${totalAddr} plotted${fSupport||fType||fInf||fEJ||fLEP||fSearch ? `<span style="color:var(--amber);margin-left:6px">· filters active</span>` : ''}` : `<span style="color:var(--fog)">Select a project to load the map</span>`}
+          ${chosen ? [
+              showC ? `${withAddr.length} of ${totalAddr} contact${totalAddr===1?'':'s'}` : '',
+              showP ? `${parcPlot.length} of ${parcTotal} parcel${parcTotal===1?'':'s'}` : ''
+            ].filter(Boolean).join(' · ') + ' plotted'
+              + (fSupport||fType||fInf||fEJ||fLEP||fSearch||fParcSt ? `<span style="color:var(--amber);margin-left:6px">· filters active</span>` : '')
+            : `<span style="color:var(--fog)">Select a project to load the map</span>`}
         </div>
-        <div style="display:flex;gap:14px;margin-left:auto;font-size:11px;color:var(--fog)" id="mv-legend">
-          ${_mapLegendHtml(colorBy)}
+        <div style="display:flex;gap:14px;margin-left:auto;font-size:11px;color:var(--fog);flex-wrap:wrap;justify-content:flex-end" id="mv-legend">
+          ${_mapLegendHtml(colorBy, layer)}
         </div>
       </div>
       <!-- Map canvas -->
@@ -15926,8 +15979,10 @@ function renderMapView(m) {
     </div>
   </div>`;
 
-  // Store filtered list for geocoding
+  // Store filtered lists for geocoding
   window._mvFiltered = withAddr;
+  window._mvParcels  = parcPlot;
+  window._mvParcNoLoc= parcNoLoc;
   window._mvProjId   = projF;
   window._mvProjName = projLabel;
 
@@ -15939,13 +15994,39 @@ function renderMapView(m) {
     return;
   }
 
-  if (withAddr.length === 0) {
-    document.getElementById('mv-loading').textContent = 'No stakeholders match the current filters or have addresses.';
+  if (withAddr.length === 0 && parcPlot.length === 0) {
+    var ld1 = document.getElementById('mv-loading');
+    ld1.textContent = showP && !showC
+      ? (parcScoped.length === 0 ? 'No parcels on this project yet.'
+                                 : 'No parcels match the current filters, or none has a situs address or coordinates.')
+      : 'Nothing matches the current filters, or nothing has an address.';
+    // Even with nothing plottable, name the parcels that cannot be placed —
+    // that is a finding, not an empty result.
+    _mvShowNoLoc(parcNoLoc);
     return;
   }
 
+  // Named before any geocoding, since "no location on record" is known from the
+  // data and shouldn't wait on a network round-trip to be reported.
+  _mvShowNoLoc(parcNoLoc);
   loadGoogleMaps();
-  _mvGeocode(withAddr, projF);
+  _mvGeocode(withAddr, projF, parcPlot);
+}
+
+// Parcels with neither a situs address nor coordinates. Listed rather than
+// dropped: on a ROW campaign "we cannot place this parcel" is exactly the row
+// somebody has to go resolve.
+function _mvShowNoLoc(noLoc, extra) {
+  var el = document.getElementById('mv-errors');
+  if (!el) return;
+  var parts = [];
+  if (extra) parts.push(extra);
+  if (noLoc && noLoc.length) {
+    parts.push('Not plotted — no situs address or coordinates: '
+      + noLoc.map(function(p){return p.parcelNumber||'(unnumbered)';}).join(', '));
+  }
+  el.style.display = parts.length ? 'block' : 'none';
+  el.innerHTML = parts.join('<br>');
 }
 
 // Deliberate project choice for the map. '' = the placeholder (back to prompt),
@@ -15957,7 +16038,23 @@ function mapSelectProject(v){
   filterByProject(v === '__all__' ? '' : v);
 }
 
-function _mapLegendHtml(colorBy) {
+function _mapLegendHtml(colorBy, layer) {
+  layer = layer || S.mapLayer || 'contacts';
+  // Parcels are squares, contacts circles, so the legend has to say which shape
+  // it is describing once both are on screen.
+  var parc = '';
+  if (layer !== 'contacts') {
+    parc = PARCEL_STATUSES.map(function(st){
+      return '<span style="margin-left:10px"><span style="display:inline-block;width:9px;height:9px;background:'
+        + _parcMapColor(st) + ';margin-right:3px;vertical-align:-1px"></span>' + st + '</span>';
+    }).join('');
+    if (layer === 'parcels') return '<span style="color:var(--fog)">Parcels ▪</span>' + parc;
+    parc = '<span style="color:var(--fog);margin-left:14px;padding-left:14px;border-left:1px solid rgba(255,255,255,.15)">Parcels ▪</span>' + parc;
+  }
+  return _mapLegendContactsHtml(colorBy) + parc;
+}
+
+function _mapLegendContactsHtml(colorBy) {
   if (colorBy === 'support') {
     return '<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#28A870;margin-right:3px"></span>Champion</span>'
       + '<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#5a87c6;margin-right:3px;margin-left:10px"></span>Neutral</span>'
@@ -15994,7 +16091,8 @@ function _mvMarkerColor(g, colorBy) {
   return g.lk.support==='Champion'?'#28A870':g.lk.support==='Opponent'?'#C0392B':'#5a87c6';
 }
 
-async function _mvGeocode(filtered, projId) {
+async function _mvGeocode(filtered, projId, parcels) {
+  parcels = parcels || [];
   var loading = document.getElementById('mv-loading');
   var errDiv  = document.getElementById('mv-errors');
   var mapEl   = document.getElementById('mv-map');
@@ -16036,6 +16134,29 @@ async function _mvGeocode(filtered, projId) {
     }
   }
 
+  // ── parcels ─────────────────────────────────────────────────────────────
+  // Stored coordinates are used as-is: no API call, and for an unsubdivided
+  // parcel they are the only locator there is. Only a situs-address-without-
+  // coordinates costs a geocode, and the result is cached by parcel id so
+  // changing a filter never re-bills.
+  var pCache = window._mvParcCache = window._mvParcCache || {};
+  var parcNeed = parcels.filter(function(p){ return !(p.latitude && p.longitude) && !pCache[p.id]; });
+  if (loading && parcNeed.length > 0) { loading.style.display = 'flex'; loading.textContent = 'Locating parcels…'; }
+  for (var j = 0; j < parcNeed.length; j++) {
+    var pc = parcNeed[j];
+    try {
+      var pr = await new Promise(function(resolve, reject){
+        geocoder.geocode({address: pc.situsAddress}, function(results, status){
+          if (status === 'OK' && results[0]) resolve(results[0]);
+          else reject(status);
+        });
+      });
+      pCache[pc.id] = {lat: pr.geometry.location.lat(), lng: pr.geometry.location.lng(), formatted: pr.formatted_address};
+    } catch(e) {
+      errors.push('parcel ' + (pc.parcelNumber||'?') + ' (' + pc.situsAddress + ')');
+    }
+  }
+
   if (loading) loading.style.display = 'none';
 
   // Build geocoded list from cache
@@ -16044,30 +16165,43 @@ async function _mvGeocode(filtered, projId) {
     return geo ? Object.assign({}, c, {lat:geo.lat, lng:geo.lng, formatted:geo.formatted}) : null;
   }).filter(Boolean);
 
-  if (geocoded.length === 0) {
-    if (loading) { loading.style.display='flex'; loading.textContent='No addresses could be geocoded.'; }
+  var parcGeo = parcels.map(function(p){
+    if (p.latitude && p.longitude) {
+      var la = parseFloat(p.latitude), ln = parseFloat(p.longitude);
+      if (isNaN(la) || isNaN(ln)) return null;
+      return Object.assign({}, p, {lat:la, lng:ln, formatted:'', fromCoords:true});
+    }
+    var g = pCache[p.id];
+    return g ? Object.assign({}, p, {lat:g.lat, lng:g.lng, formatted:g.formatted, fromCoords:false}) : null;
+  }).filter(Boolean);
+
+  if (geocoded.length === 0 && parcGeo.length === 0) {
+    if (loading) { loading.style.display='flex'; loading.textContent='Nothing could be located.'; }
+    _mvShowNoLoc(window._mvParcNoLoc);
     return;
   }
 
   // Render/update the map
-  _mvRenderMarkers(geocoded);
+  _mvRenderMarkers(geocoded, parcGeo);
 
-  if (errors.length > 0 && errDiv) {
-    errDiv.style.display = 'block';
-    errDiv.textContent = 'Could not geocode ' + errors.length + ' address' + (errors.length>1?'es':'') + ': ' + errors.join(', ');
-  }
+  _mvShowNoLoc(window._mvParcNoLoc, errors.length > 0
+    ? 'Could not locate ' + errors.length + ' address' + (errors.length>1?'es':'') + ': ' + errors.join(', ')
+    : '');
 }
 
-function _mvRenderMarkers(geocoded) {
+function _mvRenderMarkers(geocoded, parcGeo) {
   var mapEl = document.getElementById('mv-map');
   if (!mapEl) return;
   var colorBy = S.mapColorBy || 'support';
+  parcGeo = parcGeo || [];
+  var anchor = geocoded[0] || parcGeo[0];
+  if (!anchor) return;
 
   // Init or reuse map instance
   if (!window._mvMap || !mapEl.contains(window._mvMap.getDiv())) {
     window._mvMap = new window.google.maps.Map(mapEl, {
       zoom: 11,
-      center: {lat: geocoded[0].lat, lng: geocoded[0].lng},
+      center: {lat: anchor.lat, lng: anchor.lng},
       mapTypeId: 'roadmap',
       styles: [
         {elementType:'geometry',stylers:[{color:'#1d2c4d'}]},
@@ -16130,11 +16264,68 @@ function _mvRenderMarkers(geocoded) {
     });
   });
 
-  if (geocoded.length > 1) theMap.fitBounds(bounds);
-  else theMap.setCenter({lat: geocoded[0].lat, lng: geocoded[0].lng});
+  // ── parcel markers ────────────────────────────────────────────────────────
+  // Squares, so they read as a different kind of thing from the contact
+  // circles at a glance, and coloured by acquisition status — "which parcels
+  // are still un-noticed, and where" is the question a ROW review asks.
+  parcGeo.forEach(function(p, idx) {
+    var lbl = 'P' + (idx + 1);
+    var color = _parcMapColor(p.status);
+    var owners = _parcOwners(p.id);
+    var pm = new window.google.maps.Marker({
+      position: {lat: p.lat, lng: p.lng},
+      map: theMap,
+      title: lbl + '. Parcel ' + (p.parcelNumber||'—'),
+      label: {text: lbl, color:'#ffffff', fontSize:'9px', fontWeight:'bold'},
+      zIndex: 2,
+      icon: {
+        path: 'M -10,-10 L 10,-10 L 10,10 L -10,10 Z',
+        scale: 1,
+        fillColor: color,
+        fillOpacity: 0.95,
+        strokeColor: '#ffffff',
+        strokeWeight: 2,
+        anchor: new window.google.maps.Point(0, 0)
+      }
+    });
+    window._mvMarkers.push(pm);
+    bounds.extend({lat: p.lat, lng: p.lng});
+
+    pm.addListener('click', function(){
+      // Owner names are fine here — this is the consultant's own app. The
+      // client portal withholds them deliberately; that boundary is there, not
+      // here.
+      var ownHtml = owners.length
+        ? owners.map(function(o){ return escHtml(dispName(o.stake))
+            + (o.link.ownershipRole && o.link.ownershipRole!=='Owner' ? ' <span style="color:#888">· '+escHtml(o.link.ownershipRole)+'</span>' : ''); }).join('<br>')
+        : '<span style="color:#C0392B">No owner attached</span>';
+      infoWindow.setContent(`
+        <div style="font-family:sans-serif;font-size:13px;min-width:210px;max-width:280px">
+          <div style="font-weight:600;margin-bottom:3px">${lbl} — Parcel ${escHtml(p.parcelNumber||'—')}</div>
+          <div style="font-size:11px;color:#777;margin-bottom:5px">
+            ${p.fromCoords ? 'Located by survey coordinates' : escHtml(p.formatted || p.situsAddress || '')}
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+            <span style="display:inline-block;width:8px;height:8px;background:${color}"></span>
+            <span style="color:${color};font-weight:600;font-size:12px">${escHtml(p.status||'Not started')}</span>
+            ${p.acquisitionType ? `<span style="color:#999;font-size:11px;margin-left:4px">${escHtml(p.acquisitionType)}</span>` : ''}
+          </div>
+          <div style="font-size:12px;padding-top:5px;border-top:1px solid #eee">${ownHtml}</div>
+          <div style="font-size:11px;color:#888;margin-top:5px">
+            ${p.noticeDate ? 'Notice sent '+fmt(p.noticeDate) : '<span style="color:#C0392B">No notice sent</span>'}
+          </div>
+        </div>`);
+      infoWindow.open(theMap, pm);
+    });
+  });
+
+  var plotted = geocoded.length + parcGeo.length;
+  if (plotted > 1) theMap.fitBounds(bounds);
+  else theMap.setCenter({lat: anchor.lat, lng: anchor.lng});
 
   // Store for print
   window._mvGeocoded = geocoded;
+  window._mvParcelsGeo = parcGeo;
 }
 
 function _mapApplyFilters() {
@@ -16144,15 +16335,18 @@ function _mapApplyFilters() {
 function _mapRecolorView() {
   var colorBy = S.mapColorBy || 'support';
   var legend = document.getElementById('mv-legend');
-  if (legend) legend.innerHTML = _mapLegendHtml(colorBy);
-  if (window._mvGeocoded && window._mvGeocoded.length > 0) {
-    _mvRenderMarkers(window._mvGeocoded);
-  }
+  if (legend) legend.innerHTML = _mapLegendHtml(colorBy, S.mapLayer || 'contacts');
+  var g = window._mvGeocoded || [], p = window._mvParcelsGeo || [];
+  if (g.length > 0 || p.length > 0) _mvRenderMarkers(g, p);
 }
 
 function _mapPrint() {
-  var geocoded = window._mvGeocoded;
-  if (!geocoded || geocoded.length === 0) { showToast('No plotted stakeholders to print.','warn',3000); return; }
+  var geocoded = window._mvGeocoded || [];
+  var parcGeo  = window._mvParcelsGeo || [];
+  var layer    = S.mapLayer || 'contacts';
+  if (layer === 'contacts') parcGeo = [];
+  if (layer === 'parcels')  geocoded = [];
+  if (geocoded.length === 0 && parcGeo.length === 0) { showToast('Nothing plotted to print.','warn',3000); return; }
   var projName = window._mvProjName || 'All Projects';
   var colorBy  = S.mapColorBy || 'support';
 
@@ -16160,7 +16354,11 @@ function _mapPrint() {
     var color = g.lk.support==='Champion'?'green':g.lk.support==='Opponent'?'red':'blue';
     var label = ((g.s.firstName||'')[0]||(g.s.org||'?')[0]||'?').toUpperCase();
     return 'markers=color:'+color+'%7Clabel:'+label+'%7C'+g.lat+','+g.lng;
-  }).join('&');
+  }).concat(parcGeo.map(function(p, i){
+    // The Static Maps API takes no custom shapes, so parcels are distinguished
+    // by a P-label rather than by the square used on screen.
+    return 'markers=color:0x'+_parcMapColor(p.status).replace('#','')+'%7Clabel:P%7C'+p.lat+','+p.lng;
+  })).join('&');
   var staticMapUrl = 'https://maps.googleapis.com/maps/api/staticmap?size=700x400&maptype=roadmap&'+markers+'&key='+GOOGLE_MAPS_API_KEY;
 
   var rows = geocoded.map(function(g, i){
@@ -16175,7 +16373,30 @@ function _mapPrint() {
       +'<td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:11px;color:#555">'+(g.s.address||'—')+'</td></tr>';
   }).join('');
 
-  var _rptHtml = '<!DOCTYPE html><html><head><title>'+projName+' — Stakeholder Map</title>'
+  var parcRows = parcGeo.map(function(p, i){
+    var owners = _parcOwners(p.id);
+    var col = _parcMapColor(p.status);
+    return '<tr><td style="padding:6px 10px;border-bottom:1px solid #eee">P'+(i+1)+'</td>'
+      +'<td style="padding:6px 10px;border-bottom:1px solid #eee;font-weight:600;font-family:monospace">'+(p.parcelNumber||'—')+'</td>'
+      +'<td style="padding:6px 10px;border-bottom:1px solid #eee;color:#555;font-size:12px">'
+        +(p.fromCoords ? p.latitude+', '+p.longitude+' (survey)' : (p.formatted||p.situsAddress||'—'))+'</td>'
+      +'<td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:12px;color:#555">'
+        +(owners.length ? owners.map(function(o){return dispName(o.stake);}).join('; ') : 'No owner identified')+'</td>'
+      +'<td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:12px">'+(p.acquisitionType||'—')+'</td>'
+      +'<td style="padding:6px 10px;border-bottom:1px solid #eee"><span style="color:'+col+';font-weight:600">'+(p.status||'Not started')+'</span></td>'
+      +'<td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:12px">'+(p.noticeDate?fmt(p.noticeDate):'—')+'</td></tr>';
+  }).join('');
+  var parcTable = parcGeo.length ? '<h3 style="font-size:14px;margin:24px 0 8px">Parcels</h3>'
+    +'<table><thead><tr><th>#</th><th>Parcel #</th><th>Location</th><th>Owner(s)</th><th>Acquisition</th><th>Status</th><th>Notice sent</th></tr></thead>'
+    +'<tbody>'+parcRows+'</tbody></table>' : '';
+  var noLoc = (window._mvParcNoLoc||[]);
+  var noLocNote = (parcGeo.length && noLoc.length)
+    ? '<p style="font-size:12px;color:#a33;margin-top:10px">Not plotted — no situs address or coordinates on record: '
+      + noLoc.map(function(p){return p.parcelNumber||'(unnumbered)';}).join(', ') + '</p>' : '';
+
+  var title = parcGeo.length && geocoded.length ? 'Stakeholder & Parcel Map'
+            : parcGeo.length ? 'Parcel Map' : 'Stakeholder Map';
+  var _rptHtml = '<!DOCTYPE html><html><head><title>'+projName+' — '+title+'</title>'
     +'<style>body{font-family:Arial,sans-serif;margin:30px;color:#222}h1{font-size:18px;margin-bottom:4px}'
     +'h2{font-size:13px;color:#555;font-weight:400;margin-bottom:16px}'
     +'table{width:100%;border-collapse:collapse;font-size:13px}'
@@ -16183,14 +16404,18 @@ function _mapPrint() {
     +'img{max-width:100%;border:1px solid #ddd;border-radius:4px;margin-bottom:20px}'
     +'.filters{font-size:12px;color:#555;margin-bottom:12px}'
     +'@media print{button{display:none}}</style></head><body>'
-    +'<h1>'+projName+' — Stakeholder Map</h1>'
+    +'<h1>'+projName+' — '+title+'</h1>'
     +'<h2>Generated '+new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})
-    +' · '+geocoded.length+' stakeholders plotted · Color by: '+colorBy+'</h2>'
-    +'<img src="'+staticMapUrl+'" alt="Stakeholder map">'
-    +'<table><thead><tr><th>#</th><th>Name</th><th>Organization</th><th>Type</th><th>Support</th><th>Influence</th><th>Address</th></tr></thead>'
-    +'<tbody>'+rows+'</tbody></table>'
+    +' · '+[ geocoded.length ? geocoded.length+' stakeholders' : '',
+             parcGeo.length  ? parcGeo.length+' parcels' : '' ].filter(Boolean).join(' · ')
+    +' plotted'+(geocoded.length?' · Color by: '+colorBy:'')+'</h2>'
+    +'<img src="'+staticMapUrl+'" alt="'+title+'">'
+    +(geocoded.length ? (parcGeo.length?'<h3 style="font-size:14px;margin:0 0 8px">Stakeholders</h3>':'')
+      +'<table><thead><tr><th>#</th><th>Name</th><th>Organization</th><th>Type</th><th>Support</th><th>Influence</th><th>Address</th></tr></thead>'
+      +'<tbody>'+rows+'</tbody></table>' : '')
+    +parcTable+noLocNote
     +'</body></html>';
-  showInlineReport(_rptHtml, projName + ' — Stakeholder Map');
+  showInlineReport(_rptHtml, projName + ' — ' + title);
 }
 // ══════════════════════════════════════════════════════════════════
 // END STAKEHOLDER MAP VIEW
@@ -17468,6 +17693,24 @@ function _parcStatusColor(st){
   if(st==='Declined')  return 'b-red';
   if(st==='Not started')return 'b-dark';
   return 'b-amber';
+}
+// Marker fills for the Map view's parcel layer. Separate from _parcStatusColor
+// because that returns badge CLASS names and a Google Maps symbol needs a hex.
+// Each status gets its own colour rather than collapsing the middle three into
+// one amber: on a map the question is "how far along is this parcel", and
+// Notice sent vs Negotiating is the difference between a sweep being done and a
+// deal being open.
+const PARCEL_MAP_COLORS = {
+  'Not started':'#94a3b8', 'Notice sent':'#f59e0b', 'Contacted':'#0ea5e9',
+  'Negotiating':'#8b5cf6', 'Acquired':'#28A870',    'Declined':'#C0392B'
+};
+function _parcMapColor(st){ return PARCEL_MAP_COLORS[st||'Not started'] || '#94a3b8'; }
+// Can this parcel be placed on a map at all? Coordinates first — they are
+// stored, so they cost no geocode and are the only locator an unsubdivided
+// parcel has. A parcel with neither is not silently dropped; the Map view names
+// it, because "we don't know where it is" is itself a ROW finding.
+function _parcHasLoc(p){
+  return !!((p.latitude && p.longitude) || (p.situsAddress||'').trim());
 }
 
 function renderParcels(el){

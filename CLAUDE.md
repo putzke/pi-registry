@@ -219,10 +219,39 @@ there was nothing to count.
   COUNT per parcel. Internal parcel `notes` are withheld for the same reason.
   The consultant has both in COMPASS. Guarded by `test/tests/04-client-portal.test.js`,
   which asserts the owner's surname does NOT appear in the rendered section.
-- **Still not built:** map layer — parcels as a layer on the existing Map view.
-  Worth noting they need NO geocoding (the Map view geocodes stakeholder
-  addresses on demand, which is why it makes you pick a project first), so a
-  parcel layer plots instantly from stored `latitude`/`longitude`.
+- **Map layer — BUILT (Aug 2026).** `S.mapLayer` (`contacts` | `parcels` |
+  `both`) toggles a parcel layer on the Map view. Parcels are SQUARES coloured
+  by acquisition status (`PARCEL_MAP_COLORS` / `_parcMapColor` — a hex per
+  status, distinct from `_parcStatusColor`, which returns badge class names);
+  contacts stay circles. **The point of it:** the contact layer plots MAILING
+  addresses, which for an absentee owner, an LLC or three heirs is nowhere near
+  the land being acquired.
+  - **An earlier note here claimed parcels need NO geocoding. That is only true
+    of the coordinate-carrying ones.** Because the situs field deliberately does
+    not auto-fill coordinates from the Places pick, most parcels have an address
+    and no `latitude`/`longitude`, and those geocode exactly like a stakeholder.
+    `_parcHasLoc(p)` = coordinates OR situs address; stored coordinates are used
+    as-is (no API call), address-only parcels are geocoded and cached by parcel
+    id in `_mvParcCache` so changing a filter never re-bills.
+  - A parcel with NEITHER is **named in `#mv-errors`, never silently dropped** —
+    "we can't place this parcel" is itself a ROW finding. `_mvShowNoLoc()` runs
+    before geocoding, since that fact is known from the data.
+  - Stakeholder-only filters (support / type / influence / role / EJ / LEP /
+    colour-by) are hidden on the parcels layer; a parcel-status filter
+    (`S.mapFParcSt`) replaces them. Search matches parcel number, situs address
+    and owner names.
+  - `_mapPrint()` covers both layers — the Static Maps API takes no custom
+    shapes, so parcels get a `P` label there rather than a square.
+  - Covered by `test/tests/19-map-parcels.test.js` (28 checks). Google Maps
+    can't load in the harness, so it covers everything up to the map object.
+- **Deliberately NOT in the PI report, and NOT in the client portal.** In the
+  report a map would mean a Static Maps call plus a stored image; if a client
+  asks, Print/export is the supplemental attachment. In the portal it would be
+  worse than a cost: a portal token link is UNAUTHENTICATED, so every reload by
+  anyone holding the URL would bill a dynamic Maps load plus geocodes, with no
+  ceiling. If a portal map is ever wanted, persist the resolved coordinates
+  first — in their OWN columns, not `latitude`/`longitude`, which are
+  survey-grade — and render from stored points or a single cached static image.
 
 ### Project scoping per view
 `S.projectFilter` is the shared scope, written by the project select in the

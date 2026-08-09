@@ -61,19 +61,36 @@ declare
                        -- for both, the same way the RLS policies in
                        -- sql/2026-07-04_portal_links.sql do.
 begin
-  -- FIRST, and unconditionally: the TEXT-PK tables.
+  -- FIRST, and unconditionally: every key this seed supplies as a LITERAL.
   --
-  -- pi_comment_periods and pi_public_comments use app-supplied text ids
-  -- (TEXT_PK_TABLES in index.html) and this seed supplies fixed literals. A row
-  -- ORPHANED from its project — project deleted, or project_id changed — is not
-  -- reached by the project-scoped deletes below, and then collides on re-insert
-  -- with "duplicate key value violates unique constraint". Worse, the
+  -- Most of the seed writes rows whose ids the database generates, so deleting
+  -- by project link is enough. But four things are written with fixed values:
+  --
+  --   pi_comment_periods.id      'cp-sr154-deis-2025'   (app-supplied text PK)
+  --   pi_public_comments.id      'pc-sr154-NN'          (app-supplied text PK)
+  --   pi_portal_links.token      two fixed UUIDs        (PK; kept stable so
+  --                                                      bookmarked demo links
+  --                                                      survive a re-run)
+  --   pi_client_access           three fixed emails     (unique on email+project)
+  --
+  -- A row ORPHANED from its project — project deleted, or project_id changed —
+  -- is not reached by the project-scoped deletes below, and then collides on
+  -- re-insert: "duplicate key value violates unique constraint". Worse, the
   -- nothing-to-purge guard below RETURNS early, so anything placed after it is
-  -- skipped in exactly the state that needs cleaning most. Hence: before the
-  -- guard, keyed on the ids this seed owns rather than on the project link.
+  -- skipped in exactly the state that needs cleaning most.
+  --
+  -- So: before the guard, keyed on the literals rather than on the project link.
+  -- If you add another fixed-value insert to this seed, add it here too.
   delete from pi_public_comments where period_id = 'cp-sr154-deis-2025'
                                     or id like 'pc-sr154-%';
   delete from pi_comment_periods where id = 'cp-sr154-deis-2025';
+  delete from pi_portal_links where token in (
+    'a7f3c1d2-9e84-4b16-8f20-3c5d7e9a1b44'::uuid,
+    'b2e5d8a4-1c73-4f92-a6d8-5b1e4c7f2a99'::uuid);
+  delete from pi_client_access where lower(email) in (
+    'udot.demo@horizoncompass.com',
+    'logancity.demo@horizoncompass.com',
+    'demo@horizoncompass.com');
 
   select coalesce(array_agg(id::text), '{}'::text[]) into ids
     from pi_projects where pid = any(demo_pids);

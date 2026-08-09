@@ -67,13 +67,30 @@ module.exports = {
                        'pi_stakeholders','pi_projects']) {
       await t.sql(`delete from ${tbl}`);
     }
+    // Everything the seed writes with a FIXED key gets stranded, not just the
+    // comment period: portal-link tokens and client-access emails are literals
+    // too. Orphan ids must stay distinct — pi_portal_links(project_id) and
+    // pi_client_access(email, project_id) are both unique.
+    await t.sql(`with n as (select token, row_number() over (order by token) rn
+                              from pi_portal_links)
+                 update pi_portal_links pl set project_id='9991'||n.rn::text
+                   from n where n.token = pl.token`);
+    await t.sql(`with n as (select id, row_number() over (order by id) rn
+                              from pi_client_access)
+                 update pi_client_access c set project_id='9992'||n.rn::text
+                   from n where n.id = c.id`);
+
     let strandedOut = '';
     try { strandedOut = t.seed(); } catch (e) { strandedOut = 'FAILED: ' + e.message; }
     t.eq(/FAILED/.test(String(strandedOut)), false,
-         're-running with an orphan and no demo projects succeeds');
-    t.eq(Number((await t.sql(
-      `select count(*) c from pi_comment_periods where id='cp-sr154-deis-2025'`))[0].c), 1,
-         'and still leaves exactly one copy');
+         're-running with orphaned literal keys and no demo projects succeeds');
+    const after = (await t.sql(`select
+        (select count(*) from pi_comment_periods) periods,
+        (select count(*) from pi_portal_links)    links,
+        (select count(*) from pi_client_access)   grants`))[0];
+    t.eq(Number(after.periods), 1, 'exactly one comment period');
+    t.eq(Number(after.links), 2, 'exactly two portal links — tokens stay stable');
+    t.eq(Number(after.grants), 5, 'exactly five access grants');
 
     // ── the 3600 West design project: right-of-way test data ────────────────
     // A roadway project in DESIGN, which is when acquisition actually happens.

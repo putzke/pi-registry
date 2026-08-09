@@ -16149,12 +16149,27 @@ async function _mvGeocode(filtered, projId, parcels) {
     var pc = parcNeed[j];
     try {
       var pr = await new Promise(function(resolve, reject){
-        geocoder.geocode({address: pc.situsAddress}, function(results, status){
-          if (status === 'OK' && results[0]) resolve(results[0]);
-          else reject(status);
-        });
+        // Restricting to the US stops a bare grid address matching something on
+        // another continent, and costs nothing.
+        geocoder.geocode({address: pc.situsAddress, componentRestrictions: {country: 'US'}},
+          function(results, status){
+            if (status === 'OK' && results[0]) resolve(results[0]);
+            else reject(status);
+          });
       });
-      pCache[pc.id] = {lat: pr.geometry.location.lat(), lng: pr.geometry.location.lng(), formatted: pr.formatted_address};
+      // Keep HOW WELL it matched, not just where. Google answers a house number
+      // it cannot find by falling back to the street, the locality, or the
+      // postal code — and returns that silently, with a point. Four different
+      // addresses on one rural grid road then come back on one coordinate, which
+      // looks like a bug in the map rather than the geocoder declining to
+      // resolve the number. location_type says which happened.
+      pCache[pc.id] = {
+        lat: pr.geometry.location.lat(), lng: pr.geometry.location.lng(),
+        formatted: pr.formatted_address,
+        precision: (pr.geometry && pr.geometry.location_type) || '',
+        partial: !!pr.partial_match,
+        types: pr.types || []
+      };
     } catch(e) {
       errors.push('parcel ' + (pc.parcelNumber||'?') + ' (' + pc.situsAddress + ')');
     }
@@ -16175,7 +16190,9 @@ async function _mvGeocode(filtered, projId, parcels) {
       return Object.assign({}, p, {lat:la, lng:ln, formatted:'', fromCoords:true});
     }
     var g = pCache[p.id];
-    return g ? Object.assign({}, p, {lat:g.lat, lng:g.lng, formatted:g.formatted, fromCoords:false}) : null;
+    return g ? Object.assign({}, p, {lat:g.lat, lng:g.lng, formatted:g.formatted,
+                                     precision:g.precision, partial:g.partial, types:g.types,
+                                     fromCoords:false}) : null;
   }).filter(Boolean);
 
   if (geocoded.length === 0 && parcGeo.length === 0) {
@@ -16249,6 +16266,22 @@ function _mvGroupByPoint(items) {
   });
 }
 
+// How well the geocoder actually matched, in the consultant's language rather
+// than Google's. The distinction that matters on a ROW map: did it find THIS
+// property, or only the street it is on? A street-level match is why several
+// parcels can share a point, and it is the difference between a pin you can act
+// on and one you cannot.
+function _mvPrecision(p) {
+  if (p.fromCoords) return { ok: true, label: 'Located by survey coordinates' };
+  var lt = p.precision || '';
+  if (lt === 'ROOFTOP')            return { ok: true,  label: 'Address matched exactly' };
+  if (lt === 'RANGE_INTERPOLATED') return { ok: true,  label: 'Interpolated between known house numbers on this street' };
+  if (lt === 'GEOMETRIC_CENTER')   return { ok: false, label: 'Street-level match — the house number was not found, so this is the centre of the road' };
+  if (lt === 'APPROXIMATE')        return { ok: false, label: 'Area-level match only — neither the house number nor the street was resolved' };
+  if (p.partial)                   return { ok: false, label: 'Partial match — the address was not fully resolved' };
+  return { ok: true, label: '' };
+}
+
 // One parcel's info window. Owner names are fine here — this is the
 // consultant's own app; the client portal withholds them deliberately, and that
 // boundary lives there, not here.
@@ -16264,6 +16297,8 @@ function _mvParcInfoHTML(p) {
       <div style="font-weight:600;margin-bottom:3px">Parcel ${escHtml(p.parcelNumber||'—')}</div>
       <div style="font-size:11px;color:#6b7280;margin-bottom:5px">
         ${p.fromCoords ? 'Located by survey coordinates' : escHtml(p.formatted || p.situsAddress || '')}
+        ${(function(){ var pr=_mvPrecision(p);
+          return pr.ok ? '' : '<div style="color:#8a6d1f;margin-top:3px">'+escHtml(pr.label)+'</div>'; })()}
       </div>
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
         <span style="display:inline-block;width:8px;height:8px;background:${color}"></span>
@@ -16296,8 +16331,17 @@ function _mvParcGroupHTML(gp) {
         </div>`;
       }).join('')}
       <div style="font-size:11px;color:#8a6d1f;background:#fdf6e3;border-radius:4px;padding:6px 7px;margin-top:7px">
-        These addresses geocode to the same point, so they cannot be placed
-        separately. Add survey coordinates to each parcel to plot it exactly.
+        ${(function(){
+          var pr = _mvPrecision(gp.items[0]);
+          // Say which of the two it is. "The addresses are identical" and "the
+          // geocoder could not resolve the house numbers" call for completely
+          // different actions, and only the second is the common case.
+          return pr.ok
+            ? 'These addresses resolve to the same point.'
+            : escHtml(pr.label) + ' — so every parcel on this road lands here.';
+        })()}
+        Add survey coordinates to each parcel to plot it exactly; stored
+        coordinates are used as-is and cost no lookup.
       </div>
     </div>`;
 }

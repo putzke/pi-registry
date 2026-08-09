@@ -161,6 +161,46 @@ module.exports = {
         t.ok(grouped.html.includes('>' + n + '<'), `every parcel number is listed (${n})`));
       t.ok(/survey coordinates/i.test(grouped.html), 'and the popup names the fix');
 
+      // ── geocode precision is kept, not discarded ───────────────────────
+      // Google answers a house number it cannot find by falling back to the
+      // street and returning that silently, with a point. Four addresses on one
+      // rural road then come back on one coordinate — which looks like a broken
+      // map rather than the geocoder declining to resolve the number.
+      const prec = await app.page.evaluate(() => ({
+        rooftop:  _mvPrecision({precision: 'ROOFTOP'}),
+        interp:   _mvPrecision({precision: 'RANGE_INTERPOLATED'}),
+        street:   _mvPrecision({precision: 'GEOMETRIC_CENTER'}),
+        area:     _mvPrecision({precision: 'APPROXIMATE'}),
+        partial:  _mvPrecision({partial: true}),
+        coords:   _mvPrecision({fromCoords: true}),
+      }));
+      t.ok(prec.rooftop.ok && prec.interp.ok, 'an exact or interpolated match is not flagged');
+      t.eq(prec.street.ok, false, 'a street-centre match IS flagged');
+      t.eq(prec.area.ok, false, 'so is an area-level match');
+      t.eq(prec.partial.ok, false, 'so is a partial match');
+      t.ok(prec.coords.ok && /survey/i.test(prec.coords.label),
+           'survey coordinates are reported as exact');
+      t.ok(/house number/i.test(prec.street.label),
+           'and the street-level message explains what was not resolved');
+
+      // The group popup must distinguish "identical addresses" from "the
+      // geocoder gave up on the house numbers" — different problems, different
+      // fixes, and only the second is common.
+      const why = await app.page.evaluate(() => ({
+        street: _mvParcGroupHTML({ items: [
+          {parcelNumber:'A', status:'Acquired', precision:'GEOMETRIC_CENTER'},
+          {parcelNumber:'B', status:'Acquired', precision:'GEOMETRIC_CENTER'}] }),
+        exact: _mvParcGroupHTML({ items: [
+          {parcelNumber:'A', status:'Acquired', precision:'ROOFTOP'},
+          {parcelNumber:'B', status:'Acquired', precision:'ROOFTOP'}] }),
+      }));
+      t.ok(/house number was not found/i.test(why.street),
+           'a street-level group says the house numbers were not resolved');
+      t.ok(/resolve to the same point/i.test(why.exact),
+           'a genuinely co-located group says that instead');
+      t.ok(/survey coordinates/i.test(why.street) && /survey coordinates/i.test(why.exact),
+           'both name the fix');
+
       // A mixed-status group must not claim any one status's colour.
       const mixedIcon = await app.page.evaluate(() =>
         _mvParcIcon({parcelNumber:'A', status:'Acquired', mixed:true}, 3).url);

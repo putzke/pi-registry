@@ -253,6 +253,18 @@ there was nothing to count.
     and status so the register still correlates, and it names the fix: a survey
     coordinate on the parcel record places it exactly and costs no geocode. A
     mixed-status group is slate, never any one status's colour.
+    **`_mvPrecision(p)` says WHY.** The geocode result's `location_type` is
+    kept (`ROOFTOP` / `RANGE_INTERPOLATED` = exact enough; `GEOMETRIC_CENTER` =
+    street centre, house number not found; `APPROXIMATE` = area only), plus
+    `partial_match`. Google answers a house number it cannot find by falling
+    back to the street and returning that SILENTLY with a point, which is how
+    four different addresses on one rural grid road arrive on one coordinate.
+    Discarding that made a geocoder limitation look like a rendering bug. Both
+    parcel popups now report it, and the group popup distinguishes "these
+    addresses really are the same place" from "the house numbers were not
+    resolved" — different problems, different fixes. Geocode calls also pass
+    `componentRestrictions:{country:'US'}`. **The contact layer still discards
+    precision** — same treatment applies there if it ever matters.
     **Nudging them apart was tried first and was wrong twice over** — at any
     normal zoom ~25 m is a couple of pixels so the chips still overlapped, and a
     radius large enough to separate them would put a parcel on the wrong side of

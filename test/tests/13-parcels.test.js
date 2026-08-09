@@ -56,14 +56,15 @@ module.exports = {
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
         const a = document.getElementById('f-pca');
         return { exists: !!a, type: a.type,
-                 fill: a.dataset.fillLatLng, lat: a.dataset.latField, lng: a.dataset.lngField,
+                 // Picking a place must not touch the coordinates: a place gives
+                 // an address centroid, which on an unsubdivided parcel is not
+                 // where the parcel is. Coordinates come from survey.
+                 touchesCoords: !!(a.dataset.fillLatLng || a.dataset.latField),
                  hasClear: /clearAddressField\('f-pca'\)/.test(document.body.innerHTML) };
       });
       t.ok(addr.exists, 'the situs address field is present');
       t.eq(addr.type, 'text', 'it stays typable when Places cannot load');
-      t.eq(addr.fill, '1', 'it is flagged to fill coordinates from a picked place');
-      t.eq(addr.lat, 'f-pclat', 'pointing at the latitude field');
-      t.eq(addr.lng, 'f-pclng', 'and the longitude field');
+      t.eq(addr.touchesCoords, false, 'the address picker never fills coordinates');
       t.ok(addr.hasClear, 'and offers a Clear affordance');
 
       // The clear helper is generic now, not hardcoded to the contact field.

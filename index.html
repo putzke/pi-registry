@@ -6410,17 +6410,8 @@ function _initPlaceAutocompleteEl(input) {
       const pred = ev.placePrediction;
       if (!pred) return;
       const place = pred.toPlace();
-      await place.fetchFields({ fields: ['formattedAddress', 'location'] });
+      await place.fetchFields({ fields: ['formattedAddress'] });
       if (place.formattedAddress) input.value = place.formattedAddress;
-      if (input.dataset.fillLatLng && place.location) {
-        const lat = document.getElementById(input.dataset.latField);
-        const lng = document.getElementById(input.dataset.lngField);
-        // Only when empty — a surveyed coordinate beats an address centroid.
-        if (lat && lng && !lat.value.trim() && !lng.value.trim()) {
-          lat.value = Number(place.location.lat()).toFixed(6);
-          lng.value = Number(place.location.lng()).toFixed(6);
-        }
-      }
     } catch (e) { console.warn('Place selection error:', e); }
   });
 }
@@ -17276,13 +17267,14 @@ function openParcelModal(id){
   // situs address is where the LAND is, which for an absentee owner is nowhere
   // near their mailing address, so it is usually an address being typed from a
   // list rather than from memory.
+  //
+  // It deliberately does NOT fill latitude/longitude from the picked place. A
+  // place gives an address centroid, which is not a parcel location — on an
+  // unsubdivided parcel the two can be a long way apart, and a coordinate on
+  // this record is expected to come from survey.
   requestAnimationFrame(()=>{
     const a=document.getElementById('f-pca');
-    if(!a) return;
-    a.dataset.fillLatLng='1';
-    a.dataset.latField='f-pclat';
-    a.dataset.lngField='f-pclng';
-    initAddressAutocomplete(a);
+    if(a) initAddressAutocomplete(a);
   });
 }
 

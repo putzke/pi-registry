@@ -153,9 +153,11 @@ there was nothing to count.
 - **Situs address uses Google Places** (`initAddressAutocomplete`, shared with the
   stakeholder modal). Worth more here than on a contact — the situs address is
   where the LAND is, which for an absentee owner is nowhere near their mailing
-  address. Picking a place also fills `latitude`/`longitude` **only when both are
-  empty**, via the `fillLatLng`/`latField`/`lngField` datasets on the input: a
-  surveyed coordinate typed by hand outranks Google's address centroid.
+  address. It deliberately does **NOT** fill `latitude`/`longitude` from the
+  picked place: a place gives an address centroid, which on an unsubdivided
+  parcel is not where the parcel is, and a coordinate on this record is expected
+  to come from survey. (Auto-fill was built, then removed on that reasoning — do
+  not re-add it without asking.)
   `clearStakeAddress()` was generalised to `clearAddressField(inputId)` — the
   widget can't be cleared by the user, since the visible element is separate from
   the hidden input holding the value. If Places never loads the field stays an

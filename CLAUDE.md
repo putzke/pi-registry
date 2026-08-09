@@ -240,8 +240,24 @@ there was nothing to count.
     colour-by) are hidden on the parcels layer; a parcel-status filter
     (`S.mapFParcSt`) replaces them. Search matches parcel number, situs address
     and owner names.
-  - `_mapPrint()` covers both layers — the Static Maps API takes no custom
-    shapes, so parcels get a `P` label there rather than a square.
+  - **Markers are labelled with the PARCEL NUMBER**, drawn into an SVG data-URI
+    icon (`_mvParcIcon`) as a chip under the square — not a Marker `label`,
+    which is bare text over satellite imagery and often unreadable. An earlier
+    P1…Pn sequence was replaced: it correlated with nothing a client holds, and
+    renumbered itself whenever a filter changed.
+  - **`_mvSpread()` nudges apart parcels that geocode to the SAME point.** A
+    rural grid address routinely resolves to a street or ZIP centroid, so
+    several parcels land on one coordinate and stack — the count says six and
+    three are visible, which reads as a rendering bug. Duplicates are spread
+    around a ~25 m circle, flagged `nudged` (the info window says the position
+    is approximate), and counted in the status line.
+  - **The status line is rewritten after render** (`#mv-count`) to report what
+    actually plotted, not what was placeable. It previously said "6 of 6" over
+    three markers, which is how a geocode failure disguises itself.
+  - `_mapPrint()` covers both layers. Static Maps takes no custom shapes and its
+    label is a SINGLE character, so parcels are keyed 1-9 then A-Z
+    (`_mvPrintKey`) and the printed table's first column carries the same key —
+    map and table still correlate on paper.
   - Covered by `test/tests/19-map-parcels.test.js` (28 checks). Google Maps
     can't load in the harness, so it covers everything up to the map object.
 - **Deliberately NOT in the PI report, and NOT in the client portal.** In the

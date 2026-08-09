@@ -15957,7 +15957,7 @@ function renderMapView(m) {
     <div style="flex:1;min-width:0;display:flex;flex-direction:column;min-height:0">
       <!-- Status bar -->
       <div style="display:flex;align-items:center;gap:12px;padding:8px 16px;background:#0e1e30;border-bottom:1px solid rgba(255,255,255,.1);flex-shrink:0;flex-wrap:wrap">
-        <div style="font-size:12px;color:var(--slate)">
+        <div style="font-size:12px;color:var(--slate)" id="mv-count">
           ${chosen ? [
               showC ? `${withAddr.length} of ${totalAddr} contact${totalAddr===1?'':'s'}` : '',
               showP ? `${parcPlot.length} of ${parcTotal} parcel${parcTotal===1?'':'s'}` : ''
@@ -16020,7 +16020,10 @@ function _mvShowNoLoc(noLoc, extra) {
   var el = document.getElementById('mv-errors');
   if (!el) return;
   var parts = [];
-  if (extra) parts.push(extra);
+  // A failed geocode means a marker the user is looking for is NOT on the map.
+  // In fog grey next to an unrelated note that reads as decoration, so it gets
+  // the amber the rest of the app uses for "needs your attention".
+  if (extra) parts.push('<span style="color:var(--amber)">⚠ ' + extra + '</span>');
   if (noLoc && noLoc.length) {
     parts.push('Not plotted — no situs address or coordinates: '
       + noLoc.map(function(p){return p.parcelNumber||'(unnumbered)';}).join(', '));
@@ -16189,6 +16192,63 @@ async function _mvGeocode(filtered, projId, parcels) {
     : '');
 }
 
+// Marker graphic for a parcel: a status-coloured square with the PARCEL NUMBER
+// on a chip beneath it.
+//
+// The first version labelled markers P1…Pn, which correlated with nothing — a
+// client holding the parcel register had no way to tie a square to a row, and
+// the sequence shifted whenever a filter changed. The parcel number is the
+// identifier everyone already uses, so the map states it outright and needs no
+// cross-reference at all. It is drawn into the icon rather than passed as a
+// Marker `label` because a label is plain text over satellite imagery, which is
+// frequently unreadable; the chip gives it its own contrast.
+function _mvParcIcon(p) {
+  var num = String(p.parcelNumber || '—');
+  var color = _parcMapColor(p.status);
+  var w = Math.max(52, num.length * 7.0 + 14), h = 38;
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">'
+    + '<rect x="' + (w/2 - 8) + '" y="1" width="16" height="16" fill="' + color + '" stroke="#ffffff" stroke-width="2"/>'
+    + '<rect x="0" y="21" width="' + w + '" height="16" rx="4" fill="#0e1e30" fill-opacity="0.92" stroke="#ffffff" stroke-opacity="0.55"/>'
+    + '<text x="' + (w/2) + '" y="32.5" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace"'
+    + ' font-size="11" font-weight="600" fill="#ffffff">' + escHtml(num) + '</text></svg>';
+  return {
+    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+    size: new window.google.maps.Size(w, h),
+    scaledSize: new window.google.maps.Size(w, h),
+    anchor: new window.google.maps.Point(w/2, 9)   // the square sits ON the point
+  };
+}
+
+// Nudge apart markers that resolved to the SAME point.
+//
+// Geocoding a street address on a rural grid road routinely returns the street
+// or ZIP centroid, so several parcels can land on one coordinate — and there
+// they stack, with only the last one drawn. That reads as "markers are
+// missing", which is worse than an approximate position: the count says six and
+// you can see three. Duplicates are spread around a ~25 m circle and flagged,
+// so every parcel is visible and nobody mistakes the offset for survey truth.
+function _mvSpread(items) {
+  var groups = {};
+  items.forEach(function(it){
+    var k = it.lat.toFixed(5) + ',' + it.lng.toFixed(5);
+    (groups[k] = groups[k] || []).push(it);
+  });
+  var nudged = 0;
+  Object.keys(groups).forEach(function(k){
+    var g = groups[k];
+    if (g.length < 2) return;
+    var r = 0.00022;                                  // ~25 m
+    g.forEach(function(it, i){
+      var a = (2 * Math.PI * i) / g.length;
+      it.lat += r * Math.cos(a);
+      it.lng += r * Math.sin(a) / Math.max(0.2, Math.cos(it.lat * Math.PI / 180));
+      it.nudged = true;
+      nudged++;
+    });
+  });
+  return nudged;
+}
+
 function _mvRenderMarkers(geocoded, parcGeo) {
   var mapEl = document.getElementById('mv-map');
   if (!mapEl) return;
@@ -16268,25 +16328,17 @@ function _mvRenderMarkers(geocoded, parcGeo) {
   // Squares, so they read as a different kind of thing from the contact
   // circles at a glance, and coloured by acquisition status — "which parcels
   // are still un-noticed, and where" is the question a ROW review asks.
-  parcGeo.forEach(function(p, idx) {
-    var lbl = 'P' + (idx + 1);
+  var parcNudged = _mvSpread(parcGeo);
+  parcGeo.forEach(function(p) {
+    var lbl = p.parcelNumber || '—';
     var color = _parcMapColor(p.status);
     var owners = _parcOwners(p.id);
     var pm = new window.google.maps.Marker({
       position: {lat: p.lat, lng: p.lng},
       map: theMap,
-      title: lbl + '. Parcel ' + (p.parcelNumber||'—'),
-      label: {text: lbl, color:'#ffffff', fontSize:'9px', fontWeight:'bold'},
+      title: 'Parcel ' + lbl + ' — ' + (p.status || 'Not started'),
       zIndex: 2,
-      icon: {
-        path: 'M -10,-10 L 10,-10 L 10,10 L -10,10 Z',
-        scale: 1,
-        fillColor: color,
-        fillOpacity: 0.95,
-        strokeColor: '#ffffff',
-        strokeWeight: 2,
-        anchor: new window.google.maps.Point(0, 0)
-      }
+      icon: _mvParcIcon(p)
     });
     window._mvMarkers.push(pm);
     bounds.extend({lat: p.lat, lng: p.lng});
@@ -16301,9 +16353,10 @@ function _mvRenderMarkers(geocoded, parcGeo) {
         : '<span style="color:#C0392B">No owner attached</span>';
       infoWindow.setContent(`
         <div style="font-family:sans-serif;font-size:13px;min-width:210px;max-width:280px">
-          <div style="font-weight:600;margin-bottom:3px">${lbl} — Parcel ${escHtml(p.parcelNumber||'—')}</div>
+          <div style="font-weight:600;margin-bottom:3px">Parcel ${escHtml(lbl)}</div>
           <div style="font-size:11px;color:#777;margin-bottom:5px">
             ${p.fromCoords ? 'Located by survey coordinates' : escHtml(p.formatted || p.situsAddress || '')}
+            ${p.nudged ? '<div style="color:#b8860b">Shifted slightly — this address shares a geocoded point with another parcel. Approximate.</div>' : ''}
           </div>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
             <span style="display:inline-block;width:8px;height:8px;background:${color}"></span>
@@ -16323,6 +16376,20 @@ function _mvRenderMarkers(geocoded, parcGeo) {
   if (plotted > 1) theMap.fitBounds(bounds);
   else theMap.setCenter({lat: anchor.lat, lng: anchor.lng});
 
+  // The status line is written before geocoding, so it reports what COULD be
+  // placed. Once markers exist, replace it with what actually was — otherwise
+  // it reads "6 of 6 parcels plotted" over three visible squares, which is how
+  // a geocode failure disguises itself as a rendering bug.
+  var cnt = document.getElementById('mv-count');
+  if (cnt) {
+    var layer = S.mapLayer || 'contacts';
+    cnt.innerHTML = [
+      layer !== 'parcels' ? geocoded.length + ' of ' + (window._mvFiltered||[]).length + ' contacts' : '',
+      layer !== 'contacts' ? parcGeo.length + ' of ' + ((window._mvParcels||[]).length + (window._mvParcNoLoc||[]).length) + ' parcels' : ''
+    ].filter(Boolean).join(' · ') + ' plotted'
+      + (parcNudged ? '<span style="color:var(--amber);margin-left:6px" title="Several parcels geocoded to the same point and were spread apart so each is visible.">· ' + parcNudged + ' shifted to avoid overlap</span>' : '');
+  }
+
   // Store for print
   window._mvGeocoded = geocoded;
   window._mvParcelsGeo = parcGeo;
@@ -16340,6 +16407,11 @@ function _mapRecolorView() {
   if (g.length > 0 || p.length > 0) _mvRenderMarkers(g, p);
 }
 
+// Static Maps allows one character per marker label: digits first, then letters.
+function _mvPrintKey(i) {
+  return i < 9 ? String(i + 1) : String.fromCharCode(65 + (i - 9));
+}
+
 function _mapPrint() {
   var geocoded = window._mvGeocoded || [];
   var parcGeo  = window._mvParcelsGeo || [];
@@ -16355,9 +16427,13 @@ function _mapPrint() {
     var label = ((g.s.firstName||'')[0]||(g.s.org||'?')[0]||'?').toUpperCase();
     return 'markers=color:'+color+'%7Clabel:'+label+'%7C'+g.lat+','+g.lng;
   }).concat(parcGeo.map(function(p, i){
-    // The Static Maps API takes no custom shapes, so parcels are distinguished
-    // by a P-label rather than by the square used on screen.
-    return 'markers=color:0x'+_parcMapColor(p.status).replace('#','')+'%7Clabel:P%7C'+p.lat+','+p.lng;
+    // The Static Maps API takes no custom shapes and its label is a SINGLE
+    // character, so neither the square nor the parcel number survives. Markers
+    // are keyed 1-9 then A-Z instead, and the printed parcel table carries the
+    // same key in its first column — so map and table still correlate on paper,
+    // which is the point of the export.
+    return 'markers=color:0x'+_parcMapColor(p.status).replace('#','')
+      + '%7Clabel:' + _mvPrintKey(i) + '%7C' + p.lat + ',' + p.lng;
   })).join('&');
   var staticMapUrl = 'https://maps.googleapis.com/maps/api/staticmap?size=700x400&maptype=roadmap&'+markers+'&key='+GOOGLE_MAPS_API_KEY;
 
@@ -16376,7 +16452,7 @@ function _mapPrint() {
   var parcRows = parcGeo.map(function(p, i){
     var owners = _parcOwners(p.id);
     var col = _parcMapColor(p.status);
-    return '<tr><td style="padding:6px 10px;border-bottom:1px solid #eee">P'+(i+1)+'</td>'
+    return '<tr><td style="padding:6px 10px;border-bottom:1px solid #eee;font-weight:700">'+_mvPrintKey(i)+'</td>'
       +'<td style="padding:6px 10px;border-bottom:1px solid #eee;font-weight:600;font-family:monospace">'+(p.parcelNumber||'—')+'</td>'
       +'<td style="padding:6px 10px;border-bottom:1px solid #eee;color:#555;font-size:12px">'
         +(p.fromCoords ? p.latitude+', '+p.longitude+' (survey)' : (p.formatted||p.situsAddress||'—'))+'</td>'
@@ -16387,7 +16463,7 @@ function _mapPrint() {
       +'<td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:12px">'+(p.noticeDate?fmt(p.noticeDate):'—')+'</td></tr>';
   }).join('');
   var parcTable = parcGeo.length ? '<h3 style="font-size:14px;margin:24px 0 8px">Parcels</h3>'
-    +'<table><thead><tr><th>#</th><th>Parcel #</th><th>Location</th><th>Owner(s)</th><th>Acquisition</th><th>Status</th><th>Notice sent</th></tr></thead>'
+    +'<table><thead><tr><th>Map</th><th>Parcel #</th><th>Location</th><th>Owner(s)</th><th>Acquisition</th><th>Status</th><th>Notice sent</th></tr></thead>'
     +'<tbody>'+parcRows+'</tbody></table>' : '';
   var noLoc = (window._mvParcNoLoc||[]);
   var noLocNote = (parcGeo.length && noLoc.length)

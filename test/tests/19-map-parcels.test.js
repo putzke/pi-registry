@@ -110,6 +110,50 @@ module.exports = {
         PARCEL_STATUSES.map(s => _parcMapColor(s)));
       t.eq(new Set(colors).size, colors.length, 'each parcel status maps to a distinct colour');
 
+      // ── markers are labelled by PARCEL NUMBER ──────────────────────────
+      // P1…Pn correlated with nothing: a client holding the parcel register
+      // could not tie a square to a row, and the sequence moved whenever a
+      // filter changed.
+      const icon = await app.page.evaluate(() => {
+        // Stand in for the Google Maps types the icon builder needs; the map
+        // itself cannot load in the harness.
+        window.google = window.google || { maps: {
+          Size: function(w,h){ this.w=w; this.h=h; },
+          Point: function(x,y){ this.x=x; this.y=y; } } };
+        const p = (_syncCache.parcels || []).find(x => x.parcelNumber);
+        const ic = _mvParcIcon(p);
+        return { num: p.parcelNumber, status: p.status,
+                 svg: decodeURIComponent(ic.url.replace(/^data:image\/svg\+xml;charset=UTF-8,/, '')),
+                 anchored: !!ic.anchor };
+      });
+      t.ok(icon.svg.includes(icon.num),
+           `the marker draws the parcel number (${icon.num})`);
+      t.eq(/P\d+<\/text>/.test(icon.svg), false, 'and no longer a P-sequence');
+      t.ok(icon.svg.includes(await app.page.evaluate(s => _parcMapColor(s), icon.status)),
+           'in the status colour');
+      t.ok(icon.anchored, 'anchored so the square sits on the coordinate');
+
+      // ── parcels sharing a geocoded point are spread, not stacked ───────
+      // A street or ZIP centroid can swallow several addresses; stacked
+      // markers hide each other, so the count says six and three are visible.
+      const spread = await app.page.evaluate(() => {
+        const items = [{lat: 41.2, lng: -112.0}, {lat: 41.2, lng: -112.0},
+                       {lat: 41.2, lng: -112.0}, {lat: 41.3, lng: -112.1}];
+        const n = _mvSpread(items);
+        const keys = new Set(items.map(i => i.lat.toFixed(5) + ',' + i.lng.toFixed(5)));
+        return { nudged: n, distinct: keys.size, flagged: items.filter(i => i.nudged).length,
+                 untouched: items[3].lat === 41.3 && items[3].lng === -112.1 };
+      });
+      t.eq(spread.nudged, 3, 'three co-located markers were moved');
+      t.eq(spread.distinct, 4, 'every marker ends on its own point');
+      t.eq(spread.flagged, 3, 'and each moved one is flagged as approximate');
+      t.ok(spread.untouched, 'a marker with no neighbour is left exactly where it was');
+
+      // ── the printed map keys correlate with the printed table ──────────
+      const keys = await app.page.evaluate(() => [0,8,9,10].map(i => _mvPrintKey(i)));
+      t.eq(keys, ['1','9','A','B'],
+           'Static Maps single-character labels run 1-9 then A-Z');
+
       // Coordinates must never cost a geocode — that is the whole reason they
       // are stored, and the only locator an unsubdivided parcel has.
       const coordsOnly = await app.page.evaluate(() => {

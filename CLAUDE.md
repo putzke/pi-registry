@@ -150,6 +150,16 @@ there was nothing to count.
 - **Coordinates are first-class** (`latitude`/`longitude` text): unsubdivided
   land with no dwelling can only be designated by coordinates. Same fields the
   Map view and the planned Survey123 ingestion want.
+- **Situs address uses Google Places** (`initAddressAutocomplete`, shared with the
+  stakeholder modal). Worth more here than on a contact — the situs address is
+  where the LAND is, which for an absentee owner is nowhere near their mailing
+  address. Picking a place also fills `latitude`/`longitude` **only when both are
+  empty**, via the `fillLatLng`/`latField`/`lngField` datasets on the input: a
+  surveyed coordinate typed by hand outranks Google's address centroid.
+  `clearStakeAddress()` was generalised to `clearAddressField(inputId)` — the
+  widget can't be cleared by the user, since the visible element is separate from
+  the hidden input holding the value. If Places never loads the field stays an
+  ordinary text input, so the modal still works offline.
 - Owner attachment is parcel-first (`_parcelOwnerRowsHTML` re-renders in place
   inside the modal, so three co-owners cost one round-trip) and reads
   contact-first via `_parcelsFor(stakeholderId)` on the stakeholder detail pane.

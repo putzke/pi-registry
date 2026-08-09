@@ -6410,8 +6410,17 @@ function _initPlaceAutocompleteEl(input) {
       const pred = ev.placePrediction;
       if (!pred) return;
       const place = pred.toPlace();
-      await place.fetchFields({ fields: ['formattedAddress'] });
+      await place.fetchFields({ fields: ['formattedAddress', 'location'] });
       if (place.formattedAddress) input.value = place.formattedAddress;
+      if (input.dataset.fillLatLng && place.location) {
+        const lat = document.getElementById(input.dataset.latField);
+        const lng = document.getElementById(input.dataset.lngField);
+        // Only when empty — a surveyed coordinate beats an address centroid.
+        if (lat && lng && !lat.value.trim() && !lng.value.trim()) {
+          lat.value = Number(place.location.lat()).toFixed(6);
+          lng.value = Number(place.location.lng()).toFixed(6);
+        }
+      }
     } catch (e) { console.warn('Place selection error:', e); }
   });
 }
@@ -6426,8 +6435,10 @@ function _initPlaceAutocompleteEl(input) {
 //
 // Rather than reach into the widget's shadow DOM, we drop it and rebuild a fresh
 // empty one — robust across both the new element and the legacy fallback.
-function clearStakeAddress() {
-  const input = document.getElementById('f-ad');
+function clearStakeAddress() { clearAddressField('f-ad'); }
+
+function clearAddressField(inputId) {
+  const input = document.getElementById(inputId);
   if (!input) return;
   input.value = '';
   const wrap = input.parentNode;
@@ -6438,7 +6449,7 @@ function clearStakeAddress() {
     input.type = 'text';
     initAddressAutocomplete(input);   // rebuilds with no placeholder
   }
-  // Legacy path: f-ad is the visible input, so clearing .value above is enough.
+  // Legacy path: the input is the visible one, so clearing .value above is enough.
   if (typeof showToast === 'function') showToast('Address cleared — save to apply.', 'info', 2500);
 }
 
@@ -17244,7 +17255,7 @@ function openParcelModal(id){
     <div class="fr"><label>Project *</label><select id="f-pcp">${projs.map(x=>`<option value="${x.id}"${String(pF)===String(x.id)?' selected':''}>${escHtml(x.pid||'')} — ${escHtml(x.name||'')}</option>`).join('')}</select></div>
     <div class="fr"><label>Parcel # *</label><input id="f-pcn" value="${escHtml(p.parcelNumber||'')}" placeholder="e.g. 13-112-0002"></div>
   </div>
-  <div class="fr"><label>Situs address <span style="font-weight:400;color:var(--fog)">(leave blank if the parcel has no address yet)</span></label><input id="f-pca" value="${escHtml(p.situsAddress||'')}"></div>
+  <div class="fr"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Situs address <span style="font-weight:400;color:var(--fog);text-transform:none;letter-spacing:0">(leave blank if the parcel has no address yet)</span></span><span onclick="clearAddressField('f-pca')" title="Remove the saved address" style="cursor:pointer;font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--fog)">✕ Clear</span></label><input id="f-pca" value="${escHtml(p.situsAddress||'')}"></div>
   <div class="fgrid fg2f">
     <div class="fr"><label>Latitude</label><input id="f-pclat" value="${escHtml(p.latitude||'')}" placeholder="40.5231"></div>
     <div class="fr"><label>Longitude</label><input id="f-pclng" value="${escHtml(p.longitude||'')}" placeholder="-111.9385"></div>
@@ -17261,6 +17272,18 @@ function openParcelModal(id){
   `${id?`<button class="btn btn-danger btn-sm" onclick="delParcel('${id}')">Delete</button>`:''}
   <button class="btn" onclick="closeM()">Cancel</button>
   <button class="btn btn-primary" onclick="saveParcel()">${id?'Save changes':'Add parcel'}</button>`,true);
+  // Google Places on the situs address. Worth more here than on a contact: the
+  // situs address is where the LAND is, which for an absentee owner is nowhere
+  // near their mailing address, so it is usually an address being typed from a
+  // list rather than from memory.
+  requestAnimationFrame(()=>{
+    const a=document.getElementById('f-pca');
+    if(!a) return;
+    a.dataset.fillLatLng='1';
+    a.dataset.latField='f-pclat';
+    a.dataset.lngField='f-pclng';
+    initAddressAutocomplete(a);
+  });
 }
 
 // Owner rows live inside the parcel modal and re-render in place, so attaching

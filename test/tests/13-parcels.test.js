@@ -45,6 +45,36 @@ module.exports = {
       t.eq(rows[0].status, 'Not started', 'status defaults');
       t.eq(rows[2].latitude, '40.5231', 'coordinates persist for an unaddressed parcel');
 
+      // ── situs address is wired for Places, and degrades gracefully ──────
+      // Google Maps is unreachable from the harness, which is the useful case to
+      // pin: initAddressAutocomplete() only swaps the input for the widget once
+      // Places actually loads, so with no network the field stays an ordinary
+      // typable text input rather than becoming unusable.
+      const addr = await app.page.evaluate(async () => {
+        openParcelModal();
+        // The wiring runs in a requestAnimationFrame after the modal renders.
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const a = document.getElementById('f-pca');
+        return { exists: !!a, type: a.type,
+                 fill: a.dataset.fillLatLng, lat: a.dataset.latField, lng: a.dataset.lngField,
+                 hasClear: /clearAddressField\('f-pca'\)/.test(document.body.innerHTML) };
+      });
+      t.ok(addr.exists, 'the situs address field is present');
+      t.eq(addr.type, 'text', 'it stays typable when Places cannot load');
+      t.eq(addr.fill, '1', 'it is flagged to fill coordinates from a picked place');
+      t.eq(addr.lat, 'f-pclat', 'pointing at the latitude field');
+      t.eq(addr.lng, 'f-pclng', 'and the longitude field');
+      t.ok(addr.hasClear, 'and offers a Clear affordance');
+
+      // The clear helper is generic now, not hardcoded to the contact field.
+      const cleared = await app.page.evaluate(() => {
+        document.getElementById('f-pca').value = 'somewhere';
+        clearAddressField('f-pca');
+        return document.getElementById('f-pca').value;
+      });
+      t.eq(cleared, '', 'clearAddressField() blanks the parcel address');
+      await app.page.evaluate(() => closeM());
+
       // ── the duplicate guard ─────────────────────────────────────────────
       const dupe = await app.page.evaluate(async pid => {
         let alerted = null;

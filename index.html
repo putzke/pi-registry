@@ -8416,7 +8416,9 @@ function renderReports(el){
     {id:'pi-summary',name:'PI Compliance Summary',desc:'FHWA/NEPA public involvement summary: NEPA checklist, public meetings, comment response rate, LEP/EJ outreach, and commitments — export as PDF',
       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h4"/><circle cx="8" cy="9" r="1" fill="currentColor"/></svg>'},
     {id:'nepa-compliance',name:'NEPA Compliance Report',desc:'Checklist progress by phase group, outstanding items, and comment period duration compliance — works for one project or the full portfolio',
-      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/><circle cx="7" cy="17" r="1" fill="currentColor"/></svg>'}
+      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/><circle cx="7" cy="17" r="1" fill="currentColor"/></svg>'},
+    {id:'parcel-status',name:'Right-of-Way Parcel Report',desc:'Parcel register with notice and ownership coverage, acquisition status, and every parcel still missing an owner or a notice date',
+      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M2 7l7-3 6 3 7-3v13l-7 3-6-3-7 3z"/><path d="M9 4v13M15 7v13"/></svg>'}
   ];
   var cardsHTML='';
   rptCards.forEach(function(r){
@@ -8431,7 +8433,7 @@ function renderReports(el){
     cardsHTML+='<div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:18px 20px;cursor:pointer;transition:border-color .12s,transform .12s" '
       +'onmouseover="this.style.borderColor=\'rgba(45,125,210,.5)\';this.style.transform=\'translateY(-2px)\'" '
       +'onmouseout="this.style.borderColor=\'rgba(255,255,255,.14)\';this.style.transform=\'none\'" '
-      +'onclick="'+(r.id==="issues-report"?"generateIssuesReport()":r.id==="stakeholder-map"?"setView('map')":r.id==="pi-summary"?"generatePISummary()":r.id==="nepa-compliance"?"generateNepaComplianceReport()":("generateReport('"+r.id+"')"))+'">'
+      +'onclick="'+(r.id==="issues-report"?"generateIssuesReport()":r.id==="stakeholder-map"?"setView('map')":r.id==="pi-summary"?"generatePISummary()":r.id==="nepa-compliance"?"generateNepaComplianceReport()":r.id==="parcel-status"?"generateParcelReport()":("generateReport('"+r.id+"')"))+'">'
       +'<div style="display:flex;align-items:flex-start;gap:12px">'
       +'<div style="color:var(--sky-lt);flex-shrink:0;margin-top:2px">'+r.icon+'</div>'
       +'<div><div style="font-size:14px;font-weight:600;color:var(--white);margin-bottom:5px">'+r.name+'</div>'
@@ -9164,6 +9166,192 @@ function generateNepaComplianceReport(){
   showInlineReport(html, 'NEPA Compliance Report');
 }
 
+// ── PARCEL / RIGHT-OF-WAY QUICK REPORT ──────────────────────────────────────
+// The compliance unit in a ROW campaign is the PARCEL, so this reports over
+// parcels rather than contacts. It answers the four questions actually asked in
+// a review, in order:
+//   1. how many parcels are affected;
+//   2. is every parcel's owner identified — an unowned parcel is the one that
+//      silently misses a notice sweep;
+//   3. has every parcel been noticed, and when;
+//   4. what is outstanding, named parcel by parcel.
+// Shared with the PI report editor's 'auto-parcels' section via _parcelStats().
+function _parcelStats(projId){
+  var parcels=(DB.get('parcels')||[]).filter(function(p){ return !projId||String(p.projectId)===String(projId); });
+  var links=DB.get('parcel_owners')||[];
+  var stakes=DB.get('stakeholders')||[];
+  var ownersOf=function(pid){
+    return links.filter(function(l){ return String(l.parcelId)===String(pid); })
+      .map(function(l){ return {link:l,stake:stakes.find(function(s){ return String(s.id)===String(l.stakeholderId); })}; })
+      .filter(function(x){ return x.stake; });
+  };
+  var rows=parcels.map(function(p){ return {parcel:p, owners:ownersOf(p.id)}; })
+    .sort(function(a,b){ return (a.parcel.parcelNumber||'').localeCompare(b.parcel.parcelNumber||'',undefined,{numeric:true}); });
+
+  var total=rows.length;
+  var unowned=rows.filter(function(r){ return r.owners.length===0; });
+  var noticed=rows.filter(function(r){ return !!r.parcel.noticeDate; });
+  var located=rows.filter(function(r){ return (r.parcel.situsAddress||'').trim()
+                                          || ((r.parcel.latitude||'').trim() && (r.parcel.longitude||'').trim()); });
+  // Distinct owners across the campaign — one person holding six parcels is one
+  // conversation, not six, and the crew size should reflect that.
+  var ownerIds={};
+  rows.forEach(function(r){ r.owners.forEach(function(o){ ownerIds[String(o.stake.id)]=true; }); });
+
+  var byStatus={}, statusOrder=['Not started','Notice sent','Contacted','Negotiating','Acquired','Declined'];
+  rows.forEach(function(r){ var st=r.parcel.status||'Not started'; byStatus[st]=(byStatus[st]||0)+1; });
+  var byAcq={};
+  rows.forEach(function(r){ var a=(r.parcel.acquisitionType||'').trim()||'Not specified'; byAcq[a]=(byAcq[a]||0)+1; });
+
+  var dates=noticed.map(function(r){ return r.parcel.noticeDate; }).sort();
+  return {
+    rows:rows, total:total,
+    unowned:unowned, unownedCt:unowned.length,
+    noticedCt:noticed.length,
+    noticePct: total?Math.round(noticed.length/total*100):0,
+    ownedPct:  total?Math.round((total-unowned.length)/total*100):0,
+    locatedCt: located.length,
+    unlocatedCt: total-located.length,
+    ownerCt:Object.keys(ownerIds).length,
+    byStatus:byStatus, statusOrder:statusOrder, byAcq:byAcq,
+    firstNotice:dates[0]||'', lastNotice:dates[dates.length-1]||''
+  };
+}
+
+function generateParcelReport(){
+  var projs=DB.get('projects')||[];
+  var projF=S.projectFilter;
+  var targetProjs=projF?projs.filter(function(p){ return String(p.id)===String(projF); })
+                       :projs.filter(function(p){ return (DB.get('parcels')||[]).some(function(x){ return String(x.projectId)===String(p.id); }); });
+  if(!targetProjs.length){
+    alert('No parcels tracked yet. Add parcels in the Parcels view, or import a parcel list, then run this report.');
+    return;
+  }
+  var now=new Date();
+  var dateStr=now.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+
+  function sectionHdr(t){
+    return '<div style="font-size:12px;font-weight:700;color:#1a3050;text-transform:uppercase;letter-spacing:.6px;margin:18px 0 8px;padding-bottom:5px;border-bottom:2px solid #2d7dd2">'+t+'</div>';
+  }
+  function statCard(num,label,tone){
+    return '<div style="flex:1;min-width:120px;border:1px solid #d8e2ec;border-left:3px solid '+tone+';border-radius:6px;padding:10px 12px;background:#f7fafd">'
+      +'<div style="font-size:22px;font-weight:700;color:'+tone+'">'+num+'</div>'
+      +'<div style="font-size:10px;color:#5a7186;text-transform:uppercase;letter-spacing:.4px;margin-top:2px">'+label+'</div></div>';
+  }
+  function pBar(pct,color){
+    return '<div style="background:#e0e8f0;border-radius:3px;height:8px;overflow:hidden"><div style="background:'+color+';height:100%;width:'+pct+'%;border-radius:3px"></div></div>';
+  }
+  var th='padding:5px 8px;background:#1a3a5c;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.4px;text-align:left';
+  var td='padding:6px 8px;border-bottom:1px solid #e0e0e0;font-size:11px;vertical-align:top';
+
+  var bodyHTML='';
+  targetProjs.forEach(function(proj){
+    var m=_parcelStats(proj.id);
+    if(!m.total) return;
+
+    bodyHTML+='<div style="font-size:15px;font-weight:700;color:#1a3050;margin:26px 0 4px">'+escHtml(proj.pid||'')+' — '+escHtml(proj.name||'')+'</div>';
+
+    bodyHTML+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 4px">'
+      +statCard(m.total,'Parcels affected','#1a3050')
+      +statCard(m.ownerCt,'Distinct owners','#2d7dd2')
+      +statCard(m.noticedCt+' / '+m.total,'Notice sent',m.noticePct===100?'#28A870':'#D9A544')
+      +statCard(m.unownedCt,'No owner identified',m.unownedCt?'#C0392B':'#28A870')
+      +'</div>';
+
+    // ── Coverage — the two numbers a reviewer actually asks for ──────────
+    bodyHTML+=sectionHdr('Notice &amp; ownership coverage');
+    bodyHTML+='<table style="margin-bottom:6px"><tbody>'
+      +'<tr><td style="'+td+';width:150px"><strong>Owner identified</strong></td>'
+      +'<td style="'+td+'">'+(m.total-m.unownedCt)+' of '+m.total+' parcels ('+m.ownedPct+'%)'
+      +'<div style="margin-top:4px">'+pBar(m.ownedPct,m.ownedPct===100?'#28A870':'#D9A544')+'</div></td></tr>'
+      +'<tr><td style="'+td+'"><strong>Notice sent</strong></td>'
+      +'<td style="'+td+'">'+m.noticedCt+' of '+m.total+' parcels ('+m.noticePct+'%)'
+      +(m.firstNotice?'<div style="font-size:10px;color:#5a7186;margin-top:2px">'+_fmtDateRange(m.firstNotice,m.lastNotice)+'</div>':'')
+      +'<div style="margin-top:4px">'+pBar(m.noticePct,m.noticePct===100?'#28A870':'#D9A544')+'</div></td></tr>'
+      +'<tr><td style="'+td+'"><strong>Located</strong></td>'
+      +'<td style="'+td+'">'+m.locatedCt+' of '+m.total+' have a situs address or coordinates'
+      +(m.unlocatedCt?'<div style="font-size:10px;color:#C0392B;margin-top:2px">'+m.unlocatedCt+' parcel'+(m.unlocatedCt!==1?'s':'')+' with neither — cannot be shown on a map or verified in the field</div>':'')
+      +'</td></tr></tbody></table>';
+
+    if(m.unownedCt){
+      bodyHTML+='<div style="background:#fdf2f0;border:1px solid #e8c4bd;border-left:3px solid #C0392B;border-radius:6px;padding:10px 14px;margin:10px 0">'
+        +'<div style="font-size:12px;font-weight:700;color:#C0392B;margin-bottom:4px">'+m.unownedCt+' parcel'+(m.unownedCt!==1?'s have':' has')+' no owner attached</div>'
+        +'<div style="font-size:11px;color:#7a4a42;line-height:1.5">These cannot be included in a notice sweep and will not appear in any owner-based count: '
+        +m.unowned.slice(0,12).map(function(r){ return escHtml(r.parcel.parcelNumber||'?'); }).join(', ')
+        +(m.unowned.length>12?' and '+(m.unowned.length-12)+' more':'')+'.</div></div>';
+    }
+
+    // ── Status + acquisition mix ─────────────────────────────────────────
+    bodyHTML+=sectionHdr('Acquisition status');
+    bodyHTML+='<table style="margin-bottom:10px"><thead><tr><th style="'+th+'">Status</th><th style="'+th+';width:90px">Parcels</th><th style="'+th+';width:38%">Share</th></tr></thead><tbody>';
+    m.statusOrder.forEach(function(st){
+      var n=m.byStatus[st]||0;
+      if(!n) return;
+      var pct=Math.round(n/m.total*100);
+      bodyHTML+='<tr><td style="'+td+'">'+escHtml(st)+'</td><td style="'+td+'">'+n+'</td>'
+        +'<td style="'+td+'">'+pBar(pct,st==='Acquired'?'#28A870':st==='Declined'?'#C0392B':'#2d7dd2')
+        +'<div style="font-size:10px;color:#5a7186;margin-top:2px">'+pct+'%</div></td></tr>';
+    });
+    bodyHTML+='</tbody></table>';
+
+    var acqKeys=Object.keys(m.byAcq);
+    if(acqKeys.length){
+      bodyHTML+='<div style="font-size:11px;color:#5a7186;margin-bottom:4px"><strong>Acquisition type:</strong> '
+        +acqKeys.map(function(k){ return escHtml(k)+' ('+m.byAcq[k]+')'; }).join(' · ')+'</div>';
+    }
+
+    // ── The parcel register itself ───────────────────────────────────────
+    bodyHTML+=sectionHdr('Parcel register');
+    bodyHTML+='<table style="table-layout:fixed"><colgroup><col style="width:14%"><col style="width:22%"><col style="width:26%"><col style="width:15%"><col style="width:12%"><col style="width:11%"></colgroup>'
+      +'<thead><tr><th style="'+th+'">Parcel #</th><th style="'+th+'">Location</th><th style="'+th+'">Owner(s)</th><th style="'+th+'">Acquisition</th><th style="'+th+'">Status</th><th style="'+th+'">Notice</th></tr></thead><tbody>';
+    m.rows.forEach(function(r){
+      var p=r.parcel;
+      var loc=p.situsAddress||((p.latitude&&p.longitude)?(p.latitude+', '+p.longitude):'');
+      bodyHTML+='<tr><td style="'+td+';font-family:monospace"><strong>'+escHtml(p.parcelNumber||'—')+'</strong></td>'
+        +'<td style="'+td+'">'+(loc?escHtml(loc):'<span style="color:#C0392B">Not located</span>')
+        +(!p.situsAddress&&p.latitude?'<div style="font-size:9px;color:#7a95a8">coordinates</div>':'')+'</td>'
+        +'<td style="'+td+'">'+(r.owners.length
+            ? r.owners.map(function(o){ return escHtml(dispName(o.stake))
+                +(o.link.ownershipRole&&o.link.ownershipRole!=='Owner'?' <span style="color:#7a95a8">('+escHtml(o.link.ownershipRole)+')</span>':''); }).join('<br>')
+            : '<span style="color:#C0392B">No owner attached</span>')+'</td>'
+        +'<td style="'+td+'">'+escHtml(p.acquisitionType||'—')+'</td>'
+        +'<td style="'+td+'">'+escHtml(p.status||'Not started')+'</td>'
+        +'<td style="'+td+';white-space:nowrap">'+(p.noticeDate?escHtml(_fmtMDY(p.noticeDate)):'—')+'</td></tr>';
+      if((p.notes||'').trim()){
+        bodyHTML+='<tr><td style="'+td+'"></td><td colspan="5" style="'+td+';font-size:10px;color:#5a7186;font-style:italic">'+escHtml(p.notes)+'</td></tr>';
+      }
+    });
+    bodyHTML+='</tbody></table>';
+  });
+
+  if(!bodyHTML){ alert('No parcels tracked for the selected project yet.'); return; }
+
+  var titleLine=projF&&targetProjs[0]
+    ?(targetProjs[0].pid+' — '+targetProjs[0].name)
+    :'All projects with parcels ('+targetProjs.length+')';
+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Right-of-Way Parcel Report — '+escHtml(titleLine)+'</title>'
+    +'<style>*{box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:12px;color:#1a2a3a;background:#fff;margin:0;padding:32px 40px}'
+    +'table{width:100%;border-collapse:collapse}@page{size:letter portrait;margin:18mm 14mm 14mm 14mm}'
+    +'@media print{.no-print{display:none!important}body{padding:12px 18px}tr{page-break-inside:avoid}}</style></head><body>'
+    +'<div class="no-print" style="display:flex;justify-content:flex-end;margin-bottom:16px">'
+    +'<button onclick="window.print()" style="background:#1a3050;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;cursor:pointer;font-weight:600">⬇ Save / Print PDF</button></div>'
+    +_rptBrandHeader()
+    +'<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px">'
+    +'<div><div style="font-size:20px;font-weight:700;color:#1a3050;margin-bottom:2px">Right-of-Way Parcel Report</div>'
+    +'<div style="font-size:13px;color:#2d7dd2;font-weight:600">'+escHtml(titleLine)+'</div></div>'
+    +'<div style="text-align:right;font-size:11px;color:#7a95a8">Generated<br><strong>'+dateStr+'</strong><br>Sunrise Engineering Inc.</div>'
+    +'</div>'
+    +'<div style="height:3px;background:linear-gradient(90deg,#1a3050,#2d7dd2,#28A870);border-radius:2px;margin-bottom:24px"></div>'
+    +bodyHTML
+    +'<div style="margin-top:24px;padding-top:10px;border-top:1px solid #c8d6e5;font-size:10px;color:#7a95a8;display:flex;justify-content:space-between">'
+    +'<span>Horizon COMPASS — Sunrise Engineering Inc.</span><span>'+dateStr+'</span></div>'
+    +_rptBrandFooter()
+    +'</body></html>';
+
+  showInlineReport(html, 'Right-of-Way Parcel Report');
+}
+
 function generateIssuesReport(){
   // Behave like the other quick reports: render the PDF inline in the shared
   // letterhead frame, scoped to the current project only (no Word option — that
@@ -9889,7 +10077,8 @@ function getAvailableSections(){
     {id:'issues',title:'Issues tracker',type:'auto-issues'},
     {id:'commitments',title:'Commitments tracker',type:'auto-commitments'},
     {id:'pi-compliance',title:'PI Compliance Summary (FHWA/NEPA)',type:'auto-pi-compliance'},
-    {id:'nepa-compliance',title:'NEPA Compliance — Checklist & Comment Periods',type:'auto-nepa-compliance'}
+    {id:'nepa-compliance',title:'NEPA Compliance — Checklist & Comment Periods',type:'auto-nepa-compliance'},
+    {id:'parcels',title:'Right-of-Way — Parcel Status',type:'auto-parcels'}
   ];
 }
 
@@ -9958,7 +10147,8 @@ function getSectionDesc(type){
     'auto-issues':'Auto-populates open and resolved issues with priority, status, category, and linked interaction details.',
     'auto-commitments':'Auto-populates open and fulfilled commitments made to stakeholders, grouped by category and status.',
     'auto-pi-compliance':'Auto-populates a FHWA/NEPA PI compliance summary: NEPA checklist progress, public meetings, comment response rate, LEP/EJ outreach, and commitment fulfillment.',
-    'auto-nepa-compliance':'Auto-populates NEPA checklist progress by phase group, outstanding items, and comment period duration compliance. Supports AI-drafted narrative.'
+    'auto-nepa-compliance':'Auto-populates NEPA checklist progress by phase group, outstanding items, and comment period duration compliance. Supports AI-drafted narrative.',
+    'auto-parcels':'Auto-populates the right-of-way parcel register: notice and ownership coverage, acquisition status, and every parcel still missing an owner or a notice date. Supports AI-drafted narrative.'
   };
   return descs[type]||'';
 }
@@ -10634,6 +10824,25 @@ function _buildSectionDraft(secType) {
     });
     var txt_pc = pcAll.length+' formal public comment'+(pcAll.length!==1?'s':'')+' received across '+Object.keys(pcCats).length+' topic'+(Object.keys(pcCats).length!==1?'s':'')+'. '+pcPending+' pending response. Categories: '+lines.join(' | ');
     return txt_pc;
+  }
+
+  if (secType === 'auto-parcels') {
+    var pmF = _parcelStats(projF);
+    if (!pmF.total) return null;
+    var outstanding = pmF.rows.filter(function(r){ return !r.parcel.noticeDate; });
+    var lines_pf = [
+      pmF.total + ' parcels affected, held by ' + pmF.ownerCt + ' distinct owners',
+      'notice sent on ' + pmF.noticedCt + ' of ' + pmF.total + ' parcels (' + pmF.noticePct + '%)'
+        + (pmF.firstNotice ? ', ' + _fmtDateRange(pmF.firstNotice, pmF.lastNotice) : ''),
+      'owner identified on ' + (pmF.total - pmF.unownedCt) + ' of ' + pmF.total + ' (' + pmF.ownedPct + '%)'
+    ];
+    if (pmF.unownedCt) lines_pf.push(pmF.unownedCt + ' parcels have no owner attached and cannot be included in a notice sweep');
+    if (pmF.unlocatedCt) lines_pf.push(pmF.unlocatedCt + ' parcels have neither a situs address nor coordinates');
+    if (outstanding.length) lines_pf.push(outstanding.length + ' parcels are still awaiting notice');
+    var stLine = pmF.statusOrder.filter(function(st){ return pmF.byStatus[st]; })
+      .map(function(st){ return pmF.byStatus[st] + ' ' + st.toLowerCase(); }).join(', ');
+    if (stLine) lines_pf.push('acquisition status: ' + stLine);
+    return 'Right-of-way parcel status: ' + lines_pf.join('; ') + '.';
   }
 
   if (secType === 'auto-nepa-compliance') {
@@ -11505,6 +11714,36 @@ function _buildSectionPreviewTable(secType, projF, pstart, pend, includeInternal
         +'<td style="'+tdStyle+';white-space:nowrap">'+(r[2]===null?'<span style="color:#999">—</span>':barHtml(r[2]))+'</td></tr>';
     });
 
+  } else if (secType === 'auto-parcels') {
+    var pm = _parcelStats(projF);
+    if (!pm.total) {
+      tbl += '<tbody><tr><td style="'+tdStyle+';color:#aaa;font-style:italic">No parcels tracked for this project.</td></tr>';
+    } else {
+      // Coverage first — those are the two numbers a reviewer asks for — then
+      // the register itself, so the narrative and the evidence sit together.
+      tbl += '<colgroup><col style="width:14%"><col style="width:21%"><col style="width:25%"><col style="width:15%"><col style="width:14%"><col style="width:11%"></colgroup>'
+        + '<thead><tr><th style="'+thStyle+'" colspan="6">'
+        + escHtml(pm.total + ' parcel' + (pm.total !== 1 ? 's' : '')
+          + ' · ' + pm.ownerCt + ' distinct owner' + (pm.ownerCt !== 1 ? 's' : '')
+          + ' · notice sent on ' + pm.noticedCt + '/' + pm.total + ' (' + pm.noticePct + '%)'
+          + ' · owner identified on ' + (pm.total - pm.unownedCt) + '/' + pm.total + ' (' + pm.ownedPct + '%)')
+        + '</th></tr>'
+        + '<tr><th style="'+thStyle+'">Parcel #</th><th style="'+thStyle+'">Location</th><th style="'+thStyle+'">Owner(s)</th><th style="'+thStyle+'">Acquisition</th><th style="'+thStyle+'">Status</th><th style="'+thStyle+'">Notice</th></tr></thead><tbody>';
+      pm.rows.forEach(function(r){
+        var pp = r.parcel;
+        var loc = pp.situsAddress || ((pp.latitude && pp.longitude) ? (pp.latitude + ', ' + pp.longitude) : '');
+        tbl += '<tr><td style="'+tdStyle+'"><strong>'+escHtml(pp.parcelNumber||'—')+'</strong></td>'
+          + '<td style="'+tdStyle+'">'+(loc?escHtml(loc):'<span style="color:#C0392B">Not located</span>')+'</td>'
+          + '<td style="'+tdStyle+'">'+(r.owners.length
+              ? r.owners.map(function(o){ return escHtml(dispName(o.stake))
+                  + (o.link.ownershipRole && o.link.ownershipRole !== 'Owner' ? ' ('+escHtml(o.link.ownershipRole)+')' : ''); }).join('<br>')
+              : '<span style="color:#C0392B">No owner attached</span>')+'</td>'
+          + '<td style="'+tdStyle+'">'+escHtml(pp.acquisitionType||'—')+'</td>'
+          + '<td style="'+tdStyle+'">'+escHtml(pp.status||'Not started')+'</td>'
+          + '<td style="'+tdStyle+';white-space:nowrap">'+(pp.noticeDate?escHtml(_fmtMDY(pp.noticeDate)):'—')+'</td></tr>';
+      });
+    }
+
   } else {
     return '';
   }
@@ -11651,6 +11890,12 @@ function renderLivePreview() {
       if (sec.type === 'auto-contacts') {
         var extCt = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; }).length;
         counts.push(extCt + ' external contact' + (extCt !== 1 ? 's' : ''));
+      }
+      if (sec.type === 'auto-parcels') {
+        var _pm = _parcelStats(projF);
+        if (_pm.total) counts.push(_pm.total + ' parcel' + (_pm.total !== 1 ? 's' : ''),
+                                   _pm.noticedCt + '/' + _pm.total + ' noticed');
+        if (_pm.unownedCt) counts.push(_pm.unownedCt + ' without an owner');
       }
       if (sec.type === 'auto-nepa-compliance') {
         var _prj = DB.get('projects').find(function(p){ return p.id === projF; });
@@ -12036,6 +12281,12 @@ function _buildReportSnapshot(projF, saved) {
       if (sec.type === 'auto-contacts') {
         var extCt = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; }).length;
         counts.push(extCt + ' external contact' + (extCt !== 1 ? 's' : ''));
+      }
+      if (sec.type === 'auto-parcels') {
+        var pmS = _parcelStats(projF);
+        if (pmS.total) counts.push(pmS.total + ' parcel' + (pmS.total !== 1 ? 's' : ''),
+                                   pmS.noticedCt + '/' + pmS.total + ' noticed');
+        if (pmS.unownedCt) counts.push(pmS.unownedCt + ' without an owner');
       }
       if (sec.type === 'auto-nepa-compliance') {
         var cl = proj.nepaChecklist || [];
@@ -13706,6 +13957,32 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
         xml+=bullet('Fulfilled: '+_fulfilled);
         xml+=bullet('Open / pending: '+(_comms.length-_fulfilled));
       }
+      }
+
+    } else if(sec.type==='auto-parcels'){
+      var _pmx=_parcelStats(projF);
+      if(!_pmx.total){
+        xml+=bullet('No parcels tracked for this project.');
+      } else {
+        xml+=para('Right-of-Way Parcel Status',boldRpr);
+        xml+=bullet(_pmx.total+' parcels affected, held by '+_pmx.ownerCt+' distinct owner'+(_pmx.ownerCt!==1?'s':''));
+        xml+=bullet('Notice sent on '+_pmx.noticedCt+' of '+_pmx.total+' parcels ('+_pmx.noticePct+'%)'
+          +(_pmx.firstNotice?' — '+_fmtDateRange(_pmx.firstNotice,_pmx.lastNotice):''));
+        xml+=bullet('Owner identified on '+(_pmx.total-_pmx.unownedCt)+' of '+_pmx.total+' ('+_pmx.ownedPct+'%)');
+        if(_pmx.unownedCt) xml+=bullet(_pmx.unownedCt+' parcel'+(_pmx.unownedCt!==1?'s have':' has')+' no owner attached and cannot be included in a notice sweep');
+        if(_pmx.unlocatedCt) xml+=bullet(_pmx.unlocatedCt+' parcel'+(_pmx.unlocatedCt!==1?'s have':' has')+' neither a situs address nor coordinates');
+        var _stx=_pmx.statusOrder.filter(function(st){return _pmx.byStatus[st];})
+          .map(function(st){return _pmx.byStatus[st]+' '+st.toLowerCase();}).join(', ');
+        if(_stx) xml+=bullet('Acquisition status: '+_stx);
+        xml+=para('Parcel Register',boldRpr);
+        _pmx.rows.forEach(function(r){
+          var pp=r.parcel;
+          var loc=pp.situsAddress||((pp.latitude&&pp.longitude)?(pp.latitude+', '+pp.longitude):'not located');
+          var own=r.owners.length?r.owners.map(function(o){return dispName(o.stake);}).join(', '):'no owner attached';
+          xml+=bullet((pp.parcelNumber||'?')+' — '+loc+' — '+own
+            +' — '+(pp.status||'Not started')
+            +(pp.noticeDate?' — noticed '+_fmtMDY(pp.noticeDate):' — not yet noticed'));
+        });
       }
 
     } else if(sec.type==='auto-nepa-compliance'){

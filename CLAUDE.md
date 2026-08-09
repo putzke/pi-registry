@@ -193,8 +193,26 @@ there was nothing to count.
     silently wrong link.
   - Several owners on one parcel: import the parcel once, attach co-owners in the
     Parcels view. A second row with the same number is a duplicate by design.
-- **Still not built:** map layer, report section, portal exposure. Manual entry
-  is the stated normal workflow, so those remain follow-ups.
+- **Reporting (Aug 2026), two surfaces, one source of truth.** `_parcelStats(projId)`
+  computes everything; the quick report and the report-editor section both read
+  it, so they cannot disagree about coverage.
+  - **Quick report** `generateParcelReport()` — card `parcel-status`. Answers the
+    four questions asked in a ROW review, in order: how many parcels; is every
+    owner identified; has every parcel been noticed and when; what is
+    outstanding. Scoped to `S.projectFilter`, or every project with parcels.
+  - **Report-editor section** `auto-parcels` — the full five-hook wiring a new
+    section type needs: `getAvailableSections()`, `getSectionDesc()`,
+    `_buildSectionDraft()` (AI facts), `_buildSectionPreviewTable()`, the counts
+    label in **both** `renderLivePreview` and `_buildReportSnapshot` (they must
+    match or an archived header contradicts the live one), and the `.docx`
+    branch in `exportPIDocx`.
+  - **Distinct owners, not links** — one person holding six parcels is one
+    conversation, not six. Counts reflect that.
+  - AI facts are computed and handed to the model as authoritative; the model
+    narrates and never counts.
+  - Covered by `test/tests/15-parcel-report.test.js` (27 checks).
+- **Still not built:** map layer, portal exposure. Manual entry is the stated
+  normal workflow, so those remain follow-ups.
 
 ### Project scoping per view
 `S.projectFilter` is the shared scope, written by the project select in the

@@ -162,12 +162,6 @@ body{padding:0}
 .imp-tab-pane{display:none;}
 .imp-tab-pane.active{display:block;}
 /* INT TOGGLE */
-.int-toggle-bar{display:flex;align-items:center;gap:12px;padding:14px 18px;background:var(--navy-rim);border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:20px;cursor:pointer;user-select:none;}
-.int-toggle-bar input[type=checkbox]{width:16px;height:16px;accent-color:var(--sky);cursor:pointer;flex-shrink:0;}
-.int-toggle-bar .itb-label{font-size:13px;font-weight:500;color:var(--white);}
-.int-toggle-bar .itb-sub{font-size:11px;color:var(--fog);margin-top:1px;}
-.int-body{display:none;}
-.int-body.visible{display:block;}
 /* INT REVIEW TABLE */
 .int-review-table{width:100%;border-collapse:collapse;font-size:12px;}
 .int-review-table th{position:sticky;top:0;background:var(--navy-mid);padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--fog);border-bottom:1px solid var(--border);font-weight:600;white-space:nowrap;z-index:2;}
@@ -385,15 +379,6 @@ body{padding:0}
 
   <!-- TAB: INTERACTIONS -->
   <div class="imp-tab-pane" id="tabpane-interactions">
-
-    <!-- OPTIONAL TOGGLE -->
-    <div class="int-toggle-bar" onclick="toggleIntImport()">
-      <input type="checkbox" id="int-enable-chk" onclick="event.stopPropagation();toggleIntImport()">
-      <div>
-        <div class="itb-label">Import interactions for this project</div>
-        <div class="itb-sub">Optional — upload a spreadsheet of past interactions and link them to stakeholders already in the registry.</div>
-      </div>
-    </div>
 
     <div class="int-body" id="int-body">
 
@@ -2024,6 +2009,11 @@ function switchImpTab(tab) {
     document.getElementById('tab-'+t).classList.toggle('active', t===tab);
     document.getElementById('tabpane-'+t).classList.toggle('active', t===tab);
   });
+  // Choosing the tab IS the opt-in, so the project list is loaded on arrival.
+  // Interactions used to sit behind an extra "Import interactions for this
+  // project" checkbox — a leftover from when it was an optional section inside
+  // the stakeholder flow rather than a tab of its own.
+  if (tab === 'interactions') populateIntProjectSelect();
   if (tab === 'parcels') populateParcProjectSelect();
 }
 
@@ -2125,15 +2115,6 @@ let intState = {
 };
 
 // ── TOGGLE ────────────────────────────────────────────────────
-function toggleIntImport() {
-  const chk = document.getElementById('int-enable-chk');
-  const body = document.getElementById('int-body');
-  // If called from checkbox, read checkbox value; else toggle
-  const nowEnabled = chk.checked;
-  body.classList.toggle('visible', nowEnabled);
-  if (nowEnabled) populateIntProjectSelect();
-}
-
 async function populateIntProjectSelect() {
   const projs = await cacheLoad('projects');
   const sel = document.getElementById('int-project-select');

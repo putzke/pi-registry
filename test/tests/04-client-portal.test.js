@@ -109,6 +109,41 @@ module.exports = {
            `switched project shows the right banner tone for ${expected.c} / ${expected.s}`);
       t.ok(after.text.length > 5, 'switched banner has label text');
 
+      // ── Right-of-Way section ────────────────────────────────────────────
+      // Coverage is what the agency client needs. Owner NAMES are deliberately
+      // withheld: a token link is unauthenticated, anyone with the URL can read
+      // it, and the owners are private individuals — so the client sees a COUNT.
+      const proj = (await t.sql(`select id from pi_projects where pid='25-154-001'`))[0];
+      const pid = String(proj.id);
+      const own = (await t.sql(
+        `select s.id, s.last_name from pi_stakeholders s join pi_project_stakeholders l
+           on l.stakeholder_id::text = s.id::text
+          where l.project_id::text=$1 and s.last_name <> '' order by s.id limit 1`, [pid]))[0];
+      const par = (await t.sql(
+        `insert into pi_parcels (project_id,parcel_number,situs_address,status,notice_date,acquisition_type,notes)
+         values ($1,'13-112-0009','9 Situs Way','Notice sent','2026-07-02','Partial take','internal working note')
+         returning id`, [pid]))[0];
+      await t.sql(
+        `insert into pi_parcels (project_id,parcel_number,status) values ($1,'13-112-0010','Not started')`, [pid]);
+      await t.sql(
+        `insert into pi_parcel_owners (parcel_id,stakeholder_id,ownership_role) values ($1,$2,'Owner')`,
+        [String(par.id), String(own.id)]);
+
+      await app.page.evaluate(() => setView('parcels'));
+      await app.page.waitForFunction(
+        () => !/Loading/.test(document.getElementById('parc-content')?.innerHTML || 'Loading'),
+        null, { timeout: 10000 });
+      const rw = await app.page.evaluate(() => document.getElementById('parc-content').innerHTML);
+
+      t.ok(/Right-of-Way coverage/.test(rw), 'the Right-of-Way section renders');
+      t.ok(/13-112-0009/.test(rw) && /13-112-0010/.test(rw), 'both parcels are listed');
+      t.ok(/1 owner/.test(rw), 'an owner count is shown');
+      t.ok(/Not yet identified/.test(rw), 'and a parcel with no owner says so');
+      t.eq(new RegExp(own.last_name).test(rw), false,
+           'no owner NAME is exposed to the client');
+      t.eq(/internal working note/.test(rw), false, 'internal parcel notes are withheld');
+      t.ok(/Notice sent/.test(rw), 'status shows');
+
       t.eq(app.errors, [], 'no page errors in login mode');
     } finally { await app.close(); }
   },

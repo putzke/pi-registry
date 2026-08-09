@@ -211,8 +211,18 @@ there was nothing to count.
   - AI facts are computed and handed to the model as authoritative; the model
     narrates and never counts.
   - Covered by `test/tests/15-parcel-report.test.js` (27 checks).
-- **Still not built:** map layer, portal exposure. Manual entry is the stated
-  normal workflow, so those remain follow-ups.
+- **Client portal: a "Right-of-Way" nav section** (`renderParcels` in
+  `client-portal.html`). Shows coverage — parcels affected, owner identified,
+  notice sent, with meters — then the register. **Owner NAMES are deliberately
+  withheld**: a portal token link is unauthenticated, anyone holding the URL can
+  read it, and the owners are private individuals, so the client sees an owner
+  COUNT per parcel. Internal parcel `notes` are withheld for the same reason.
+  The consultant has both in COMPASS. Guarded by `test/tests/04-client-portal.test.js`,
+  which asserts the owner's surname does NOT appear in the rendered section.
+- **Still not built:** map layer — parcels as a layer on the existing Map view.
+  Worth noting they need NO geocoding (the Map view geocodes stakeholder
+  addresses on demand, which is why it makes you pick a project first), so a
+  parcel layer plots instantly from stored `latitude`/`longitude`.
 
 ### Project scoping per view
 `S.projectFilter` is the shared scope, written by the project select in the

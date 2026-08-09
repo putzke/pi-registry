@@ -391,6 +391,7 @@ const NAV = [
   { id:'activity',     label:'Engagement',      icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 3H2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h3l2 2 2-2h5a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1z"/></svg>' },
   { id:'issues',       label:'Issues',          icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1L1.5 13.5h13L8 1z"/><line x1="8" y1="6" x2="8" y2="9.5"/><circle cx="8" cy="11.5" r="0.6" fill="currentColor" stroke="none"/></svg>' },
   { id:'commitments',  label:'Commitments',     icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M5 8l2 2 4-4"/></svg>' },
+  { id:'parcels',      label:'Right-of-Way',    icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1.5 4.5 6 2.5l4 2 4.5-2v9l-4.5 2-4-2-4.5 2v-9z"/><path d="M6 2.5v9M10 4.5v9"/></svg>' },
   { id:'comments',     label:'Comment Periods', icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2v12L5 11H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10z"/><path d="M5 13.5l.7 1.5"/></svg>' },
   { id:'summary',      label:'Project Updates', icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M5 8h6M5 5.5h6M5 10.5h4"/></svg>' },
 ];
@@ -847,6 +848,7 @@ function renderSection(view) {
     case 'activity':     renderActivity();     break;
     case 'issues':       renderIssues();       break;
     case 'commitments':  renderCommitments();  break;
+    case 'parcels':      renderParcels();      break;
     case 'comments':     renderComments();     break;
     case 'summary':      renderSummary();      break;
   }
@@ -1280,6 +1282,81 @@ async function renderCommitments() {
     if (err.message !== 'session_expired') {
       const el = document.getElementById('comm-content');
       if (el) el.innerHTML = infoMsg('Commitments couldn\'t be loaded at this time. Please contact your project manager if this persists.');
+    }
+  }
+}
+
+// ── Right-of-Way parcels ──────────────────────────────────────────────────────
+// Reports COVERAGE, which is what the agency client needs to see: how many
+// parcels are affected, how many have an identified owner, and how many have
+// been noticed. That is the count a ROW review turns on.
+//
+// Owner NAMES are deliberately withheld. A portal token link is unauthenticated
+// and anyone holding the URL can read it, and the owners are private
+// individuals — so the client sees an owner COUNT per parcel, never who they
+// are. The consultant has the names in COMPASS, where they belong. Notes are
+// withheld for the same reason: they are internal working notes, not a client
+// deliverable.
+async function renderParcels() {
+  setContent(`${projSelector()}${projBanner()}
+    <div id="parc-content"><div class="loading-state">Loading&hellip;</div></div>`);
+  try {
+    const [parcels, links] = await Promise.all([
+      sbFetch(`pi_parcels?project_id=eq.${_projId}&select=id,parcel_number,situs_address,latitude,longitude,acquisition_type,status,notice_date&order=parcel_number.asc`),
+      sbFetch(`pi_parcel_owners?select=parcel_id,stakeholder_id`),
+    ]);
+    const el = document.getElementById('parc-content');
+    if (!el) return;
+    if (!parcels.length) {
+      el.innerHTML = '<div class="card"><div class="card-title">Right-of-Way</div>'
+        + '<div class="empty-state">No parcels are being tracked for this project.</div></div>';
+      return;
+    }
+    const ids = {};
+    parcels.forEach(p => { ids[String(p.id)] = 0; });
+    (links || []).forEach(l => { const k = String(l.parcel_id); if (k in ids) ids[k]++; });
+
+    const total = parcels.length;
+    const noticed = parcels.filter(p => !!p.notice_date).length;
+    const owned = parcels.filter(p => ids[String(p.id)] > 0).length;
+    const noticePct = Math.round(noticed / total * 100);
+    const ownedPct = Math.round(owned / total * 100);
+    const dates = parcels.filter(p => p.notice_date).map(p => p.notice_date).sort();
+
+    const meter = (pct, ok) => `<div class="tile-meter"><span style="width:${pct}%;background:${ok?'#28A870':'#E8A020'}"></span></div>`;
+
+    el.innerHTML = `
+      <div class="card">
+        <div class="card-title">Right-of-Way coverage</div>
+        <div class="stat-row" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+          <div class="stat-tile"><div class="stat-num">${total}</div><div class="stat-lbl">Parcels affected</div></div>
+          <div class="stat-tile"><div class="stat-num">${owned}<span style="font-size:15px;color:var(--fog)"> / ${total}</span></div>
+            <div class="stat-lbl">Owner identified</div>${meter(ownedPct, ownedPct===100)}</div>
+          <div class="stat-tile"><div class="stat-num">${noticed}<span style="font-size:15px;color:var(--fog)"> / ${total}</span></div>
+            <div class="stat-lbl">Notice sent</div>${meter(noticePct, noticePct===100)}</div>
+        </div>
+        ${dates.length ? `<div style="font-size:12px;color:var(--fog);margin-top:10px">Notices issued ${fmt(dates[0])} – ${fmt(dates[dates.length-1])}.</div>` : ''}
+      </div>
+      <div class="card"><div class="card-title">Parcel register</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Parcel #</th><th>Location</th><th>Owners</th><th>Acquisition</th><th>Status</th><th>Notice sent</th></tr></thead>
+        <tbody>${parcels.map(p => {
+          const loc = p.situs_address || ((p.latitude && p.longitude) ? `${p.latitude}, ${p.longitude}` : '');
+          const n = ids[String(p.id)] || 0;
+          return `<tr>
+            <td class="col-main" style="white-space:nowrap">${esc(p.parcel_number||'—')}</td>
+            <td>${loc ? esc(loc) : '<span style="color:var(--fog)">Not located</span>'}</td>
+            <td>${n ? n + (n===1?' owner':' owners') : '<span style="color:var(--fog)">Not yet identified</span>'}</td>
+            <td>${esc(p.acquisition_type||'—')}</td>
+            <td>${esc(p.status||'Not started')}</td>
+            <td style="white-space:nowrap">${p.notice_date ? fmt(p.notice_date) : '—'}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div></div>`;
+  } catch(err) {
+    if (err.message !== 'session_expired') {
+      const el = document.getElementById('parc-content');
+      if (el) el.innerHTML = infoMsg('Right-of-way information couldn\'t be loaded at this time. Please contact your project manager if this persists.');
     }
   }
 }

@@ -50,6 +50,31 @@ module.exports = {
       `select count(*) c from pi_comment_periods where id='cp-sr154-deis-2025'`))[0].c), 1,
          'and leaves exactly one copy of it');
 
+    // The harder version, and the one seen in production: the comment period is
+    // orphaned AND no demo project remains. The purge's nothing-to-purge guard
+    // returns early, so any cleanup placed after it is skipped in exactly the
+    // state that needs it — which is why the text-PK deletes run before it.
+    await t.sql(`update pi_comment_periods set project_id='999999'
+                  where id='cp-sr154-deis-2025'`);
+    // pi_stakeholders goes too: the purge identifies demo contacts BY their link
+    // rows, so wiping links while leaving contacts would strand them and the
+    // next run would add a second copy — an artefact of this teardown, not of
+    // the seed.
+    for (const tbl of ['pi_project_stakeholders','pi_interactions','pi_public_comments',
+                       'pi_parcel_owners','pi_parcels','pi_deliverables','pi_meetings',
+                       'pi_issues','pi_commitments','pi_portal_links','pi_client_access',
+                       'pi_reports','pi_report_archive','pi_client_summaries',
+                       'pi_stakeholders','pi_projects']) {
+      await t.sql(`delete from ${tbl}`);
+    }
+    let strandedOut = '';
+    try { strandedOut = t.seed(); } catch (e) { strandedOut = 'FAILED: ' + e.message; }
+    t.eq(/FAILED/.test(String(strandedOut)), false,
+         're-running with an orphan and no demo projects succeeds');
+    t.eq(Number((await t.sql(
+      `select count(*) c from pi_comment_periods where id='cp-sr154-deis-2025'`))[0].c), 1,
+         'and still leaves exactly one copy');
+
     // ── the 3600 West design project: right-of-way test data ────────────────
     // A roadway project in DESIGN, which is when acquisition actually happens.
     // Its parcels are shaped to exercise every case the module has to handle,

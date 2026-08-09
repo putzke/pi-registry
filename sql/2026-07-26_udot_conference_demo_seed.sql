@@ -61,6 +61,20 @@ declare
                        -- for both, the same way the RLS policies in
                        -- sql/2026-07-04_portal_links.sql do.
 begin
+  -- FIRST, and unconditionally: the TEXT-PK tables.
+  --
+  -- pi_comment_periods and pi_public_comments use app-supplied text ids
+  -- (TEXT_PK_TABLES in index.html) and this seed supplies fixed literals. A row
+  -- ORPHANED from its project — project deleted, or project_id changed — is not
+  -- reached by the project-scoped deletes below, and then collides on re-insert
+  -- with "duplicate key value violates unique constraint". Worse, the
+  -- nothing-to-purge guard below RETURNS early, so anything placed after it is
+  -- skipped in exactly the state that needs cleaning most. Hence: before the
+  -- guard, keyed on the ids this seed owns rather than on the project link.
+  delete from pi_public_comments where period_id = 'cp-sr154-deis-2025'
+                                    or id like 'pc-sr154-%';
+  delete from pi_comment_periods where id = 'cp-sr154-deis-2025';
+
   select coalesce(array_agg(id::text), '{}'::text[]) into ids
     from pi_projects where pid = any(demo_pids);
   if coalesce(array_length(ids, 1), 0) = 0 then
@@ -74,18 +88,6 @@ begin
   delete from pi_interactions        where project_id::text = any(ids);
   delete from pi_public_comments     where project_id::text = any(ids);
   delete from pi_comment_periods     where project_id::text = any(ids);
-
-  -- Belt and braces for the TEXT-PK tables. pi_comment_periods and
-  -- pi_public_comments use app-supplied text ids (TEXT_PK_TABLES in
-  -- index.html), and this seed supplies fixed literals — so a row that has
-  -- become ORPHANED from its project (its project deleted, or its project_id
-  -- changed) survives the scoped delete above and then collides on re-insert
-  -- with "duplicate key value violates unique constraint". The project-scoped
-  -- deletes are the normal path; these clean up by the ids the seed itself
-  -- owns, so a re-run is self-healing whatever state the table is in.
-  delete from pi_public_comments where period_id = 'cp-sr154-deis-2025'
-                                    or id like 'pc-sr154-%';
-  delete from pi_comment_periods where id = 'cp-sr154-deis-2025';
   delete from pi_commitments         where project_id::text = any(ids);
   delete from pi_deliverables        where project_id::text = any(ids);
   delete from pi_meetings            where project_id::text = any(ids);

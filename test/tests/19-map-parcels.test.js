@@ -186,20 +186,34 @@ module.exports = {
       // The group popup must distinguish "identical addresses" from "the
       // geocoder gave up on the house numbers" — different problems, different
       // fixes, and only the second is common.
-      const why = await app.page.evaluate(() => ({
-        street: _mvParcGroupHTML({ items: [
-          {parcelNumber:'A', status:'Acquired', precision:'GEOMETRIC_CENTER'},
-          {parcelNumber:'B', status:'Acquired', precision:'GEOMETRIC_CENTER'}] }),
-        exact: _mvParcGroupHTML({ items: [
-          {parcelNumber:'A', status:'Acquired', precision:'ROOFTOP'},
-          {parcelNumber:'B', status:'Acquired', precision:'ROOFTOP'}] }),
-      }));
+      const why = await app.page.evaluate(() => {
+        const two = (pre, a, b) => ({ items: [
+          {parcelNumber:'A', status:'Acquired', precision:pre, situsAddress:a},
+          {parcelNumber:'B', status:'Acquired', precision:pre, situsAddress:b}] });
+        return {
+          street: _mvParcGroupHTML(two('GEOMETRIC_CENTER', '1 Main St', '2 Main St')),
+          interp: _mvParcGroupHTML(two('RANGE_INTERPOLATED', '1 Main St', '2 Main St')),
+          exact:  _mvParcGroupHTML(two('ROOFTOP', '1 Main St', '2 Main St')),
+          same:   _mvParcGroupHTML(two('ROOFTOP', '1 Main St', '1 Main St')),
+        };
+      });
       t.ok(/house number was not found/i.test(why.street),
            'a street-level group says the house numbers were not resolved');
-      t.ok(/resolve to the same point/i.test(why.exact),
-           'a genuinely co-located group says that instead');
-      t.ok(/survey coordinates/i.test(why.street) && /survey coordinates/i.test(why.exact),
-           'both name the fix');
+      // The case that was reported wrongly: distinct house numbers on one point,
+      // which Google still calls a good match. Judging by the label alone
+      // claimed the addresses genuinely resolve there, which cannot be true.
+      t.ok(/could not be resolved to separate positions/i.test(why.interp),
+           'an interpolated group says the numbers could not be separated');
+      t.eq(/resolve to the same point/i.test(why.interp), false,
+           'and does not claim they genuinely belong on one point');
+      t.ok(/matched exactly and still resolve/i.test(why.exact),
+           'only an exact match is reported as genuinely co-located');
+      t.ok(/share one situs address/i.test(why.same),
+           'and parcels that really do share an address say so plainly');
+      t.ok(['street','interp','exact','same'].every(k => /survey coordinates/i.test(why[k])),
+           'every variant names the fix');
+      t.ok(/Match type:\s*RANGE_INTERPOLATED/.test(why.interp),
+           'the raw match type is shown, so a surprising result is diagnosable');
 
       // A mixed-status group must not claim any one status's colour.
       const mixedIcon = await app.page.evaluate(() =>

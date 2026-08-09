@@ -16272,14 +16272,14 @@ function _mvGroupByPoint(items) {
 // parcels can share a point, and it is the difference between a pin you can act
 // on and one you cannot.
 function _mvPrecision(p) {
-  if (p.fromCoords) return { ok: true, label: 'Located by survey coordinates' };
+  if (p.fromCoords) return { ok: true, code: 'SURVEY', label: 'Located by survey coordinates' };
   var lt = p.precision || '';
-  if (lt === 'ROOFTOP')            return { ok: true,  label: 'Address matched exactly' };
-  if (lt === 'RANGE_INTERPOLATED') return { ok: true,  label: 'Interpolated between known house numbers on this street' };
-  if (lt === 'GEOMETRIC_CENTER')   return { ok: false, label: 'Street-level match — the house number was not found, so this is the centre of the road' };
-  if (lt === 'APPROXIMATE')        return { ok: false, label: 'Area-level match only — neither the house number nor the street was resolved' };
-  if (p.partial)                   return { ok: false, label: 'Partial match — the address was not fully resolved' };
-  return { ok: true, label: '' };
+  if (lt === 'ROOFTOP')            return { ok: true,  code: lt, label: 'Address matched exactly' };
+  if (lt === 'RANGE_INTERPOLATED') return { ok: true,  code: lt, label: 'Interpolated between known house numbers on this street' };
+  if (lt === 'GEOMETRIC_CENTER')   return { ok: false, code: lt, label: 'Street-level match — the house number was not found, so this is the centre of the road' };
+  if (lt === 'APPROXIMATE')        return { ok: false, code: lt, label: 'Area-level match only — neither the house number nor the street was resolved' };
+  if (p.partial)                   return { ok: false, code: 'PARTIAL', label: 'Partial match — the address was not fully resolved' };
+  return { ok: true, code: lt || 'UNKNOWN', label: '' };
 }
 
 // One parcel's info window. Owner names are fine here — this is the
@@ -16333,15 +16333,25 @@ function _mvParcGroupHTML(gp) {
       <div style="font-size:11px;color:#8a6d1f;background:#fdf6e3;border-radius:4px;padding:6px 7px;margin-top:7px">
         ${(function(){
           var pr = _mvPrecision(gp.items[0]);
-          // Say which of the two it is. "The addresses are identical" and "the
-          // geocoder could not resolve the house numbers" call for completely
-          // different actions, and only the second is the common case.
-          return pr.ok
-            ? 'These addresses resolve to the same point.'
-            : escHtml(pr.label) + ' — so every parcel on this road lands here.';
+          // Judge by OUTCOME, not by the label alone. Distinct house numbers
+          // that matched exactly cannot share a coordinate, so if several
+          // parcels landed here the match was not precise enough to tell them
+          // apart — whatever Google called it. RANGE_INTERPOLATED is the usual
+          // culprit: on a road with no address-range data every number
+          // collapses onto one node, and it is still reported as a good match.
+          var addrs = {};
+          gp.items.forEach(function(x){ addrs[(x.situsAddress||'').trim().toLowerCase()] = 1; });
+          var sameAddr = Object.keys(addrs).length === 1;
+          if (sameAddr) return 'These parcels share one situs address, so they plot together.';
+          if (pr.code === 'ROOFTOP')
+            return 'Their addresses each matched exactly and still resolve to this point.';
+          if (pr.code === 'RANGE_INTERPOLATED')
+            return 'Their house numbers could not be resolved to separate positions — this road has no address-range data, so every number lands on the same node.';
+          return escHtml(pr.label) + ' — so every parcel on this road lands here.';
         })()}
         Add survey coordinates to each parcel to plot it exactly; stored
         coordinates are used as-is and cost no lookup.
+        <div style="color:#6b7280;margin-top:4px">Match type: ${escHtml(_mvPrecision(gp.items[0]).code || 'unknown')}</div>
       </div>
     </div>`;
 }

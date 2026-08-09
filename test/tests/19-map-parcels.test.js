@@ -11,6 +11,9 @@
 // layer toggle, plottability, the status counts, the legend, and the parcel
 // that has no location at all — which must be NAMED rather than silently
 // dropped, because on a ROW campaign that is the row somebody has to resolve.
+const fs = require('fs');
+const path = require('path');
+
 module.exports = {
   name: 'map — parcel layer scopes, colours by status, and names what it cannot place',
   async run({ t }) {
@@ -161,6 +164,17 @@ module.exports = {
         return p ? { has: _parcHasLoc(p), num: p.parcelNumber } : null;
       });
       t.ok(coordsOnly && coordsOnly.has, 'a coordinates-only parcel is placeable');
+
+      // ── info windows must set their own text colour ────────────────────
+      // A Google InfoWindow renders into the page DOM, so the app's dark-theme
+      // white text is inherited onto its white background and any run of text
+      // without an explicit colour disappears. It hit the parcel owner names
+      // first; every one of these popups had the same hole.
+      const src = fs.readFileSync(path.join(__dirname, '..', '..', 'index.html'), 'utf8');
+      const wrappers = src.match(/font-family:sans-serif;font-size:13px[^"]*/g) || [];
+      t.gt(wrappers.length, 3, 'found the info-window content wrappers');
+      t.eq(wrappers.filter(w => !/;color:/.test(w)), [],
+           'every info-window wrapper sets an explicit text colour');
 
       t.eq(app.errors, [], 'no page errors during the run');
     } finally {

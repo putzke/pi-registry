@@ -15267,7 +15267,7 @@ async function _smapGeocodeAndRender(projectId, projectName, stakes, psLinks) {
 
     marker.addListener('click', () => {
       infoWindow.setContent(`
-        <div style="font-family:sans-serif;font-size:13px;min-width:180px">
+        <div style="font-family:sans-serif;font-size:13px;color:#1f2937;min-width:180px">
           <div style="font-weight:600;margin-bottom:4px">#${num} — ${name}</div>
           ${g.stake.org ? `<div style="color:#555;margin-bottom:3px">${g.stake.org}</div>` : ''}
           ${g.stake.type ? `<div style="color:#777;font-size:11px;margin-bottom:3px">${g.stake.type}</div>` : ''}
@@ -16308,7 +16308,7 @@ function _mvRenderMarkers(geocoded, parcGeo) {
       var ejTag = (g.s.ejCommunity||g.s.ej) ? '<span style="background:#e94040;color:#fff;font-size:10px;padding:1px 5px;border-radius:4px;margin-right:3px">EJ</span>' : '';
       var lepTag = g.s.lep ? '<span style="background:#f59e0b;color:#000;font-size:10px;padding:1px 5px;border-radius:4px">LEP</span>' : '';
       infoWindow.setContent(`
-        <div style="font-family:sans-serif;font-size:13px;min-width:200px;max-width:260px">
+        <div style="font-family:sans-serif;font-size:13px;color:#1f2937;min-width:200px;max-width:260px">
           <div style="font-weight:600;margin-bottom:3px">#${num} — ${name}</div>
           ${g.s.org ? `<div style="color:#555;margin-bottom:3px">${g.s.org}</div>` : ''}
           <div style="font-size:11px;color:#777;margin-bottom:5px">${g.s.type||''}</div>
@@ -16352,7 +16352,7 @@ function _mvRenderMarkers(geocoded, parcGeo) {
             + (o.link.ownershipRole && o.link.ownershipRole!=='Owner' ? ' <span style="color:#888">· '+escHtml(o.link.ownershipRole)+'</span>' : ''); }).join('<br>')
         : '<span style="color:#C0392B">No owner attached</span>';
       infoWindow.setContent(`
-        <div style="font-family:sans-serif;font-size:13px;min-width:210px;max-width:280px">
+        <div style="font-family:sans-serif;font-size:13px;color:#1f2937;min-width:210px;max-width:280px">
           <div style="font-weight:600;margin-bottom:3px">Parcel ${escHtml(lbl)}</div>
           <div style="font-size:11px;color:#777;margin-bottom:5px">
             ${p.fromCoords ? 'Located by survey coordinates' : escHtml(p.formatted || p.situsAddress || '')}
@@ -16586,7 +16586,7 @@ async function _smapGeocodeAndRenderInEl(containerId, loadingId, errorsId, proje
     });
     bounds.extend({lat:g.lat,lng:g.lng});
     marker.addListener('click', function(){
-      infoWindow.setContent('<div style="font-family:sans-serif;font-size:13px;min-width:180px"><div style="font-weight:600;margin-bottom:4px">'+name+'</div>'+(g.stake.org?'<div style="color:#555;margin-bottom:3px">'+g.stake.org+'</div>':'')+(g.stake.type?'<div style="color:#777;font-size:11px;margin-bottom:3px">'+g.stake.type+'</div>':'')+'<div style="margin-top:5px;padding-top:5px;border-top:1px solid #eee"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+color+';margin-right:4px"></span><span style="color:'+color+';font-weight:600">'+g.support+'</span></div><div style="font-size:11px;color:#888;margin-top:4px">'+g.formatted+'</div></div>');
+      infoWindow.setContent('<div style="font-family:sans-serif;font-size:13px;color:#1f2937;min-width:180px"><div style="font-weight:600;margin-bottom:4px">'+name+'</div>'+(g.stake.org?'<div style="color:#555;margin-bottom:3px">'+g.stake.org+'</div>':'')+(g.stake.type?'<div style="color:#777;font-size:11px;margin-bottom:3px">'+g.stake.type+'</div>':'')+'<div style="margin-top:5px;padding-top:5px;border-top:1px solid #eee"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+color+';margin-right:4px"></span><span style="color:'+color+';font-weight:600">'+g.support+'</span></div><div style="font-size:11px;color:#888;margin-top:4px">'+g.formatted+'</div></div>');
       infoWindow.open(map, marker);
     });
   });

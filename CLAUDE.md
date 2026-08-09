@@ -823,9 +823,41 @@ Built for the UDOT conference demo.
 **Security note (unchanged / known):** token isolation is client-side; the
 anon key is public and RLS is permissive (blanket anon read on portal tables).
 Server-side token-scoped RLS is the separate hardening project (ties to
-multi-tenant org_id work). Reminder learned the hard way: new portal tables
-need an explicit `grant ... to anon;` — RLS policies alone give "permission
-denied for table" (see sql/2026-07-06_client_summaries_grant_fix.sql).
+multi-tenant org_id work).
+
+### GRANT BOTH ROLES — every migration, every time
+A table a migration creates starts with NO grants (only dashboard-created tables
+get them automatically), and Supabase runs requests as one of two roles
+depending on which app is asking:
+- **`anon`** — `client-portal.html`, genuinely unauthenticated.
+- **`authenticated`** — `index.html` and `mobile.html`. They sign in through
+  Supabase auth, and `getAuthHeaders()` sends the user's access token instead of
+  `SUPA_KEY` once a session exists.
+
+So a new table needs `grant … to anon, authenticated;` **and** a policy naming
+both roles. Miss one and the app using that role reads an empty table, silently
+in both directions: RLS with no matching policy returns zero rows rather than an
+error, and `sbGet()` turns even a hard 403 into `[]`. The view then renders
+"nothing here yet" over a table full of data.
+
+It has happened twice, once each way. `pi_client_summaries` shipped without
+`anon` (`sql/2026-07-06_client_summaries_grant_fix.sql`). `pi_parcels` shipped
+without `authenticated` — the rows were in the database and the portal displayed
+them while the desktop Parcels view was blank
+(`sql/2026-08-09_parcels_grant_fix.sql`). The second was written by someone
+reading the first as a warning about `anon` specifically rather than about the
+pair.
+
+**Now enforced** by `test/tests/17-grants.test.js`, which parses every file in
+`sql/` and holds each table a migration CREATES to the rule. It is static
+because it has to be: the live database hides the mistake behind dashboard
+grants, and the harness creates everything as `postgres`. Deliberate
+asymmetries live in that file's `ALLOWED` map with the reason — `pi_portal_links`
+(anon read-only, or anyone holding one link could mint others) and
+`pi_client_access` (read-only to both; grants are pasted in by an admin so a
+client cannot self-grant). `test/schema.sql` now creates both roles, so
+migration grants actually apply in the harness — before that every one of them
+failed and `run.js` swallowed the error, which is why nothing caught this.
 
 ## IN PROGRESS — Client reporting redesign (locked plan, July 2026)
 

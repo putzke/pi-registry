@@ -59,9 +59,17 @@ create index if not exists pi_parcels_project_idx on pi_parcels (project_id);
 create index if not exists pi_parcel_owners_parcel_idx on pi_parcel_owners (parcel_id);
 create index if not exists pi_parcel_owners_stake_idx  on pi_parcel_owners (stakeholder_id);
 
--- RLS + grants. New portal-adjacent tables need an explicit GRANT to anon —
--- policies alone give "permission denied for table" (see
--- sql/2026-07-06_client_summaries_grant_fix.sql, learned the hard way).
+-- RLS + grants. BOTH roles, every time:
+--   * `anon`          — the client portal, which is genuinely unauthenticated.
+--   * `authenticated` — the desktop and mobile apps. getAuthHeaders() sends the
+--     signed-in user's access token when a session exists, so PostgREST runs
+--     those requests as `authenticated`, NOT as `anon`.
+-- Granting one and not the other fails silently in whichever app uses the other
+-- role: sbGet() turns the failed read into an empty array, so the view renders
+-- "nothing here yet" over a table full of rows. Missing `anon` was learned the
+-- hard way in sql/2026-07-06_client_summaries_grant_fix.sql; missing
+-- `authenticated` cost the Parcels view the same way — see
+-- sql/2026-08-09_parcels_grant_fix.sql.
 alter table pi_parcels        enable row level security;
 alter table pi_parcel_owners  enable row level security;
 
@@ -69,14 +77,16 @@ do $$
 begin
   if not exists (select 1 from pg_policies
                   where tablename='pi_parcels' and policyname='pi_parcels_anon_all') then
-    create policy pi_parcels_anon_all on pi_parcels for all to anon using (true) with check (true);
+    create policy pi_parcels_anon_all on pi_parcels
+      for all to anon, authenticated using (true) with check (true);
   end if;
   if not exists (select 1 from pg_policies
                   where tablename='pi_parcel_owners' and policyname='pi_parcel_owners_anon_all') then
-    create policy pi_parcel_owners_anon_all on pi_parcel_owners for all to anon using (true) with check (true);
+    create policy pi_parcel_owners_anon_all on pi_parcel_owners
+      for all to anon, authenticated using (true) with check (true);
   end if;
 end $$;
 
-grant select, insert, update, delete on pi_parcels       to anon;
-grant select, insert, update, delete on pi_parcel_owners to anon;
-grant usage, select on all sequences in schema public to anon;
+grant select, insert, update, delete on pi_parcels       to anon, authenticated;
+grant select, insert, update, delete on pi_parcel_owners to anon, authenticated;
+grant usage, select on all sequences in schema public to anon, authenticated;

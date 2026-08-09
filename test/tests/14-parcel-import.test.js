@@ -123,9 +123,11 @@ module.exports = {
            'and no duplicate was written');
       t.eq(saved[3].latitude, '41.2984', 'the coordinates-only parcel persisted');
 
+      // Scoped: the demo seed ships parcels on another project.
       const links = await t.sql(
         `select p.parcel_number, o.stakeholder_id from pi_parcel_owners o
-           join pi_parcels p on p.id::text = o.parcel_id::text order by p.parcel_number`);
+           join pi_parcels p on p.id::text = o.parcel_id::text
+          where p.project_id::text=$1 order by p.parcel_number`, [projId]);
       t.eq(links.length, 2, 'exactly two ownership links written');
       t.ok(links.every(l => String(l.stakeholder_id) === String(owner.id)),
            'both point at the matched contact');

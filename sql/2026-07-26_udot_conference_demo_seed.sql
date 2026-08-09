@@ -55,7 +55,7 @@ create temporary table _seed_stake (slug text primary key, id bigint not null);
 -- ═══════════════════════════════════════════════════════════════════════════
 do $$
 declare
-  demo_pids text[] := array['25-154-001','25-LC-400N'];
+  demo_pids text[] := array['25-154-001','25-LC-400N','25-3W-DESIGN'];
   ids text[];          -- TEXT, not bigint: project_id is text on some of these
   demo_stakes text[];  -- tables and bigint on others. Comparing as text works
                        -- for both, the same way the RLS policies in
@@ -83,6 +83,10 @@ begin
    where group_id::text in (select id::text from pi_groups
                              where project_id::text = any(ids));
   delete from pi_groups              where project_id::text = any(ids);
+  delete from pi_parcel_owners
+   where parcel_id::text in (select id::text from pi_parcels
+                              where project_id::text = any(ids));
+  delete from pi_parcels             where project_id::text = any(ids);
   delete from pi_reports             where project_id::text = any(ids);
   delete from pi_report_archive      where project_id::text = any(ids);
   delete from pi_client_summaries    where project_id::text = any(ids);
@@ -120,6 +124,7 @@ begin
   for r in select * from (values
     ('sr154','25-154-001','SR-154 Corridor Safety Improvements','UDOT Region 2','Roadway','Salt Lake','NEPA / Environmental','Active','2024-03-04','2026-12-18','EA','EA - Draft','SR-154 (Bangerter Highway) corridor safety and operational improvements between 11400 South and the Point of the Mountain, Salt Lake County. Environmental Assessment under UDOT NEPA assignment (23 USC 327). PI Lead: Jeff Putzke. Support: Shaylie Bryner, Savannah Hansen.'),
     ('logan','25-LC-400N','Logan City 400 North Reconstruction','Logan City Engineering','Roadway','Cache','Construction','Active','2025-01-13','2026-10-30','CE','Post-NEPA / Construction','Full-depth reconstruction of 400 North in Logan City (Cache County) from Main Street east to 800 East, including water and sewer replacement, new curb, gutter, sidewalk and a school-zone crossing upgrade at Ellis Elementary. Categorical Exclusion cleared; project is in active construction. PI Lead: Jeff Putzke. Support: Shaylie Bryner, Savannah Hansen.')
+    ,('west3','25-3W-DESIGN','3600 West Corridor Widening','Weber County Engineering','Roadway','Weber','Design','Active','2026-02-02','2028-06-30','CE','Post-NEPA / Design','Widening of 3600 West from 1200 South to 2700 South in Weber County to a three-lane section with a centre turn lane, curb, gutter and a detached walk on the east side. Categorical Exclusion cleared; project is in final design with right-of-way acquisition under way. Seven parcels are affected, most partial takes for the walk and drainage. PI Lead: Jeff Putzke. Support: Shaylie Bryner.')
   ) as v(slug,pid,name,client,project_type,county,phase,status,start_date,end_date,
          nepa_classification,nepa_stage,notes)
   loop
@@ -1468,6 +1473,137 @@ begin
       r.shared_reports, r.trends;
   end loop;
 end $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 13. 3600 WEST — RIGHT-OF-WAY PARCELS AND PROPERTY OWNERS
+--
+--     A roadway project in DESIGN, which is when right-of-way acquisition
+--     actually happens — neither of the other two demo projects covers that
+--     phase. Seven parcels, deliberately shaped to exercise every case the
+--     parcel module has to handle:
+--       * a parcel with two co-owners (jointly held)
+--       * a parcel with three heirs on an unprobated estate
+--       * one owner holding two adjacent parcels
+--       * an LLC plus its manager on one parcel
+--       * a parcel with NO owner identified — the one that misses a notice sweep
+--       * an unsubdivided parcel with no address, located by coordinates only
+--       * a full spread of acquisition types and statuses
+--
+--     Property owners are project-level contacts (is_master = false): they are
+--     specific to this acquisition and should not clutter the master registry,
+--     which is for contacts reused across projects.
+-- ═══════════════════════════════════════════════════════════════════════════
+do $$
+declare r record; nid bigint;
+begin
+  for r in select * from (values
+    ('w-hollins','Marguerite','Hollins','','Property owner','mhollins@demo-owner.test','(801) 555-0410','1284 S 3600 W, Ogden, UT 84404','Property Owner','Medium','Phone',false,false,false,'External','Owns the corner parcel at 1200 South jointly with her brother. Retired; prefers a phone call and a mailed follow-up.'),
+    ('w-hollins-r','Russell','Hollins','','Property owner','rhollins@demo-owner.test','(801) 555-0411','742 E 2200 N, North Ogden, UT 84414','Property Owner','Medium','Email',false,false,false,'External','Co-owner with his sister Marguerite. Lives off-parcel in North Ogden — all notices go to his North Ogden address.'),
+    ('w-castellano','Rosa','Castellano','','Property owner','rcastellano@demo-owner.test','(801) 555-0423','1420 S 3600 W, Ogden, UT 84404','Property Owner','High','Phone',true,true,false,'External','Spanish-preferred. Owns two adjacent parcels either side of the canal crossing. All written notices require a Spanish translation.'),
+    ('w-brimhall','Dale','Brimhall','','Property owner','dbrimhall@demo-owner.test','(801) 555-0434','1585 S 3600 W, Ogden, UT 84404','Property Owner','Medium','Email',false,false,false,'External','Working farm. Concerned about field access during construction and the location of the temporary construction easement.'),
+    ('w-nakamura','Alice','Nakamura','','Heir','anakamura@demo-owner.test','(385) 555-0447','2210 Jefferson Ave, Ogden, UT 84401','Property Owner','Medium','Email',false,false,false,'External','One of three heirs to the Nakamura estate; probate not complete, so all three must be noticed.'),
+    ('w-nakamura-t','Theodore','Nakamura','','Heir','tnakamura@demo-owner.test','(385) 555-0448','88 W Center St, Logan, UT 84321','Property Owner','Low','Email',false,false,false,'External','Heir to the Nakamura estate. Out of area — email is the only reliable channel.'),
+    ('w-nakamura-j','Junko','Nakamura','','Heir','jnakamura@demo-owner.test','','1740 Monroe Blvd, Ogden, UT 84404','Property Owner','Low','Mail',true,false,false,'External','Heir to the Nakamura estate. No phone on file; Japanese-preferred, notices sent by mail with translation.'),
+    ('w-canyonview','','','Canyon View Holdings LLC','Property owner (entity)','records@demo-canyonview.test','(801) 555-0455','2650 Washington Blvd Ste 200, Ogden, UT 84401','Business','High','Email',false,false,false,'External','Entity of record for the commercial parcel at 2100 South. Correspondence goes to the registered agent AND to the manager, Curtis Ipsen.'),
+    ('w-ipsen','Curtis','Ipsen','Canyon View Holdings LLC','Manager','cipsen@demo-canyonview.test','(801) 555-0456','2650 Washington Blvd Ste 200, Ogden, UT 84401','Business','High','Phone',false,false,false,'External','Manager and decision-maker for Canyon View Holdings. The LLC is the owner of record, but nothing moves without Curtis.'),
+    ('w-eng','Bianca','Ferrell-Ng','Weber County Engineering','County Project Manager','bferrellng@demo.co.weber.ut.us','(801) 555-0402','2380 Washington Blvd, Ogden, UT 84401','Agency','High','Email',false,false,false,'Internal','County project manager and the client contact for this project. Wants the ROW status current before each design review.'),
+    ('w-row','Samuel','Ottley','Weber County Engineering','Right-of-Way Agent','sottley@demo.co.weber.ut.us','(801) 555-0403','2380 Washington Blvd, Ogden, UT 84401','Agency','High','Phone',false,false,false,'Internal','County ROW agent. Sends the formal offers; PI team handles first contact and keeps the parcel record.')
+  ) as v(slug,first_name,last_name,org,title,email,phone,address,stakeholder_type,
+         influence_tier,pref_contact,lep,underserved,is_master,stakeholder_role,notes)
+  loop
+    insert into pi_stakeholders
+      (first_name,last_name,org,title,email,phone,address,stakeholder_type,
+       influence_tier,pref_contact,lep,underserved,is_master,is_archived,
+       stakeholder_role,notes)
+    values
+      (r.first_name,r.last_name,nullif(r.org,''),r.title,r.email,r.phone,r.address,
+       r.stakeholder_type,r.influence_tier,r.pref_contact,r.lep,r.underserved,
+       r.is_master,false,r.stakeholder_role,r.notes)
+    returning id into nid;
+    insert into _seed_stake values (r.slug, nid);
+  end loop;
+end $$;
+
+insert into pi_project_stakeholders
+  (project_id, stakeholder_id, stakeholder_role, support, influence,
+   distribution_groups, issue_tags, added_date, notes)
+select p.id, s.id, v.role, v.support, v.influence, v.dist, v.tags, v.added::date, v.notes
+from (values
+  ('west3','w-eng','Internal','Champion','High','Project team,Agency contacts','Schedule,Right-of-way','2026-02-02','County project manager and client contact.'),
+  ('west3','w-row','Internal','Champion','High','Project team,Agency contacts','Right-of-way','2026-02-09','County ROW agent. Formal offers come from him.'),
+  ('west3','w-hollins','External','Neutral','Medium','Other','Right-of-way,Access','2026-03-02','Co-owner, parcel 12-047-0001.'),
+  ('west3','w-hollins-r','External','Neutral','Medium','Other','Right-of-way','2026-03-02','Co-owner, parcel 12-047-0001. Off-parcel address.'),
+  ('west3','w-castellano','External','Opponent','High','Other','Right-of-way,Drainage,Language access','2026-03-05','Owns two parcels. Opposed to the canal-side alignment; requires Spanish materials.'),
+  ('west3','w-brimhall','External','Neutral','Medium','Other','Right-of-way,Access','2026-03-09','Working farm — field access during construction is the live concern.'),
+  ('west3','w-nakamura','External','Neutral','Medium','Other','Right-of-way,Estate','2026-03-16','Lead heir contact for the estate parcel.'),
+  ('west3','w-nakamura-t','External','Neutral','Low','Other','Right-of-way,Estate','2026-03-16','Heir. Out of area.'),
+  ('west3','w-nakamura-j','External','Neutral','Low','Other','Right-of-way,Estate,Language access','2026-03-16','Heir. Mail only, translation required.'),
+  ('west3','w-canyonview','External','Neutral','High','Other','Right-of-way,Commercial access','2026-03-23','Owner of record for the commercial parcel.'),
+  ('west3','w-ipsen','External','Neutral','High','Other','Right-of-way,Commercial access','2026-03-23','Manager and actual decision-maker for the LLC.')
+) as v(pslug,sslug,role,support,influence,dist,tags,added,notes)
+join _seed_proj  p on p.slug = v.pslug
+join _seed_stake s on s.slug = v.sslug;
+
+-- Parcels. Statuses spread across the acquisition lifecycle so the coverage
+-- meters and the status breakdown both have something to show.
+insert into pi_parcels
+  (project_id, parcel_number, situs_address, latitude, longitude,
+   acquisition_type, status, notice_date, notes)
+select p.id, v.num, v.situs, v.lat, v.lng, v.acq, v.status,
+       nullif(v.notice,'')::date, v.notes
+from (values
+  ('west3','12-047-0001','1284 S 3600 W, Ogden, UT 84404','','','Partial take','Acquired','2026-03-04','Corner parcel at 1200 South. Jointly held; both owners signed. Strip take for the walk plus a drainage easement.'),
+  ('west3','12-047-0014','1420 S 3600 W, Ogden, UT 84404','','','Partial take','Negotiating','2026-03-06','West side of the canal crossing. Owner disputes the offered value of the frontage strip.'),
+  ('west3','12-047-0015','1445 S 3600 W, Ogden, UT 84404','','','Permanent easement','Negotiating','2026-03-06','East side of the canal crossing, same owner as 12-047-0014. Drainage easement only, no strip take.'),
+  ('west3','12-047-0022','1585 S 3600 W, Ogden, UT 84404','','','Temporary construction easement','Contacted','2026-03-11','Working farm. TCE for regrading the approach; field access during construction is the sticking point.'),
+  ('west3','12-047-0031','','41.2412','-112.0091','Partial take','Notice sent','2026-03-18','Unsubdivided estate parcel — no dwelling and no assigned address, located by coordinates from the county survey. Probate incomplete, all three heirs noticed.'),
+  ('west3','12-047-0038','2105 S 3600 W, Ogden, UT 84404','','','Full take','Contacted','2026-03-25','Commercial parcel. Full take of the northern lot; access reconfiguration under discussion with the manager.'),
+  ('west3','12-047-0044','','','','Partial take','Not started','','Owner of record unclear — the county assessor lists a deceased owner and the title search is still open. NOT yet noticed and cannot be included in a sweep until an owner is identified.')
+) as v(pslug,num,situs,lat,lng,acq,status,notice,notes)
+join _seed_proj p on p.slug = v.pslug;
+
+-- Ownership links. Deliberately many-to-many: two co-owners on one parcel,
+-- one owner across two parcels, three heirs on the estate parcel, an LLC plus
+-- its manager, and one parcel left with nobody attached.
+insert into pi_parcel_owners (parcel_id, stakeholder_id, ownership_role)
+select pc.id, s.id, v.role
+from (values
+  ('12-047-0001','w-hollins','Owner'),
+  ('12-047-0001','w-hollins-r','Co-owner'),
+  ('12-047-0014','w-castellano','Owner'),
+  ('12-047-0015','w-castellano','Owner'),
+  ('12-047-0022','w-brimhall','Owner'),
+  ('12-047-0031','w-nakamura','Heir'),
+  ('12-047-0031','w-nakamura-t','Heir'),
+  ('12-047-0031','w-nakamura-j','Heir'),
+  ('12-047-0038','w-canyonview','Owner'),
+  ('12-047-0038','w-ipsen','Agent')
+) as v(num,sslug,role)
+join _seed_proj  p  on p.slug = 'west3'
+join pi_parcels  pc on pc.parcel_number = v.num and pc.project_id::text = p.id::text
+join _seed_stake s  on s.slug = v.sslug;
+
+-- A handful of interactions so the project is not an empty shell, and so the
+-- ROW conversation has a record behind the parcel status.
+insert into pi_interactions
+  (project_id, stakeholder_id, anon_label, nepa_stage, interaction_date, channel,
+   subject, nature, direction, summary, logged_by, follow_up, follow_up_note,
+   follow_up_due, follow_up_done)
+select p.id, s.id, '', 'Post-NEPA / Design', v.d::date, v.channel,
+       v.subject, v.nature, v.direction, v.summary, v.by, v.fu, v.fun,
+       nullif(v.fud,'')::date, v.fud_done
+from (values
+  ('west3','w-hollins','2026-03-04','Phone','ROW / Easement','Inquiry','Incoming','Called after receiving the first notice. Asked what a partial take means for her frontage and whether the mailbox would move. Explained the strip width and offered a site walk.','PUT',false,'','',false),
+  ('west3','w-hollins-r','2026-03-10','Email','ROW / Easement','Comment','Outgoing','Sent the parcel exhibit and the appraisal timeline to the off-parcel address at his request.','SHA',false,'','',false),
+  ('west3','w-castellano','2026-03-06','In-person','ROW / Easement','Concern','In-person','Doorstep visit with a Spanish interpreter. Owner objects to the canal-side alignment across both her parcels and questions the offered value of the frontage strip.','PUT',true,'Provide the Spanish-language appraisal summary and arrange a follow-up with the county ROW agent.','2026-04-10',false),
+  ('west3','w-brimhall','2026-03-11','Phone','Property Access','Concern','Incoming','Farm owner asked how equipment would reach the back field once the TCE is in place. Committed to routing the haul access off the south approach.','SHA',true,'Confirm the construction access route with the design team and put it in writing to the owner.','2026-04-03',false),
+  ('west3','w-nakamura','2026-03-18','Email','ROW / Easement','Inquiry','Incoming','Heir asked whether all three siblings need to sign given probate is incomplete. Referred to the county ROW agent and confirmed all three were noticed.','PUT',false,'','',false),
+  ('west3','w-ipsen','2026-03-25','Phone','Property Access','Concern','Incoming','LLC manager wants the access reconfiguration resolved before any offer is considered. Requested a meeting with the design engineer.','PUT',true,'Schedule the access design meeting with the county and the manager.','2026-04-17',false),
+  ('west3','w-eng','2026-03-30','Email','General','Comment','Outgoing','Sent the county PM the current ROW status: one parcel acquired, two in negotiation, one still without an identified owner pending the title search.','PUT',false,'','',false)
+) as v(pslug,sslug,d,channel,subject,nature,direction,summary,by,fu,fun,fud,fud_done)
+join _seed_proj  p on p.slug = v.pslug
+join _seed_stake s on s.slug = v.sslug;
+
 
 drop table if exists _seed_proj;
 drop table if exists _seed_stake;

@@ -114,9 +114,12 @@ module.exports = {
       await attach(p2, contacts[0]);
       await app.page.waitForTimeout(1500);
 
+      // Scoped to this project — the demo seed now ships its own parcels on
+      // 25-3W-DESIGN, so an unscoped count here would drift with the seed.
       const links = await t.sql(
-        `select parcel_id, stakeholder_id, ownership_role from pi_parcel_owners
-          order by parcel_id, stakeholder_id`);
+        `select o.parcel_id, o.stakeholder_id, o.ownership_role
+           from pi_parcel_owners o join pi_parcels pc on pc.id::text = o.parcel_id::text
+          where pc.project_id::text=$1 order by o.parcel_id, o.stakeholder_id`, [projId]);
       t.eq(links.length, 3, 'three ownership links written');
       t.eq(links.filter(l => String(l.parcel_id) === p1).length, 2,
            'one parcel carries two owners');
@@ -127,7 +130,9 @@ module.exports = {
       // Attaching the same contact twice must be a no-op.
       await attach(p1, contacts[0]);
       await app.page.waitForTimeout(800);
-      t.eq(Number((await t.sql('select count(*) c from pi_parcel_owners'))[0].c), 3,
+      t.eq(Number((await t.sql(
+        `select count(*) c from pi_parcel_owners o join pi_parcels pc
+           on pc.id::text = o.parcel_id::text where pc.project_id::text=$1`, [projId]))[0].c), 3,
            'a duplicate owner attach is refused');
 
       // ── searching an owner's name finds their parcels ───────────────────
@@ -153,7 +158,9 @@ module.exports = {
       await app.page.waitForTimeout(1400);
       t.eq(Number((await t.sql('select count(*) c from pi_parcels where project_id::text=$1',
                                [projId]))[0].c), 2, 'the parcel is gone');
-      t.eq(Number((await t.sql('select count(*) c from pi_parcel_owners'))[0].c), 1,
+      t.eq(Number((await t.sql(
+        `select count(*) c from pi_parcel_owners o join pi_parcels pc
+           on pc.id::text = o.parcel_id::text where pc.project_id::text=$1`, [projId]))[0].c), 1,
            'its ownership links went with it');
       t.eq(Number((await t.sql('select count(*) c from pi_stakeholders'))[0].c), stakesBefore,
            'but the contacts themselves are untouched');

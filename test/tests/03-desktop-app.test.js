@@ -18,8 +18,8 @@ module.exports = {
         stakeholders: _syncCache.stakeholders.length,
         me: getLoggedBy(),
       }));
-      t.eq(boot.projects, 2, 'both demo projects loaded');
-      t.eq(boot.stakeholders, 52, 'all stakeholders loaded');
+      t.eq(boot.projects, 3, 'all three demo projects loaded');
+      t.eq(boot.stakeholders, 63, 'all stakeholders loaded');
       t.gt(boot.interactions, 500, 'interactions loaded');
       t.eq(boot.me, 'PUT', 'getLoggedBy() derives initials from the login email');
 

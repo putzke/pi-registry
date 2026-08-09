@@ -28,7 +28,7 @@ module.exports = {
         dateRaisedFilled: _syncCache.issues.filter(i => !!i.dateRaised).length,
       }));
 
-      t.eq(data.projects, 2, 'mobile loaded both projects');
+      t.eq(data.projects, 3, 'mobile loaded every demo project');
       t.eq(data.issues, 8, 'mobile loaded all issues');
       t.gt(data.interactions, 500, 'mobile loaded interactions');
       t.eq(data.raisedByFilled, data.issues, 'raisedBy resolves for every issue');

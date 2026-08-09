@@ -80,7 +80,7 @@ module.exports = {
         const sel = document.getElementById('sb-proj-select');
         return { options: sel ? sel.options.length : 0 };
       });
-      t.eq(multi.options, 2, 'grant covering both projects shows a two-project selector');
+      t.eq(multi.options, 3, 'the grant covers every demo project');
 
       // Switch to whichever project is NOT currently selected, then assert the
       // banner matches that project's classification. Written this way so the
@@ -94,9 +94,13 @@ module.exports = {
       t.ok(other, 'there is a second project to switch to');
 
       await app.page.selectOption('#sb-proj-select', other);
+      // Wait on the project id, not the banner class. Two projects can share a
+      // tone — a CE in construction and a CE in design are both "post" — so a
+      // class change is not a reliable signal that the switch completed.
       await app.page.waitForFunction(
-        prev => { const b = document.querySelector('.nepa-banner'); return b && b.className !== prev; },
-        cur.cls, { timeout: 15000 });
+        want => String(typeof _projId !== 'undefined' ? _projId : '') === String(want),
+        String(other), { timeout: 15000 });
+      await app.page.waitForSelector('.nepa-banner', { timeout: 15000 });
       const after = await app.page.evaluate(() => {
         const b = document.querySelector('.nepa-banner');
         return { cls: b.className, text: b.textContent.replace(/\s+/g, ' ').trim() };
@@ -129,6 +133,12 @@ module.exports = {
         `insert into pi_parcel_owners (parcel_id,stakeholder_id,ownership_role) values ($1,$2,'Owner')`,
         [String(par.id), String(own.id)]);
 
+      // The switch above left the portal on some other project; point it at the
+      // one these parcels belong to.
+      await app.page.selectOption('#sb-proj-select', pid);
+      await app.page.waitForFunction(
+        want => String(typeof _projId !== 'undefined' ? _projId : '') === String(want),
+        pid, { timeout: 15000 });
       await app.page.evaluate(() => setView('parcels'));
       await app.page.waitForFunction(
         () => !/Loading/.test(document.getElementById('parc-content')?.innerHTML || 'Loading'),

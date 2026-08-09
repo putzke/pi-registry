@@ -772,10 +772,23 @@ columns queried).
    mid-flight.
 
 ### Demo dataset — `sql/2026-07-26_udot_conference_demo_seed.sql`
-Two realistic Utah projects (SR-154 / UDOT Region 2, EA; Logan City 400 North /
-CE, construction) with ~52 stakeholders, ~586 interactions, deliverables,
-events, issues, commitments, a comment period with 23 public comments, portal
-links and grant-by-email rows. Built for the UDOT conference demo.
+Three realistic Utah projects with ~63 stakeholders, ~586 interactions,
+deliverables, events, issues, commitments, a comment period with 23 public
+comments, portal links and grant-by-email rows:
+- **SR-154 / UDOT Region 2** — EA, NEPA/Environmental phase
+- **Logan City 400 North** — CE, construction phase
+- **3600 West Corridor Widening (`25-3W-DESIGN`) / Weber County** — CE, **design
+  phase**, added Aug 2026 for right-of-way testing. Design is when acquisition
+  actually happens and neither other project covered it. **7 parcels**, shaped to
+  exercise every case the module handles: two co-owners on one parcel, three
+  heirs on an unprobated estate, one owner across two adjacent parcels, an LLC
+  plus its manager, one parcel with **no owner identified**, one unsubdivided
+  parcel located by **coordinates only**, and a spread of acquisition types and
+  statuses. Its 7 property owners are **project-level (`is_master = false`)** —
+  they belong to this acquisition, not the master registry. Counts are asserted
+  in `test/tests/02-seed-and-migrations.test.js`, so a re-run has to reproduce
+  them exactly.
+Built for the UDOT conference demo.
 - **Idempotent** — re-running purges its own prior output (matched on project
   number `25-154-001` / `25-LC-400N`) and rebuilds. Demo-only stakeholders are
   deleted only when they are not linked to any other project; their ids are

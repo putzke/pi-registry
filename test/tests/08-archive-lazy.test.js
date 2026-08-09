@@ -52,7 +52,7 @@ module.exports = {
         interactions: _syncCache.interactions.length,
         reports: _syncCache.reports.length,
       }));
-      t.eq(others.projects, 2, 'projects still load');
+      t.eq(others.projects, 3, 'projects still load');
       t.gt(others.interactions, 500, 'interactions still load');
 
       // ── previewing pulls the snapshot and renders full fidelity ─────────

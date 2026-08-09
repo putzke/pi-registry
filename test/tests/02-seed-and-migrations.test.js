@@ -24,16 +24,63 @@ module.exports = {
              (select count(*) from pi_client_summaries)      trends`))[0];
 
     const a = await counts();
-    t.eq(Number(a.projects), 2, 'two demo projects');
-    t.eq(Number(a.stakeholders), 52, '52 stakeholders');
+    t.eq(Number(a.projects), 3, 'three demo projects');
+    t.eq(Number(a.stakeholders), 63, '63 stakeholders');
     t.eq(Number(a.links), 2, 'two portal links');
-    t.eq(Number(a.grants), 4, 'four access grants');
+    t.eq(Number(a.grants), 5, 'five access grants');
     t.eq(Number(a.archives), 6, 'six archived reports');
     t.eq(Number(a.trends), 3, 'three published trends');
 
     // Idempotency — the purge must leave no duplicates behind.
     const out2 = t.seed();
-    t.ok(/Purged 2 previous demo project\(s\)/.test(out2), 'second run purges the first');
+    t.ok(/Purged 3 previous demo project\(s\)/.test(out2), 'second run purges the first');
+
+    // ── the 3600 West design project: right-of-way test data ────────────────
+    // A roadway project in DESIGN, which is when acquisition actually happens.
+    // Its parcels are shaped to exercise every case the module has to handle,
+    // so a re-run has to reproduce them exactly.
+    const rw = (await t.sql(`
+      select count(distinct pc.id)::int parcels,
+             count(po.id)::int links,
+             count(distinct po.stakeholder_id)::int owners,
+             count(distinct pc.id) filter (where po.id is null)::int unowned,
+             count(distinct pc.id) filter (where pc.notice_date is not null)::int noticed,
+             count(distinct pc.id) filter (where coalesce(pc.situs_address,'')=''
+                                             and coalesce(pc.latitude,'')<>'')::int coords_only
+        from pi_projects p
+        join pi_parcels pc on pc.project_id::text = p.id::text
+        left join pi_parcel_owners po on po.parcel_id::text = pc.id::text
+       where p.pid = '25-3W-DESIGN'`))[0];
+    t.eq(rw.parcels, 7, 'seven parcels on the design project');
+    t.eq(rw.links, 10, 'ten ownership links — the many-to-many is exercised');
+    t.eq(rw.owners, 9, 'nine distinct owner contacts');
+    t.eq(rw.unowned, 1, 'one parcel deliberately has no owner identified');
+    t.eq(rw.noticed, 6, 'six of seven parcels noticed, so coverage is partial');
+    t.eq(rw.coords_only, 1, 'one unsubdivided parcel is located by coordinates only');
+
+    // Several owners on one parcel, and one owner across two.
+    const shapes = (await t.sql(`
+      select max(c)::int most_owners_on_a_parcel from (
+        select po.parcel_id, count(*) c from pi_parcel_owners po
+          join pi_parcels pc on pc.id::text = po.parcel_id::text
+          join pi_projects p on p.id::text = pc.project_id::text
+         where p.pid='25-3W-DESIGN' group by po.parcel_id) x`))[0];
+    t.eq(shapes.most_owners_on_a_parcel, 3, 'one parcel carries three heirs');
+    const multi = (await t.sql(`
+      select count(*)::int n from (
+        select po.stakeholder_id from pi_parcel_owners po
+          join pi_parcels pc on pc.id::text = po.parcel_id::text
+          join pi_projects p on p.id::text = pc.project_id::text
+         where p.pid='25-3W-DESIGN'
+         group by po.stakeholder_id having count(*) > 1) x`))[0];
+    t.eq(multi.n, 1, 'one owner holds more than one parcel');
+
+    // Property owners stay OUT of the master registry — they are specific to
+    // this acquisition, not contacts reused across projects.
+    const master = (await t.sql(
+      `select count(*)::int n from pi_stakeholders
+        where stakeholder_type='Property Owner' and is_master`))[0];
+    t.eq(master.n, 0, 'no property owner is in the master registry');
     t.ok(!/ERROR/.test(out2), 'second run has no errors');
     const b = await counts();
     t.eq(b, a, 're-running changes nothing');

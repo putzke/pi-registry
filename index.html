@@ -16202,9 +16202,12 @@ async function _mvGeocode(filtered, projId, parcels) {
 // cross-reference at all. It is drawn into the icon rather than passed as a
 // Marker `label` because a label is plain text over satellite imagery, which is
 // frequently unreadable; the chip gives it its own contrast.
-function _mvParcIcon(p) {
-  var num = String(p.parcelNumber || '—');
-  var color = _parcMapColor(p.status);
+function _mvParcIcon(p, count) {
+  var num = count > 1 ? count + ' parcels here' : String(p.parcelNumber || '—');
+  // A group of mixed statuses gets slate rather than any one status's colour —
+  // claiming "Acquired" for a pin that also covers a not-started parcel would
+  // be worse than saying nothing.
+  var color = count > 1 ? (p.mixed ? '#64748b' : _parcMapColor(p.status)) : _parcMapColor(p.status);
   var w = Math.max(52, num.length * 7.0 + 14), h = 38;
   var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">'
     + '<rect x="' + (w/2 - 8) + '" y="1" width="16" height="16" fill="' + color + '" stroke="#ffffff" stroke-width="2"/>'
@@ -16219,34 +16222,84 @@ function _mvParcIcon(p) {
   };
 }
 
-// Nudge apart markers that resolved to the SAME point.
+// Group parcels that resolved to the SAME point.
 //
 // Geocoding a street address on a rural grid road routinely returns the street
-// or ZIP centroid, so several parcels can land on one coordinate — and there
-// they stack, with only the last one drawn. That reads as "markers are
-// missing", which is worse than an approximate position: the count says six and
-// you can see three. Duplicates are spread around a ~25 m circle and flagged,
-// so every parcel is visible and nobody mistakes the offset for survey truth.
-function _mvSpread(items) {
-  var groups = {};
+// or ZIP centroid, so several parcels land on one coordinate. Stacked, only the
+// last one draws — the count says six and you see three, which reads as a
+// rendering bug.
+//
+// An earlier version nudged them apart by ~25 m. That was the wrong fix twice
+// over: at any normal zoom 25 m is a couple of pixels, so the chips still
+// overlapped, and a radius large enough to separate them (hundreds of metres)
+// would put a parcel on the wrong side of the road — inventing precision the
+// data does not have. These addresses genuinely cannot be told apart, so the
+// map says exactly that: one marker, the count on it, every parcel listed
+// inside, and the fix named (add survey coordinates).
+function _mvGroupByPoint(items) {
+  var by = {}, order = [];
   items.forEach(function(it){
     var k = it.lat.toFixed(5) + ',' + it.lng.toFixed(5);
-    (groups[k] = groups[k] || []).push(it);
+    if (!by[k]) { by[k] = []; order.push(k); }
+    by[k].push(it);
   });
-  var nudged = 0;
-  Object.keys(groups).forEach(function(k){
-    var g = groups[k];
-    if (g.length < 2) return;
-    var r = 0.00022;                                  // ~25 m
-    g.forEach(function(it, i){
-      var a = (2 * Math.PI * i) / g.length;
-      it.lat += r * Math.cos(a);
-      it.lng += r * Math.sin(a) / Math.max(0.2, Math.cos(it.lat * Math.PI / 180));
-      it.nudged = true;
-      nudged++;
-    });
+  return order.map(function(k){
+    var g = by[k];
+    return { lat: g[0].lat, lng: g[0].lng, items: g };
   });
-  return nudged;
+}
+
+// One parcel's info window. Owner names are fine here — this is the
+// consultant's own app; the client portal withholds them deliberately, and that
+// boundary lives there, not here.
+function _mvParcInfoHTML(p) {
+  var color = _parcMapColor(p.status);
+  var owners = _parcOwners(p.id);
+  var ownHtml = owners.length
+    ? owners.map(function(o){ return escHtml(dispName(o.stake))
+        + (o.link.ownershipRole && o.link.ownershipRole!=='Owner' ? ' <span style="color:#6b7280">· '+escHtml(o.link.ownershipRole)+'</span>' : ''); }).join('<br>')
+    : '<span style="color:#C0392B">No owner attached</span>';
+  return `
+    <div style="font-family:sans-serif;font-size:13px;color:#1f2937;min-width:210px;max-width:280px">
+      <div style="font-weight:600;margin-bottom:3px">Parcel ${escHtml(p.parcelNumber||'—')}</div>
+      <div style="font-size:11px;color:#6b7280;margin-bottom:5px">
+        ${p.fromCoords ? 'Located by survey coordinates' : escHtml(p.formatted || p.situsAddress || '')}
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+        <span style="display:inline-block;width:8px;height:8px;background:${color}"></span>
+        <span style="color:${color};font-weight:600;font-size:12px">${escHtml(p.status||'Not started')}</span>
+        ${p.acquisitionType ? `<span style="color:#6b7280;font-size:11px;margin-left:4px">${escHtml(p.acquisitionType)}</span>` : ''}
+      </div>
+      <div style="font-size:12px;padding-top:5px;border-top:1px solid #eee">${ownHtml}</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:5px">
+        ${p.noticeDate ? 'Notice sent '+fmt(p.noticeDate) : '<span style="color:#C0392B">No notice sent</span>'}
+      </div>
+    </div>`;
+}
+
+// Several parcels on one geocoded point. Every parcel number is listed, so the
+// register still correlates, and the reason is stated with the fix — a survey
+// coordinate on the parcel record places it exactly and costs no geocode.
+function _mvParcGroupHTML(gp) {
+  return `
+    <div style="font-family:sans-serif;font-size:13px;color:#1f2937;min-width:230px;max-width:300px">
+      <div style="font-weight:600;margin-bottom:3px">${gp.items.length} parcels at this location</div>
+      <div style="font-size:11px;color:#6b7280;margin-bottom:7px">
+        ${escHtml(gp.items[0].formatted || gp.items[0].situsAddress || '')}
+      </div>
+      ${gp.items.map(function(p){
+        var c = _parcMapColor(p.status);
+        return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-top:1px solid #eee">
+          <span style="display:inline-block;width:8px;height:8px;background:${c};flex-shrink:0"></span>
+          <span style="font-family:monospace;font-weight:600">${escHtml(p.parcelNumber||'—')}</span>
+          <span style="color:${c};font-size:11px;margin-left:auto">${escHtml(p.status||'Not started')}</span>
+        </div>`;
+      }).join('')}
+      <div style="font-size:11px;color:#8a6d1f;background:#fdf6e3;border-radius:4px;padding:6px 7px;margin-top:7px">
+        These addresses geocode to the same point, so they cannot be placed
+        separately. Add survey coordinates to each parcel to plot it exactly.
+      </div>
+    </div>`;
 }
 
 function _mvRenderMarkers(geocoded, parcGeo) {
@@ -16328,46 +16381,27 @@ function _mvRenderMarkers(geocoded, parcGeo) {
   // Squares, so they read as a different kind of thing from the contact
   // circles at a glance, and coloured by acquisition status — "which parcels
   // are still un-noticed, and where" is the question a ROW review asks.
-  var parcNudged = _mvSpread(parcGeo);
-  parcGeo.forEach(function(p) {
-    var lbl = p.parcelNumber || '—';
-    var color = _parcMapColor(p.status);
-    var owners = _parcOwners(p.id);
+  var parcGroups = _mvGroupByPoint(parcGeo);
+  var parcShared = parcGroups.filter(function(gp){ return gp.items.length > 1; })
+                             .reduce(function(a,gp){ return a + gp.items.length; }, 0);
+  parcGroups.forEach(function(gp) {
+    var many = gp.items.length > 1;
+    var head = gp.items[0];
+    var mixed = many && gp.items.some(function(x){ return (x.status||'Not started') !== (head.status||'Not started'); });
     var pm = new window.google.maps.Marker({
-      position: {lat: p.lat, lng: p.lng},
+      position: {lat: gp.lat, lng: gp.lng},
       map: theMap,
-      title: 'Parcel ' + lbl + ' — ' + (p.status || 'Not started'),
+      title: many
+        ? gp.items.length + ' parcels at this location: ' + gp.items.map(function(x){return x.parcelNumber||'—';}).join(', ')
+        : 'Parcel ' + (head.parcelNumber||'—') + ' — ' + (head.status||'Not started'),
       zIndex: 2,
-      icon: _mvParcIcon(p)
+      icon: _mvParcIcon(Object.assign({}, head, {mixed: mixed}), gp.items.length)
     });
     window._mvMarkers.push(pm);
-    bounds.extend({lat: p.lat, lng: p.lng});
+    bounds.extend({lat: gp.lat, lng: gp.lng});
 
     pm.addListener('click', function(){
-      // Owner names are fine here — this is the consultant's own app. The
-      // client portal withholds them deliberately; that boundary is there, not
-      // here.
-      var ownHtml = owners.length
-        ? owners.map(function(o){ return escHtml(dispName(o.stake))
-            + (o.link.ownershipRole && o.link.ownershipRole!=='Owner' ? ' <span style="color:#888">· '+escHtml(o.link.ownershipRole)+'</span>' : ''); }).join('<br>')
-        : '<span style="color:#C0392B">No owner attached</span>';
-      infoWindow.setContent(`
-        <div style="font-family:sans-serif;font-size:13px;color:#1f2937;min-width:210px;max-width:280px">
-          <div style="font-weight:600;margin-bottom:3px">Parcel ${escHtml(lbl)}</div>
-          <div style="font-size:11px;color:#777;margin-bottom:5px">
-            ${p.fromCoords ? 'Located by survey coordinates' : escHtml(p.formatted || p.situsAddress || '')}
-            ${p.nudged ? '<div style="color:#b8860b">Shifted slightly — this address shares a geocoded point with another parcel. Approximate.</div>' : ''}
-          </div>
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
-            <span style="display:inline-block;width:8px;height:8px;background:${color}"></span>
-            <span style="color:${color};font-weight:600;font-size:12px">${escHtml(p.status||'Not started')}</span>
-            ${p.acquisitionType ? `<span style="color:#999;font-size:11px;margin-left:4px">${escHtml(p.acquisitionType)}</span>` : ''}
-          </div>
-          <div style="font-size:12px;padding-top:5px;border-top:1px solid #eee">${ownHtml}</div>
-          <div style="font-size:11px;color:#888;margin-top:5px">
-            ${p.noticeDate ? 'Notice sent '+fmt(p.noticeDate) : '<span style="color:#C0392B">No notice sent</span>'}
-          </div>
-        </div>`);
+      infoWindow.setContent(many ? _mvParcGroupHTML(gp) : _mvParcInfoHTML(head));
       infoWindow.open(theMap, pm);
     });
   });
@@ -16387,7 +16421,7 @@ function _mvRenderMarkers(geocoded, parcGeo) {
       layer !== 'parcels' ? geocoded.length + ' of ' + (window._mvFiltered||[]).length + ' contacts' : '',
       layer !== 'contacts' ? parcGeo.length + ' of ' + ((window._mvParcels||[]).length + (window._mvParcNoLoc||[]).length) + ' parcels' : ''
     ].filter(Boolean).join(' · ') + ' plotted'
-      + (parcNudged ? '<span style="color:var(--amber);margin-left:6px" title="Several parcels geocoded to the same point and were spread apart so each is visible.">· ' + parcNudged + ' shifted to avoid overlap</span>' : '');
+      + (parcShared ? '<span style="color:var(--amber);margin-left:6px" title="Their situs addresses geocode to the same point, so they cannot be placed separately. Add survey coordinates to plot them exactly.">· ' + parcShared + ' share a location</span>' : '');
   }
 
   // Store for print

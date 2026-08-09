@@ -136,21 +136,37 @@ module.exports = {
            'in the status colour');
       t.ok(icon.anchored, 'anchored so the square sits on the coordinate');
 
-      // ── parcels sharing a geocoded point are spread, not stacked ───────
-      // A street or ZIP centroid can swallow several addresses; stacked
-      // markers hide each other, so the count says six and three are visible.
-      const spread = await app.page.evaluate(() => {
-        const items = [{lat: 41.2, lng: -112.0}, {lat: 41.2, lng: -112.0},
-                       {lat: 41.2, lng: -112.0}, {lat: 41.3, lng: -112.1}];
-        const n = _mvSpread(items);
-        const keys = new Set(items.map(i => i.lat.toFixed(5) + ',' + i.lng.toFixed(5)));
-        return { nudged: n, distinct: keys.size, flagged: items.filter(i => i.nudged).length,
-                 untouched: items[3].lat === 41.3 && items[3].lng === -112.1 };
+      // ── parcels sharing a geocoded point become ONE marker ─────────────
+      // A street or ZIP centroid swallows several addresses. Stacked markers
+      // hide each other, so the count said six and three were visible. Nudging
+      // them apart was tried and was wrong twice: 25 m is a couple of pixels at
+      // any normal zoom, and a radius that WOULD separate them invents
+      // precision the data has not got.
+      const grouped = await app.page.evaluate(() => {
+        const items = [{lat: 41.2, lng: -112.0, parcelNumber: 'A', status: 'Acquired'},
+                       {lat: 41.2, lng: -112.0, parcelNumber: 'B', status: 'Not started'},
+                       {lat: 41.2, lng: -112.0, parcelNumber: 'C', status: 'Acquired'},
+                       {lat: 41.3, lng: -112.1, parcelNumber: 'D', status: 'Declined'}];
+        const g = _mvGroupByPoint(items);
+        const html = _mvParcGroupHTML(g[0]);
+        return { groups: g.length, sizes: g.map(x => x.items.length),
+                 moved: items.some(i => i.lat !== 41.2 && i.lat !== 41.3),
+                 html };
       });
-      t.eq(spread.nudged, 3, 'three co-located markers were moved');
-      t.eq(spread.distinct, 4, 'every marker ends on its own point');
-      t.eq(spread.flagged, 3, 'and each moved one is flagged as approximate');
-      t.ok(spread.untouched, 'a marker with no neighbour is left exactly where it was');
+      t.eq(grouped.groups, 2, 'four parcels on two points make two markers');
+      t.eq(grouped.sizes, [3, 1], 'three share one point, one stands alone');
+      t.eq(grouped.moved, false, 'no parcel is moved off its geocoded position');
+      t.ok(/3 parcels at this location/.test(grouped.html), 'the group marker states the count');
+      ['A', 'B', 'C'].forEach(n =>
+        t.ok(grouped.html.includes('>' + n + '<'), `every parcel number is listed (${n})`));
+      t.ok(/survey coordinates/i.test(grouped.html), 'and the popup names the fix');
+
+      // A mixed-status group must not claim any one status's colour.
+      const mixedIcon = await app.page.evaluate(() =>
+        _mvParcIcon({parcelNumber:'A', status:'Acquired', mixed:true}, 3).url);
+      t.eq(decodeURIComponent(mixedIcon).includes(
+        await app.page.evaluate(() => _parcMapColor('Acquired'))), false,
+        'a mixed group is not coloured as though it were all Acquired');
 
       // ── the printed map keys correlate with the printed table ──────────
       const keys = await app.page.evaluate(() => [0,8,9,10].map(i => _mvPrintKey(i)));

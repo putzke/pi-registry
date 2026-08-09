@@ -245,12 +245,18 @@ there was nothing to count.
     which is bare text over satellite imagery and often unreadable. An earlier
     P1…Pn sequence was replaced: it correlated with nothing a client holds, and
     renumbered itself whenever a filter changed.
-  - **`_mvSpread()` nudges apart parcels that geocode to the SAME point.** A
-    rural grid address routinely resolves to a street or ZIP centroid, so
-    several parcels land on one coordinate and stack — the count says six and
-    three are visible, which reads as a rendering bug. Duplicates are spread
-    around a ~25 m circle, flagged `nudged` (the info window says the position
-    is approximate), and counted in the status line.
+  - **`_mvGroupByPoint()` merges parcels that geocode to the SAME point into
+    ONE marker.** A rural grid address routinely resolves to a street or ZIP
+    centroid, so several parcels land on one coordinate and stack — the count
+    says six and three are visible, which reads as a rendering bug. The marker
+    shows the count, the popup (`_mvParcGroupHTML`) lists every parcel number
+    and status so the register still correlates, and it names the fix: a survey
+    coordinate on the parcel record places it exactly and costs no geocode. A
+    mixed-status group is slate, never any one status's colour.
+    **Nudging them apart was tried first and was wrong twice over** — at any
+    normal zoom ~25 m is a couple of pixels so the chips still overlapped, and a
+    radius large enough to separate them would put a parcel on the wrong side of
+    the road, inventing precision the data has not got. Do not re-add it.
   - **The status line is rewritten after render** (`#mv-count`) to report what
     actually plotted, not what was placeable. It previously said "6 of 6" over
     three markers, which is how a geocode failure disguises itself.

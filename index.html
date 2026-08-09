@@ -1964,7 +1964,23 @@ function renderDash(el){
     var pSums=clientSums.filter(function(s){return String(s.projectId)===String(p.id);});
     pSums.sort(function(a,b){return a.publishedAt>b.publishedAt?-1:1;});
     var lastSum=pSums[0];
-    var portalChip=lastSum?'<span style="color:var(--teal);font-size:11px;font-weight:600;margin-left:auto">✦ Portal: '+fmt(lastSum.publishedAt.slice(0,10))+'</span>':'';
+    // The chip reads "Portal: <date>", which invites being read as "this project
+    // has a portal" or "the client has these reports". It is neither: it is the
+    // last time a Project Status Report was PUBLISHED (publishClientTrend), and
+    // nothing else. A project can have a live portal link the client checks
+    // weekly and show no chip at all. The title says so, and the colour goes
+    // amber at 30 days — a client who hasn't had a narrative in a month is the
+    // whole reason to surface the date rather than a tick.
+    var portalChip='';
+    if(lastSum){
+      var pubDay=(lastSum.publishedAt||'').slice(0,10);
+      var pubAge=pubDay?Math.floor((Date.now()-new Date(pubDay+'T00:00:00'))/86400000):0;
+      var pubTip='Project Status Report last published to the client portal — '
+                +fmt(pubDay)+(pubDay?' ('+ago(pubDay)+')':'')
+                +'.\nSeparate from shared reports, and from whether a portal link exists.';
+      portalChip='<span title="'+escHtml(pubTip)+'" style="color:'+(pubAge>=30?'var(--amber)':'var(--teal)')
+                +';font-size:11px;font-weight:600;margin-left:auto;cursor:help">✦ Portal: '+fmt(pubDay)+'</span>';
+    }
     card.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
       <div><div style="font-weight:600;font-size:14px;margin-bottom:2px">${p.name}</div>
       <div style="font-size:12px;color:var(--fog);font-family:var(--mono)">${p.pid} · ${p.client}</div></div>

@@ -35,6 +35,21 @@ module.exports = {
     const out2 = t.seed();
     t.ok(/Purged 3 previous demo project\(s\)/.test(out2), 'second run purges the first');
 
+    // A TEXT-PK row that has lost its project link must not block a re-run.
+    // pi_comment_periods ids are fixed literals, so an orphan survives the
+    // project-scoped delete and then collides on re-insert — which is exactly
+    // what "duplicate key value violates unique constraint" looked like in
+    // production.
+    await t.sql(`update pi_comment_periods set project_id='999999'
+                  where id='cp-sr154-deis-2025'`);
+    let orphanOut = '';
+    try { orphanOut = t.seed(); } catch (e) { orphanOut = 'FAILED: ' + e.message; }
+    t.eq(/FAILED/.test(String(orphanOut)), false,
+         're-running over an orphaned comment period succeeds');
+    t.eq(Number((await t.sql(
+      `select count(*) c from pi_comment_periods where id='cp-sr154-deis-2025'`))[0].c), 1,
+         'and leaves exactly one copy of it');
+
     // ── the 3600 West design project: right-of-way test data ────────────────
     // A roadway project in DESIGN, which is when acquisition actually happens.
     // Its parcels are shaped to exercise every case the module has to handle,

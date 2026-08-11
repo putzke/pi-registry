@@ -6964,12 +6964,30 @@ function filterIntStakeList(){
   lst.innerHTML=html; lst.style.display='block';
 }
 
+// Put a known contact into the picker — both the hidden id the save reads and
+// the visible box the user reads. Returns false if the id resolves to nobody,
+// so a caller never claims a selection that isn't there.
+function _intSetStake(id){
+  const s=(DB.getActive('stakeholders')||[]).find(x=>String(x.id)===String(id));
+  if(!s) return false;
+  selectIntStake(String(s.id), dispName(s)+(s.org?' — '+s.org:''));
+  return true;
+}
+
 function selectIntStake(id, label){
   const hid=document.getElementById('f-is');
   const search=document.getElementById('f-is-search');
   const lst=document.getElementById('f-is-list');
   if(hid) hid.value=id;
-  if(search) search.value=id?label:'';
+  if(search){
+    search.value=id?label:'';
+    // The placeholder is the next anonymous label. Under a chosen contact that
+    // is just wrong, and it reappears the moment the selection is cleared, so
+    // it is swapped rather than blanked.
+    const projId=document.getElementById('f-ip')?.value||'';
+    search.placeholder = id ? 'Search by name or org…'
+                            : getAnonLabel(projId) + ' — search, or add a new contact';
+  }
   if(lst) lst.style.display='none';
   intHideNewContactForm();
 }
@@ -7380,11 +7398,20 @@ function openIntModal(preStake){
   `<button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-primary" onclick="saveInt()">Save interaction</button>`,true);
   // If a project is already selected (via filter), populate stakeholders for that project
   if(S.projectFilter){ updateIntStakeholders(); updateIntIssues(); }
-  // Set placeholder to next anonymous label for this project
+  // Re-apply the pre-selected contact AFTERWARDS. openIntModal seeds the hidden
+  // #f-is from preStake, but updateIntStakeholders() blanks it — correctly, since
+  // it also runs when the project changes and the old contact may not belong to
+  // the new one. The result was that "+ Log interaction" on a contact's own
+  // detail pane, which passes the id, opened with an empty picker and made you
+  // search for the person you were already looking at.
+  if(preStake) _intSetStake(preStake);
+  // Set placeholder to next anonymous label for this project — but never over a
+  // pre-selected contact, or the field reads "Anonymous" for a named person.
   setTimeout(function(){
     var isearch = document.getElementById('f-is-search');
+    if(!isearch || isearch.value) return;
     var anonDefault = getAnonLabel(S.projectFilter||'');
-    if(isearch) isearch.placeholder = anonDefault + ' — search, or add a new contact';
+    isearch.placeholder = anonDefault + ' — search, or add a new contact';
   }, 50);
   // Auto-populate Logged by from session
   (function(){var lb=getLoggedBy();var d=document.getElementById('f-il-display');var h=document.getElementById('f-il');if(d)d.textContent=lb||'—';if(h)h.value=lb;})();

@@ -1848,6 +1848,7 @@ function refreshBadges(){
   document.getElementById('nb-master').textContent=masterCount;
   const fuEl=document.getElementById('nb-fu');
   fuEl.textContent=openFU;
+  fuEl.title='Follow-ups assigned to you that are still outstanding — overdue ones included, not counted separately.';
   fuEl.classList.toggle('hide',openFU===0);
   // Meetings badge
   const mbEl=document.getElementById('meetings-badge');
@@ -5262,8 +5263,16 @@ function renderFollowups(el){
   const userF=S.fuUser||'mine';
   const now=new Date();
 
+  // 'open' means open AND overdue — an overdue follow-up is still open, it is
+  // just late. That is the opposite of Commitments, where a past-due row is
+  // promoted OUT of Open into its own Overdue status. Two views using the same
+  // word for different sets is what makes the tiles read as though they should
+  // be added together. The labels below say which is meant; 'notdue' is the set
+  // people assume "Open" is.
+  const _fuOverdue=i=>!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<now;
   if(statusF==='open')ints=ints.filter(i=>!i.followUpDone);
-  else if(statusF==='overdue')ints=ints.filter(i=>!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<now);
+  else if(statusF==='notdue')ints=ints.filter(i=>!i.followUpDone&&!_fuOverdue(i));
+  else if(statusF==='overdue')ints=ints.filter(_fuOverdue);
   else if(statusF==='resolved')ints=ints.filter(i=>i.followUpDone);
   if(projF)ints=ints.filter(i=>String(i.projectId)===String(projF));
   if(myLoggedBy&&userF==='mine')        ints=ints.filter(i=>_fuOwner(i)===myLoggedBy);
@@ -5305,13 +5314,13 @@ function renderFollowups(el){
     </div>
   </div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--navy-mid);border-bottom:1px solid var(--border);padding:10px 22px;flex-shrink:0">
-    <div class="scope-stat" style="cursor:pointer" onclick="document.getElementById('fu-status').value='open';renderFollowups(document.getElementById('main'))">
-      <b style="color:var(--amber);font-size:22px">${openCt}</b><span style="font-size:12px;color:var(--slate)">Open</span>
+    <div class="scope-stat" style="cursor:pointer${statusF==='open'?';border-color:rgba(232,160,32,.5)':''}" title="Everything still outstanding, overdue included. This is the number on the sidebar badge." onclick="S.fuStatus='open';renderFollowups(document.getElementById('main'))">
+      <b style="color:var(--amber);font-size:22px">${openCt}</b><span style="font-size:12px;color:var(--slate)">Open &amp; overdue</span>
     </div>
-    <div class="scope-stat" style="cursor:pointer${overdueCt>0?';border-color:rgba(217,64,64,.35)':''}" onclick="document.getElementById('fu-status').value='overdue';renderFollowups(document.getElementById('main'))">
-      <b style="color:var(--red);font-size:22px">${overdueCt}</b><span style="font-size:12px;color:var(--slate)">Overdue</span>
+    <div class="scope-stat" style="cursor:pointer${statusF==='overdue'?';border-color:rgba(217,64,64,.6)':overdueCt>0?';border-color:rgba(217,64,64,.35)':''}" title="Past their due date — part of the ${openCt} outstanding, not additional to it." onclick="S.fuStatus='overdue';renderFollowups(document.getElementById('main'))">
+      <b style="color:var(--red);font-size:22px">${overdueCt}</b><span style="font-size:12px;color:var(--slate)">Overdue <span style="color:var(--fog)">of those ${openCt}</span></span>
     </div>
-    <div class="scope-stat" style="cursor:pointer" onclick="document.getElementById('fu-status').value='resolved';renderFollowups(document.getElementById('main'))">
+    <div class="scope-stat" style="cursor:pointer${statusF==='resolved'?';border-color:rgba(40,168,112,.5)':''}" onclick="S.fuStatus='resolved';renderFollowups(document.getElementById('main'))">
       <b style="color:var(--green);font-size:22px">${resolvedCt}</b><span style="font-size:12px;color:var(--slate)">Resolved</span>
     </div>
     <div style="flex:1"></div>
@@ -5323,7 +5332,8 @@ function renderFollowups(el){
       <option value="all"${(S.fuUser||'')==='all'?' selected':''}>All follow-ups</option>
     </select>
     <select class="fsel" id="fu-status" onchange="S.fuStatus=this.value;renderFollowups(document.getElementById('main'))">
-      <option value="open"${(S.fuStatus||'open')==='open'?' selected':''}>Open</option>
+      <option value="open"${(S.fuStatus||'open')==='open'?' selected':''}>Open &amp; overdue</option>
+      <option value="notdue"${(S.fuStatus||'')==='notdue'?' selected':''}>Open, not yet due</option>
       <option value="overdue"${(S.fuStatus||'')==='overdue'?' selected':''}>Overdue only</option>
       <option value="resolved"${(S.fuStatus||'')==='resolved'?' selected':''}>Resolved</option>
       <option value="all"${(S.fuStatus||'')==='all'?' selected':''}>All follow-ups</option>

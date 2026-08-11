@@ -7402,7 +7402,7 @@ function openIntModal(preStake){
     <div class="fr"><label>Follow-up action</label><input id="f-ifun" placeholder="What needs to be done?"></div>
     <div class="fr"><label>Due date</label><input type="date" id="f-ifud"></div>
   </div>
-  <div class="fr"><label>Assign to <span style="font-weight:400;color:var(--fog)">(defaults to you)</span></label><select id="f-ifua" onchange="_fuAssignPick(this)">${_fuAssignOptions('')}</select></div>
+  <div class="fr"><label>Assign to <span style="font-weight:400;color:var(--fog)">(defaults to you)</span></label><select id="f-ifua" onchange="_fuAssignPick(this)">${_fuAssignOptions('', getLoggedBy())}</select></div>
   <div class="fr"><div class="fcheck"><input type="checkbox" id="f-ifudo" onchange="document.getElementById('fu-rdate').style.display=this.checked?'':'none'"><label for="f-ifudo">Follow-up resolved</label></div></div>
   <div id="fu-rdate" style="display:none"><div class="fr"><label>Date resolved</label><input type="date" id="f-ifudr" value="${localToday()}"></div></div></div>`,
   `<button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-primary" onclick="saveInt()">Save interaction</button>`,true);
@@ -7476,7 +7476,7 @@ async function openEditIntModal(id){
       <div id="fu-rdate" style="${i.followUpDone?'flex:1':'display:none'}"><label>Date resolved</label><input type="date" id="f-ifudr" value="${i.followUpResolved||localToday()}"></div>
     </div>
   </div>
-  <div class="fr"><label>Assign to <span style="font-weight:400;color:var(--fog)">(defaults to whoever logged it)</span></label><select id="f-ifua" onchange="_fuAssignPick(this)">${_fuAssignOptions(i.followUpAssignedTo)}</select></div>
+  <div class="fr"><label>Assign to <span style="font-weight:400;color:var(--fog)">(defaults to whoever logged it)</span></label><select id="f-ifua" onchange="_fuAssignPick(this)">${_fuAssignOptions(i.followUpAssignedTo, i.loggedBy)}</select></div>
   </div>`,
   `<button class="btn btn-danger" onclick="delInt('${id}')">Delete</button>
   <button class="btn" onclick="closeM()">Cancel</button>
@@ -7568,14 +7568,27 @@ function _fuTeam(){
 // initials keeps one representation of "mine" instead of two, and matches every
 // row that predates assignment. Explicitly picking yourself normalises back to
 // empty for the same reason.
-function _fuAssignOptions(cur){
+// `cur` is the explicit assignee (may be empty); `loggedBy` is who the follow-up
+// falls back to when it is empty — see _fuOwner().
+//
+// The blank option means "nobody was explicitly assigned, so this stays with
+// whoever logged it". That is NOT the same as "assigned to me", and labelling it
+// "Me (PUT)" said a follow-up logged by SHA belonged to PUT. On the new-
+// interaction modal the two coincide, because you are the logger; on the edit
+// modal they routinely do not, and that is the case it got wrong. "Me" is now
+// its own option with a real value, so choosing it is a deliberate reassignment
+// rather than a side effect of leaving the field alone.
+function _fuAssignOptions(cur, loggedBy){
   const me=getLoggedBy();
   cur=(cur||'').trim();
+  const owner=(loggedBy||'').trim()||me;
   const team=_fuTeam().filter(u=>u!==me);
-  if(cur&&cur!==me&&team.indexOf(cur)<0) team.push(cur);   // keep an off-roster assignee
+  if(cur&&cur!==me&&team.indexOf(cur)<0) team.push(cur);       // keep an off-roster assignee
+  if(owner&&owner!==me&&team.indexOf(owner)<0) team.push(owner);
   team.sort();
-  let html='<option value=""'+((!cur||cur===me)?' selected':'')+'>'
-    +(me?'Me ('+escHtml(me)+')':'— Unassigned —')+'</option>';
+  let html='<option value=""'+(!cur?' selected':'')+'>'
+    +(owner?'— Unassigned · stays with '+escHtml(owner)+' —':'— Unassigned —')+'</option>';
+  if(me) html+='<option value="'+escHtml(me)+'"'+(cur===me?' selected':'')+'>Me ('+escHtml(me)+')</option>';
   team.forEach(u=>{ html+='<option value="'+escHtml(u)+'"'+(cur===u?' selected':'')+'>'+escHtml(u)+'</option>'; });
   return html+'<option value="__new">＋ Someone else…</option>';
 }

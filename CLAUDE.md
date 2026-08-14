@@ -278,6 +278,32 @@ there was nothing to count.
     map and table still correlate on paper.
   - Covered by `test/tests/19-map-parcels.test.js` (28 checks). Google Maps
     can't load in the harness, so it covers everything up to the map object.
+- **ROW register export (Aug 2026)** — "Print register" and "Export .xlsx" on the
+  Parcels view. The working document for the sponsor and a hired ROW agent.
+  - **Two sheets, because two readers.** `Parcel register` = one row per PARCEL
+    (coverage). `Mailing list` = one row per PARCEL x OWNER — what a notice
+    mailing is run from. Three heirs make three rows; one owner across two
+    parcels makes two. That is how several mailing addresses on one parcel
+    resolve without stuffing them into a cell.
+  - **The mailing address is the OWNER's** (`pi_stakeholders.address`) and is
+    routinely nowhere near the situs. Both columns are carried side by side.
+  - A parcel with **NO owner still gets a mailing row**, flagged. Dropping it
+    would hide the case that matters most.
+  - **The export ignores the search and status filters** — deliberately. A
+    filtered file looks complete once it has been emailed.
+  - `_xlsxBuild()` writes a real .xlsx on the **JSZip already embedded** for the
+    .docx export (no new dependency, nothing fetched). Inline strings, no
+    sharedStrings; frozen header + autoFilter; dates as ISO so they sort as text
+    anywhere and import as dates in Google Sheets.
+  - Covered by `test/tests/23-row-export.test.js` (44 checks) which unzips the
+    blob and parses the XML. Verified separately against **openpyxl** — note
+    LibreOffice is broken in the dev container and rejects even a textbook
+    minimal .xlsx, so it is NOT a usable validator here.
+  - **Google Sheets sync is NOT built and is staged deliberately.** Push
+    (COMPASS -> Sheet, `drive.file` scope, client-side OAuth) is safe; a
+    read-back must be a REVIEWED import (diff -> human accepts), never
+    bidirectional auto-sync — the register is a compliance record and an
+    unattended writer has no attribution. Needs an OAuth client ID from Jeff.
 - **Deliberately NOT in the PI report, and NOT in the client portal.** In the
   report a map would mean a Static Maps call plus a stored image; if a client
   asks, Print/export is the supplemental attachment. In the portal it would be

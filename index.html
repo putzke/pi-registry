@@ -17957,6 +17957,8 @@ function renderParcels(el){
       <select class="fsel" onchange="S.projectFilter=this.value;renderParcels(document.getElementById('main'))">
         <option value="">All projects</option>${projs.map(p=>`<option value="${p.id}"${String(projF)===String(p.id)?' selected':''}>${escHtml(p.pid||'')} — ${escHtml(p.name||'')}</option>`).join('')}
       </select>
+      ${scoped.length?`<button class="btn" onclick="printRowRegister()" title="Parcel register and mailing list, on screen and print-ready. Every parcel in scope — the search and status filters do not apply."><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6V2h8v4"/><rect x="2" y="6" width="12" height="7" rx="1"/><path d="M4 10h8M4 13h5"/></svg>Print register</button>
+      <button class="btn" onclick="exportRowRegisterXlsx()" title="Excel workbook — Parcel register plus a Mailing list with one row per owner and their mailing address. Every parcel in scope, filters do not apply. Imports straight into Google Sheets."><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 2v8M5 7l3 3 3-3M3 13h10"/></svg>Export .xlsx</button>`:''}
       <button class="btn btn-primary" onclick="openParcelModal()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v10M3 8h10"/></svg>Add parcel</button>
     </div>
   </div>
@@ -18151,6 +18153,251 @@ async function delParcel(id){
   await DB.set('parcel_owners',(DB.get('parcel_owners')||[]).filter(l=>String(l.parcelId)!==String(id)));
   await DB.set('parcels',(DB.get('parcels')||[]).filter(p=>String(p.id)!==String(id)));
   closeM(); S.editId=null; refreshBadges(); renderParcels(document.getElementById('main'));
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ROW REGISTER EXPORT — the working document for a sponsor and a hired
+// right-of-way agent.
+//
+// Two sheets, because those two readers want different shapes of the same data:
+//   * Parcel register — one row per PARCEL. The coverage document: has every
+//     affected parcel got an identified owner, and has it been noticed.
+//   * Mailing list    — one row per PARCEL × OWNER. What a notice mailing is
+//     actually run from. Three heirs make three rows; one owner holding two
+//     parcels makes two. That is how several mailing addresses on one parcel
+//     resolve without stuffing them into a cell, and pi_parcel_owners already
+//     models it.
+//
+// The mailing address comes from the OWNER's contact record and is routinely
+// nowhere near the situs address — an absentee owner, an LLC, an estate. Both
+// are carried, side by side, because the agent needs to know which is which.
+//
+// A parcel with NO owner still appears on the mailing sheet, flagged. Dropping
+// it would hide the one case that matters most: nobody to notice.
+// ══════════════════════════════════════════════════════════════════
+
+// Every parcel on the project, deliberately IGNORING the search and status
+// filters. A filtered export looks complete and is not; this file gets emailed
+// to a sponsor and worked from as though it were the whole register.
+function _rowExportScope(){
+  const projF=S.projectFilter||'';
+  const projs=DB.get('projects')||[];
+  const parcels=(DB.get('parcels')||[])
+    .filter(p=>!projF||String(p.projectId)===String(projF))
+    .slice().sort((a,b)=>(a.parcelNumber||'').localeCompare(b.parcelNumber||'',undefined,{numeric:true}));
+  const proj=projF?projs.find(p=>String(p.id)===String(projF)):null;
+  return {projF, proj, projs, parcels};
+}
+function _rowProjLabel(p,projs){
+  const pr=(projs||[]).find(x=>String(x.id)===String(p.projectId));
+  return pr?(pr.pid||''):'';
+}
+// ISO on purpose: it sorts correctly as text in any tool, and Google Sheets
+// recognises it as a date on import. mm/dd/yyyy does neither.
+function _rowDate(d){ return d?String(d).slice(0,10):''; }
+
+const ROW_REG_COLS = [
+  {h:'Project',        w:14},
+  {h:'Parcel #',       w:16},
+  {h:'Situs address',  w:34, wrap:true},
+  {h:'Latitude',       w:12},
+  {h:'Longitude',      w:12},
+  {h:'Acquisition',    w:22},
+  {h:'Status',         w:14},
+  {h:'Notice sent',    w:13},
+  {h:'Owners',         w:9},
+  {h:'Owner names',    w:34, wrap:true},
+  {h:'Notes',          w:52, wrap:true},
+];
+const ROW_MAIL_COLS = [
+  {h:'Project',         w:14},
+  {h:'Parcel #',        w:16},
+  {h:'Situs address',   w:32, wrap:true},
+  {h:'Owner',           w:26},
+  {h:'Organization',    w:26},
+  {h:'Role',            w:12},
+  {h:'Mailing address', w:40, wrap:true},
+  {h:'Email',           w:26},
+  {h:'Phone',           w:16},
+  {h:'Parcel status',   w:14},
+  {h:'Notice sent',     w:13},
+];
+
+function _rowRegisterRows(){
+  const {projs,parcels}=_rowExportScope();
+  return parcels.map(p=>{
+    const owners=_parcOwners(p.id);
+    return [
+      _rowProjLabel(p,projs), p.parcelNumber||'', p.situsAddress||'',
+      p.latitude||'', p.longitude||'', p.acquisitionType||'',
+      p.status||'Not started', _rowDate(p.noticeDate),
+      String(owners.length),
+      owners.map(o=>dispName(o.stake)
+        +(o.link.ownershipRole&&o.link.ownershipRole!=='Owner'?' ('+o.link.ownershipRole+')':'')).join('; '),
+      p.notes||''
+    ];
+  });
+}
+function _rowMailingRows(){
+  const {projs,parcels}=_rowExportScope();
+  const out=[];
+  parcels.forEach(p=>{
+    const owners=_parcOwners(p.id);
+    const head=[_rowProjLabel(p,projs), p.parcelNumber||'', p.situsAddress||''];
+    const tail=[p.status||'Not started', _rowDate(p.noticeDate)];
+    if(!owners.length){
+      // Kept, not skipped. "No owner identified" is the row that most needs to
+      // reach the agent.
+      out.push(head.concat(['— No owner identified —','','','','',''], tail).slice(0,ROW_MAIL_COLS.length));
+      return;
+    }
+    owners.forEach(o=>{
+      const s=o.stake;
+      out.push(head.concat([
+        dispName(s), s.org||'', o.link.ownershipRole||'Owner',
+        s.address||'', s.email||'', s.phone||''
+      ], tail));
+    });
+  });
+  return out;
+}
+
+// ── minimal .xlsx writer ──────────────────────────────────────────────────
+// Built on the JSZip already embedded for the .docx export, so this adds no
+// dependency and nothing is fetched at runtime. Values are written as inline
+// strings, which avoids a sharedStrings table entirely — the file is a working
+// document, not a calculation.
+function _xlsxColName(n){
+  let s=''; n=n+1;
+  while(n>0){ const r=(n-1)%26; s=String.fromCharCode(65+r)+s; n=Math.floor((n-1)/26); }
+  return s;
+}
+function _xlsxEsc(v){
+  return String(v==null?'':v)
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g,'')   // control chars are invalid in XML
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function _xlsxSheet(cols, rows){
+  const last=_xlsxColName(cols.length-1), end=rows.length+1;
+  const colXml='<cols>'+cols.map((c,i)=>
+    '<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+(c.w||16)+'" customWidth="1"'
+    +(c.wrap?' style="2"':'')+'/>').join('')+'</cols>';
+  const cell=(r,i,v,s)=>'<c r="'+_xlsxColName(i)+r+'" t="inlineStr"'+(s?' s="'+s+'"':'')
+    +'><is><t xml:space="preserve">'+_xlsxEsc(v)+'</t></is></c>';
+  let body='<row r="1" ht="20" customHeight="1">'
+    +cols.map((c,i)=>cell(1,i,c.h,1)).join('')+'</row>';
+  rows.forEach((r,n)=>{
+    body+='<row r="'+(n+2)+'">'+r.map((v,i)=>cell(n+2,i,v)).join('')+'</row>';
+  });
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+    // Freeze the header and switch on filtering — it is opened to be sorted.
+    +'<sheetViews><sheetView workbookViewId="0">'
+    +'<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>'
+    +'</sheetView></sheetViews>'
+    +colXml+'<sheetData>'+body+'</sheetData>'
+    +'<autoFilter ref="A1:'+last+end+'"/></worksheet>';
+}
+function _xlsxBuild(sheets){
+  const zip=new JSZip();
+  const ct='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+    +'<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+    +'<Default Extension="xml" ContentType="application/xml"/>'
+    +'<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+    +sheets.map((s,i)=>'<Override PartName="/xl/worksheets/sheet'+(i+1)+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join('')
+    +'<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+    +'</Types>';
+  zip.file('[Content_Types].xml',ct);
+  zip.file('_rels/.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+    +'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+    +'</Relationships>');
+  zip.file('xl/workbook.xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+    +' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>'
+    +sheets.map((s,i)=>'<sheet name="'+_xlsxEsc(s.name)+'" sheetId="'+(i+1)+'" r:id="rId'+(i+1)+'"/>').join('')
+    +'</sheets></workbook>');
+  zip.file('xl/_rels/workbook.xml.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+    +sheets.map((s,i)=>'<Relationship Id="rId'+(i+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet'+(i+1)+'.xml"/>').join('')
+    +'<Relationship Id="rId'+(sheets.length+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+    +'</Relationships>');
+  zip.file('xl/styles.xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+    +'<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font>'
+    +'<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts>'
+    +'<fills count="3"><fill><patternFill patternType="none"/></fill>'
+    +'<fill><patternFill patternType="gray125"/></fill>'
+    +'<fill><patternFill patternType="solid"><fgColor rgb="FF1A3050"/><bgColor indexed="64"/></patternFill></fill></fills>'
+    +'<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+    +'<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+    +'<cellXfs count="3">'
+    +'<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+    +'<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment vertical="center"/></xf>'
+    +'<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf>'
+    +'</cellXfs>'
+    // Optional per the schema, but a reader that expects a default cell style
+    // warns without it. Cheap insurance for a file that gets opened in whatever
+    // the recipient happens to use.
+    +'<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
+    +'</styleSheet>');
+  sheets.forEach((s,i)=>zip.file('xl/worksheets/sheet'+(i+1)+'.xml',_xlsxSheet(s.cols,s.rows)));
+  return zip.generateAsync({type:'blob',
+    mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+
+function exportRowRegisterXlsx(){
+  const {proj,parcels}=_rowExportScope();
+  if(!parcels.length){ showToast('No parcels to export.','warn',3000); return; }
+  _xlsxBuild([
+    {name:'Parcel register', cols:ROW_REG_COLS,  rows:_rowRegisterRows()},
+    {name:'Mailing list',    cols:ROW_MAIL_COLS, rows:_rowMailingRows()}
+  ]).then(function(blob){
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=(proj?(proj.pid+'_'):'')+'ROW_Register_'+localToday()+'.xlsx';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1000);
+    showToast('Exported '+parcels.length+' parcel'+(parcels.length===1?'':'s')+' — two sheets.','ok',3500);
+  }).catch(function(e){
+    console.error('ROW export failed:',e);
+    showToast('Export failed: '+e.message,'err',5000);
+  });
+}
+
+// Same two tables, on screen and on paper — for anyone who wants to read or
+// hand over the register without opening a spreadsheet.
+function printRowRegister(){
+  const {proj,parcels}=_rowExportScope();
+  if(!parcels.length){ showToast('No parcels to print.','warn',3000); return; }
+  const st=_parcelStats(S.projectFilter||'');
+  const tbl=(cols,rows)=>'<table><thead><tr>'
+    +cols.map(c=>'<th>'+escHtml(c.h)+'</th>').join('')+'</tr></thead><tbody>'
+    +rows.map(r=>'<tr>'+r.map(v=>'<td>'+escHtml(v==null?'':String(v))+'</td>').join('')+'</tr>').join('')
+    +'</tbody></table>';
+  const title=(proj?proj.name:'All projects')+' — Right-of-Way Register';
+  const html='<!DOCTYPE html><html><head><title>'+escHtml(title)+'</title><style>'
+    +'body{font-family:Arial,sans-serif;margin:26px;color:#222}'
+    +'h1{font-size:18px;margin-bottom:3px}h2{font-size:13px;color:#555;font-weight:400;margin:0 0 16px}'
+    +'h3{font-size:14px;margin:22px 0 7px}'
+    +'table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:6px}'
+    +'th{background:#1A3050;color:#fff;padding:6px 8px;text-align:left;font-size:11px}'
+    +'td{padding:5px 8px;border-bottom:1px solid #eee;vertical-align:top}'
+    +'tr:nth-child(even) td{background:#fafafa}'
+    +'.note{font-size:11px;color:#666;margin:4px 0 0}'
+    +'@media print{h3{page-break-after:avoid}tr{page-break-inside:avoid}}'
+    +'</style></head><body>'
+    +'<h1>'+escHtml(title)+'</h1>'
+    +'<h2>Generated '+new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})
+    +' · '+st.total+' parcels · '+(st.total-st.unownedCt)+' with an owner identified · '
+    +st.noticedCt+' noticed · '+st.ownerCt+' distinct owners</h2>'
+    +'<h3>Parcel register</h3>'+tbl(ROW_REG_COLS,_rowRegisterRows())
+    +'<h3>Mailing list — one row per owner</h3>'+tbl(ROW_MAIL_COLS,_rowMailingRows())
+    +'<p class="note">Mailing addresses are the owner&rsquo;s address of record and may differ from the situs address. '
+    +'Parcels with no owner identified are listed so the gap is visible.</p>'
+    +'</body></html>';
+  showInlineReport(html, title);
 }
 
 function renderCommitments(m) {

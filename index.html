@@ -1302,6 +1302,27 @@ async function _relinkIssueInteractions(field, oldTmpId, newId) {
 }
 
 // ── DB SHIM ────────────────────────────────────────────────────────
+// A write the database refused. The change is still in _syncCache, so the screen
+// looks right; it will be silently undone by the next refetch. Say so, loudly
+// and with the table named, because the alternative is a consultant believing a
+// compliance record was saved when it was not.
+//
+// Deliberately NOT a network warning — _sbNetworkWarn covers being offline,
+// where the right advice is "try again". A 4xx means the server understood and
+// rejected it, and trying again will not help.
+let _syncFailWarnedAt = 0;
+function _syncFailed(table, n) {
+  const label = String(table).replace(/_/g, ' ');
+  console.error('SYNC: ' + n + ' write(s) to ' + table + ' were rejected by the database.');
+  if (Date.now() - _syncFailWarnedAt < 4000) return;   // one message per burst
+  _syncFailWarnedAt = Date.now();
+  if (typeof showToast === 'function') {
+    showToast('Could not save ' + (n > 1 ? n + ' changes to ' : 'a change to ') + label
+      + '. It will be lost when the view refreshes — check the browser console for the reason.',
+      'err', 9000);
+  }
+}
+
 const DB = {
   get(k) { return JSON.parse(JSON.stringify(_syncCache[k] || [])); },
   set(k, arr) {
@@ -1312,11 +1333,19 @@ const DB = {
   async _sync(table, oldArr, newArr) {
     const oldMap = {}; oldArr.forEach(x => { if(x.id) oldMap[x.id] = x; });
     const newMap = {}; newArr.forEach(x => { if(x.id) newMap[x.id] = x; });
+    // sbAdd / sbUpdate / sbDelete all report failure by return value, and this
+    // loop used to discard every one of them. Writes are local-first, so a
+    // rejected PATCH left the change sitting in _syncCache looking saved — until
+    // the next background refetch replaced it with the server's version and the
+    // edit vanished with no explanation. Console-only errors are no use to
+    // someone who has just clicked Save.
+    let failed = 0;
     for (const item of newArr) {
       if (!item.id) continue;
       const isNumeric = /^\d+$/.test(item.id);
       if (!oldMap[item.id]) {
         const newId = await sbAdd(table, item);
+        if (!newId) failed++;
         if (newId) {
           const oldTmpId = item.id;
           const idx = _syncCache[table].findIndex(x => x.id === item.id);
@@ -1336,15 +1365,17 @@ const DB = {
         }
       } else if (JSON.stringify(oldMap[item.id]) !== JSON.stringify(item) && isNumeric) {
         // Pass the pre-edit updated_at as the OCC baseline (ignored for non-OCC tables).
-        await sbUpdate(table, item.id, item, oldMap[item.id] && oldMap[item.id].updatedAt);
+        if (!(await sbUpdate(table, item.id, item, oldMap[item.id] && oldMap[item.id].updatedAt))) failed++;
       }
     }
     const _textPKTables = new Set(['comment_periods','public_comments','tribal_consultations']);
     for (const item of oldArr) {
       if (item.id && !newMap[item.id] && (/^\d+$/.test(item.id) || _textPKTables.has(table))) {
-        await sbDelete(table, item.id);
+        if (!(await sbDelete(table, item.id))) failed++;
       }
     }
+    if (failed) _syncFailed(table, failed);
+    return !failed;
   },
   uid() { return 'tmp_' + Date.now().toString(36) + Math.random().toString(36).slice(2,5); },
   // Returns only non-archived stakeholders — use for all normal UI queries

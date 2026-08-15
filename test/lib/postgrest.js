@@ -124,6 +124,19 @@ async function handle(pool, req, body) {
     return { status: 200, body: rows };
   }
 
+  // node-pg turns a JS array into a Postgres ARRAY literal ({a,b}), which a
+  // json/jsonb column rejects outright — "invalid input syntax for type json".
+  // Real PostgREST takes the value straight from the request body, so without
+  // this every write of a jsonb column (attendee_ids, nepa_checklist, sections,
+  // snapshot, dist_groups) fails here and only here. That is a harness lie in
+  // the dangerous direction: it invents a failure the app does not have, and
+  // would send someone hunting a bug in application code.
+  const bind = (col, v) => {
+    const ty = (types && types[col]) || '';
+    if (/json/.test(ty) && v !== null && typeof v === 'object') return JSON.stringify(v);
+    return v;
+  };
+
   if (req.method === 'POST') {
     const items = Array.isArray(body) ? body : [body];
     const out = [];
@@ -138,7 +151,7 @@ async function handle(pool, req, body) {
         q += ` on conflict (${sp.get('on_conflict')}) do update set ${upd.join(',')}`;
       }
       q += ' returning *';
-      const { rows } = await pool.query(q, cols.map(c => item[c]));
+      const { rows } = await pool.query(q, cols.map(c => bind(c, item[c])));
       out.push(...rows);
     }
     return { status: 201, body: wantRows ? out : null };
@@ -150,7 +163,7 @@ async function handle(pool, req, body) {
     if (!cols.length) return { status: 200, body: [] };
     const sets = cols.map((c, n) => `${c}=$${n + 1}`);
     const q = `update ${table} set ${sets.join(',')}${sql} returning *`;
-    const { rows } = await pool.query(q, [...cols.map(c => body[c]), ...values]);
+    const { rows } = await pool.query(q, [...cols.map(c => bind(c, body[c])), ...values]);
     return { status: 200, body: wantRows ? rows : null };
   }
 

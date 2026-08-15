@@ -22,6 +22,26 @@ module.exports = {
     try {
       await app.ready();
 
+      // Google Maps cannot load here, so stub it — completely. A partial stub is
+      // worse than none: renderMapView kicks off an async _mvGeocode that waits
+      // up to six seconds for window.google, so a stub installed halfway through
+      // the test wakes a geocode from an EARLIER render into an object missing
+      // Geocoder, and it throws where the real app never would.
+      await app.page.evaluate(() => {
+        const noop = function () {};
+        window.google = { maps: {
+          Size:  function (w, h) { this.w = w; this.h = h; },
+          Point: function (x, y) { this.x = x; this.y = y; },
+          Geocoder: function () { this.geocode = (req, cb) => cb([], 'ZERO_RESULTS'); },
+          Map: function () { this.getDiv = () => document.createElement('div');
+                             this.fitBounds = noop; this.setCenter = noop; },
+          Marker: function () { this.setMap = noop; this.addListener = noop; },
+          InfoWindow: function () { this.setContent = noop; this.open = noop; },
+          LatLngBounds: function () { this.extend = noop; },
+          SymbolPath: { CIRCLE: 0 },
+        } };
+      });
+
       const proj = (await t.sql(`select id from pi_projects where pid='25-3W-DESIGN'`))[0];
       t.ok(proj, 'found the design project');
 
@@ -50,7 +70,7 @@ module.exports = {
                     ? main.querySelector('#mv-legend').previousElementSibling.textContent.trim() : '',
           legend: (main.querySelector('#mv-legend') || {}).textContent || '',
           errors: (document.getElementById('mv-errors') || {}).textContent || '',
-          hasParcelFilter: !!main.innerHTML.match(/Parcel status/),
+          hasParcelFilter: !!main.innerHTML.match(/Acquisition status/),
           hasSupportFilter: !!main.innerHTML.match(/Support level/),
           parcelsHeld: (window._mvParcels || []).length,
           noLocHeld: (window._mvParcNoLoc || []).length,
@@ -106,6 +126,52 @@ module.exports = {
       t.eq(byStatus.length, expect, `filtering to Negotiating leaves ${expect}`);
       t.ok(byStatus.every(s => s === 'Negotiating'), 'and only those');
 
+      // ── "Notice sent" the STAGE is not "has been noticed" ──────────────
+      // The map showed one parcel under status "Notice sent" while the Parcels
+      // view counted six noticed, which reads as a broken map. Both numbers were
+      // right: five of those six were noticed and have since moved to Contacted,
+      // Negotiating or Acquired, so they are no longer AT that stage.
+      const counts = (await t.sql(`
+        select count(*) filter (where status='Notice sent')::int at_stage,
+               count(*) filter (where notice_date is not null)::int noticed,
+               count(*) filter (where notice_date is null)::int unnoticed
+          from pi_parcels where project_id::text = $1`, [String(proj.id)]))[0];
+      t.eq(counts.at_stage, 1, 'exactly one parcel is AT the Notice sent stage');
+      t.eq(counts.noticed, 6, 'but six have been noticed');
+      t.ok(counts.noticed > counts.at_stage,
+           'the two are genuinely different numbers — that is the whole confusion');
+
+      const byStage = await app.page.evaluate(() => {
+        S.mapFParcSt = 'Notice sent';
+        renderMapView(document.getElementById('main'));
+        return (window._mvParcels || []).length;
+      });
+      t.eq(byStage, counts.at_stage, 'filtering by the stage returns just that stage');
+
+      // The compliance question needs its own filter, because no status value
+      // can express it: "never noticed" spans Not started and anything else
+      // somebody moved on without sending a notice.
+      const unnoticed = await app.page.evaluate(() => {
+        S.mapFParcSt = '__nonotice';
+        renderMapView(document.getElementById('main'));
+        return { n: (window._mvParcels || []).length + (window._mvParcNoLoc || []).length,
+                 anyDated: (window._mvParcels || []).some(p => p.noticeDate) };
+      });
+      t.eq(unnoticed.n, counts.unnoticed, 'the no-notice filter returns the un-noticed parcels');
+      t.eq(unnoticed.anyDated, false, 'and nothing that carries a notice date');
+
+      const offered = await app.page.evaluate(() => {
+        S.mapFParcSt = ''; renderMapView(document.getElementById('main'));
+        const sel = [...document.querySelectorAll('#main select')]
+          .find(s => /No notice date yet/.test(s.innerHTML));
+        return sel ? { values: [...sel.options].map(o => o.value),
+                       label: (sel.previousElementSibling || {}).textContent || '' } : null;
+      });
+      t.ok(offered, 'the option is offered in the filter');
+      t.ok(offered.values.includes('__nonotice'), 'with its own value');
+      t.ok(/acquisition status/i.test(offered.label),
+           `the filter is labelled as the stage, not "Parcel status" — got "${offered.label.trim()}"`);
+
       // ── every status has its own marker colour ─────────────────────────
       // Collapsing the middle statuses into one amber would lose the
       // distinction the map exists to show.
@@ -118,11 +184,6 @@ module.exports = {
       // could not tie a square to a row, and the sequence moved whenever a
       // filter changed.
       const icon = await app.page.evaluate(() => {
-        // Stand in for the Google Maps types the icon builder needs; the map
-        // itself cannot load in the harness.
-        window.google = window.google || { maps: {
-          Size: function(w,h){ this.w=w; this.h=h; },
-          Point: function(x,y){ this.x=x; this.y=y; } } };
         const p = (_syncCache.parcels || []).find(x => x.parcelNumber);
         const ic = _mvParcIcon(p);
         return { num: p.parcelNumber, status: p.status,

@@ -237,8 +237,16 @@ there was nothing to count.
     "we can't place this parcel" is itself a ROW finding. `_mvShowNoLoc()` runs
     before geocoding, since that fact is known from the data.
   - Stakeholder-only filters (support / type / influence / role / EJ / LEP /
-    colour-by) are hidden on the parcels layer; a parcel-status filter
-    (`S.mapFParcSt`) replaces them. Search matches parcel number, situs address
+    colour-by) are hidden on the parcels layer; an **Acquisition status** filter
+    (`S.mapFParcSt`) replaces them.
+  - **"Notice sent" the STAGE is not "has been noticed".** `PARCEL_STATUSES`
+    tracks where a parcel is in the acquisition lifecycle, so a noticed parcel
+    that has moved to Contacted or Acquired is no longer AT the Notice-sent
+    stage — the map showed 1 while the Parcels view counted 6, and both were
+    right. The Parcels tile now reads "Noticed · any stage" and the map filter
+    is labelled "Acquisition status", both with tooltips. The compliance
+    question gets its own option, `__nonotice` ("— No notice date yet —"), which
+    no status value can express. Search matches parcel number, situs address
     and owner names.
   - **Markers are labelled with the PARCEL NUMBER**, drawn into an SVG data-URI
     icon (`_mvParcIcon`) as a chip under the square — not a Marker `label`,

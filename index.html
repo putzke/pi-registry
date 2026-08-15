@@ -15982,7 +15982,12 @@ function renderMapView(m) {
   var allParcels = DB.get('parcels') || [];
   var parcScoped = allParcels.filter(function(p){ return !projF || String(p.projectId)===String(projF); });
   var parcList = showP ? parcScoped.slice() : [];
-  if (fParcSt) parcList = parcList.filter(function(p){ return (p.status||'Not started')===fParcSt; });
+  // 'Notice sent' is an acquisition STAGE — a parcel noticed and since moved to
+  // Contacted or Acquired no longer matches it, which is why the map showed one
+  // parcel while the Parcels view counted six noticed. The stage is not the
+  // compliance question; '__nonotice' is, so it gets its own option.
+  if (fParcSt === '__nonotice') parcList = parcList.filter(function(p){ return !p.noticeDate; });
+  else if (fParcSt) parcList = parcList.filter(function(p){ return (p.status||'Not started')===fParcSt; });
   if (fSearch) {
     var pq = fSearch.toLowerCase();
     parcList = parcList.filter(function(p){
@@ -16026,10 +16031,11 @@ function renderMapView(m) {
         <input id="mv-search" value="${fSearch}" oninput="S.mapFSearch=this.value;_mapApplyFilters()" placeholder="${showP&&!showC?'Parcel #, address, owner…':'Name, org, address…'}" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:var(--white);font-size:12px;padding:6px 9px;outline:none">
       </div>
       ${showP?`<div>
-        <div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Parcel status</div>
+        <div title="The acquisition stage on the parcel record. A parcel that was noticed and has since moved to Contacted or Acquired is no longer at the &quot;Notice sent&quot; stage — use &quot;No notice date yet&quot; to find parcels that have never been noticed." style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;cursor:help">Acquisition status</div>
         <select onchange="S.mapFParcSt=this.value;_mapApplyFilters()" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:var(--white);font-size:12px;padding:6px 8px;box-sizing:border-box">
           <option value="">All statuses</option>
           ${PARCEL_STATUSES.map(function(t){return `<option value="${t}" ${fParcSt===t?'selected':''}>${t}</option>`;}).join('')}
+          <option value="__nonotice" ${fParcSt==='__nonotice'?'selected':''}>— No notice date yet —</option>
         </select>
       </div>`:''}
       ${showC?`
@@ -18061,9 +18067,9 @@ function renderParcels(el){
       <div style="font-size:28px;font-weight:700;color:var(--sky-lt)">${scoped.length}</div>
       <div style="font-size:11px;color:var(--fog);margin-top:2px">Parcels tracked</div>
     </div>
-    <div style="background:rgba(40,168,112,.08);border:1px solid rgba(40,168,112,.25);border-radius:10px;padding:14px 16px">
+    <div title="Parcels with a notice date on record, at ANY acquisition stage. Not the same as the &quot;Notice sent&quot; status, which is the stage a parcel is currently at — a noticed parcel that has moved on to Contacted or Acquired is counted here but not there." style="background:rgba(40,168,112,.08);border:1px solid rgba(40,168,112,.25);border-radius:10px;padding:14px 16px;cursor:help">
       <div style="font-size:28px;font-weight:700;color:var(--green)">${noticed}<span style="font-size:14px;color:var(--fog);font-weight:400"> / ${scoped.length}</span></div>
-      <div style="font-size:11px;color:var(--fog);margin-top:2px">Notice sent</div>
+      <div style="font-size:11px;color:var(--fog);margin-top:2px">Noticed <span style="color:var(--slate)">· any stage</span></div>
     </div>
     <div style="background:${unowned?'rgba(192,57,43,.1)':'rgba(255,255,255,.04)'};border:1px solid ${unowned?'rgba(192,57,43,.3)':'var(--border)'};border-radius:10px;padding:14px 16px">
       <div style="font-size:28px;font-weight:700;color:${unowned?'var(--red)':'var(--fog)'}">${unowned}</div>

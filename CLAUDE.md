@@ -296,12 +296,13 @@ there was nothing to count.
     the print header and the .xlsx filename instead. Unscoped it must stay or
     the rows are ambiguous. `_rowRegCols(withProj)` / `_rowMailCols(withProj)`
     build both shapes — index columns BY NAME, not position.
-  - **Coordinates round to 3 decimals (~110 m) in the export only** — free-text
-    lat/lng can arrive with a float's full tail (41.241355781290835), 17
-    characters of column for precision nobody typed. The parcel record keeps
-    the full value. Enough to find the right stretch of road, NOT enough to
-    identify a boundary — if a survey-grade shared document is ever needed,
-    raise `_rowCoord()` to 5 or 6 dp.
+  - **Coordinates: full in the .xlsx, 3 decimals in the PRINT VIEW only.**
+    `_rowRegisterRows(shortCoords)` — the print view passes true, the export
+    does not. Free-text lat/lng can arrive with a float's full tail
+    (41.241355781290835), which is unreadable in an on-screen table but is real
+    data in a file the ROW agent works from, so a column width is not a reason
+    to drop it. 3 dp is ~110 m: fine for reading, NOT enough to identify a
+    boundary — never round the file.
   - `_xlsxBuild()` writes a real .xlsx on the **JSZip already embedded** for the
     .docx export (no new dependency, nothing fetched). Inline strings, no
     sharedStrings; frozen header + autoFilter; dates as ISO so they sort as text

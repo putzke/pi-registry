@@ -94,24 +94,28 @@ module.exports = {
         && r[M('Mailing address')] !== r[M('Situs address')]);
       t.ok(differs, 'at least one owner is reachable somewhere other than the land');
 
-      // ── coordinates are shortened for the shared document only ──────────
-      const coords = rows.reg.map(r => [r[R('Latitude')], r[R('Longitude')]])
-        .filter(([a, b]) => a || b);
-      t.gt(coords.length, 0, 'a parcel is located by coordinates');
-      coords.forEach(([a, b]) => {
-        [a, b].filter(Boolean).forEach(v =>
-          t.ok(/^-?\d+\.\d{3}$/.test(v), `coordinate is rounded to 3 decimals — got "${v}"`));
+      // ── coordinates: full in the file, shortened only on screen ─────────
+      // A long float is unreadable in the popup table but is real data in a
+      // file the agent works from, so the two surfaces differ deliberately.
+      await app.page.evaluate(() => {
+        const p = (_syncCache.parcels || []).find(x => x.latitude && x.longitude);
+        p.latitude = '41.241355781290835'; p.longitude = '-112.0663024305744';
       });
-      // The stored value keeps its full precision; only the export rounds.
-      const stored = await app.page.evaluate(() =>
-        (_syncCache.parcels || []).filter(p => p.latitude).map(p => String(p.latitude)));
-      t.ok(stored.some(v => (v.split('.')[1] || '').length > 3),
-           'the parcel record itself still holds more than three decimals');
+      const shown = await app.page.evaluate(() => ({
+        file: _rowRegisterRows().find(r => r.some(c => /^41\.24/.test(String(c)))),
+        screen: _rowRegisterRows(true).find(r => r.some(c => /^41\.24/.test(String(c)))),
+      }));
+      t.eq(shown.file[R('Latitude')], '41.241355781290835',
+           'the .xlsx keeps the stored coordinate exactly');
+      t.eq(shown.file[R('Longitude')], '-112.0663024305744', 'both of them');
+      t.eq(shown.screen[R('Latitude')], '41.241', 'the print view shortens it');
+      t.eq(shown.screen[R('Longitude')], '-112.066', 'both of those too');
+
       const roundTrip = await app.page.evaluate(() =>
         [_rowCoord('41.241355781290835'), _rowCoord('-112.0663024305744'),
          _rowCoord(''), _rowCoord('not a number')]);
       t.eq(roundTrip, ['41.241', '-112.066', '', 'not a number'],
-           'rounding handles blanks and junk without inventing a number');
+           'shortening handles blanks and junk without inventing a number');
 
       // ── unscoped, the Project column must come back ─────────────────────
       // Without it, an all-projects file cannot say which project a row is on.
@@ -210,6 +214,8 @@ module.exports = {
            'the print view shows both tables');
       t.ok(/Mailing address/.test(printed), 'including the mailing addresses');
       t.ok(/No owner identified/.test(printed), 'and the parcel with no owner');
+      t.ok(printed.includes('41.241') && !printed.includes('41.241355'),
+           'and coordinates shortened for reading on screen');
 
       t.eq(app.errors, [], 'no page errors during the run');
     } finally {

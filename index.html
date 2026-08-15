@@ -18228,23 +18228,26 @@ function _rowMailCols(withProj){
     {h:'Notice sent',     w:13},
   ]);
 }
-// Coordinates are stored as free text and can arrive with a float's full tail
-// (41.241355781290835), which is 17 characters of column for precision nobody
-// entered. Three decimals is about 110 m at this latitude — enough to find the
-// right stretch of road, not enough to identify a boundary, so the parcel
-// record keeps the full value and only the shared document rounds.
+// Screen-only shortening. Coordinates are stored as free text and can arrive
+// with a float's full tail (41.241355781290835), which is unreadable in a table
+// on screen. Three decimals is about 110 m at this latitude — fine for reading,
+// NOT enough to identify a boundary, so this is used only by the print view.
+// The .xlsx carries the stored value in full: a column width costs nothing
+// there, and the agent working from the file may need the precision.
 function _rowCoord(v){
   const n=parseFloat(v);
   return isNaN(n)?String(v||''):n.toFixed(3);
 }
 
-function _rowRegisterRows(){
+function _rowRegisterRows(shortCoords){
   const {projF,projs,parcels}=_rowExportScope();
   return parcels.map(p=>{
     const owners=_parcOwners(p.id);
     return (projF?[]:[_rowProjLabel(p,projs)]).concat([
       p.parcelNumber||'', p.situsAddress||'',
-      _rowCoord(p.latitude), _rowCoord(p.longitude), p.acquisitionType||'',
+      shortCoords?_rowCoord(p.latitude):(p.latitude||''),
+      shortCoords?_rowCoord(p.longitude):(p.longitude||''),
+      p.acquisitionType||'',
       p.status||'Not started', _rowDate(p.noticeDate),
       String(owners.length),
       owners.map(o=>dispName(o.stake)
@@ -18413,7 +18416,7 @@ function printRowRegister(){
     +'<h2>Generated '+new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})
     +' · '+st.total+' parcels · '+(st.total-st.unownedCt)+' with an owner identified · '
     +st.noticedCt+' noticed · '+st.ownerCt+' distinct owners</h2>'
-    +'<h3>Parcel register</h3>'+tbl(_rowRegCols(withProj),_rowRegisterRows())
+    +'<h3>Parcel register</h3>'+tbl(_rowRegCols(withProj),_rowRegisterRows(true))
     +'<h3>Mailing list — one row per owner</h3>'+tbl(_rowMailCols(withProj),_rowMailingRows())
     +'<p class="note">Mailing addresses are the owner&rsquo;s address of record and may differ from the situs address. '
     +'Parcels with no owner identified are listed so the gap is visible.</p>'

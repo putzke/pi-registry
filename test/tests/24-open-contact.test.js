@@ -46,6 +46,56 @@ module.exports = {
       t.ok(pane.text.includes(row.last_name),
            `the contact's name appears on screen (${row.last_name})`);
 
+      // ── the row is highlighted AND scrolled into view ───────────────────
+      // Landing on a contact whose row is below the fold means the detail pane
+      // names one person while the list shows another, with no way to see where
+      // you are or to click back after looking at someone else.
+      // Deliberately the LAST contact in the list. A contact near the top is
+      // visible at scrollTop 0 whether or not anything scrolled, so testing one
+      // of those proves nothing — verified by removing the scroll call and
+      // watching this still pass.
+      const last = await app.page.evaluate(pid => {
+        S.projectFilter = pid; setView('stakeholders');
+        const rows = [...document.querySelectorAll('.lrow')];
+        const el = rows[rows.length - 1];
+        const m = (el.getAttribute('onclick') || '').match(/selectStake\('([^']+)'\)/);
+        return { id: m && m[1], total: rows.length };
+      }, String(row.project_id));
+      t.ok(last.id, 'found the last contact in the project list');
+      t.gt(last.total, 10, 'the list is long enough to need scrolling');
+
+      const inList = await app.page.evaluate(async ([sid, pid]) => {
+        setView('interactions');                    // arrive from somewhere else
+        openContact(sid, pid);
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(
+          () => setTimeout(r, 30))));               // let the scroll settle
+        // The scroller is the .data-list INSIDE the pane; the pane itself is
+        // overflow:hidden and its scrollTop never moves.
+        const pane = _skScroller();
+        const rows = [...document.querySelectorAll('.lrow')];
+        const sel = document.querySelector('.lrow.sel');
+        if (!pane || !sel) return { pane: !!pane, sel: !!sel };
+        const pr = pane.getBoundingClientRect(), sr = sel.getBoundingClientRect();
+        return {
+          pane: true, sel: true,
+          selCount: document.querySelectorAll('.lrow.sel').length,
+          index: rows.indexOf(sel), total: rows.length,
+          overflows: pane.scrollHeight > pane.clientHeight,
+          visible: sr.top >= pr.top - 1 && sr.bottom <= pr.bottom + 1,
+          scrolled: pane.scrollTop,
+          matches: (sel.getAttribute('onclick') || '').includes(sid),
+        };
+      }, [String(last.id), String(row.project_id)]);
+      t.ok(inList.pane, 'the list pane rendered');
+      t.ok(inList.sel, 'a row is marked selected');
+      t.eq(inList.selCount, 1, 'exactly one');
+      t.ok(inList.matches, 'and it is the contact that was opened');
+      t.ok(inList.overflows, 'the list really is taller than its pane');
+      t.gt(inList.scrolled, 0, 'the pane scrolled rather than sitting at the top');
+      t.ok(inList.visible,
+           `the selected row is visible (row ${inList.index} of ${inList.total}, `
+           + `scrollTop ${inList.scrolled})`);
+
       // ── proof the old spelling really was broken ────────────────────────
       // Not a hypothetical: this is exactly what every call site did.
       const oldWay = await app.page.evaluate(sid => {

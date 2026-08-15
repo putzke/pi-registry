@@ -1894,6 +1894,40 @@ function openContact(stakeId, projId){
   S.selStakeholder=String(stakeId);
   S.stakeTab='info';
   render();
+  _scrollSelectedIntoView();
+}
+
+// Bring the selected row into view after arriving from another view.
+//
+// The existing restore (see renderStakeholders) replays a scroll position saved
+// by selectStake, which only exists when the click came from inside the list.
+// Arriving from the interaction log there is none, so the pane sat at the top
+// with the selected contact somewhere below the fold — the detail pane said
+// Dallinga while the list showed Adams, and you could not tell where you were
+// or click back after looking at someone else.
+//
+// Two frames: the first lets render() paint, the second lets the list pane get
+// its height, without which scrollIntoView has nothing to measure against.
+function _scrollSelectedIntoView(){
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    const row=document.querySelector('#sk-list-pane .lrow.sel')
+           || document.querySelector('.list-pane .lrow.sel');
+    if(row&&row.scrollIntoView) row.scrollIntoView({block:'center'});
+  }));
+}
+
+// The element that actually scrolls the contact list.
+//
+// NOT #sk-list-pane — that is overflow:hidden and its scrollTop is permanently
+// 0. The scroller is the .data-list inside it. selectStake() saved a position
+// from the pane and renderStakeholders wrote it back to the pane, so scroll
+// preservation on this view has never done anything; it just looked like it
+// did, because clicking a row you can see does not move the list.
+function _skScroller(){
+  return document.getElementById('ms-data-list')
+      || document.querySelector('#sk-list-pane .data-list')
+      || document.querySelector('.list-pane .data-list')
+      || document.querySelector('.data-list');
 }
 function refreshBadges(){
   const all=DB.getActive('stakeholders');
@@ -4228,7 +4262,7 @@ function renderStakeholders(el){
     window._pendingListScroll=0;
     requestAnimationFrame(()=>{
       requestAnimationFrame(()=>{
-        const lp=document.getElementById('sk-list-pane')||document.querySelector('.list-pane');
+        const lp=_skScroller();
         if(lp)lp.scrollTop=_scrollTarget;
       });
     });
@@ -4798,7 +4832,7 @@ function selectStake(id){
   const msVal=document.getElementById('ms-search')?.value||'';
   const skVal=document.getElementById('sk-search')?.value||'';
   // Preserve list scroll position across re-render
-  const _listEl=document.getElementById('ms-data-list')||document.getElementById('sk-list-pane')||document.querySelector('.list-pane');
+  const _listEl=_skScroller();
   const _savedScroll=_listEl?_listEl.scrollTop:0;
   window._pendingListScroll=_savedScroll;
   S.selStakeholder=id;S.stakeTab='info';

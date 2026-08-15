@@ -1839,6 +1839,28 @@ const DEV_BYPASS = false;
 })();
 
 function filterByProject(pid){S.projectFilter=pid;S.selStakeholder=null;render()}
+
+// Open a specific contact on the Project contacts view.
+//
+// The obvious spelling — selectStake(id) then setView('stakeholders') — cannot
+// work: setView() clears S.selStakeholder, and so does filterByProject(). Both
+// are right to, since a view change and a project change each invalidate a
+// selection made under the old scope. The selection therefore has to be applied
+// AFTER them, which every caller was getting wrong: clicking a name in the
+// interaction log landed on the unfiltered contact list and left you to search
+// for the person whose row you had just clicked.
+//
+// projId is the interaction's or parcel's own project, not whatever happened to
+// be in scope — the contact may not be linked to the project you were looking
+// at, and the detail pane needs the right one to render their project context.
+function openContact(stakeId, projId){
+  if(!stakeId) return;                 // anonymous — there is nobody to open
+  setView('stakeholders');
+  if(projId!==undefined&&projId!==null&&String(projId)!=='') S.projectFilter=String(projId);
+  S.selStakeholder=String(stakeId);
+  S.stakeTab='info';
+  render();
+}
 function refreshBadges(){
   const all=DB.getActive('stakeholders');
   const masterCount=all.filter(s=>s.isMaster).length;
@@ -5396,7 +5418,9 @@ function renderFollowups(el){
                   </td>
                   <td style="font-weight:500;color:var(--white)">${i.followUpNote||'—'}</td>
                   <td style="white-space:nowrap">
-                    <div class="td-link" onclick="filterByProject('${projId}');selectStake('${i.stakeholderId}');setView('stakeholders')">${s?dispName(s):(i.anonLabel||'Anonymous')}</div>
+                    ${i.stakeholderId
+                      ?`<div class="td-link" onclick="openContact('${i.stakeholderId}','${i.projectId||projId||''}')">${s?dispName(s):'Unknown contact'}</div>`
+                      :`<div style="color:var(--fog)">${escHtml(i.anonLabel||'Anonymous')}</div>`}
                   </td>
 
                   <td style="min-width:180px"><div style="font-size:12px;color:var(--slate);white-space:normal;line-height:1.5">${i.summary}</div></td>
@@ -5528,7 +5552,9 @@ function renderInteractions(el){
             return`<tr style="page-break-inside:avoid">
               <td class="td-mono" style="white-space:nowrap">${fmt(i.date)}</td>
               <td><span class="badge b-dark td-mono">${p?p.pid:'?'}</span></td>
-              <td><div class="td-link" onclick="selectStake('${i.stakeholderId}');setView('stakeholders')">${s?dispName(s):(i.anonLabel||'Anonymous')}</div><div style="font-size:11px;color:var(--fog)">${s?s.org||s.type||'':''}</div></td>
+              <td>${i.stakeholderId
+                ?`<div class="td-link" onclick="openContact('${i.stakeholderId}','${i.projectId||''}')">${s?dispName(s):'Unknown contact'}</div>`
+                :`<div style="color:var(--fog)">${escHtml(i.anonLabel||'Anonymous')}</div>`}<div style="font-size:11px;color:var(--fog)">${s?s.org||s.type||'':''}</div></td>
               <td><span class="badge ${chCls(i.channel)}">${i.channel}</span></td>
               <td><span class="badge ${i.direction==='Incoming'?'b-sky':'b-green'}">${i.direction}</span></td>
               <td style="font-size:12px;color:var(--mist)">${i.subject||'General'}</td>
@@ -18006,7 +18032,7 @@ function renderParcels(el){
             <td class="td-mono" style="white-space:nowrap"><div class="td-link" onclick="openParcelModal('${p.id}')">${escHtml(p.parcelNumber||'—')}</div></td>
             <td style="font-size:12px;color:var(--mist)">${loc?escHtml(loc):'<span style="color:var(--fog);font-style:italic">Not located</span>'}${(!p.situsAddress&&p.latitude&&p.longitude)?'<div style="font-size:10px;color:var(--fog)">coordinates</div>':''}</td>
             <td>${owners.length===0?'<span style="color:var(--red);font-size:12px">⚠ No owner attached</span>'
-              :owners.map(o=>`<span class="badge b-dark" style="margin:1px 3px 1px 0;cursor:pointer" onclick="selectStake('${o.stake.id}');setView('stakeholders')">${escHtml(dispName(o.stake))}${o.link.ownershipRole&&o.link.ownershipRole!=='Owner'?' · '+escHtml(o.link.ownershipRole):''}</span>`).join('')}</td>
+              :owners.map(o=>`<span class="badge b-dark" style="margin:1px 3px 1px 0;cursor:pointer" onclick="openContact('${o.stake.id}','${p.projectId||''}')">${escHtml(dispName(o.stake))}${o.link.ownershipRole&&o.link.ownershipRole!=='Owner'?' · '+escHtml(o.link.ownershipRole):''}</span>`).join('')}</td>
             <td style="font-size:12px;color:var(--mist)">${escHtml(p.acquisitionType||'—')}</td>
             <td><span class="badge ${_parcStatusColor(p.status||'Not started')}">${escHtml(p.status||'Not started')}</span></td>
             <td class="td-mono" style="font-size:12px;color:${p.noticeDate?'var(--mist)':'var(--fog)'}">${p.noticeDate?fmt(p.noticeDate):'—'}</td>

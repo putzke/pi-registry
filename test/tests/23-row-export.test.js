@@ -40,7 +40,8 @@ module.exports = {
       // ── the rows that feed the workbook ─────────────────────────────────
       const rows = await app.page.evaluate(() => ({
         reg: _rowRegisterRows(), mail: _rowMailingRows(),
-        regCols: ROW_REG_COLS.map(c => c.h), mailCols: ROW_MAIL_COLS.map(c => c.h),
+        regCols: _rowRegCols(!S.projectFilter).map(c => c.h),
+        mailCols: _rowMailCols(!S.projectFilter).map(c => c.h),
       }));
       t.eq(rows.reg.length, truth.parcels, 'the register has one row per parcel');
       // One row per owner, plus a placeholder row for the parcel with none.
@@ -50,6 +51,17 @@ module.exports = {
       t.ok(rows.regCols.includes('Situs address') && rows.mailCols.includes('Situs address'),
            'both sheets carry the situs address, so the two are never confused');
 
+      // Resolve columns by NAME. The Project column comes and goes with scope,
+      // so positional indexes would silently read the wrong field.
+      const M = h => rows.mailCols.indexOf(h);
+      const R = h => rows.regCols.indexOf(h);
+
+      // ── one project in scope drops the repeating Project column ─────────
+      t.eq(R('Project'), -1, 'a single-project register has no Project column');
+      t.eq(M('Project'), -1, 'nor does its mailing list');
+      t.eq(rows.reg[0].length, rows.regCols.length, 'register rows match their headers');
+      t.eq(rows.mail[0].length, rows.mailCols.length, 'mailing rows match theirs');
+
       // The three-heir parcel must produce three rows, each with its own address.
       const heirs = (await t.sql(`
         select pc.parcel_number n, count(*)::int c from pi_parcel_owners po
@@ -57,25 +69,63 @@ module.exports = {
          where pc.project_id::text=$1 group by pc.parcel_number
          order by count(*) desc limit 1`, [String(proj.id)]))[0];
       t.eq(heirs.c, 3, 'one parcel carries three owners');
-      const heirRows = rows.mail.filter(r => r[1] === heirs.n);
+      const heirRows = rows.mail.filter(r => r[M('Parcel #')] === heirs.n);
       t.eq(heirRows.length, 3, 'and it produces three mailing rows');
-      t.eq(new Set(heirRows.map(r => r[3])).size, 3, 'each naming a different owner');
+      t.eq(new Set(heirRows.map(r => r[M('Owner')])).size, 3, 'each naming a different owner');
+      t.eq(new Set(heirRows.map(r => r[M('Mailing address')])).size, 3,
+           'at three different mailing addresses');
 
       // An owner across two parcels appears under both.
-      const names = rows.mail.map(r => r[3]).filter(n => !/No owner/.test(n));
+      const names = rows.mail.map(r => r[M('Owner')]).filter(n => !/No owner/.test(n));
       const dupe = names.find((n, i) => names.indexOf(n) !== i);
       t.ok(dupe, 'an owner holding more than one parcel appears more than once');
-      t.eq(new Set(rows.mail.filter(r => r[3] === dupe).map(r => r[1])).size, 2,
+      t.eq(new Set(rows.mail.filter(r => r[M('Owner')] === dupe)
+                            .map(r => r[M('Parcel #')])).size, 2,
            'under two different parcel numbers');
 
       // The unowned parcel is present and flagged, not dropped.
-      const flagged = rows.mail.filter(r => /No owner identified/.test(r[3]));
+      const flagged = rows.mail.filter(r => /No owner identified/.test(r[M('Owner')]));
       t.eq(flagged.length, truth.unowned, 'the parcel with no owner still has a row');
       t.eq(flagged[0].length, rows.mailCols.length, 'and the right number of columns');
 
       // Mailing address is the OWNER's, which is routinely not the situs.
-      const differs = rows.mail.some(r => r[6] && r[2] && r[6] !== r[2]);
+      const differs = rows.mail.some(r =>
+        r[M('Mailing address')] && r[M('Situs address')]
+        && r[M('Mailing address')] !== r[M('Situs address')]);
       t.ok(differs, 'at least one owner is reachable somewhere other than the land');
+
+      // ── coordinates are shortened for the shared document only ──────────
+      const coords = rows.reg.map(r => [r[R('Latitude')], r[R('Longitude')]])
+        .filter(([a, b]) => a || b);
+      t.gt(coords.length, 0, 'a parcel is located by coordinates');
+      coords.forEach(([a, b]) => {
+        [a, b].filter(Boolean).forEach(v =>
+          t.ok(/^-?\d+\.\d{3}$/.test(v), `coordinate is rounded to 3 decimals — got "${v}"`));
+      });
+      // The stored value keeps its full precision; only the export rounds.
+      const stored = await app.page.evaluate(() =>
+        (_syncCache.parcels || []).filter(p => p.latitude).map(p => String(p.latitude)));
+      t.ok(stored.some(v => (v.split('.')[1] || '').length > 3),
+           'the parcel record itself still holds more than three decimals');
+      const roundTrip = await app.page.evaluate(() =>
+        [_rowCoord('41.241355781290835'), _rowCoord('-112.0663024305744'),
+         _rowCoord(''), _rowCoord('not a number')]);
+      t.eq(roundTrip, ['41.241', '-112.066', '', 'not a number'],
+           'rounding handles blanks and junk without inventing a number');
+
+      // ── unscoped, the Project column must come back ─────────────────────
+      // Without it, an all-projects file cannot say which project a row is on.
+      const unscoped = await app.page.evaluate(() => {
+        S.projectFilter = '';
+        return { cols: _rowRegCols(!S.projectFilter).map(c => c.h),
+                 row: _rowRegisterRows()[0],
+                 mailCols: _rowMailCols(!S.projectFilter).map(c => c.h) };
+      });
+      t.eq(unscoped.cols[0], 'Project', 'an all-projects register leads with Project');
+      t.eq(unscoped.mailCols[0], 'Project', 'and so does its mailing list');
+      t.ok(/^\d{2}-/.test(unscoped.row[0]), 'populated with the project number');
+      t.eq(unscoped.row.length, unscoped.cols.length, 'rows still match their headers');
+      await app.page.evaluate(id => { S.projectFilter = id; }, String(proj.id));
 
       // ── filters must not narrow the file ────────────────────────────────
       const filtered = await app.page.evaluate(() => {
@@ -91,8 +141,8 @@ module.exports = {
       // ── the actual .xlsx bytes ──────────────────────────────────────────
       const book = await app.page.evaluate(async () => {
         const blob = await _xlsxBuild([
-          { name: 'Parcel register', cols: ROW_REG_COLS, rows: _rowRegisterRows() },
-          { name: 'Mailing list', cols: ROW_MAIL_COLS, rows: _rowMailingRows() },
+          { name: 'Parcel register', cols: _rowRegCols(!S.projectFilter), rows: _rowRegisterRows() },
+          { name: 'Mailing list', cols: _rowMailCols(!S.projectFilter), rows: _rowMailingRows() },
         ]);
         const zip = await JSZip.loadAsync(await blob.arrayBuffer());
         const names = Object.keys(zip.files);
@@ -143,7 +193,7 @@ module.exports = {
            'ampersands and angle brackets are escaped, not emitted raw');
 
       // Dates go out ISO so they sort as text and import as dates.
-      const noticed = rows.reg.map(r => r[7]).filter(Boolean);
+      const noticed = rows.reg.map(r => r[R('Notice sent')]).filter(Boolean);
       t.gt(noticed.length, 0, 'notice dates are exported');
       t.ok(noticed.every(d => /^\d{4}-\d{2}-\d{2}$/.test(d)),
            'as ISO, which sorts correctly anywhere and imports as a date');

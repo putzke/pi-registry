@@ -18196,59 +18196,75 @@ function _rowProjLabel(p,projs){
 // recognises it as a date on import. mm/dd/yyyy does neither.
 function _rowDate(d){ return d?String(d).slice(0,10):''; }
 
-const ROW_REG_COLS = [
-  {h:'Project',        w:14},
-  {h:'Parcel #',       w:16},
-  {h:'Situs address',  w:34, wrap:true},
-  {h:'Latitude',       w:12},
-  {h:'Longitude',      w:12},
-  {h:'Acquisition',    w:22},
-  {h:'Status',         w:14},
-  {h:'Notice sent',    w:13},
-  {h:'Owners',         w:9},
-  {h:'Owner names',    w:34, wrap:true},
-  {h:'Notes',          w:52, wrap:true},
-];
-const ROW_MAIL_COLS = [
-  {h:'Project',         w:14},
-  {h:'Parcel #',        w:16},
-  {h:'Situs address',   w:32, wrap:true},
-  {h:'Owner',           w:26},
-  {h:'Organization',    w:26},
-  {h:'Role',            w:12},
-  {h:'Mailing address', w:40, wrap:true},
-  {h:'Email',           w:26},
-  {h:'Phone',           w:16},
-  {h:'Parcel status',   w:14},
-  {h:'Notice sent',     w:13},
-];
+// The Project column only earns its width when the export spans projects. With
+// one project in scope it repeats the same value down every row, and the
+// project is already named in the print header and in the .xlsx filename.
+// Unscoped it has to stay, or the rows are ambiguous.
+function _rowRegCols(withProj){
+  return (withProj?[{h:'Project', w:14}]:[]).concat([
+    {h:'Parcel #',       w:16},
+    {h:'Situs address',  w:34, wrap:true},
+    {h:'Latitude',       w:11},
+    {h:'Longitude',      w:11},
+    {h:'Acquisition',    w:22},
+    {h:'Status',         w:14},
+    {h:'Notice sent',    w:13},
+    {h:'Owners',         w:9},
+    {h:'Owner names',    w:34, wrap:true},
+    {h:'Notes',          w:52, wrap:true},
+  ]);
+}
+function _rowMailCols(withProj){
+  return (withProj?[{h:'Project', w:14}]:[]).concat([
+    {h:'Parcel #',        w:16},
+    {h:'Situs address',   w:32, wrap:true},
+    {h:'Owner',           w:26},
+    {h:'Organization',    w:26},
+    {h:'Role',            w:12},
+    {h:'Mailing address', w:40, wrap:true},
+    {h:'Email',           w:26},
+    {h:'Phone',           w:16},
+    {h:'Parcel status',   w:14},
+    {h:'Notice sent',     w:13},
+  ]);
+}
+// Coordinates are stored as free text and can arrive with a float's full tail
+// (41.241355781290835), which is 17 characters of column for precision nobody
+// entered. Three decimals is about 110 m at this latitude — enough to find the
+// right stretch of road, not enough to identify a boundary, so the parcel
+// record keeps the full value and only the shared document rounds.
+function _rowCoord(v){
+  const n=parseFloat(v);
+  return isNaN(n)?String(v||''):n.toFixed(3);
+}
 
 function _rowRegisterRows(){
-  const {projs,parcels}=_rowExportScope();
+  const {projF,projs,parcels}=_rowExportScope();
   return parcels.map(p=>{
     const owners=_parcOwners(p.id);
-    return [
-      _rowProjLabel(p,projs), p.parcelNumber||'', p.situsAddress||'',
-      p.latitude||'', p.longitude||'', p.acquisitionType||'',
+    return (projF?[]:[_rowProjLabel(p,projs)]).concat([
+      p.parcelNumber||'', p.situsAddress||'',
+      _rowCoord(p.latitude), _rowCoord(p.longitude), p.acquisitionType||'',
       p.status||'Not started', _rowDate(p.noticeDate),
       String(owners.length),
       owners.map(o=>dispName(o.stake)
         +(o.link.ownershipRole&&o.link.ownershipRole!=='Owner'?' ('+o.link.ownershipRole+')':'')).join('; '),
       p.notes||''
-    ];
+    ]);
   });
 }
 function _rowMailingRows(){
-  const {projs,parcels}=_rowExportScope();
+  const {projF,projs,parcels}=_rowExportScope();
   const out=[];
   parcels.forEach(p=>{
     const owners=_parcOwners(p.id);
-    const head=[_rowProjLabel(p,projs), p.parcelNumber||'', p.situsAddress||''];
+    const head=(projF?[]:[_rowProjLabel(p,projs)])
+      .concat([p.parcelNumber||'', p.situsAddress||'']);
     const tail=[p.status||'Not started', _rowDate(p.noticeDate)];
     if(!owners.length){
       // Kept, not skipped. "No owner identified" is the row that most needs to
       // reach the agent.
-      out.push(head.concat(['— No owner identified —','','','','',''], tail).slice(0,ROW_MAIL_COLS.length));
+      out.push(head.concat(['— No owner identified —','','','','',''], tail));
       return;
     }
     owners.forEach(o=>{
@@ -18350,9 +18366,10 @@ function _xlsxBuild(sheets){
 function exportRowRegisterXlsx(){
   const {proj,parcels}=_rowExportScope();
   if(!parcels.length){ showToast('No parcels to export.','warn',3000); return; }
+  const withProj=!S.projectFilter;
   _xlsxBuild([
-    {name:'Parcel register', cols:ROW_REG_COLS,  rows:_rowRegisterRows()},
-    {name:'Mailing list',    cols:ROW_MAIL_COLS, rows:_rowMailingRows()}
+    {name:'Parcel register', cols:_rowRegCols(withProj),  rows:_rowRegisterRows()},
+    {name:'Mailing list',    cols:_rowMailCols(withProj), rows:_rowMailingRows()}
   ]).then(function(blob){
     const a=document.createElement('a');
     a.href=URL.createObjectURL(blob);
@@ -18376,7 +18393,11 @@ function printRowRegister(){
     +cols.map(c=>'<th>'+escHtml(c.h)+'</th>').join('')+'</tr></thead><tbody>'
     +rows.map(r=>'<tr>'+r.map(v=>'<td>'+escHtml(v==null?'':String(v))+'</td>').join('')+'</tr>').join('')
     +'</tbody></table>';
-  const title=(proj?proj.name:'All projects')+' — Right-of-Way Register';
+  const withProj=!S.projectFilter;
+  // With one project in scope its number belongs in the header, said once,
+  // rather than repeated down a column on every row.
+  const title=(proj?(proj.pid?proj.pid+' — ':'')+proj.name:'All projects')
+    +' — Right-of-Way Register';
   const html='<!DOCTYPE html><html><head><title>'+escHtml(title)+'</title><style>'
     +'body{font-family:Arial,sans-serif;margin:26px;color:#222}'
     +'h1{font-size:18px;margin-bottom:3px}h2{font-size:13px;color:#555;font-weight:400;margin:0 0 16px}'
@@ -18392,8 +18413,8 @@ function printRowRegister(){
     +'<h2>Generated '+new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})
     +' · '+st.total+' parcels · '+(st.total-st.unownedCt)+' with an owner identified · '
     +st.noticedCt+' noticed · '+st.ownerCt+' distinct owners</h2>'
-    +'<h3>Parcel register</h3>'+tbl(ROW_REG_COLS,_rowRegisterRows())
-    +'<h3>Mailing list — one row per owner</h3>'+tbl(ROW_MAIL_COLS,_rowMailingRows())
+    +'<h3>Parcel register</h3>'+tbl(_rowRegCols(withProj),_rowRegisterRows())
+    +'<h3>Mailing list — one row per owner</h3>'+tbl(_rowMailCols(withProj),_rowMailingRows())
     +'<p class="note">Mailing addresses are the owner&rsquo;s address of record and may differ from the situs address. '
     +'Parcels with no owner identified are listed so the gap is visible.</p>'
     +'</body></html>';

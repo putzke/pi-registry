@@ -291,6 +291,17 @@ there was nothing to count.
     would hide the case that matters most.
   - **The export ignores the search and status filters** — deliberately. A
     filtered file looks complete once it has been emailed.
+  - **The Project column appears only when the export spans projects.** Scoped
+    to one, it repeated the same value down every row; the project is named in
+    the print header and the .xlsx filename instead. Unscoped it must stay or
+    the rows are ambiguous. `_rowRegCols(withProj)` / `_rowMailCols(withProj)`
+    build both shapes — index columns BY NAME, not position.
+  - **Coordinates round to 3 decimals (~110 m) in the export only** — free-text
+    lat/lng can arrive with a float's full tail (41.241355781290835), 17
+    characters of column for precision nobody typed. The parcel record keeps
+    the full value. Enough to find the right stretch of road, NOT enough to
+    identify a boundary — if a survey-grade shared document is ever needed,
+    raise `_rowCoord()` to 5 or 6 dp.
   - `_xlsxBuild()` writes a real .xlsx on the **JSZip already embedded** for the
     .docx export (no new dependency, nothing fetched). Inline strings, no
     sharedStrings; frozen header + autoFilter; dates as ISO so they sort as text

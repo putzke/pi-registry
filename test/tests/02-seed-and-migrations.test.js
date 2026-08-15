@@ -71,13 +71,16 @@ module.exports = {
     // comment period: portal-link tokens and client-access emails are literals
     // too. Orphan ids must stay distinct — pi_portal_links(project_id) and
     // pi_client_access(email, project_id) are both unique.
+    // project_id is bigint on BOTH of these tables and text on most others —
+    // see test/schema-columns.txt. The fake ids are built numerically so this
+    // teardown works against the real column types.
     await t.sql(`with n as (select token, row_number() over (order by token) rn
                               from pi_portal_links)
-                 update pi_portal_links pl set project_id='9991'||n.rn::text
+                 update pi_portal_links pl set project_id = 99910 + n.rn
                    from n where n.token = pl.token`);
     await t.sql(`with n as (select id, row_number() over (order by id) rn
                               from pi_client_access)
-                 update pi_client_access c set project_id='9992'||n.rn::text
+                 update pi_client_access c set project_id = 99920 + n.rn
                    from n where n.id = c.id`);
 
     let strandedOut = '';

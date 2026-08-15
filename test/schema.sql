@@ -14,10 +14,21 @@ end $$;
 create table pi_client_access (
   id bigint generated always as identity primary key,
   user_id uuid,
-  project_id text,
+  project_id bigint,
   org_id bigint,
   created_at timestamptz default now(),
   email text
+);
+
+create table pi_client_summaries (
+  id bigserial primary key,
+  project_id bigint,
+  content_recent text,
+  content_full text,
+  period_start date,
+  period_end date,
+  published_at timestamptz default now(),
+  published_by text
 );
 
 create table pi_comment_periods (
@@ -29,12 +40,17 @@ create table pi_comment_periods (
   end_date date,
   status text,
   created_at timestamptz default now(),
-  period_type text
+  period_type text,
+  venue text,
+  hearing_date date,
+  first_ad_date date,
+  second_ad_date date,
+  federal_register_date date
 );
 
 create table pi_commitments (
   id bigserial primary key,
-  project_id text,
+  project_id bigint,
   stakeholder_id bigint,
   commitment text,
   made_to text,
@@ -55,17 +71,23 @@ create table pi_deliverables (
   deliverable_type text,
   scope_type text,
   status text,
-  contracted_qty int,
-  delivered_count int,
+  contracted_qty integer,
+  delivered_count integer,
   freq text,
-  milestone_start date,
-  milestone_end date,
+  milestone_start text,
+  milestone_end text,
   dist_list text,
   notes text,
   created_at timestamptz default now(),
   due_date date,
   title text,
-  progress int
+  progress integer
+);
+
+create table pi_dismissed_pairs (
+  id bigserial primary key,
+  id_a bigint,
+  id_b bigint
 );
 
 create table pi_group_members (
@@ -77,20 +99,20 @@ create table pi_group_members (
 
 create table pi_groups (
   id bigserial primary key,
-  project_id text,
+  project_id bigint,
   name text,
   color text,
   spatial_label text,
   spatial_value text,
   description text,
-  sort_order int,
+  sort_order integer,
   created_at timestamptz default now()
 );
 
 create table pi_interactions (
   id bigserial primary key,
   project_id text,
-  stakeholder_id bigint,
+  stakeholder_id text,
   interaction_date date,
   channel text,
   subject text,
@@ -102,21 +124,21 @@ create table pi_interactions (
   follow_up_due date,
   follow_up_note text,
   follow_up_done boolean,
-  meeting_id bigint,
+  meeting_id text,
   created_at timestamptz default now(),
   follow_up_resolved date,
   anon_label text,
   nepa_stage text,
   equity_form_submitted boolean,
   updated_at timestamptz default now(),
-  updated_by text
+  updated_by text,
+  follow_up_assigned_to text
 );
 
 create table pi_issue_interactions (
   id bigserial primary key,
   issue_id bigint,
-  interaction_id bigint,
-  created_at timestamptz default now()
+  interaction_id text
 );
 
 create table pi_issues (
@@ -146,8 +168,8 @@ create table pi_meetings (
   meeting_type text,
   location text,
   status text,
-  attendance_count int,
-  comment_cards int,
+  attendance_count integer,
+  comment_cards integer,
   format text,
   key_concerns text,
   action_items text,
@@ -155,14 +177,38 @@ create table pi_meetings (
   created_at timestamptz default now(),
   handouts text,
   agenda text,
-  attendee_ids jsonb,
   additional_attendees text,
-  equity_form_submitted boolean
+  equity_form_submitted boolean,
+  attendee_ids jsonb
+);
+
+create table pi_parcel_owners (
+  id bigint generated always as identity primary key,
+  parcel_id text,
+  stakeholder_id text,
+  ownership_role text,
+  created_at timestamptz default now()
+);
+
+create table pi_parcels (
+  id bigint generated always as identity primary key,
+  project_id text,
+  parcel_number text,
+  situs_address text,
+  latitude text,
+  longitude text,
+  acquisition_type text,
+  status text,
+  notice_date date,
+  notes text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  updated_by text
 );
 
 create table pi_portal_links (
   token uuid primary key,
-  project_id text,
+  project_id bigint,
   label text,
   created_at timestamptz default now()
 );
@@ -170,7 +216,7 @@ create table pi_portal_links (
 create table pi_project_stakeholders (
   id bigserial primary key,
   project_id text,
-  stakeholder_id bigint,
+  stakeholder_id text,
   stakeholder_role text,
   support text,
   distribution_groups text,
@@ -218,8 +264,43 @@ create table pi_public_comments (
   response_status text,
   response_text text,
   response_date date,
-  linked_stakeholder_id bigint,
+  linked_stakeholder_id text,
   created_at timestamptz default now()
+);
+
+create table pi_report_archive (
+  id bigserial primary key,
+  project_id bigint,
+  report_num text,
+  report_title text,
+  report_subtitle text,
+  period_start date,
+  period_end date,
+  overall_summary text,
+  sections jsonb,
+  archived_at timestamptz default now(),
+  archived_by text,
+  client_visible boolean,
+  snapshot jsonb
+);
+
+create table pi_reports (
+  id bigserial primary key,
+  project_id bigint,
+  report_num text,
+  report_title text,
+  report_subtitle text,
+  period_start date,
+  period_end date,
+  overall_summary text,
+  sections jsonb,
+  updated_at timestamptz default now(),
+  updated_by text,
+  editing_email text,
+  editing_session text,
+  editing_at timestamptz default now(),
+  include_internal boolean,
+  dist_groups jsonb
 );
 
 create table pi_stakeholders (
@@ -246,58 +327,6 @@ create table pi_stakeholders (
   underserved boolean,
   updated_at timestamptz default now(),
   updated_by text
-);
-
-create table pi_client_summaries (
-  id bigserial primary key,
-  project_id text,
-  content_recent text,
-  content_full text,
-  period_start date,
-  period_end date,
-  published_at timestamptz default now(),
-  published_by text
-);
-
-create table pi_dismissed_pairs (
-  id bigserial primary key,
-  id_a text,
-  id_b text
-);
-
-create table pi_report_archive (
-  id bigserial primary key,
-  project_id text,
-  report_num int,
-  report_title text,
-  report_subtitle text,
-  period_start date,
-  period_end date,
-  overall_summary text,
-  sections jsonb,
-  archived_at timestamptz default now(),
-  archived_by text,
-  client_visible boolean,
-  snapshot jsonb
-);
-
-create table pi_reports (
-  id bigserial primary key,
-  project_id text,
-  report_num int,
-  report_title text,
-  report_subtitle text,
-  period_start date,
-  period_end date,
-  overall_summary text,
-  sections jsonb,
-  updated_at timestamptz default now(),
-  updated_by text,
-  editing_email text,
-  editing_session text,
-  editing_at timestamptz default now(),
-  include_internal boolean,
-  dist_groups jsonb
 );
 
 create table pi_tribal_consultations (
@@ -332,35 +361,7 @@ create table pi_tribal_consultations (
   utah_pa_ref text,
   certification_status text,
   included_in_annual_report boolean,
-  annual_report_year int,
-  next_action text,
-  follow_up_date date,
-  notes text,
-  created_at timestamptz default now()
-);
-
-create table pi_parcels (
-  id bigint generated always as identity primary key,
-  project_id text,
-  parcel_number text,
-  situs_address text,
-  latitude text,
-  longitude text,
-  acquisition_type text,
-  status text,
-  notice_date date,
-  notes text,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now(),
-  updated_by text
-);
-
-create table pi_parcel_owners (
-  id bigint generated always as identity primary key,
-  parcel_id text,
-  stakeholder_id text,
-  ownership_role text,
-  created_at timestamptz default now()
+  annual_report_year text
 );
 
 create unique index pi_portal_links_proj_uniq on pi_portal_links(project_id);

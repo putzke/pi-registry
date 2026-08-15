@@ -756,8 +756,11 @@ const SB_TO_INT = {
     createdBy:'created_by', notes:'notes', createdAt:'created_at'
   },
   pi_issue_interactions: {
-    id:'id', issueId:'issue_id', interactionId:'interaction_id',
-    createdAt:'created_at'
+    // No createdAt — the column does not exist on this table. Nothing ever set
+    // it, so toSB never emitted it and no write failed; the drift test found it
+    // once schema-columns.txt started carrying real types. Left mapped it would
+    // be a landmine: the first code to populate it would get a 400.
+    id:'id', issueId:'issue_id', interactionId:'interaction_id'
   },
   pi_commitments: {
     id:'id', projectId:'project_id', stakeholderId:'stakeholder_id',

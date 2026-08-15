@@ -1,62 +1,42 @@
 #!/usr/bin/env node
 // Regenerates test/schema.sql from test/schema-columns.txt.
 //
-// schema-columns.txt is a verbatim dump of the live database's column lists —
-// it is the reason the drift test means anything. Refresh it by running this in
-// the Supabase SQL editor and pasting the result back as `table|col, col, …`:
+// schema-columns.txt is a verbatim dump of the live database, INCLUDING COLUMN
+// TYPES — that is the reason the drift test means anything. Refresh it by
+// running this in the Supabase SQL editor and pasting the result back:
 //
-//   select table_name, string_agg(column_name, ', ' order by ordinal_position)
+//   select table_name || '|' || string_agg(
+//            column_name || ':' ||
+//            case data_type
+//              when 'timestamp with time zone' then 'timestamptz'
+//              when 'character varying'        then 'text'
+//              else data_type end,
+//            ', ' order by ordinal_position)
 //     from information_schema.columns
-//    where table_schema = 'public' and table_name like 'pi\_%'
+//    where table_schema = 'public' and table_name like 'pi\\_%'
 //    group by table_name order by table_name;
 //
 // then: node test/lib/build-schema.js
 //
-// Types are inferred by column name rather than dumped, which is a deliberate
-// simplification — the tests care about which columns exist and about
-// text-vs-bigint id handling, not about every check constraint.
+// TYPES USED TO BE INFERRED FROM THE COLUMN NAME, and that inference is what let
+// a real bug through. Production had pi_meetings.attendee_ids as text while the
+// name said jsonb, so the app's JSON array was rejected with a 400 in production
+// and accepted here — the round trip passed in tests and lost every attendee
+// list in the field. The dump settled several more: project_id and
+// stakeholder_id are genuinely MIXED across tables (bigint on some, text on
+// others), meeting_id and interaction_id are text, report_num and
+// annual_report_year are text, and milestone_start / milestone_end are text
+// rather than dates. A single guess per column name could not have been right.
 const fs = require('fs');
 const path = require('path');
 
-const TYPES = {
-  // project_id is TEXT, not bigint. fromSB() stringifies `id` but passes foreign
-  // keys through raw, and the app compares them strictly — `p.id === x.projectId`
-  // in _getIntStakeList(), `i.projectId === S.projectFilter` in renderInteractions.
-  // Those work against the live database, which only holds if the column comes
-  // back as a string. Typing it bigint here made the shim return numbers and
-  // every project-scoped list came back empty for reasons that had nothing to do
-  // with the code under test. (The live "text = bigint" seed error says the same.)
-  id: 'bigint', project_id: 'text', stakeholder_id: 'bigint', group_id: 'bigint',
-  issue_id: 'bigint', interaction_id: 'bigint', meeting_id: 'bigint', period_id: 'text',
-  parcel_id: 'text',
-  linked_stakeholder_id: 'bigint', org_id: 'bigint', user_id: 'uuid', token: 'uuid',
-  sort_order: 'int', attendance_count: 'int', comment_cards: 'int', progress: 'int',
-  contracted_qty: 'int', delivered_count: 'int', report_num: 'int', annual_report_year: 'int',
-  is_master: 'boolean', is_archived: 'boolean', lep: 'boolean', underserved: 'boolean',
-  is_lep: 'boolean', is_ej: 'boolean', follow_up: 'boolean', follow_up_done: 'boolean',
-  equity_form_submitted: 'boolean', client_visible: 'boolean', include_internal: 'boolean',
-  language_access_needed: 'boolean', moa_required: 'boolean', near_tribal_lands: 'boolean',
-  cfr710_review: 'boolean', included_in_annual_report: 'boolean', bia_involvement: 'boolean',
-  nepa_checklist: 'jsonb', phase_history: 'jsonb', nepa_stage_history: 'jsonb',
-  sections: 'jsonb', snapshot: 'jsonb', attendee_ids: 'jsonb', dist_groups: 'jsonb',
-};
-const DATES = new Set(['start_date','end_date','precon_date','last_exported','due_date',
-  'milestone_start','milestone_end','added_date','interaction_date','follow_up_due',
-  'follow_up_resolved','meeting_date','date_raised','date_resolved','date_made',
-  'fulfilled_date','comment_date','response_date','notification_date','response_deadline',
-  'ura_notice_date','follow_up_date','period_start','period_end','hearing_date','notice_date',
-  'first_ad_date','second_ad_date','federal_register_date']);
-// OCC columns default to now() in sql/2026-07-24_app_wide_occ.sql — the guard
-// depends on that, so the test schema has to match.
+// Only a fallback, for a column pasted in without a type. Anything that lands
+// here is reported, because a guess is exactly what this file stopped doing.
+const FALLBACK = 'text';
 const TIMESTAMPS = new Set(['created_at','updated_at','published_at','editing_at','archived_at']);
-const TEXT_PK = new Set(['pi_comment_periods','pi_public_comments','pi_tribal_consultations']);
-const IDENTITY_PK = new Set(['pi_projects','pi_stakeholders','pi_client_access','pi_parcels','pi_parcel_owners']);
-
-// Per-table overrides where a column's name-based type is wrong for that table.
-// pi_parcel_owners is a pure join written from the app, which holds every id as
-// a string (fromSB stringifies `id`), so both sides are text — matching
-// sql/2026-08-07_parcels.sql.
-const TABLE_TYPES = { pi_parcel_owners: { stakeholder_id: 'text' } };
+// Which bigint ids are GENERATED ALWAYS AS IDENTITY rather than bigserial.
+const IDENTITY_PK = new Set(['pi_projects','pi_stakeholders','pi_client_access',
+                             'pi_parcels','pi_parcel_owners']);
 
 const here = path.join(__dirname, '..');
 const out = [];
@@ -76,22 +56,33 @@ begin
     create role authenticated nologin noinherit;
   end if;
 end $$;`);
+const guessed = [];
 for (const line of fs.readFileSync(path.join(here, 'schema-columns.txt'), 'utf8').trim().split('\n')) {
   if (!line.trim()) continue;
   const [table, cols] = line.split('|');
-  const defs = cols.split(',').map(c => c.trim()).map(c => {
-    if (c === 'id') {
-      if (TEXT_PK.has(table)) return 'id text primary key';
-      if (IDENTITY_PK.has(table)) return 'id bigint generated always as identity primary key';
-      return 'id bigserial primary key';
+  const defs = cols.split(',').map(c => c.trim()).filter(Boolean).map(spec => {
+    const [col, declared] = spec.split(':').map(x => (x || '').trim());
+    let ty = declared;
+    if (!ty) { guessed.push(`${table}.${col}`); ty = FALLBACK; }
+    if (col === 'id') {
+      // The primary key's shape follows its declared type: text PKs are the
+      // app-generated ids (comment periods, public comments, tribal), bigint
+      // ones are generated by the database.
+      if (ty === 'text') return 'id text primary key';
+      return IDENTITY_PK.has(table)
+        ? 'id bigint generated always as identity primary key'
+        : 'id bigserial primary key';
     }
-    if (c === 'token') return 'token uuid primary key';
-    if (TIMESTAMPS.has(c)) return `${c} timestamptz default now()`;
-    if (DATES.has(c)) return `${c} date`;
-    const over = (TABLE_TYPES[table] || {})[c];
-    return `${c} ${over || TYPES[c] || 'text'}`;
+    if (col === 'token') return 'token uuid primary key';
+    // OCC depends on updated_at defaulting to now(), so timestamps keep theirs.
+    if (TIMESTAMPS.has(col) && ty === 'timestamptz') return `${col} timestamptz default now()`;
+    return `${col} ${ty}`;
   });
   out.push(`create table ${table} (\n  ${defs.join(',\n  ')}\n);`);
+}
+if (guessed.length) {
+  console.warn('  WARNING — no type declared, fell back to ' + FALLBACK + ':\n    '
+    + guessed.join('\n    ') + '\n  Re-run the dump query in the header comment.');
 }
 out.push('create unique index pi_portal_links_proj_uniq on pi_portal_links(project_id);');
 out.push('create unique index pi_parcels_proj_number_uniq on pi_parcels (project_id, lower(trim(parcel_number)));');

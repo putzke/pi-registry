@@ -1238,6 +1238,34 @@ and municipal infrastructure work. Fast adoption, no IT procurement cycle,
 $50–150/seat. Multi-tenant org_id isolation is the gate on paid launch.
 Target: 2027 availability.
 
+## Test harness schema fidelity (Aug 2026)
+`test/schema-columns.txt` carries **column TYPES**, not just names, and
+`build-schema.js` reads them instead of guessing from the column name. That
+guess is what let `pi_meetings.attendee_ids` through: production had it as
+`text` while the name said `jsonb`, so the app's JSON array was accepted in the
+harness and rejected with a 400 in the field, losing every attendee list a user
+ticked (fixed by `sql/2026-08-14_meetings_attendee_ids_jsonb.sql`).
+
+The dump settled several more the old inference had wrong:
+- **`project_id` is MIXED** — `bigint` on `pi_client_access`,
+  `pi_client_summaries`, `pi_commitments`, `pi_groups`, `pi_portal_links`,
+  `pi_reports`, `pi_report_archive`; `text` everywhere else.
+- **`stakeholder_id` is MIXED** — `bigint` on `pi_commitments`,
+  `pi_group_members`; `text` on `pi_interactions`, `pi_project_stakeholders`,
+  `pi_parcel_owners`.
+- `meeting_id`, `interaction_id`, `linked_stakeholder_id` are **text**.
+- `report_num`, `annual_report_year`, `milestone_start`, `milestone_end` are
+  **text**, not numbers or dates.
+
+Consequences to remember: any SQL that unions or compares `project_id` across
+tables must cast (`::text`), and `pi_issue_interactions` has **no `created_at`**
+— the stale mapping was removed from `index.html`.
+
+Refresh the file with the query in `build-schema.js`'s header comment, then
+`node test/lib/build-schema.js`. `test/tests/01-schema-drift.test.js` asserts
+every column declares a type, that the built schema matches, and spot-checks the
+nine that were previously guessed wrong.
+
 ## Supabase project
 - URL: `https://ncfbblhlsiglxkoiounv.supabase.co`
 - Anon key in `index.html` line ~505 (`SUPA_KEY`)

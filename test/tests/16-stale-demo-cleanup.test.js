@@ -100,16 +100,19 @@ module.exports = {
 
     // Nothing points at a project that no longer exists.
     const dangling = (await t.sql(`
+      -- project_id is bigint on some of these tables and text on others, so
+      -- every arm is cast before the union — the mixed typing is real, and
+      -- production, not a harness quirk.
       select count(*) c from (
-        select project_id from pi_interactions
-        union all select project_id from pi_project_stakeholders
-        union all select project_id from pi_deliverables
-        union all select project_id from pi_meetings
-        union all select project_id from pi_issues
-        union all select project_id from pi_commitments
-        union all select project_id from pi_parcels
-        union all select project_id from pi_report_archive
-        union all select project_id from pi_portal_links) x
+        select project_id::text from pi_interactions
+        union all select project_id::text from pi_project_stakeholders
+        union all select project_id::text from pi_deliverables
+        union all select project_id::text from pi_meetings
+        union all select project_id::text from pi_issues
+        union all select project_id::text from pi_commitments
+        union all select project_id::text from pi_parcels
+        union all select project_id::text from pi_report_archive
+        union all select project_id::text from pi_portal_links) x
        where project_id is not null
          and project_id::text not in (select id::text from pi_projects)`))[0];
     t.eq(Number(dangling.c), 0, 'no row references a deleted project');

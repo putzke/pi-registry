@@ -18339,16 +18339,37 @@ function _rowCoord(v){
   return isNaN(n)?String(v||''):n.toFixed(3);
 }
 
-function _rowRegisterRows(shortCoords){
+// The notice column, on paper.
+//
+// A tick would be worse than the date: URA and FHWA timelines run FROM the
+// notice date, so "when" is the compliance fact and "whether" is only its
+// shadow — any past date already means sent. What a tick would have added is
+// scannability, and one real distinction the date alone hides: a FUTURE date
+// means scheduled, not sent, and looked identical to a sent one.
+//
+// So the date stays and the two edge cases are called out. A blank cell read as
+// an oversight rather than the finding it is; "Not sent" is the row somebody has
+// to act on, and on a ROW register it is the only row that matters.
+//
+// PRINT ONLY. The .xlsx keeps a bare ISO date so the column still sorts and
+// filters as a date — same split as the coordinates.
+function _rowNotice(d, forPrint){
+  const iso = _rowDate(d);
+  if (!forPrint) return iso;
+  if (!iso) return '\u26a0 Not sent';
+  return iso + (iso > localToday() ? ' (scheduled)' : '');
+}
+
+function _rowRegisterRows(forPrint){
   const {projF,projs,parcels}=_rowExportScope();
   return parcels.map(p=>{
     const owners=_parcOwners(p.id);
     return (projF?[]:[_rowProjLabel(p,projs)]).concat([
       p.parcelNumber||'', p.situsAddress||'',
-      shortCoords?_rowCoord(p.latitude):(p.latitude||''),
-      shortCoords?_rowCoord(p.longitude):(p.longitude||''),
+      forPrint?_rowCoord(p.latitude):(p.latitude||''),
+      forPrint?_rowCoord(p.longitude):(p.longitude||''),
       p.acquisitionType||'',
-      p.status||'Not started', _rowDate(p.noticeDate),
+      p.status||'Not started', _rowNotice(p.noticeDate, forPrint),
       String(owners.length),
       owners.map(o=>dispName(o.stake)
         +(o.link.ownershipRole&&o.link.ownershipRole!=='Owner'?' ('+o.link.ownershipRole+')':'')).join('; '),
@@ -18356,18 +18377,18 @@ function _rowRegisterRows(shortCoords){
     ]);
   });
 }
-function _rowMailingRows(){
+function _rowMailingRows(forPrint){
   const {projF,projs,parcels}=_rowExportScope();
   const out=[];
   parcels.forEach(p=>{
     const owners=_parcOwners(p.id);
     const head=(projF?[]:[_rowProjLabel(p,projs)])
       .concat([p.parcelNumber||'', p.situsAddress||'']);
-    const tail=[p.status||'Not started', _rowDate(p.noticeDate)];
+    const tail=[p.status||'Not started', _rowNotice(p.noticeDate, forPrint)];
     if(!owners.length){
       // Kept, not skipped. "No owner identified" is the row that most needs to
       // reach the agent.
-      out.push(head.concat(['— No owner identified —','','','','',''], tail));
+      out.push(head.concat(['\u26a0 No owner identified','','','','',''], tail));
       return;
     }
     owners.forEach(o=>{
@@ -18494,7 +18515,14 @@ function printRowRegister(){
   const st=_parcelStats(S.projectFilter||'');
   const tbl=(cols,rows)=>'<table><thead><tr>'
     +cols.map(c=>'<th>'+escHtml(c.h)+'</th>').join('')+'</tr></thead><tbody>'
-    +rows.map(r=>'<tr>'+r.map(v=>'<td>'+escHtml(v==null?'':String(v))+'</td>').join('')+'</tr>').join('')
+    +rows.map(r=>'<tr>'+r.map(function(v){
+      const t=v==null?'':String(v);
+      // The ⚠ cells are the findings — no owner, no notice. They have to survive
+      // a black-and-white print, so they get weight as well as colour.
+      const st=/^⚠/.test(t) ? ' style="color:#b03a2e;font-weight:700"'
+             : /\(scheduled\)$/.test(t) ? ' style="color:#8a6d1f"' : '';
+      return '<td'+st+'>'+escHtml(t)+'</td>';
+    }).join('')+'</tr>').join('')
     +'</tbody></table>';
   const withProj=!S.projectFilter;
   // With one project in scope its number belongs in the header, said once,
@@ -18517,7 +18545,7 @@ function printRowRegister(){
     +' · '+st.total+' parcels · '+(st.total-st.unownedCt)+' with an owner identified · '
     +st.noticedCt+' noticed · '+st.ownerCt+' distinct owners</h2>'
     +'<h3>Parcel register</h3>'+tbl(_rowRegCols(withProj),_rowRegisterRows(true))
-    +'<h3>Mailing list — one row per owner</h3>'+tbl(_rowMailCols(withProj),_rowMailingRows())
+    +'<h3>Mailing list — one row per owner</h3>'+tbl(_rowMailCols(withProj),_rowMailingRows(true))
     +'<p class="note">Mailing addresses are the owner&rsquo;s address of record and may differ from the situs address. '
     +'Parcels with no owner identified are listed so the gap is visible.</p>'
     +'</body></html>';

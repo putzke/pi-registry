@@ -117,6 +117,31 @@ module.exports = {
       t.eq(roundTrip, ['41.241', '-112.066', '', 'not a number'],
            'shortening handles blanks and junk without inventing a number');
 
+      // ── the notice column: date in the file, flagged gaps on paper ──────
+      // A tick would drop the compliance fact — URA and FHWA timelines run FROM
+      // the notice date. What the date alone hid was the blank cell, which read
+      // as an oversight, and a FUTURE date, which looked exactly like a sent one.
+      const notice = await app.page.evaluate(() => {
+        const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+        return {
+          file:  [_rowNotice('2026-03-04', false), _rowNotice('', false),
+                  _rowNotice(tomorrow, false)],
+          print: [_rowNotice('2026-03-04', true), _rowNotice('', true),
+                  _rowNotice(tomorrow, true)],
+          tomorrow,
+        };
+      });
+      t.eq(notice.file, ['2026-03-04', '', notice.tomorrow],
+           'the .xlsx keeps a bare ISO date, so the column still sorts as a date');
+      t.eq(notice.print[0], '2026-03-04', 'the print view shows the date too');
+      t.ok(/^⚠ Not sent$/.test(notice.print[1]),
+           `a missing notice is called out, not left blank — got "${notice.print[1]}"`);
+      t.ok(/\(scheduled\)$/.test(notice.print[2]),
+           `a future date reads as scheduled, not sent — got "${notice.print[2]}"`);
+
+      const unnoticed = rows.reg.filter(r => !r[R('Notice sent')]).length;
+      t.gt(unnoticed, 0, 'the project has a parcel with no notice date');
+
       // ── unscoped, the Project column must come back ─────────────────────
       // Without it, an all-projects file cannot say which project a row is on.
       const unscoped = await app.page.evaluate(() => {
@@ -216,6 +241,9 @@ module.exports = {
       t.ok(/No owner identified/.test(printed), 'and the parcel with no owner');
       t.ok(printed.includes('41.241') && !printed.includes('41.241355'),
            'and coordinates shortened for reading on screen');
+      t.ok(/Not sent/.test(printed), 'the un-noticed parcel is flagged on paper');
+      t.ok(/color:#b03a2e/.test(printed),
+           'and the findings carry weight and colour, so they survive a print');
 
       t.eq(app.errors, [], 'no page errors during the run');
     } finally {

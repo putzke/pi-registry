@@ -304,9 +304,16 @@ there was nothing to count.
     the print header and the .xlsx filename instead. Unscoped it must stay or
     the rows are ambiguous. `_rowRegCols(withProj)` / `_rowMailCols(withProj)`
     build both shapes — index columns BY NAME, not position.
-  - **Coordinates: full in the .xlsx, 3 decimals in the PRINT VIEW only.**
-    `_rowRegisterRows(shortCoords)` — the print view passes true, the export
-    does not. Free-text lat/lng can arrive with a float's full tail
+  - **Two print-only formats, via `_rowRegisterRows(forPrint)` / `_rowMailingRows(forPrint)`.**
+    The .xlsx always carries raw values so the columns still sort and filter.
+    - **Notice sent** — `_rowNotice()`. A CHECKBOX was considered and rejected:
+      URA/FHWA timelines run FROM the notice date, so "when" is the compliance
+      fact and "whether" is only its shadow. What the date alone hid gets called
+      out instead — a blank cell now reads `⚠ Not sent` (the row somebody has to
+      act on), and a FUTURE date reads `(scheduled)` rather than looking
+      identical to a sent one. `⚠` cells print bold red so they survive a
+      black-and-white printer.
+    - **Coordinates: full in the .xlsx, 3 decimals in the print view.** Free-text lat/lng can arrive with a float's full tail
     (41.241355781290835), which is unreadable in an on-screen table but is real
     data in a file the ROW agent works from, so a column width is not a reason
     to drop it. 3 dp is ~110 m: fine for reading, NOT enough to identify a

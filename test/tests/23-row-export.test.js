@@ -132,8 +132,8 @@ module.exports = {
         };
       });
       t.eq(notice.file, ['2026-03-04', '', notice.tomorrow],
-           'the .xlsx keeps a bare ISO date, so the column still sorts as a date');
-      t.eq(notice.print[0], '2026-03-04', 'the print view shows the date too');
+           'the row builder still yields ISO — the sheet writer turns it into a date cell');
+      t.eq(notice.print[0], '03-04-2026', 'the print view shows mm-dd-yyyy');
       t.ok(/^⚠ Not sent$/.test(notice.print[1]),
            `a missing notice is called out, not left blank — got "${notice.print[1]}"`);
       t.ok(/\(scheduled\)$/.test(notice.print[2]),
@@ -225,7 +225,28 @@ module.exports = {
       const noticed = rows.reg.map(r => r[R('Notice sent')]).filter(Boolean);
       t.gt(noticed.length, 0, 'notice dates are exported');
       t.ok(noticed.every(d => /^\d{4}-\d{2}-\d{2}$/.test(d)),
-           'as ISO, which sorts correctly anywhere and imports as a date');
+           'the builder hands the writer ISO, which is what a date serial needs');
+
+      // ── the workbook holds REAL dates, not text that looks like a date ──
+      // Text reading "03-04-2026" sorts alphabetically, which files every March
+      // above every December regardless of year — useless in a document whose
+      // whole purpose is to be sorted by a ROW agent. A serial with a
+      // mm-dd-yyyy number format displays as asked AND sorts as a date.
+      t.ok(/numFmtId="164" formatCode="mm-dd-yyyy"/.test(book['xl/styles.xml']),
+           'the workbook defines a mm-dd-yyyy number format');
+      t.ok(/<xf numFmtId="164"[^>]*applyNumberFormat="1"/.test(book['xl/styles.xml']),
+           'and a cell style that applies it');
+      const dateCells = (book['xl/worksheets/sheet1.xml'].match(/<c r="[A-Z]+\d+" s="3"><v>\d+<\/v><\/c>/g) || []);
+      t.eq(dateCells.length, noticed.length,
+           'every notice date is written as a numeric date cell');
+      t.eq(/<is><t[^>]*>\d{4}-\d{2}-\d{2}</.test(book['xl/worksheets/sheet1.xml']), false,
+           'and no ISO date is left sitting in the sheet as text');
+      const serial = await app.page.evaluate(() =>
+        [_xlsxDateSerial('2026-03-04'), _xlsxDateSerial('1970-01-01'),
+         _xlsxDateSerial(''), _xlsxDateSerial('not a date')]);
+      t.eq(serial[1], 25569, 'the epoch maps to the serial Excel expects');
+      t.eq(serial[0], 46085, 'and a real notice date converts correctly');
+      t.eq(serial.slice(2), [null, null], 'a blank or junk value is left as text');
 
       // ── the print view ──────────────────────────────────────────────────
       await app.page.evaluate(() => printRowRegister());
@@ -242,6 +263,8 @@ module.exports = {
       t.ok(printed.includes('41.241') && !printed.includes('41.241355'),
            'and coordinates shortened for reading on screen');
       t.ok(/Not sent/.test(printed), 'the un-noticed parcel is flagged on paper');
+      t.ok(/03-04-2026/.test(printed), 'dates read mm-dd-yyyy on paper');
+      t.eq(/2026-03-04/.test(printed), false, 'and no ISO date survives into the print view');
       t.ok(/color:#b03a2e/.test(printed),
            'and the findings carry weight and colour, so they survive a print');
 

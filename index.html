@@ -18295,6 +18295,12 @@ function _rowProjLabel(p,projs){
 // ISO on purpose: it sorts correctly as text in any tool, and Google Sheets
 // recognises it as a date on import. mm/dd/yyyy does neither.
 function _rowDate(d){ return d?String(d).slice(0,10):''; }
+// mm-dd-yyyy for anything a person reads. The ISO form stays internal: it is
+// what the .xlsx date cells are built from, and what sorts correctly as text.
+function _rowDateUS(d){
+  const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(d||''));
+  return m ? m[2]+'-'+m[3]+'-'+m[1] : '';
+}
 
 // The Project column only earns its width when the export spans projects. With
 // one project in scope it repeats the same value down every row, and the
@@ -18308,7 +18314,7 @@ function _rowRegCols(withProj){
     {h:'Longitude',      w:11},
     {h:'Acquisition',    w:22},
     {h:'Status',         w:14},
-    {h:'Notice sent',    w:13},
+    {h:'Notice sent',    w:13, date:true},
     {h:'Owners',         w:9},
     {h:'Owner names',    w:34, wrap:true},
     {h:'Notes',          w:52, wrap:true},
@@ -18325,7 +18331,7 @@ function _rowMailCols(withProj){
     {h:'Email',           w:26},
     {h:'Phone',           w:16},
     {h:'Parcel status',   w:14},
-    {h:'Notice sent',     w:13},
+    {h:'Notice sent',     w:13, date:true},
   ]);
 }
 // Screen-only shortening. Coordinates are stored as free text and can arrive
@@ -18355,9 +18361,9 @@ function _rowCoord(v){
 // filters as a date — same split as the coordinates.
 function _rowNotice(d, forPrint){
   const iso = _rowDate(d);
-  if (!forPrint) return iso;
+  if (!forPrint) return iso;                 // the file gets ISO; see _xlsxSheet
   if (!iso) return '\u26a0 Not sent';
-  return iso + (iso > localToday() ? ' (scheduled)' : '');
+  return _rowDateUS(iso) + (iso > localToday() ? ' (scheduled)' : '');
 }
 
 function _rowRegisterRows(forPrint){
@@ -18412,6 +18418,12 @@ function _xlsxColName(n){
   while(n>0){ const r=(n-1)%26; s=String.fromCharCode(65+r)+s; n=Math.floor((n-1)/26); }
   return s;
 }
+// Excel counts days from 1899-12-30; 1970-01-01 is serial 25569.
+function _xlsxDateSerial(v){
+  const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v||''));
+  if(!m) return null;
+  return Math.round(Date.UTC(+m[1], +m[2]-1, +m[3])/86400000) + 25569;
+}
 function _xlsxEsc(v){
   return String(v==null?'':v)
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g,'')   // control chars are invalid in XML
@@ -18422,12 +18434,23 @@ function _xlsxSheet(cols, rows){
   const colXml='<cols>'+cols.map((c,i)=>
     '<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+(c.w||16)+'" customWidth="1"'
     +(c.wrap?' style="2"':'')+'/>').join('')+'</cols>';
-  const cell=(r,i,v,s)=>'<c r="'+_xlsxColName(i)+r+'" t="inlineStr"'+(s?' s="'+s+'"':'')
-    +'><is><t xml:space="preserve">'+_xlsxEsc(v)+'</t></is></c>';
+  // A date column is written as a real Excel date — a serial number carrying the
+  // mm-dd-yyyy number format (style 3) — NOT as text. Text reading "03-04-2026"
+  // sorts alphabetically, which puts every March above every December
+  // regardless of year, and this file exists to be sorted by a ROW agent. The
+  // serial displays exactly as asked and still sorts as a date.
+  const cell=(r,i,v,s,isDate)=>{
+    if(isDate){
+      const n=_xlsxDateSerial(v);
+      if(n!==null) return '<c r="'+_xlsxColName(i)+r+'" s="3"><v>'+n+'</v></c>';
+    }
+    return '<c r="'+_xlsxColName(i)+r+'" t="inlineStr"'+(s?' s="'+s+'"':'')
+      +'><is><t xml:space="preserve">'+_xlsxEsc(v)+'</t></is></c>';
+  };
   let body='<row r="1" ht="20" customHeight="1">'
     +cols.map((c,i)=>cell(1,i,c.h,1)).join('')+'</row>';
   rows.forEach((r,n)=>{
-    body+='<row r="'+(n+2)+'">'+r.map((v,i)=>cell(n+2,i,v)).join('')+'</row>';
+    body+='<row r="'+(n+2)+'">'+r.map((v,i)=>cell(n+2,i,v,0,cols[i]&&cols[i].date)).join('')+'</row>';
   });
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     +'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
@@ -18465,6 +18488,9 @@ function _xlsxBuild(sheets){
     +'</Relationships>');
   zip.file('xl/styles.xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     +'<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+    // numFmts must come first in the styleSheet. 164 is the first id available
+    // for a custom format; everything below it is built in.
+    +'<numFmts count="1"><numFmt numFmtId="164" formatCode="mm-dd-yyyy"/></numFmts>'
     +'<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font>'
     +'<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts>'
     +'<fills count="3"><fill><patternFill patternType="none"/></fill>'
@@ -18472,10 +18498,11 @@ function _xlsxBuild(sheets){
     +'<fill><patternFill patternType="solid"><fgColor rgb="FF1A3050"/><bgColor indexed="64"/></patternFill></fill></fills>'
     +'<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
     +'<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-    +'<cellXfs count="3">'
+    +'<cellXfs count="4">'
     +'<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
     +'<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment vertical="center"/></xf>'
     +'<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf>'
+    +'<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
     +'</cellXfs>'
     // Optional per the schema, but a reader that expects a default cell style
     // warns without it. Cheap insurance for a file that gets opened in whatever

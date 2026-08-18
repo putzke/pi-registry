@@ -306,6 +306,15 @@ there was nothing to count.
     build both shapes — index columns BY NAME, not position.
   - **Two print-only formats, via `_rowRegisterRows(forPrint)` / `_rowMailingRows(forPrint)`.**
     The .xlsx always carries raw values so the columns still sort and filter.
+    - **Dates read mm-dd-yyyy.** The print view formats via `_rowDateUS()`. The
+      .xlsx does NOT hold text: `_xlsxDateSerial()` writes a real Excel date
+      serial with a `mm-dd-yyyy` numFmt (style 3), so it displays as asked AND
+      still sorts as a date. Text reading "03-04-2026" sorts alphabetically —
+      every March above every December — which is useless in a file whose whole
+      point is to be sorted. The row builders still yield ISO; the sheet writer
+      converts. **Only the ROW register was changed** (Aug 2026, deliberate
+      scope): `fmt()` still gives "Mar 4, 2026" everywhere else and `_fmtMDY()`
+      still gives mm/dd/yyyy in PI report tables.
     - **Notice sent** — `_rowNotice()`. A CHECKBOX was considered and rejected:
       URA/FHWA timelines run FROM the notice date, so "when" is the compliance
       fact and "whether" is only its shadow. What the date alone hid gets called

@@ -263,6 +263,31 @@ module.exports = {
       t.ok(printed.includes('41.241') && !printed.includes('41.241355'),
            'and coordinates shortened for reading on screen');
       t.ok(/Not sent/.test(printed), 'the un-noticed parcel is flagged on paper');
+
+      // ── the printed mailing list drops the parcel-level notice date ──────
+      // Both tables are on one page there, with the register directly above, so
+      // repeating it was width the mailing rows could not spare. The workbook
+      // keeps it: separate tabs, and filtering a blank notice date is how the
+      // next mailing gets built.
+      const shapes = await app.page.evaluate(() => ({
+        fileCols:  _rowMailCols(false).map(c => c.h),
+        printCols: _rowMailCols(false, true).map(c => c.h),
+        fileRow:   _rowMailingRows()[0].length,
+        printRow:  _rowMailingRows(true)[0].length,
+        fileNoOwner:  _rowMailingRows().find(r => /No owner/.test(r.join('|'))).length,
+        printNoOwner: _rowMailingRows(true).find(r => /No owner/.test(r.join('|'))).length,
+      }));
+      t.ok(shapes.fileCols.includes('Notice sent'), 'the workbook keeps the notice date');
+      t.eq(shapes.printCols.includes('Notice sent'), false, 'the printed list drops it');
+      t.ok(shapes.printCols.includes('Parcel status'),
+           'but keeps parcel status — only the column asked about was removed');
+      t.eq(shapes.printRow, shapes.printCols.length, 'printed rows match printed headers');
+      t.eq(shapes.fileRow, shapes.fileCols.length, 'file rows match file headers');
+      // The no-owner placeholder is padded by hand, so it is the row most likely
+      // to fall out of step with a column change.
+      t.eq(shapes.printNoOwner, shapes.printCols.length,
+           'the no-owner row matches the printed headers too');
+      t.eq(shapes.fileNoOwner, shapes.fileCols.length, 'and the file headers');
       t.ok(/03-04-2026/.test(printed), 'dates read mm-dd-yyyy on paper');
       t.eq(/2026-03-04/.test(printed), false, 'and no ISO date survives into the print view');
       t.ok(/color:#b03a2e/.test(printed),

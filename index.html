@@ -18320,7 +18320,13 @@ function _rowRegCols(withProj){
     {h:'Notes',          w:52, wrap:true},
   ]);
 }
-function _rowMailCols(withProj){
+// forPrint drops the parcel-level columns. In the workbook the two sheets are
+// separate tabs and the duplication earns its place — you filter the Mailing
+// list on a blank notice date to build the next mailing, without cross-
+// referencing the register. On paper both tables are on the SAME page with the
+// register directly above, so repeating it is pure width, and the mailing rows
+// were wrapping to three lines because of it.
+function _rowMailCols(withProj, forPrint){
   return (withProj?[{h:'Project', w:14}]:[]).concat([
     {h:'Parcel #',        w:16},
     {h:'Situs address',   w:32, wrap:true},
@@ -18331,8 +18337,7 @@ function _rowMailCols(withProj){
     {h:'Email',           w:26},
     {h:'Phone',           w:16},
     {h:'Parcel status',   w:14},
-    {h:'Notice sent',     w:13, date:true},
-  ]);
+  ]).concat(forPrint?[]:[{h:'Notice sent', w:13, date:true}]);
 }
 // Screen-only shortening. Coordinates are stored as free text and can arrive
 // with a float's full tail (41.241355781290835), which is unreadable in a table
@@ -18390,7 +18395,10 @@ function _rowMailingRows(forPrint){
     const owners=_parcOwners(p.id);
     const head=(projF?[]:[_rowProjLabel(p,projs)])
       .concat([p.parcelNumber||'', p.situsAddress||'']);
-    const tail=[p.status||'Not started', _rowNotice(p.noticeDate, forPrint)];
+    // Print drops the notice date here — see _rowMailCols. The register above
+    // carries it, flagged, for every parcel.
+    const tail=forPrint?[p.status||'Not started']
+                       :[p.status||'Not started', _rowNotice(p.noticeDate, forPrint)];
     if(!owners.length){
       // Kept, not skipped. "No owner identified" is the row that most needs to
       // reach the agent.
@@ -18572,7 +18580,7 @@ function printRowRegister(){
     +' · '+st.total+' parcels · '+(st.total-st.unownedCt)+' with an owner identified · '
     +st.noticedCt+' noticed · '+st.ownerCt+' distinct owners</h2>'
     +'<h3>Parcel register</h3>'+tbl(_rowRegCols(withProj),_rowRegisterRows(true))
-    +'<h3>Mailing list — one row per owner</h3>'+tbl(_rowMailCols(withProj),_rowMailingRows(true))
+    +'<h3>Mailing list — one row per owner</h3>'+tbl(_rowMailCols(withProj,true),_rowMailingRows(true))
     +'<p class="note">Mailing addresses are the owner&rsquo;s address of record and may differ from the situs address. '
     +'Parcels with no owner identified are listed so the gap is visible.</p>'
     +'</body></html>';

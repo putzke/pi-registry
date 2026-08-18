@@ -871,7 +871,11 @@ function _occStamp(table, body) {
 async function sbAdd(table, obj) {
   const sbTable = SB_TABLES[table];
   const body = _occStamp(table, toSB(table, obj));
-  console.log('[sbAdd]', table, JSON.stringify(body).slice(0, 200));
+  // No request-body logging. This is a BULK importer: one line per row means a
+  // whole file of names, emails, phones, addresses and LEP/EJ flags sitting in
+  // the console. The failure paths below still log, which is what makes a bad
+  // import diagnosable — see the same reasoning in index.html.
+  
   const r = await fetch(SUPA_REST + '/' + sbTable, {
     method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(body)
   });
@@ -881,7 +885,6 @@ async function sbAdd(table, obj) {
     throw new Error('Supabase insert failed (' + r.status + ') on ' + table + ': ' + e.slice(0, 200));
   }
   const rows = await r.json();
-  console.log('[sbAdd] OK', table, 'id=', rows[0]?.id);
   return rows[0] ? rows[0].id : null;
 }
 
@@ -2609,7 +2612,6 @@ async function runIntImport() {
     };
 
     try {
-      console.log('[Int insert]', JSON.stringify(rec));
       const res = await fetch(SUPA_REST + '/pi_interactions', {
         method: 'POST',
         headers: getAuthHeaders(),
@@ -2649,7 +2651,6 @@ async function runIntImport() {
                   headers: getAuthHeaders(),
                   body: JSON.stringify(linkRec)
                 });
-                console.log('[Auto-link] Created project_stakeholders link for stakeholder', stakeholderId, 'project', projectId);
               }
             }
           } catch(linkErr) {

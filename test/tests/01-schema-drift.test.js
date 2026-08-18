@@ -123,5 +123,18 @@ module.exports = {
     ];
     spot.forEach(([tb, col, ty]) =>
       t.eq((live[tb] || {})[col], ty, `${tb}.${col} is ${ty}`));
+
+    // ── no routine console.log in any shipped app ─────────────────────────
+    // These printed whole request bodies: a contact's name, email, phone,
+    // address and LEP/EJ flags on every save, and in importer.html one line per
+    // row of a bulk file. console.error / console.warn are deliberately kept —
+    // they only fire on failure and are how a silent failure stays diagnosable.
+    for (const app of APPS) {
+      const text = fs.readFileSync(path.join(REPO, app), 'utf8');
+      const hits = (text.match(/console\.log\(/g) || []).length;
+      t.eq(hits, 0, `${app}: no routine console.log`);
+      t.gt((text.match(/console\.(error|warn)\(/g) || []).length, 0,
+           `${app}: still logs failures`);
+    }
   },
 };

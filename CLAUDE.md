@@ -589,9 +589,9 @@ shipped. Grep the actual functions before planning work off this list.
   Bulk-add grid (see the AI contact importer section above).
 
 **Live / open:**
-1. **Absorb popup report windows** — the Issues report was converted to inline
-   this session; verify whether `generateReport()` / `generatePISummary()` still
-   use `window.open()` and absorb them into the inline output panel too (deferred by user).
+1. ✅ **Absorb popup report windows — DONE** (verified 2026-08-17). The only
+   `window.open` left in `index.html` launches `importer.html`, which is a
+   separate app, not a report. Reports all go through `showInlineReport()`.
 2. **AI cross-report trend summary testing** — needs 2+ real exports to test fully.
 3. **Continue testing** stakeholders LEP/EJ checkboxes, public meeting equity toggle, public comments nav/form.
 4. **Tribal consultation tracker** — nav view exists (`renderTribal()`), but classified
@@ -609,10 +609,11 @@ shipped. Grep the actual functions before planning work off this list.
    it to users. **All 45 `console.error`/`console.warn` paths were kept
    deliberately**; they only fire on failure and are how a silent failure stays
    diagnosable. Do not "tidy" them away.
-   **STILL OUTSTANDING — `importer.html` has four of the same kind**:
-   `[sbAdd]` (logs the request body), `[sbAdd] OK`, `[Int insert]` (logs the
-   whole interaction record) and `[Auto-link]`. Higher exposure than the
-   index.html pair was, because a bulk import prints every contact in the file.
+   ✅ **`importer.html` cleaned too (2026-08-17)** — `[sbAdd]`, `[sbAdd] OK`,
+   `[Int insert]` and `[Auto-link]` are gone. Higher exposure than the
+   index.html pair, because a bulk import printed every contact in the file.
+   **Now enforced**: `test/tests/01-schema-drift.test.js` asserts zero
+   `console.log` in all three apps, and that each still has failure logging.
 
 ## PARKED — Survey/public-input ingestion bridge (validate first, July 2026)
 

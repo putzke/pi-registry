@@ -1408,6 +1408,37 @@ No competitor (Dialog, PublicInput, Simply Stakeholders, Tractivity, Borealis)
 offers a polygon-draw-to-stakeholder-query capability. Dialog has a GIS layer
 display but no interactive spatial query against stakeholder and parcel records.
 
+## Link crawl (`test/tests/27-link-crawl.test.js`, Aug 2026)
+Walks every view and exercises every link. Written because four bugs in one
+session were the same shape — a control that rendered fine, threw nothing, and
+quietly did the wrong thing. Two layers, because the click surface is lopsided
+(~1,700 clickable elements, only ~51 distinct handlers, 1,218 of them the rows
+of one list):
+1. **Static, total coverage** — every `onclick` in every view is parsed and every
+   function it names must exist. String literals are blanked first, or prose
+   inside a toast (`showToast('API key saved (obfuscated)')`) reads as a call to
+   a function named `saved`.
+2. **Behavioural, sampled** — one element per (view, scope, handler) is clicked
+   and must not throw, blank `#main`, or leave `S.view` invalid. Run **twice per
+   view**: unscoped and scoped to a project, since several controls only exist
+   when a project is selected.
+
+Crawl-specific rules learned the hard way:
+- **Identify the element by WHAT IT CALLS, never by index.** The first version
+  recorded an index while planning and reused it after a click had changed
+  `S.projectFilter`; the view re-rendered with different controls and the crawl
+  silently clicked the wrong button — skipping the very handler a deliberately
+  injected fault was meant to catch.
+- **`window.open` must return a window-ish object, not `null`.** `openImportTool`
+  treats `null` as "popup blocked" and falls back to same-tab navigation, which
+  destroys the test context. Correct app behaviour turned into a fake bug.
+- `blob:` URLs are the .docx/.xlsx downloads, not popups.
+- Writes are stubbed and `confirm()` answers no, so a crawl cannot delete a demo
+  record. The crawl tests wiring; what each handler DOES has its own test.
+- **Verify it can fail.** Injecting a renamed handler and a throwing handler is
+  the only way to know it works — the second injection is what exposed the index
+  bug above.
+
 ## Supabase project
 - URL: `https://ncfbblhlsiglxkoiounv.supabase.co`
 - Anon key in `index.html` line ~505 (`SUPA_KEY`)

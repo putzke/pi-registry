@@ -1290,6 +1290,123 @@ Refresh the file with the query in `build-schema.js`'s header comment, then
 every column declares a type, that the built schema matches, and spot-checks the
 nine that were previously guessed wrong.
 
+
+## FUTURE — Map: Polygon Drawing + Property Query (3 phases, July 2026)
+
+### What it is
+User draws a freeform polygon on the map (minimum 3 clicks / triangle, unlimited
+vertices, any shape — corridor, neighborhood, irregular boundary). On close, the
+app queries all stakeholders and parcels within that polygon and returns a results
+panel (Option C: panel on map + "View in contacts list" filter button).
+
+A configurable acreage threshold prevents accidental queries of enormous areas
+(e.g. warn if polygon exceeds 500 acres before running query).
+
+### Why it matters
+- Draw a project corridor influence area → instantly see every affected stakeholder
+- Draw a neighborhood → see which residents haven't been contacted yet
+- Draw around a sensitive receptor (school, HOA, hospital) → pull targeted outreach list
+- For ROW campaigns: draw the acquisition corridor → get every parcel + owner in one step
+- Directly supports NEPA EJ analysis: show LEP/EJ-flagged stakeholders inside impact zone
+- No competitor (Dialog, PublicInput, Simply Stakeholders, Tractivity) offers this
+
+---
+
+### PHASE 1 — Internal polygon query (build first, no external API)
+**What:** Google Maps Drawing Library polygon tool + query internal HC database
+
+Technical details:
+- Load `google.maps.drawing.DrawingManager` with polygon mode (already have Maps API key)
+- Load `google.maps.geometry` library for `poly.containsLocation()` and
+  `spherical.computeArea()` (area threshold check)
+- On polygon close: query pi_stakeholders where lat/lng inside polygon,
+  query pi_parcels where coordinates inside polygon (both use containsLocation())
+- Area threshold: warn if polygon > [configurable, suggest 500 acres] before querying
+- Results panel (slide-out on map view):
+  - Polygon coordinates + total acreage
+  - Matched stakeholders (name, org, type, contact info, link to record)
+  - Matched pi_parcels (APN, owner, status, link to ROW record)
+  - Count badges: "14 stakeholders · 23 parcels within drawn area"
+- Option C behavior: results panel PLUS "View in contacts list" button that
+  pre-filters the project contacts view to matched stakeholders only
+- "Clear polygon" button resets the drawing
+- Do NOT show parcels from external sources in Phase 1 — internal data only
+
+**Build notes for Claude Code:**
+- Drawing Library is part of the existing Maps JavaScript API — add `libraries=drawing,geometry`
+  to the Maps script URL (check current URL to see what libraries are already loaded)
+- `google.maps.drawing.DrawingManager` with `drawingMode: 'polygon'`
+- On `polygoncomplete` event: get path, compute area, run containsLocation() loop
+  against all loaded stakeholder/parcel lat/lng values
+- Keep polygon on map after query so user can see the boundary alongside results
+- Mobile: polygon drawing may be difficult on touch — consider disabling on mobile.html
+  or adding a simplified "radius around point" mode for mobile
+
+---
+
+### PHASE 2 — UGRC Utah statewide parcel overlay (design session first)
+**What:** Display Utah parcel boundaries as a layer + query UGRC Feature Service
+within the drawn polygon to find parcels NOT yet in pi_parcels
+
+Data source: Utah UGRC (Utah Geospatial Resource Center)
+- Statewide parcel layer: public, CC BY 4.0, ArcGIS Feature Service
+- Coordinates with all 29 Utah counties monthly
+- Fields: PARCEL_ID (APN), PARCEL_ADD, PARCEL_CITY, PARCEL_ZIP, OWN_TYPE
+  (Federal/Private/State/Tribal — generalized, not actual owner name), RECORDER
+- REST endpoint: queryable via standard ArcGIS REST API — no ESRI license required
+- UGRC API also has: GET https://api.mapserv.utah.gov/api/v1/parcelinfo?lat={lat}&lng={lng}
+  for single-point parcel lookup
+
+**What Phase 2 adds:**
+- Show UGRC parcel boundaries as a map tile layer (toggle on/off)
+- On polygon draw: query UGRC Feature Service for parcels intersecting polygon
+- Cross-reference against existing pi_parcels — show "Untracked parcels" section
+  in results panel for parcels in UGRC but not yet in HC
+- "Import" button on each untracked parcel: creates pi_parcel record pre-filled
+  with UGRC data (APN, address, acreage, OWN_TYPE)
+- NOTE: OWN_TYPE is generalized (Private/Federal/State/Tribal) — actual owner
+  name requires county assessor query (Phase 3)
+
+**Requires design session before build** — need to decide:
+- Which UGRC Feature Service endpoint to use (county-specific vs statewide)
+- How to handle parcel boundary rendering performance for large polygons
+- Whether to store UGRC-sourced parcels differently from manually entered ones
+
+---
+
+### PHASE 3 — County assessor integration for owner name + mailing address
+**What:** Auto-populate actual owner name and mailing address from county assessor
+public REST APIs when importing parcels from UGRC
+
+Utah county assessor data availability:
+- Salt Lake County: robust public assessor API — owner name + mailing address
+- Utah County: public parcel viewer with REST endpoint
+- Weber County: public assessor data accessible via REST
+- Cache County, Davis County: varying levels of API availability
+- All 29 counties contribute to UGRC monthly — APN is the key to cross-reference
+
+**What Phase 3 adds:**
+- On UGRC parcel import: auto-query county assessor API using APN to get
+  actual owner name and mailing address
+- Auto-populate pi_parcel_owners record with assessor data
+- Flag data source (UGRC / county assessor / manual) on each parcel record
+- This completes the ROW campaign workflow: draw corridor → get all parcels →
+  auto-fill owner contact info → import to HC → begin outreach
+
+**Requires design session + county-by-county API mapping before build**
+- Start with Salt Lake County and Utah County (highest UDOT project volume)
+- Build county adapter pattern so adding new counties is additive not structural
+
+---
+
+### Strategic note
+This feature set directly addresses the FHWA AID Demonstration grant narrative —
+geospatial querying for environmental review and public involvement is exactly the
+"innovation in the environment phase of highway project delivery" FHWA wants to fund.
+No competitor (Dialog, PublicInput, Simply Stakeholders, Tractivity, Borealis)
+offers a polygon-draw-to-stakeholder-query capability. Dialog has a GIS layer
+display but no interactive spatial query against stakeholder and parcel records.
+
 ## Supabase project
 - URL: `https://ncfbblhlsiglxkoiounv.supabase.co`
 - Anon key in `index.html` line ~505 (`SUPA_KEY`)

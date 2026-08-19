@@ -350,14 +350,24 @@ there was nothing to count.
   survey-grade — and render from stored points or a single cached static image.
 
 ### Project scoping per view
-`S.projectFilter` is the shared scope, written by the project select in the
-topbar/filter bar of **interactions, followups, deliverables, reports, meetings
-and commitments**. Two views deliberately keep their OWN filter state instead —
-issues (`S.issViewProj`) and comments (`S.cmtProj`) — and `master` is the
-cross-project list by definition. Commitments was the one list view with no
-selector at all until Aug 2026: the only way to scope it was to pick a project
-in another view and navigate in, with no way back to "all projects" without
-leaving. If you add a list view, give it a selector.
+`S.projectFilter` is the **single** shared scope, written by the project select
+on **interactions, followups, deliverables, reports, meetings, commitments,
+parcels, issues and comments**. `master` is the cross-project list by definition
+and is deliberately never scoped.
+
+**Issues and Comments used to keep their own** (`S.issViewProj`, `S.cmtProj`),
+and `setView()` cleared both on every navigation — so scoping Interactions to a
+project and clicking Issues landed on "All projects". Comments was subtler: it
+read `S.cmtProj || S.projectFilter`, so it filtered correctly while its select
+still displayed "All projects", which is worse than not filtering because it
+tells you you are seeing everything. Both keys are **removed**, not bypassed —
+a leftover reference would silently reintroduce the split. Guarded by
+`test/tests/28-project-scope.test.js`, which walks every scoped view and asserts
+the select SHOWS the project, not just that the list is filtered.
+
+The Comments "Clear" button no longer clears the project: the scope is shared
+now, so clearing it there would unscope the whole app. If you add a list view,
+give it a selector and wire it to `S.projectFilter` — nothing else.
 
 ### Navigation views
 `dashboard | projects | master | stakeholders | interactions | followups | commitments | comments | tribal | deliverables | meetings | issues | map | reports | settings`

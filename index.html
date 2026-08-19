@@ -1737,7 +1737,7 @@ const S={
   stakeTab:'info',
   skView:'list',
   issStatus:'', issCat:'', selIssue:null,
-  issViewProj:'', issViewStatus:'', issViewCat:'', issViewPri:'', selIssueView:null,
+  issViewStatus:'', issViewCat:'', issViewPri:'', selIssueView:null,
   delTab:'scope',
   projTab:'active',
   editId:null,
@@ -1806,7 +1806,7 @@ function initDashRows(){
     }
   });
 }
-function setView(v){if(v==='tribal'){showToast('Tribal consultation module is not available yet.','info',2500);return;}S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.showBulkAdd=false;S.showQuickLog=false;S.showEmailPanel=false;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewProj='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;S.cmtSearch='';S.cmtProj='';S.cmtStatus='';S.cmtPeriod='';S.cmtPeriodId='';S.cmtTab='comments';S.parcSearch='';S.parcStatus='';S.commStatus=COMM_FILTER_DEFAULT;S.commCat='';
+function setView(v){if(v==='tribal'){showToast('Tribal consultation module is not available yet.','info',2500);return;}S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.showBulkAdd=false;S.showQuickLog=false;S.showEmailPanel=false;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;S.cmtSearch='';S.cmtStatus='';S.cmtPeriod='';S.cmtPeriodId='';S.cmtTab='comments';S.parcSearch='';S.parcStatus='';S.commStatus=COMM_FILTER_DEFAULT;S.commCat='';
   S.view=v;S.mapPicked=undefined;S.selStakeholder=null;S.selInteraction=null;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const navId=v==='commitments'?'nav-commitments':v==='comments'?'nav-comments':v==='tribal'?'nav-tribal':('nav-'+v);
@@ -7942,7 +7942,7 @@ function renderIssuesView(el){
   const stakes=DB.getActive('stakeholders')||[];
 
   // Filters
-  const projF=S.issViewProj||'';
+  const projF=S.projectFilter||'';
   const statF=S.issViewStatus||'';
   const catF=S.issViewCat||'';
   const priF=S.issViewPri||'';
@@ -7967,7 +7967,7 @@ function renderIssuesView(el){
     <button class="btn btn-primary btn-sm" onclick="openNewIssueFromTracker()">+ New issue</button>
   </div>
   <div class="toolbar">
-    <select class="fsel" onchange="S.issViewProj=this.value;renderIssuesView(document.getElementById('main'))">
+    <select class="fsel" onchange="S.projectFilter=this.value;renderIssuesView(document.getElementById('main'))">
       <option value="">All projects</option>
       ${projs.map(p=>`<option value="${p.id}"${projF===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}
     </select>
@@ -8093,7 +8093,7 @@ function exportIssuesSummaryDocx(){
   var projs=DB.get('projects')||[];
   var ints=DB.get('interactions')||[];
   var iLinks=DB.get('issue_interactions')||[];
-  var projF=S.issViewProj||'';
+  var projF=S.projectFilter||'';
   var statF=S.issViewStatus||'';
   var catF=S.issViewCat||'';
   var priF=S.issViewPri||'';
@@ -8393,7 +8393,7 @@ function exportIssueSingleDocx(issueId){
 
 // ── NEW ISSUE FROM TRACKER ─────────────────────────────────────────
 function openNewIssueFromTracker(){
-  const projF=S.issViewProj||'';
+  const projF=S.projectFilter||'';
   if(projF){
     openIssueModal(null,projF);
     return;
@@ -8402,7 +8402,7 @@ function openNewIssueFromTracker(){
   const opts=projs.map(p=>'<option value="'+p.id+'">'+p.pid+' — '+p.name+'</option>').join('');
   openM('New issue — select project',
     '<div class="fr"><label>Project *</label><select id="new-iss-proj-pick"><option value="">— Select project —</option>'+opts+'</select></div>',
-    '<button class="btn btn-primary" onclick="var pid=document.getElementById(\'new-iss-proj-pick\').value;if(!pid){alert(\'Please select a project.\');return;}closeM();S.issViewProj=pid;openIssueModal(null,pid);">Continue</button>'
+    '<button class="btn btn-primary" onclick="var pid=document.getElementById(\'new-iss-proj-pick\').value;if(!pid){alert(\'Please select a project.\');return;}closeM();S.projectFilter=pid;openIssueModal(null,pid);">Continue</button>'
   );
 }
 
@@ -8417,7 +8417,7 @@ function exportIssuesPdf(){
   const ints=DB.get('interactions')||[];
   const iLinks=DB.get('issue_interactions')||[];
   const allStakes=DB.getActive('stakeholders')||[];
-  const projF=S.issViewProj||'';
+  const projF=S.projectFilter||'';
   const statF=S.issViewStatus||'';
   const catF=S.issViewCat||'';
   const priF=S.issViewPri||'';
@@ -8499,7 +8499,7 @@ function exportIssuesPdf(){
   '</div>';
 
   var issProjs=DB.get('projects')||[];
-  var isssProjF=S.issViewProj||S.projectFilter||'';
+  var isssProjF=S.projectFilter||'';
   var issProj=isssProjF?issProjs.find(function(p){return p.id===isssProjF;}):null;
   var issProjLabel=issProj?(issProj.pid+' — '+issProj.name):'All Projects';
   var issDateStr=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
@@ -9518,11 +9518,10 @@ function generateIssuesReport(){
   // lives in the PI Report Editor). Temporarily neutralize the Issues-view
   // status/category/priority filters so the report shows the full project scope,
   // then restore them so the Issues view is unaffected.
-  var _pv=S.issViewProj,_sv=S.issViewStatus,_cv=S.issViewCat,_pr=S.issViewPri;
-  S.issViewProj=S.projectFilter||'';
+  var _pv=S.projectFilter,_sv=S.issViewStatus,_cv=S.issViewCat,_pr=S.issViewPri;
   S.issViewStatus='';S.issViewCat='';S.issViewPri='';
   try{ exportIssuesPdf(); }
-  finally{ S.issViewProj=_pv;S.issViewStatus=_sv;S.issViewCat=_cv;S.issViewPri=_pr; }
+  finally{ S.projectFilter=_pv;S.issViewStatus=_sv;S.issViewCat=_cv;S.issViewPri=_pr; }
 }
 
 function getReportTitle(type){
@@ -9976,10 +9975,10 @@ function generateReportSequence(){
       if(c.id==='issues-report'){
         // Issues report reads its own view state; scope to this project and
         // ignore any leftover status/category/priority filters, then restore.
-        var _pv=S.issViewProj,_sv=S.issViewStatus,_cv=S.issViewCat,_pr=S.issViewPri;
-        S.issViewProj=projF;S.issViewStatus='';S.issViewCat='';S.issViewPri='';
+        var _pv=S.projectFilter,_sv=S.issViewStatus,_cv=S.issViewCat,_pr=S.issViewPri;
+        S.projectFilter=projF;S.issViewStatus='';S.issViewCat='';S.issViewPri='';
         try{ exportIssuesPdf(); }
-        finally{ S.issViewProj=_pv;S.issViewStatus=_sv;S.issViewCat=_cv;S.issViewPri=_pr; }
+        finally{ S.projectFilter=_pv;S.issViewStatus=_sv;S.issViewCat=_cv;S.issViewPri=_pr; }
       } else {
         generateReport(c.id);
       }
@@ -17438,7 +17437,7 @@ function renderComments(m){
   const tab=S.cmtTab||'comments';
   const allProjs=DB.get('projects');
   const projF=S.projectFilter||'';
-  const projFilt=S.cmtProj||projF;
+  const projFilt=projF;
   const projLabel=projFilt?(allProjs.find(p=>String(p.id)===String(projFilt))||{}).name||'':'';
   const allComments=DB.get('public_comments')||[];
   const allPeriods=DB.get('comment_periods')||[];
@@ -17485,9 +17484,9 @@ function _renderCommentPeriods(allPeriods,allComments,allProjs,projFilt){
     .filter(p=>!projFilt||String(p.projectId)===String(projFilt))
     .sort((a,b)=>(b.startDate||'').localeCompare(a.startDate||''));
 
-  const projSel=`<select style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)" onchange="S.cmtProj=this.value;renderComments(document.getElementById('main'))">
+  const projSel=`<select style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)" onchange="S.projectFilter=this.value;renderComments(document.getElementById('main'))">
     <option value="">All projects</option>
-    ${allProjs.map(p=>`<option value="${p.id}" ${String(p.id)===String(projFilt)?'selected':''}>${p.name}</option>`).join('')}
+    ${allProjs.map(p=>`<option value="${p.id}" ${String(p.id)===String(projFilt)?'selected':''}>${escHtml(p.pid||'')} — ${escHtml(p.name||'')}</option>`).join('')}
   </select>`;
 
   if(periods.length===0){
@@ -17647,9 +17646,9 @@ function _renderCommentList(allComments,allPeriods,allProjs,projFilt){
   html+=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
     <input placeholder="Search comments…" value="${S.cmtSearch||''}" oninput="S.cmtSearch=this.value;renderComments(document.getElementById('main'))"
       style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white);width:180px">
-    <select style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)" onchange="S.cmtProj=this.value;S.cmtPeriodId='';renderComments(document.getElementById('main'))">
+    <select style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)" onchange="S.projectFilter=this.value;S.cmtPeriodId='';renderComments(document.getElementById('main'))">
       <option value="">All projects</option>
-      ${allProjs.map(p=>`<option value="${p.id}" ${String(p.id)===String(projFilt)?'selected':''}>${p.name}</option>`).join('')}
+      ${allProjs.map(p=>`<option value="${p.id}" ${String(p.id)===String(projFilt)?'selected':''}>${escHtml(p.pid||'')} — ${escHtml(p.name||'')}</option>`).join('')}
     </select>
     ${periodsForProj.length>0?`<select style="font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)" onchange="S.cmtPeriodId=this.value;renderComments(document.getElementById('main'))">
       <option value="">All periods</option>
@@ -17659,7 +17658,7 @@ function _renderCommentList(allComments,allPeriods,allProjs,projFilt){
       <option value="">All statuses</option>
       ${CMT_STATUSES.map(s=>`<option value="${s}" ${statusF===s?'selected':''}>${s}</option>`).join('')}
     </select>
-    ${srch||statusF||periodTypeF||periodIdF||projFilt?`<button class="btn btn-ghost btn-sm" onclick="S.cmtSearch='';S.cmtStatus='';S.cmtPeriod='';S.cmtPeriodId='';S.cmtProj='';renderComments(document.getElementById('main'))">Clear</button>`:''}
+    ${srch||statusF||periodTypeF||periodIdF?`<button class="btn btn-ghost btn-sm" onclick="S.cmtSearch='';S.cmtStatus='';S.cmtPeriod='';S.cmtPeriodId='';renderComments(document.getElementById('main'))">Clear</button>`:''}
     <span style="margin-left:auto;font-size:12px;color:var(--fog)">${filtered.length} comment${filtered.length!==1?'s':''}</span>
   </div>`;
 
@@ -17711,7 +17710,7 @@ function openPeriodModal(id){
   S.editPeriodId=id||null;
   const p=id?(DB.get('comment_periods')||[]).find(x=>String(x.id)===String(id))||{}:{};
   const allProjs=DB.get('projects').filter(x=>x.status==='Active'||x.status==='On hold');
-  const projId=p.projectId||S.projectFilter||S.cmtProj||'';
+  const projId=p.projectId||S.projectFilter||'';
   const curType=p.periodType||'';
   const curReq=getPeriodReq(curType);
   const reqHtml=curReq?`<div id="f-preq-hint" style="margin-top:6px;padding:10px 12px;background:rgba(74,155,232,.1);border:1px solid rgba(74,155,232,.3);border-radius:7px;font-size:12px;line-height:1.5">
@@ -17859,7 +17858,7 @@ function openCommentModal(id){
   S.editId=id||null;
   const c=id?(DB.get('public_comments')||[]).find(x=>String(x.id)===String(id))||{}:{};
   const allProjs=DB.get('projects').filter(p=>p.status==='Active'||p.status==='On hold');
-  const projId=c.projectId||S.projectFilter||S.cmtProj||'';
+  const projId=c.projectId||S.projectFilter||'';
   const allPeriods=DB.get('comment_periods')||[];
   const projPeriods=allPeriods.filter(p=>String(p.projectId)===String(projId));
   const selPeriodId=c.commentPeriodId||S.cmtPeriodId||'';

@@ -35,6 +35,24 @@ Other files: `mobile.html` (mobile companion), `importer.html` (bulk data import
   into the cache so a concurrent user's saved change shows immediately (no hard-refresh)
   and the OCC baseline is accurate-at-open. There is NO live presence warning on these
   modals (unlike the report editor) — that's by design, not a bug.
+- **A failed READ must never look like an empty table (Aug 2026).**
+  `sbGet(table, opts)` — pass `{strict:true}` and a non-404 error THROWS instead
+  of returning `[]`. Returning `[]` for a 401 or a 500 makes a broken fetch
+  indistinguishable from a table with no rows, and any caller that assigns the
+  result into `_syncCache` then ERASES good data.
+  That is exactly what happened: one background refresh got a 4xx (an expired
+  token is the usual cause), `_refreshData` assigned `[]` over the stakeholder
+  cache, and the app emptied in place — Master List badge 0, and every name in
+  the PI report's interaction table resolving to "Anonymous" because the lookup
+  had nothing left to find. The rows were in the database throughout.
+  `_refreshData`'s comment had always claimed the cache was left alone on
+  failure; that was only ever true for a thrown NETWORK error.
+  `_refreshData` now uses strict, keeps the last good copy and warns once a
+  minute (`_refreshFailed`). `loadAllData` stays tolerant — one unreachable
+  table must not lock the app — but names what failed in a toast rather than
+  showing a silent blank. A **404 is still an empty result**, not a failure: it
+  means the table has not been created yet. Guarded by
+  `test/tests/29-refresh-failure.test.js`.
 - **Live data refresh** (`_bgRefreshTick`, near `loadAllData`) — `_syncCache` is
   loaded once at startup, so this keeps a DWELLED-on list view from going stale.
   Refetches only the current view's tables (`_viewTables(S.view)`) and re-renders

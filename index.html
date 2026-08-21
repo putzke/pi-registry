@@ -949,7 +949,16 @@ function fromSB(table, row) {
 }
 
 // ── SUPABASE REST HELPERS ──────────────────────────────────────────
-async function sbGet(table) {
+// opts.strict — throw on a failed request instead of returning [].
+//
+// Returning [] for a 401 or a 500 makes a broken fetch indistinguishable from a
+// genuinely empty table, and callers that overwrite their cache with the result
+// then ERASE good data. That is what emptied the stakeholder list mid-session:
+// one refresh got a 4xx, the cache became [], the Master List badge read 0 and
+// every name in the PI report resolved to "Anonymous". Reads that replace live
+// state must pass strict; the tolerant default is kept for callers that only
+// want a best-effort list.
+async function sbGet(table, opts) {
   const cached = cacheGet(table);
   if (cached) return cached;
   const sbTable = SB_TABLES[table];
@@ -959,8 +968,9 @@ async function sbGet(table) {
   });
   if (!r.ok) {
     // 404 = table not yet created in Supabase — treat as empty, not an error
-    if (r.status === 404) { cacheSet(table, []); return []; }
+    if (r.status === 404) { cacheSet(table, []); return []; }   // table not created yet
     console.error('SB GET error:', r.status, table);
+    if (opts && opts.strict) throw new Error('GET ' + table + ' failed with ' + r.status);
     return [];
   }
   const rows = await r.json();
@@ -1187,7 +1197,22 @@ const _syncCache = {};
 
 async function loadAllData() {
   const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments','comment_periods','tribal_consultations','reports','report_archive','client_summaries','parcels','parcel_owners'];
-  await Promise.all(tables.map(async t => { _syncCache[t] = await sbGet(t); }));
+  // Boot stays tolerant — one unreachable table should not lock the app — but a
+  // table that FAILED must not be presented as an empty one. An empty Master
+  // List that is really a 401 is worse than an error message.
+  const _bootFailed = [];
+  await Promise.all(tables.map(async t => {
+    try { _syncCache[t] = await sbGet(t, {strict:true}); }
+    catch(e){ _bootFailed.push(t); _syncCache[t] = []; console.error('Load failed for', t, e.message); }
+  }));
+  if (_bootFailed.length) {
+    setTimeout(function(){
+      if (typeof showToast === 'function') {
+        showToast('Could not load ' + _bootFailed.join(', ')
+          + '. Those views will look empty — reload to try again.', 'error', 10000);
+      }
+    }, 800);
+  }
   // Load dismissed_pairs separately so a 403 doesn't block everything else
   try { _syncCache['dismissed_pairs'] = await sbGet('dismissed_pairs'); }
   catch(e) { console.warn('dismissed_pairs unavailable:', e.message); _syncCache['dismissed_pairs'] = []; }
@@ -1228,15 +1253,35 @@ function _viewTables(v){
 // Refetch the given tables into _syncCache; returns true if any table changed.
 async function _refreshData(tables){
   let changed = false;
+  const failed = [];
   await Promise.all(tables.map(async t => {
     try {
       cacheClear(t);                    // bust the 30s sbGet cache so this truly refetches
-      const fresh = await sbGet(t);
+      // strict: a 4xx used to come back as [] and overwrite the cache, emptying
+      // the table on screen. The comment below always claimed the cache was left
+      // alone on failure; only a thrown network error actually did that.
+      const fresh = await sbGet(t, {strict:true});
       if (JSON.stringify(_syncCache[t]) !== JSON.stringify(fresh)) changed = true;
       _syncCache[t] = fresh;
-    } catch(e) { /* transient — leave the existing cache in place */ }
+    } catch(e) { failed.push(t); console.error('Background refresh failed for', t, e.message); }
   }));
+  if (failed.length) _refreshFailed(failed);
   return changed;
+}
+
+// A refresh that could not complete. The data on screen is the last good copy,
+// which is the right thing to show — but silently is not the right way to show
+// it, because a session that has expired will keep failing and the user needs to
+// know why nothing is updating.
+let _refreshWarnedAt = 0;
+function _refreshFailed(tables){
+  if (Date.now() - _refreshWarnedAt < 60000) return;    // at most once a minute
+  _refreshWarnedAt = Date.now();
+  if (typeof showToast === 'function') {
+    showToast('Could not refresh ' + tables.join(', ')
+      + ' — showing the last loaded copy. If this keeps happening, reload the page to sign in again.',
+      'warn', 7000);
+  }
 }
 
 // Is it safe to refresh + maybe re-render right now without disrupting the user?

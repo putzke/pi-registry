@@ -10259,6 +10259,21 @@ function saveAsPdf(){
 // Section types that have row-based data eligible for table output
 var TABLE_ELIGIBLE_TYPES = ['auto-concerns','auto-intlog','auto-del','auto-events','auto-followups','auto-comments','auto-commitments','auto-issues','auto-comment-matrix','auto-contacts','auto-pi-compliance'];
 
+// Section types whose rows are actually BOUNDED by the reporting period, and so
+// may carry the "N-day report period ·" prefix on their counts label.
+// Only auto-concerns is: everything else shows the project's current state
+// (deliverables, contacts, commitments, issues, parcels) regardless of the
+// dates in the header, and auto-intlog is the period's INVERSE — it lists
+// interactions from BEFORE pstart. Labelling those with the period claimed a
+// window over them that was never applied.
+var PERIOD_SCOPED_TYPES = ['auto-concerns'];
+function _periodLabel(secType, pstart, pend) {
+  if (PERIOD_SCOPED_TYPES.indexOf(secType) < 0) return '';
+  if (!pstart || !pend) return '';
+  var d = Math.round((new Date(pend) - new Date(pstart)) / 86400000) + 1;
+  return d > 0 ? d + '-day report period · ' : '';
+}
+
 function getDefaultSections(){
   return[
     {id:'concerns',title:'Recent public concerns and inquiries',type:'auto-concerns',content:''},
@@ -11686,7 +11701,7 @@ function _buildSectionPreviewTable(secType, projF, pstart, pend, includeInternal
   var allStakes = DB.get('stakeholders');
   var ps = DB.get('project_stakeholders').filter(function(lk){ return String(lk.projectId)===String(projF); });
   var externalPS = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; });
-  var externalIds = externalPS.map(function(lk){ return lk.stakeholderId; });
+  var externalIds = externalPS.map(function(lk){ return String(lk.stakeholderId); });
   var ints = DB.get('interactions').filter(function(i){ return String(i.projectId)===String(projF); });
 
   var thStyle = 'padding:5px 8px;background:#1a3a5c;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.4px;text-align:left;white-space:nowrap';
@@ -12012,7 +12027,7 @@ function renderLivePreview() {
   document.querySelectorAll('.rpt-ed-grp:checked').forEach(function(cb){ selGroups.push(cb.value); });
   var ps = DB.get('project_stakeholders').filter(function(lk){ return String(lk.projectId) === String(projF); });
   var allStakes = DB.get('stakeholders');
-  var previewExternalIds = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; }).map(function(lk){ return lk.stakeholderId; });
+  var previewExternalIds = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; }).map(function(lk){ return String(lk.stakeholderId); });
   var recipients = [];
   ps.forEach(function(lk) {
     if (!selGroups.length) return;
@@ -12087,7 +12102,7 @@ function renderLivePreview() {
       var counts = [];
       if (sec.type === 'auto-concerns') {
         var _cN = ints.filter(function(i){
-          if (!includeInternal && previewExternalIds.indexOf(i.stakeholderId) < 0) return false;
+          if (!includeInternal && !_intIsExternal(i, previewExternalIds)) return false;
           if (pstart && i.date < pstart) return false;
           if (pend   && i.date > pend)   return false;
           return true;
@@ -12096,7 +12111,7 @@ function renderLivePreview() {
       }
       if (sec.type === 'auto-intlog') {
         var _pN = ints.filter(function(i){
-          if (!includeInternal && previewExternalIds.indexOf(i.stakeholderId) < 0) return false;
+          if (!includeInternal && !_intIsExternal(i, previewExternalIds)) return false;
           if (pstart && i.date >= pstart) return false; // prior to the period
           return true;
         }).length;
@@ -12124,8 +12139,7 @@ function renderLivePreview() {
         if (_perCt) counts.push(_perCt + ' comment period' + (_perCt !== 1 ? 's' : ''));
       }
       if (counts.length) {
-        var _days = (pstart && pend) ? Math.round((new Date(pend) - new Date(pstart)) / 86400000) + 1 : null;
-        var _dayLabel = _days ? _days + '-day report period · ' : '';
+        var _dayLabel = _periodLabel(sec.type, pstart, pend);
         html += '<div style="font-size:11px;color:#595959;font-style:italic;background:#f0f0f0;border-radius:4px;padding:5px 10px;margin-bottom:8px">' + _dayLabel + counts.join(' · ') + '</div>';
       }
       // Data table (when toggled on)
@@ -12447,7 +12461,7 @@ function _buildReportSnapshot(projF, saved) {
   var ps = DB.get('project_stakeholders').filter(function(lk){ return String(lk.projectId) === String(projF); });
   var allStakes = DB.get('stakeholders');
   var externalIds = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; })
-                      .map(function(lk){ return lk.stakeholderId; });
+                      .map(function(lk){ return String(lk.stakeholderId); });
 
   // Distribution list — frozen as names, exactly as printed in the header.
   var selGroups = (saved.distGroups && saved.distGroups.length)
@@ -12465,7 +12479,6 @@ function _buildReportSnapshot(projF, saved) {
   var ints   = DB.get('interactions').filter(function(i){ return String(i.projectId)===String(projF); });
   var dels   = DB.get('deliverables').filter(function(d){ return String(d.projectId)===String(projF); });
   var pcomms = DB.get('public_comments').filter(function(c){ return String(c.projectId)===String(projF); });
-  var _days  = (pstart && pend) ? Math.round((new Date(pend) - new Date(pstart)) / 86400000) + 1 : null;
 
   var snapSections = sections.map(function(sec){
     var isAuto = sec.type && sec.type !== 'manual';
@@ -12512,7 +12525,7 @@ function _buildReportSnapshot(projF, saved) {
         var perCt = (DB.get('comment_periods')||[]).filter(function(p){ return String(p.projectId)===String(projF); }).length;
         if (perCt) counts.push(perCt + ' comment period' + (perCt !== 1 ? 's' : ''));
       }
-      if (counts.length) countsLabel = (_days ? _days + '-day report period · ' : '') + counts.join(' · ');
+      if (counts.length) countsLabel = _periodLabel(sec.type, pstart, pend) + counts.join(' · ');
 
       // Freeze the rendered table — same builder the live preview uses, so the
       // archived copy is identical to what was on screen and in the .docx.
@@ -13355,7 +13368,7 @@ async function exportPIDocx(){
   // honor the "Include internal stakeholders in interaction log" toggle so an
   // in-period internal interaction can appear (and matches the preview + count).
   var externalPS=ps.filter(function(lk){return(lk.stakeholderRole||'External')==='External'});
-  var externalIds=externalPS.map(function(lk){return lk.stakeholderId});
+  var externalIds=externalPS.map(function(lk){return String(lk.stakeholderId)});
   var _incInternalDocx=!!(( document.getElementById('rpt-ed-include-internal')||document.getElementById('rpt-include-internal')||{}).checked);
   var periodInts=ints.filter(function(i){
     if(!_incInternalDocx&&!_intIsExternal(i, externalIds))return false;

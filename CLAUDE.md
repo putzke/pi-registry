@@ -423,6 +423,29 @@ client's .docx disagreeing about how much public contact there was. That count
 is a compliance figure, so under-counting is a reporting error, not a display
 quirk. Guarded by `test/tests/30-anonymous-external.test.js`, which also asserts
 no raw `externalIds.indexOf(i.stakeholderId)` survives in any of them.
+`renderLivePreview`'s two COUNTS-label filters were the twelfth and thirteenth
+copies — missed in the first pass because they build the "N interactions in
+period" chip rather than a table, so the label under-counted the very rows
+listed beneath it. Every `externalIds` array is now built with `String()` to
+match the rule's own comparison; `project_id`/`stakeholder_id` types are mixed
+across tables (see the schema-fidelity section), so that is not paranoia.
+
+### The report-period label belongs to ONE section (`_periodLabel`, Aug 2026)
+The counts chip under every auto section was prefixed "19-day report period · ".
+Only **`auto-concerns`** is actually bounded by `pstart`/`pend`. Deliverables,
+the contact list, commitments, issues and parcels show the project's CURRENT
+state regardless of the header dates, so the prefix claimed a window that was
+never applied — "19-day report period · 7 deliverables" is not a subset of
+anything. `auto-intlog` was worse than noise: it lists interactions from BEFORE
+`pstart`, i.e. exactly the rows the period excludes.
+
+`PERIOD_SCOPED_TYPES` (next to `TABLE_ELIGIBLE_TYPES`, ~line 10260) is the list;
+`_periodLabel(secType, pstart, pend)` is the only thing that builds the string.
+It must stay the only one: `renderLivePreview` and `_buildReportSnapshot` both
+call it, and if they drift the archived compliance record's header contradicts
+the report that was on screen when it was issued. Guarded by
+`test/tests/31-period-label.test.js`, which asserts both surfaces agree and that
+neither hand-rolls the string.
 
 ### Reports view tabs (S.rptTab)
 - **`'reports'`** — summary stats bar, distribution group checkboxes, 10 report-type cards

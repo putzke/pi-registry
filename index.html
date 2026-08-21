@@ -10071,7 +10071,7 @@ function _buildPackageFacts(projF){
   var extPS=ps.filter(function(lk){return (lk.stakeholderRole||'External')==='External';});
   var ints=(DB.get('interactions')||[]).filter(function(i){return String(i.projectId)===String(projF);});
   var extIds=extPS.map(function(lk){return String(lk.stakeholderId);});
-  var extInts=ints.filter(function(i){return extIds.indexOf(String(i.stakeholderId))>=0;});
+  var extInts=ints.filter(function(i){return _intIsExternal(i, extIds);});
   var champ=extPS.filter(function(lk){return lk.support==='Champion';}).length;
   var opp=extPS.filter(function(lk){return lk.support==='Opponent';}).length;
   var neut=extPS.length-champ-opp;
@@ -10555,7 +10555,7 @@ function _buildConcernsAIFacts() {
   var externalIds = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; })
                       .map(function(lk){ return String(lk.stakeholderId); });
   var periodInts = ints.filter(function(i){
-    if (externalIds.indexOf(String(i.stakeholderId)) < 0) return false;
+    if (!_intIsExternal(i, externalIds)) return false;
     if (saved.periodStart && i.date < saved.periodStart) return false;
     if (saved.periodEnd && i.date > saved.periodEnd) return false;
     return true;
@@ -10867,7 +10867,7 @@ function _buildSectionDraft(secType) {
   var internalPS = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='Internal'; });
   var externalIds = externalPS.map(function(lk){ return String(lk.stakeholderId); });
   var periodInts = ints.filter(function(i){
-    if (externalIds.indexOf(String(i.stakeholderId)) < 0) return false;
+    if (!_intIsExternal(i, externalIds)) return false;
     if (saved.periodStart && i.date < saved.periodStart) return false;
     if (saved.periodEnd && i.date > saved.periodEnd) return false;
     return true;
@@ -11128,7 +11128,7 @@ function _buildOverallDraft() {
   var internalPS = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='Internal'; });
   var externalIds = externalPS.map(function(lk){ return String(lk.stakeholderId); });
   var periodInts = ints.filter(function(i){
-    if (externalIds.indexOf(String(i.stakeholderId)) < 0) return false;
+    if (!_intIsExternal(i, externalIds)) return false;
     if (saved.periodStart && i.date < saved.periodStart) return false;
     if (saved.periodEnd && i.date > saved.periodEnd) return false;
     return true;
@@ -11668,6 +11668,20 @@ function schedulePreview() {
 
 // Returns an HTML table for a section type when "Include data table" is checked.
 // Light-mode styles so it renders correctly in the preview pane and archived preview.
+// Is this interaction with someone OUTSIDE the project team?
+//
+// An interaction with no stakeholder is an anonymous member of the public — the
+// most external contact there is. Filtering "External only" by membership of the
+// project's external contact list dropped every one of them, because an
+// anonymous caller has no id to match. That is backwards: they are external
+// precisely BECAUSE nobody took their name, and they were only visible with
+// "include internal stakeholders" ticked — which then pulled in the project team
+// as the price of seeing the public.
+function _intIsExternal(i, externalIds){
+  if (!i.stakeholderId) return true;
+  return externalIds.indexOf(String(i.stakeholderId)) >= 0;
+}
+
 function _buildSectionPreviewTable(secType, projF, pstart, pend, includeInternal) {
   var allStakes = DB.get('stakeholders');
   var ps = DB.get('project_stakeholders').filter(function(lk){ return String(lk.projectId)===String(projF); });
@@ -11681,7 +11695,7 @@ function _buildSectionPreviewTable(secType, projF, pstart, pend, includeInternal
 
   if (secType === 'auto-concerns' || secType === 'auto-intlog') {
     var logInts = ints.filter(function(i){
-      if (!includeInternal && externalIds.indexOf(i.stakeholderId) < 0) return false;
+      if (!includeInternal && !_intIsExternal(i, externalIds)) return false;
       if (secType === 'auto-concerns') {
         if (pstart && i.date < pstart) return false;
         if (pend   && i.date > pend)   return false;
@@ -11753,7 +11767,7 @@ function _buildSectionPreviewTable(secType, projF, pstart, pend, includeInternal
 
   } else if (secType === 'auto-comments') {
     var comments = ints.filter(function(i){
-      return externalIds.indexOf(i.stakeholderId) >= 0
+      return _intIsExternal(i, externalIds)
         && ['Comment card','Public meeting','Mail','In-person'].indexOf(i.channel) >= 0;
     }).sort(function(a,b){ return b.date.localeCompare(a.date); });
     tbl += '<colgroup><col style="width:11%"><col style="width:18%"><col style="width:14%"><col style="width:30%"><col style="width:27%"></colgroup>'
@@ -12461,7 +12475,7 @@ function _buildReportSnapshot(projF, saved) {
       var counts = [];
       if (sec.type === 'auto-concerns') {
         var cN = ints.filter(function(i){
-          if (!includeInternal && externalIds.indexOf(i.stakeholderId) < 0) return false;
+          if (!includeInternal && !_intIsExternal(i, externalIds)) return false;
           if (pstart && i.date < pstart) return false;
           if (pend   && i.date > pend)   return false;
           return true;
@@ -12470,7 +12484,7 @@ function _buildReportSnapshot(projF, saved) {
       }
       if (sec.type === 'auto-intlog') {
         var pN = ints.filter(function(i){
-          if (!includeInternal && externalIds.indexOf(i.stakeholderId) < 0) return false;
+          if (!includeInternal && !_intIsExternal(i, externalIds)) return false;
           if (pstart && i.date >= pstart) return false;
           return true;
         }).length;
@@ -12524,7 +12538,7 @@ function _buildReportSnapshot(projF, saved) {
   // report 1 and is resolved in report 3" — narrative prose alone can't support
   // that, and recomputing from live data would rewrite history.
   var _tfInts = ints.filter(function(i){
-    if (!includeInternal && externalIds.indexOf(i.stakeholderId) < 0) return false;
+    if (!includeInternal && !_intIsExternal(i, externalIds)) return false;
     if (pstart && i.date < pstart) return false;
     if (pend   && i.date > pend)   return false;
     return true;
@@ -13344,7 +13358,7 @@ async function exportPIDocx(){
   var externalIds=externalPS.map(function(lk){return lk.stakeholderId});
   var _incInternalDocx=!!(( document.getElementById('rpt-ed-include-internal')||document.getElementById('rpt-include-internal')||{}).checked);
   var periodInts=ints.filter(function(i){
-    if(!_incInternalDocx&&externalIds.indexOf(i.stakeholderId)<0)return false;
+    if(!_incInternalDocx&&!_intIsExternal(i, externalIds))return false;
     if(saved.periodStart&&i.date<saved.periodStart)return false;
     if(saved.periodEnd&&i.date>saved.periodEnd)return false;
     return true;
@@ -13717,7 +13731,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
       var allProjInts=DB.get('interactions').filter(function(i){return i.projectId===proj.id});
       var extIds3=externalPS.map(function(lk){return lk.stakeholderId});
       var pastInts=allProjInts.filter(function(i){
-        if(!includeInternal&&extIds3.indexOf(i.stakeholderId)<0)return false;
+        if(!includeInternal&&!_intIsExternal(i, extIds3))return false;
         if(saved.periodStart&&i.date>=saved.periodStart)return false;
         return true;
       });

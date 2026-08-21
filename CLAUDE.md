@@ -407,6 +407,23 @@ give it a selector and wire it to `S.projectFilter` — nothing else.
 
 ## Reports module (most recently worked on)
 
+### An anonymous interaction is EXTERNAL (`_intIsExternal`, Aug 2026)
+Report sections that show "External only" filtered by membership of the
+project's external contact list. An anonymous caller has no `stakeholderId`, so
+`indexOf()` never matched and every one was dropped — the public was excluded
+from the public-concerns section precisely because nobody took their name. The
+only way to see them was to tick "include internal stakeholders", which then
+pulled the project team into a report about public concern.
+
+`_intIsExternal(i, externalIds)` is now the single rule: **no stakeholder id →
+external**. It replaced eleven hand-rolled copies of the same filter across the
+section tables, the AI facts builder, the report snapshot and `exportPIDocx` —
+fixing one and not the others would have left the on-screen report and the
+client's .docx disagreeing about how much public contact there was. That count
+is a compliance figure, so under-counting is a reporting error, not a display
+quirk. Guarded by `test/tests/30-anonymous-external.test.js`, which also asserts
+no raw `externalIds.indexOf(i.stakeholderId)` survives in any of them.
+
 ### Reports view tabs (S.rptTab)
 - **`'reports'`** — summary stats bar, distribution group checkboxes, 10 report-type cards
 - **`'pi-editor'`** — landing card with draft status + "Open editor" button (opens split-pane `openPIReport()`)

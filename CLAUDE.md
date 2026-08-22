@@ -519,6 +519,43 @@ template that already complies.
   header; after, `True` with content in the first-page header and an empty
   every-page header, footers unchanged.
 
+### "Draft all sections" makes the SAME calls as the section buttons (Aug 2026)
+It used to be ONE batched call — every task concatenated into a single prompt
+with a JSON reply contract — and it produced visibly shorter, thinner narratives
+than pressing each section's own **✦ AI Draft**. Three causes, none visible in a
+diff:
+1. **The per-section retry used the wrong system prompt.** Whenever the JSON
+   failed to parse, it re-drafted every section with `_claudeSystemPrompt()` —
+   the GENERIC prompt, which caps output at *"2-4 sentence narrative
+   summaries"*. `_claudeSectionSystemPrompt()` exists precisely because that cap
+   truncates the richer sections. It also hardcoded 600/undefined tokens instead
+   of the section's own budget.
+2. **The overall summary was drafted under the SECTION prompt** rather than
+   `_claudeExecSystemPrompt()`, from a near-copy of the individual button's
+   instruction instead of the instruction itself.
+3. **One response carrying N narratives as JSON** makes the model ration length
+   however generous the shared ceiling is, and a reply clipped mid-JSON threw
+   away every narrative in it.
+
+**The batch's justification did not hold.** "The project context is sent once
+rather than once per section" was never true: the facts are built PER SECTION
+(`_buildSectionDraft` / `_buildConcernsAIFacts`), so batching only concatenated
+the same text. Measured on a real 8-section report the entire saving was the
+repeated system prompt — **~570 input tokens, about $0.002** at Sonnet pricing.
+That is what the short narratives were being traded for.
+
+Now: **N+1 ordinary calls run concurrently** (`_mapLimit`, 4 in flight), each
+identical to what its own button sends. `_sectionDraftCall()` and
+`_overallDraftCall()` are the single place each kind of narrative is requested,
+and BOTH entry points go through them — parity is by construction, not by two
+code paths being kept in step by hand. A section with no facts is **skipped**,
+exactly as its own button refuses one; the batch drafted them off an empty facts
+block, which invites the model to invent engagement. Guarded by
+`test/tests/34-draft-all-parity.test.js` (39 checks), which stubs
+`_claudeNarrative`, drafts the same report both ways and asserts the system
+prompt, instruction, token budget and model match **byte for byte** — plus that
+the capped generic prompt reaches no report narrative.
+
 ### Reports view tabs (S.rptTab)
 - **`'reports'`** — summary stats bar, distribution group checkboxes, 10 report-type cards
 - **`'pi-editor'`** — landing card with draft status + "Open editor" button (opens split-pane `openPIReport()`)
@@ -630,7 +667,10 @@ template that already complies.
 ### Claude AI integration
 - API key stored obfuscated (XOR+base64) in localStorage key `compass_claude_api_key_v2`
 - `_getClaudeKey()` / `_setClaudeKey(key)` — read/write helpers
-- `_claudeNarrative(systemPrompt, userContent)` — shared fetch wrapper, model: `claude-haiku-4-5-20251001`, max_tokens: 400
+- `_claudeNarrative(systemPrompt, userContent, maxTokens, model)` — shared fetch
+  wrapper. Defaults: model `claude-sonnet-5`, `max_tokens` 400. (This line said
+  Haiku long after the default became Sonnet — check the function, not this
+  line, before quoting a cost.)
 - CSP `connect-src` includes `https://api.anthropic.com`
 - Confirmation dialog required before bulk AI calls (cost estimate shown)
 

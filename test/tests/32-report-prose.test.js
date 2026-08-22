@@ -206,12 +206,17 @@ module.exports = {
            + 'finish a sentence rather than clip mid-word');
 
       // "Draft all sections" must carry the SAME instruction and budget, or the
-      // batched copy of this section comes out at a different length from the
-      // one the per-section button produces.
-      const batchSrc = await app.page.evaluate(() => String(generateAllSectionDrafts));
-      t.ok(/_sectionAIRequest\(/.test(batchSrc),
-           'the batch path builds its task from the same request builder');
-      t.ok(/req\.maxTokens/.test(batchSrc), 'and inherits its token budget');
+      // bulk copy of this section comes out at a different length from the one
+      // the per-section button produces. Both go through _sectionDraftCall;
+      // test 34 asserts the arguments actually match at the call site.
+      const wiring = await app.page.evaluate(() => ({
+        one: /_sectionDraftCall\(/.test(String(generateSectionDraft)),
+        all: /_sectionDraftCall\(/.test(String(generateAllSectionDrafts)),
+        budget: /req\.maxTokens/.test(String(_sectionDraftCall)),
+      }));
+      t.ok(wiring.one, 'the section button goes through the shared request helper');
+      t.ok(wiring.all, 'and so does "Draft all sections"');
+      t.ok(wiring.budget, 'which carries the section\'s own token budget');
 
       t.eq(app.errors, [], 'no page errors during the run');
     } finally {

@@ -10668,6 +10668,39 @@ function _sectionAIRequest(secType, templateDraft) {
   };
 }
 
+// ── The ONE place each kind of narrative is requested ────────────────────
+// A section's own "AI Draft" button and "Draft all sections" both go through
+// these, so they cannot drift. They used to be separate code paths and had
+// silently diverged in three ways — see generateAllSectionDrafts.
+function _sectionDraftCall(secType, templateDraft) {
+  var req = _sectionAIRequest(secType, templateDraft);
+  return _claudeNarrative(_claudeSectionSystemPrompt(), req.userContent, req.maxTokens);
+}
+// The executive summary has its OWN system prompt: it orients rather than
+// recaps, and drafting it under the section prompt turns it back into a recap.
+function _overallDraftCall(templateDraft) {
+  var projF = S.projectFilter;
+  var proj = projF ? (DB.get('projects').find(function(p){ return p.id===projF; }))||{} : {};
+  // Deliberately does NOT receive the section narratives: this summary orients the
+  // reader rather than recapping the sections, and feeding it their text just pulls
+  // it back toward a recap. The project facts are enough to pick the headline.
+  var userContent = 'Write the opening executive summary for a public involvement progress report for project "'
+    + (proj.name||'this project') + '" (' + (proj.pid||'') + ').\n\n'
+    + 'Identify the most consequential development and what needs attention. Do not recap the report\'s '
+    + 'sections and do not restate the date range or the counts shown in the tables.\n\n'
+    + 'PROJECT FACTS:\n' + templateDraft;
+  return _claudeNarrative(_claudeExecSystemPrompt(), userContent, 400);
+}
+
+// Run N async jobs with a ceiling on how many are in flight at once, so a
+// twelve-section report does not open twelve sockets at the same instant.
+async function _mapLimit(items, limit, fn) {
+  var out = new Array(items.length), next = 0;
+  async function worker(){ while (next < items.length) { var n = next++; out[n] = await fn(items[n], n); } }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
+
 async function generateSectionDraft(secType, textareaIdx) {
   var ta = document.querySelector('.rpt-sec-summary[data-idx="'+textareaIdx+'"]');
   if (!ta) return;
@@ -10692,8 +10725,7 @@ async function generateSectionDraft(secType, textareaIdx) {
   var origText = btn ? btn.textContent : '';
   if (btn) { btn.textContent = 'Generating…'; btn.disabled = true; }
 
-  var req = _sectionAIRequest(secType, templateDraft);
-  var narrative = await _claudeNarrative(_claudeSectionSystemPrompt(), req.userContent, req.maxTokens);
+  var narrative = await _sectionDraftCall(secType, templateDraft);
 
   if (btn) { btn.textContent = origText; btn.disabled = false; }
   ta.value = narrative || templateDraft;
@@ -10722,19 +10754,7 @@ async function generateOverallDraft() {
   var btn = document.getElementById('overall-draft-btn');
   if (btn) { btn.textContent = 'Generating…'; btn.disabled = true; }
 
-  // Gather all section stats for context
-  var projF = S.projectFilter;
-  var proj = projF ? (DB.get('projects').find(function(p){return p.id===projF;}))||{} : {};
-  // Deliberately does NOT receive the section narratives: this summary orients the
-  // reader rather than recapping the sections, and feeding it their text just pulls
-  // it back toward a recap. The project facts are enough to pick the headline.
-  var userContent = 'Write the opening executive summary for a public involvement progress report for project "'
-    + (proj.name||'this project') + '" (' + (proj.pid||'') + ').\n\n'
-    + 'Identify the most consequential development and what needs attention. Do not recap the report\'s '
-    + 'sections and do not restate the date range or the counts shown in the tables.\n\n'
-    + 'PROJECT FACTS:\n' + templateDraft;
-
-  var narrative = await _claudeNarrative(_claudeExecSystemPrompt(), userContent, 400);
+  var narrative = await _overallDraftCall(templateDraft);
 
   if (btn) { btn.textContent = '✦ Generate Overall Summary'; btn.disabled = false; }
   ta.value = narrative || templateDraft;
@@ -10757,14 +10777,73 @@ async function generateAllSectionDrafts() {
       autoSections.push({ ta: ta, idx: idx, secType: secType });
     }
   });
-  // Also queue overall summary
-  var doOverall = true;
-  var total = autoSections.length + (doOverall ? 1 : 0);
-  if (total === 0) { showToast('No auto-generated sections to draft', 'info', 2000); return; }
 
-  if (!confirm('This will draft ' + total + ' section' + (total !== 1 ? 's' : '') + ' in a single Claude '
-    + '(Anthropic) API call. Estimated cost: well under $0.01 (Claude Sonnet) — the project context is sent '
-    + 'once for the whole report rather than once per section.\n\n'
+  // ── One call per narrative — the SAME call the buttons make ──────────────
+  // This was ONE batched call: every task concatenated into a single prompt
+  // with a JSON reply contract. It produced visibly shorter, thinner narratives
+  // than the per-section buttons, for three reasons, all now removed:
+  //
+  //   1. The per-section RETRY (which ran whenever the JSON failed to parse)
+  //      used _claudeSystemPrompt() — the GENERIC prompt, which caps output at
+  //      "2-4 sentence narrative summaries". _claudeSectionSystemPrompt()
+  //      exists precisely because that cap truncates the richer sections, and
+  //      the individual buttons use it. It also hardcoded 600/undefined tokens
+  //      instead of the section's own budget.
+  //   2. The overall summary was drafted under _claudeSectionSystemPrompt()
+  //      instead of _claudeExecSystemPrompt(), from a near-copy of the
+  //      individual button's instruction rather than the instruction itself.
+  //   3. Asking one response to carry N narratives as JSON makes the model
+  //      ration length no matter how generous the shared ceiling is, and a
+  //      response clipped mid-JSON threw away every narrative in it.
+  //
+  // The batch's stated justification — "the project context is sent once
+  // rather than once per section" — did not hold: the facts are built PER
+  // SECTION (_buildSectionDraft / _buildConcernsAIFacts), so batching only
+  // concatenated the same text. Measured on a real 8-section report the whole
+  // saving was the system prompt, ~570 input tokens ≈ $0.002 at Sonnet
+  // pricing. That is what the short narratives were being traded for.
+  //
+  // So: N+1 ordinary calls, run concurrently (which is also faster than the
+  // sequential path this replaced), each one identical to what its own button
+  // sends. "Same engine and directive" is now true by construction rather than
+  // by two code paths being kept in step by hand.
+  var overallTa = document.getElementById('rpt-overall-summary');
+  // Use the SAME rich facts builder as the standalone "Generate Overall Summary"
+  // button. This path previously used a hardcoded 4-fact string (whose stakeholder
+  // count was always 0 — it filtered stakeholders by a projectId field they don't
+  // have; the link lives in project_stakeholders), which is why the batched
+  // overall summary read far thinner than the individual button's output.
+  var overallTemplate = _buildOverallDraft() || '';
+
+  // A section with no facts is SKIPPED, exactly as its own button refuses one
+  // ("Not enough data yet to generate a draft for this section"). The batch
+  // drafted them anyway, off an empty facts block, which is an invitation to
+  // invent — and inventing engagement is the one thing a compliance narrative
+  // must never do.
+  var skipped = [];
+  var jobs = [];
+  autoSections.forEach(function(s) {
+    var templateDraft = _buildSectionDraft(s.secType) || '';
+    if (!templateDraft) { skipped.push(s.secType); return; }
+    jobs.push({ kind: 'section', ta: s.ta, secType: s.secType, templateDraft: templateDraft });
+  });
+  if (overallTa && overallTemplate) {
+    jobs.push({ kind: 'overall', ta: overallTa, secType: 'overall',
+                templateDraft: overallTemplate });
+  }
+
+  var total = jobs.length;
+  if (!total) {
+    showToast(skipped.length
+      ? 'Not enough data yet to draft ' + (skipped.length===1?'that section':'those sections') + '.'
+      : 'No auto-generated sections to draft', 'warn', 4000);
+    return;
+  }
+
+  if (!confirm('This will draft ' + total + ' section' + (total !== 1 ? 's' : '') + ' with '
+    + total + ' Claude (Anthropic) API call' + (total !== 1 ? 's' : '') + ' — one per section, '
+    + 'identical to pressing each section\'s own AI Draft button.\n\n'
+    + 'Estimated cost: a few cents at current Claude Sonnet pricing.\n\n'
     + 'Make sure you have a spend cap set at console.anthropic.com.\n\nProceed?')) return;
 
   if (allBtn) { allBtn.disabled = true; allBtn.textContent = 'Drafting…'; }
@@ -10777,121 +10856,44 @@ async function generateAllSectionDrafts() {
     if (barLabel) barLabel.textContent = done + ' of ' + total + ' sections drafted';
   }
 
-  // ── ONE batched call for the whole report ────────────────────────────────
-  // Previously this fired N+1 separate requests, each re-sending the system
-  // prompt and project context — so the shared context was billed once per
-  // section. Batching sends it ONCE and asks for every narrative back in a
-  // single JSON response. Same model (Sonnet), same per-section instructions
-  // and facts, so output quality is unchanged; it's just far cheaper and faster.
-  // Falls back to the original per-section calls if the batch fails.
-  var overallTa = document.getElementById('rpt-overall-summary');
-  var projF0 = S.projectFilter;
-  var proj0 = projF0 && DB.get('projects').find(function(p){ return p.id===projF0; });
-  // Use the SAME rich facts builder as the standalone "Generate Overall Summary"
-  // button. This path previously used a hardcoded 4-fact string (whose stakeholder
-  // count was always 0 — it filtered stakeholders by a projectId field they don't
-  // have; the link lives in project_stakeholders), which is why the batched
-  // overall summary read far thinner than the individual button's output.
-  var overallTemplate = _buildOverallDraft() || '';
-
-  // Build one job per narrative we need, carrying the SAME instructions+facts
-  // the individual calls would have used.
-  var jobs = autoSections.map(function(s, n) {
-    var templateDraft = _buildSectionDraft(s.secType) || '';
-    var req = _sectionAIRequest(s.secType, templateDraft);
-    return { key:'s'+n, ta:s.ta, templateDraft:templateDraft, instruction:req.userContent,
-             secType:s.secType, budget:(req.maxTokens || 400) };
-  });
-  if (doOverall && overallTa && overallTemplate) {
-    jobs.push({
-      key: 'overall', ta: overallTa, templateDraft: overallTemplate, secType: 'overall', budget: 400,
-      // Independent of the other tasks by design — it orients rather than recaps, so it
-      // needs no section text and there is no ordering dependency inside the batch.
-      instruction: 'Write the opening executive summary (3-4 sentences) for a public involvement progress '
-        + 'report for project "' + ((proj0 && proj0.name) || 'this project') + '" ('
-        + ((proj0 && proj0.pid) || '') + '). '
-        + 'Orient the reader: what the project is and where it stands, the single most consequential '
-        + 'development of the period, and what needs attention or a decision. Do NOT recap the other '
-        + 'sections in this response, and do NOT restate the reporting date range or the counts that '
-        + 'appear in the tables. Project facts: ' + overallTemplate
-    });
-  }
-
-  // Keep the progress bar honest — the overall summary is skipped when there
-  // isn't enough project data for a meaningful draft.
-  total = jobs.length;
-  if (!total) { if (allBtn) { allBtn.disabled = false; allBtn.textContent = '✦ AI: Draft all sections'; } if (bar) bar.style.display = 'none'; showToast('Not enough data yet to draft sections.', 'warn', 3000); return; }
-
-  var batchPrompt = 'You are drafting several sections of ONE public involvement progress report.\n'
-    + 'Below are ' + jobs.length + ' independent writing tasks, each with its own instructions and facts.\n'
-    + 'Complete every task. Treat each strictly on its own facts — do not carry figures between tasks.\n\n'
-    + jobs.map(function(j){ return '=== TASK ' + j.key + ' ===\n' + j.instruction; }).join('\n\n')
-    + '\n\nWrite each narrative at the FULL length its task asks for, exactly as you would if it were the '
-    + 'only task you had been given. Do not abbreviate, compress or summarise more tightly because several '
-    + 'tasks share this response.'
-    + '\n\nReturn ONLY a JSON object mapping each task id to its finished narrative text, with no other '
-    + 'commentary and no markdown fences. Example: {"' + jobs[0].key + '": "The project team ..."}';
-
-  // Give the batch the SUM of what each section would get on its own, plus room for
-  // the JSON scaffolding — otherwise the sections compete for a flat ceiling and the
-  // later ones come out clipped. Output tokens cost the same batched or not (the
-  // saving is on the shared input context), so there's no reason to be stingy here.
-  var batchMaxTokens = Math.min(16000, 600 + jobs.reduce(function(t,j){ return t + (j.budget||400); }, 0));
-  var applied = false;
-  var raw = await _claudeNarrative(_claudeSectionSystemPrompt(), batchPrompt, batchMaxTokens);
-  if (!raw) console.warn('AI draft-all: no response from Claude — falling back to template text.');
-  if (raw) {
-    try {
-      var txt = String(raw).trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
-      var first = txt.indexOf('{'), last = txt.lastIndexOf('}');
-      if (first >= 0 && last > first) txt = txt.slice(first, last+1);
-      var parsed = JSON.parse(txt);
-      var hits = 0, missed = [];
-      jobs.forEach(function(j) {
-        var v = parsed[j.key];
-        if (typeof v === 'string' && v.trim()) { j.ta.value = v.trim(); hits++; }
-        else { if (j.templateDraft) j.ta.value = j.templateDraft; missed.push(j.secType); }
-        progress();
-      });
-      applied = hits > 0;   // treat a parse that filled nothing as a failure
-      // A section the model skipped falls back to raw facts text, which reads like
-      // a data dump rather than a narrative — say so instead of leaving it looking
-      // like a bad AI draft.
-      if (applied && missed.length) {
-        showToast(missed.length + ' section' + (missed.length!==1?'s':'') + ' came back without a narrative and show raw facts — use the section’s own AI Draft button to retry.', 'warn', 6000);
+  // 4 at a time: enough to keep a twelve-section report quick, few enough not
+  // to trip a rate limit and fail half the report at once.
+  var failed = [];
+  await _mapLimit(jobs, 4, function(j) {
+    var call = j.kind === 'overall'
+      ? _overallDraftCall(j.templateDraft)
+      : _sectionDraftCall(j.secType, j.templateDraft);
+    return call.then(function(narrative) {
+      if (narrative) { j.ta.value = narrative; }
+      else {
+        // Template text is raw facts, not prose. Writing it silently looks
+        // exactly like a weak AI draft, which makes a failed call impossible
+        // to spot — so it is named below.
+        if (j.templateDraft) j.ta.value = j.templateDraft;
+        failed.push(j.secType);
       }
-    } catch(e) {
-      console.warn('AI draft-all: could not parse the batched JSON reply — retrying per-section.', e.message);
-      console.warn('AI draft-all: raw reply was:', String(raw).slice(0, 2000));
-    }
-  }
-
-  // Only retry per-section if we actually got a response we couldn't use. If the
-  // call itself failed (bad key, network, rate limit) _claudeNarrative already
-  // surfaced the error — firing N more doomed calls would just spam the user.
-  if (!applied && raw) {
-    // Fallback: the original one-call-per-section path.
-    done = 0;
-    if (barInner) barInner.style.width = '0%';
-    await Promise.all(jobs.map(function(j) {
-      return _claudeNarrative(_claudeSystemPrompt(), j.instruction, j.secType==='auto-concerns'?600:undefined)
-        .then(function(narrative) {
-          if (narrative) j.ta.value = narrative;
-          else if (j.templateDraft) j.ta.value = j.templateDraft;
-          progress();
-        }).catch(function(){ progress(); });
-    }));
-  } else if (!applied) {
-    // The call produced nothing usable. Fill the non-AI template text so the user
-    // still has content, but SAY SO — silently writing template text looks
-    // identical to a weak AI draft, which makes a failed call impossible to spot.
-    jobs.forEach(function(j){ if (j.templateDraft) j.ta.value = j.templateDraft; progress(); });
-    showToast('AI drafting did not run — the sections below are auto-generated template text, not AI prose. '
-      + 'Check the browser console (F12) for the error, then try again.', 'error', 9000);
-  }
+      progress();
+    }).catch(function(e) {
+      console.warn('AI draft-all: ' + j.secType + ' failed —', e && e.message);
+      if (j.templateDraft) j.ta.value = j.templateDraft;
+      failed.push(j.secType);
+      progress();
+    });
+  });
 
   if (allBtn) { allBtn.disabled = false; allBtn.textContent = '✦ AI: Draft all sections'; }
-  showToast('All section drafts generated', 'success', 3000);
+  if (failed.length === total) {
+    showToast('AI drafting did not run — the sections below are auto-generated template text, not AI prose. '
+      + 'Check the browser console (F12) for the error, then try again.', 'error', 9000);
+  } else if (failed.length) {
+    showToast(failed.length + ' section' + (failed.length!==1?'s':'') + ' came back without a narrative and '
+      + 'show raw facts — use the section’s own AI Draft button to retry.', 'warn', 6000);
+  } else if (skipped.length) {
+    showToast('Drafted ' + total + ' section' + (total!==1?'s':'') + '. ' + skipped.length
+      + ' skipped — not enough data yet.', 'info', 5000);
+  } else {
+    showToast('All section drafts generated', 'success', 3000);
+  }
   setTimeout(function() { if (bar) bar.style.display = 'none'; }, 4000);
   renderLivePreview();
 }

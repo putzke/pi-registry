@@ -209,6 +209,17 @@
     .upcoming-due { font-size: 12px; color: #9ca3af; white-space: nowrap; }
     .due-soon { color: #b45309; font-weight: 600; }
 
+    /* ── Coming Up list ───────────────────────────────────────────────── */
+    .up-tag { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+              white-space: nowrap; flex-shrink: 0; min-width: 92px; }
+    .up-tag-event { color: #1d4ed8; }
+    .up-tag-deliverable { color: #166534; }
+    .up-tag-commitment { color: #1d7f9e; }
+    .up-tag-comment { color: #7c3aed; }
+    .up-when { font-size: 11.5px; color: #b45309; font-weight: 600; white-space: nowrap; }
+    .up-more { font-size: 12px; color: #9ca3af; padding-top: 10px; }
+    .sched-note { color: #9ca3af; }
+
     /* ── Date range bar ───────────────────────────────────────────────── */
     .date-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; padding: 14px 16px; background: #f8f9fc; border-radius: 8px; border: 1px solid #e5e7eb; }
     .date-bar label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; }
@@ -603,7 +614,7 @@ async function bootApp() {
     const ids = access.map(r => r.project_id).join(',');
     const [projects, deliverables, clientSummaries, sharedReports] = await Promise.all([
       sbFetch(`pi_projects?id=in.(${ids})&select=id,name,pid,client,phase,status,start_date,end_date,nepa_classification,nepa_stage&order=name.asc`),
-      sbFetch(`pi_deliverables?project_id=in.(${ids})&select=id,project_id,title,deliverable_type,status,progress,contracted_qty,delivered_count,due_date,milestone_end&order=due_date.asc.nullslast`),
+      sbFetch(`pi_deliverables?project_id=in.(${ids})&select=id,project_id,title,deliverable_type,scope_type,freq,status,progress,contracted_qty,delivered_count,due_date,milestone_start,milestone_end&order=due_date.asc.nullslast`),
       sbFetch(`pi_client_summaries?project_id=in.(${ids})&select=id,project_id,content_recent,content_full,period_start,period_end,published_at,published_by&order=published_at.desc`),
       sbFetch(`pi_report_archive?project_id=in.(${ids})&client_visible=eq.true&select=id,project_id,report_num,report_title,report_subtitle,period_start,period_end,overall_summary,sections,snapshot,archived_at&order=archived_at.desc`)
     ]);
@@ -638,7 +649,7 @@ async function bootFromToken(token) {
     const projId = rows[0].project_id;
     const [projects, deliverables, clientSummaries, sharedReports] = await Promise.all([
       sbFetch(`pi_projects?id=eq.${projId}&select=id,name,pid,client,phase,status,start_date,end_date,nepa_classification,nepa_stage`),
-      sbFetch(`pi_deliverables?project_id=eq.${projId}&select=id,project_id,title,deliverable_type,status,progress,contracted_qty,delivered_count,due_date,milestone_end&order=due_date.asc.nullslast`),
+      sbFetch(`pi_deliverables?project_id=eq.${projId}&select=id,project_id,title,deliverable_type,scope_type,freq,status,progress,contracted_qty,delivered_count,due_date,milestone_start,milestone_end&order=due_date.asc.nullslast`),
       sbFetch(`pi_client_summaries?project_id=eq.${projId}&select=id,project_id,content_recent,content_full,period_start,period_end,published_at,published_by&order=published_at.desc`),
       sbFetch(`pi_report_archive?project_id=eq.${projId}&client_visible=eq.true&select=id,project_id,report_num,report_title,report_subtitle,period_start,period_end,overall_summary,sections,snapshot,archived_at&order=archived_at.desc`)
     ]);
@@ -861,12 +872,6 @@ async function renderOverview() {
   const doneD  = projDevs.filter(d => isComplete(d.status)).length;
   const pctD   = totalD ? Math.round(doneD / totalD * 100) : 0;
 
-  const today = isoDate(new Date());
-  const upcoming = projDevs
-    .filter(d => !isComplete(d.status) && (d.due_date || d.milestone_end))
-    .sort((a,b) => (a.due_date||a.milestone_end) < (b.due_date||b.milestone_end) ? -1 : 1)
-    .slice(0, 5);
-
   setContent(`${projCardsGrid()}${projBanner()}
     <div id="ov-attention"></div>
     <div class="stat-row">
@@ -887,19 +892,9 @@ async function renderOverview() {
       <div class="card-title">Engagement Activity — Last 8 Weeks</div>
       <div class="loading-state" style="padding:34px">Loading&hellip;</div>
     </div>
-    <div class="card">
-      <div class="card-title">Upcoming Deadlines</div>
-      ${upcoming.length ? `<ul class="upcoming-list">${upcoming.map(d => {
-        const due = d.due_date || d.milestone_end;
-        const daysLeft = Math.ceil((new Date(due+'T12:00:00') - new Date()) / 86400000);
-        const dueCls = daysLeft <= 14 ? ' due-soon' : '';
-        return `<li>
-          <span class="upcoming-title">${esc(d.title||d.deliverable_type||'—')}</span>
-          ${statusBadge(d.status)}
-          <span class="upcoming-due${dueCls}">${fmt(due)}</span>
-        </li>`;
-      }).join('')}</ul>`
-      : '<div class="empty-state">No upcoming deadlines.</div>'}
+    <div class="card" id="ov-coming">
+      <div class="card-title">Coming Up &mdash; Next 60 Days</div>
+      <div class="loading-state" style="padding:24px">Loading&hellip;</div>
     </div>
     <div class="card" id="ov-activity"><div class="loading-state" style="padding:24px">Loading recent activity&hellip;</div></div>`);
 
@@ -912,7 +907,7 @@ async function renderOverview() {
       sbFetch(`pi_meetings?project_id=eq.${_projId}&select=id,meeting_date,title,meeting_type&order=meeting_date.desc`),
       sbFetch(`pi_interactions?project_id=eq.${_projId}&select=id,interaction_date,channel,subject,summary&order=interaction_date.desc&limit=5`),
       sbFetch(`pi_commitments?project_id=eq.${_projId}&select=id,commitment,due_date,status`),
-      sbFetch(`pi_comment_periods?project_id=eq.${_projId}&select=id,title,status,end_date`),
+      sbFetch(`pi_comment_periods?project_id=eq.${_projId}&select=id,title,status,start_date,end_date`),
       sbFetch(`pi_interactions?project_id=eq.${_projId}&interaction_date=gte.${weeks[0].start}&interaction_date=lte.${weeks[weeks.length-1].end}&select=interaction_date`)
     ]);
     if (projAtFetch !== _projId) return;
@@ -942,11 +937,15 @@ async function renderOverview() {
     commitments.filter(c => !isComplete(c.status) && c.due_date && c.due_date < today)
       .forEach(c => attnItems.push({ dot: 'red', tag: 'Commitment', text: clip(c.commitment || 'Untitled commitment', 90) + ' — past due' }));
 
+    const attnPeriodIds = new Set();
     commentPeriods.filter(p => {
         const sl = (p.status||'').toLowerCase();
         return (sl.includes('open')||sl.includes('active')) && p.end_date && p.end_date >= today && p.end_date <= in14;
       })
-      .forEach(p => attnItems.push({ dot: 'blue', tag: 'Comment Period', text: `"${p.title || 'Untitled'}" closes ${fmt(p.end_date)}` }));
+      .forEach(p => {
+        attnPeriodIds.add(String(p.id));
+        attnItems.push({ dot: 'blue', tag: 'Comment Period', text: `"${p.title || 'Untitled'}" closes ${fmt(p.end_date)}` });
+      });
 
     const attnEl = t('ov-attention');
     if (attnEl && attnItems.length) {
@@ -961,6 +960,73 @@ async function renderOverview() {
           </li>`).join('')}
         </ul>
       </div>`;
+    }
+
+    // ── Coming Up ────────────────────────────────────────────────────────
+    // This card used to be "Upcoming Deadlines": every incomplete deliverable
+    // sorted by due_date. But a due date only means something for a MILESTONE
+    // deliverable. A `recurring` one (freq 'Bi-weekly', bounded by "Start of
+    // construction"/"End of construction") and a `fixed` one (3 newsletters, no
+    // cadence) have no deadline — their stored date is just the end of the
+    // contract window. On a construction project most PI deliverables are one of
+    // those two, so the card collapsed into the project end date repeated N
+    // times, and it got worse as milestones were completed.
+    //
+    // It is now a genuine look-ahead, and the only thing on this page that faces
+    // forward — Recent Activity, the trend chart and Heads Up are all backward
+    // or exception-based. Recurring and fixed deliverables are excluded BY KIND
+    // (devKind), so the pile-up cannot come back; their real story is
+    // delivered-of-contracted, which the Deliverables tab now tells properly.
+    const in60 = isoDate(new Date(Date.now() + 60*86400000));
+    const coming = [];
+
+    meetings.filter(m => m.meeting_date && m.meeting_date >= today && m.meeting_date <= in60)
+      .forEach(m => coming.push({ date: m.meeting_date, kind: 'event', tag: 'Event',
+                                  text: m.title || m.meeting_type || 'Scheduled event' }));
+
+    projDevs.filter(d => !isComplete(d.status) && devKind(d) === 'milestone'
+                      && d.due_date && d.due_date >= today && d.due_date <= in60)
+      .forEach(d => coming.push({ date: d.due_date, kind: 'deliverable', tag: 'Deliverable',
+                                  text: d.title || d.deliverable_type || 'Deliverable' }));
+
+    // Past-due commitments are Heads Up's job — this card is the schedule, not
+    // the exception list.
+    commitments.filter(c => !isComplete(c.status) && c.due_date
+                         && c.due_date >= today && c.due_date <= in60)
+      .forEach(c => coming.push({ date: c.due_date, kind: 'commitment', tag: 'Commitment',
+                                  text: clip(c.commitment || 'Commitment', 90) }));
+
+    commentPeriods.forEach(p => {
+      const name = p.title || 'Untitled';
+      if (p.start_date && p.start_date >= today && p.start_date <= in60) {
+        coming.push({ date: p.start_date, kind: 'comment', tag: 'Comment Period',
+                      text: `\u201c${name}\u201d opens` });
+      }
+      // Skip a closing date Heads Up has already named, or the same line prints
+      // twice on one screen and reads like a bug.
+      if (p.end_date && p.end_date >= today && p.end_date <= in60
+          && !attnPeriodIds.has(String(p.id))) {
+        coming.push({ date: p.end_date, kind: 'comment', tag: 'Comment Period',
+                      text: `\u201c${name}\u201d closes` });
+      }
+    });
+
+    coming.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+    const SHOWN = 8;
+    const comingEl = t('ov-coming');
+    if (comingEl) {
+      comingEl.innerHTML = `<div class="card-title">Coming Up &mdash; Next 60 Days</div>`
+        + (coming.length
+          ? `<ul class="upcoming-list">${coming.slice(0, SHOWN).map(c => `
+              <li>
+                <span class="up-tag up-tag-${c.kind}">${esc(c.tag)}</span>
+                <span class="upcoming-title">${esc(c.text)}</span>
+                <span class="upcoming-due">${fmt(c.date)}</span>
+                ${relWhen(c.date) ? `<span class="up-when">${esc(relWhen(c.date))}</span>` : ''}
+              </li>`).join('')}</ul>`
+            + (coming.length > SHOWN
+              ? `<div class="up-more">+${coming.length - SHOWN} more in the next 60 days</div>` : '')
+          : '<div class="empty-state">Nothing scheduled in the next 60 days.</div>');
     }
 
     // Recent activity merged list
@@ -1141,7 +1207,7 @@ function renderDeliverables() {
         <td>${esc(d.deliverable_type||'—')}</td>
         <td>${statusBadge(d.status)}</td>
         <td>${progCell(d)}</td>
-        <td style="white-space:nowrap">${fmt(d.due_date||d.milestone_end)}</td>
+        <td>${devSchedule(d)}</td>
       </tr>`).join('')
     : '<tr><td colspan="5" class="empty-state">No deliverables on record yet.</td></tr>';
 
@@ -1149,7 +1215,7 @@ function renderDeliverables() {
     <div class="card">
       <div class="card-title">Deliverable Progress</div>
       <div class="tbl-wrap"><table>
-        <thead><tr><th>Deliverable</th><th>Type</th><th>Status</th><th>Progress</th><th>Due Date</th></tr></thead>
+        <thead><tr><th>Deliverable</th><th>Type</th><th>Status</th><th>Progress</th><th>Schedule</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
     </div>`);
@@ -1524,6 +1590,60 @@ function tribalBadge(s) {
 // contracted; otherwise fall back to the manual progress field. Without this the
 // portal showed 0% for deliverables the report showed as 100% (e.g. 1 of 1
 // delivered but no manual progress value set).
+// A deliverable's due date only means something for a MILESTONE.
+//
+// pi_deliverables.scope_type has three values and they are not interchangeable:
+//   milestone — one dated thing (pre-construction open house, closeout report)
+//   recurring — a cadence (freq 'Bi-weekly', bounded by milestone_start/_end,
+//               which are free TEXT like "End of construction")
+//   fixed     — a fixed quantity with no cadence (3 newsletters)
+// Only the first has a deadline. The other two carry the end of the contract
+// window in due_date, which is why sorting every deliverable by that date piled
+// them all onto one meaningless day.
+//
+// Older rows predate scope_type, so the shape of the record is used instead —
+// never guessed silently into "milestone", which is the one kind that would put
+// a fake deadline back on the client's screen.
+function devKind(d) {
+  const st = String(d.scope_type || '').toLowerCase().trim();
+  if (st === 'milestone' || st === 'recurring' || st === 'fixed') return st;
+  if (String(d.freq || '').trim()) return 'recurring';
+  if (parseInt(d.contracted_qty, 10) > 1) return 'fixed';
+  return 'milestone';
+}
+
+// What the Deliverables table prints where a due date used to go. A recurring
+// deliverable gets its cadence and window; a fixed one gets its contracted
+// count (the Progress column already carries delivered-of-contracted); only a
+// milestone gets a date. milestone_end is TEXT, so it is printed as written —
+// fmt() would render "End of construction" as an em dash and lose it.
+function devSchedule(d) {
+  const kind = devKind(d);
+  if (kind === 'recurring') {
+    const freq = String(d.freq || '').trim() || 'Recurring';
+    const win  = String(d.milestone_end || '').trim();
+    return `${esc(freq)}${win ? ` <span class="sched-note">through ${esc(win)}</span>` : ''}`;
+  }
+  if (kind === 'fixed') {
+    const n = parseInt(d.contracted_qty, 10);
+    if (n > 0) return `${n} ${n === 1 ? 'issue' : 'issues'} <span class="sched-note">contracted</span>`;
+  }
+  if (d.due_date) return fmt(d.due_date);
+  const me = String(d.milestone_end || '').trim();
+  return me ? esc(me) : '&mdash;';
+}
+
+// A short relative label for anything close enough to act on. Only within two
+// weeks — "in 47 days" is noise next to the date itself.
+function relWhen(iso) {
+  if (!iso) return '';
+  const days = Math.round((new Date(iso + 'T12:00:00') - new Date(isoDate(new Date()) + 'T12:00:00')) / 86400000);
+  if (days < 0 || days > 14) return '';
+  if (days === 0) return 'today';
+  if (days === 1) return 'tomorrow';
+  return `in ${days} days`;
+}
+
 function progCell(d) {
   const contracted = parseInt(d.contracted_qty, 10);
   let pct;

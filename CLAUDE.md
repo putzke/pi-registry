@@ -1077,6 +1077,48 @@ columns queried).
    `projAtFetch !== _projId` guard bails out if the user switches project
    mid-flight.
 
+### Portal Overview: "Coming Up", not "Upcoming Deadlines" (Aug 2026)
+The card sorted EVERY incomplete deliverable by `due_date`. But
+**`pi_deliverables.scope_type` has three values and only one has a deadline**:
+- `milestone` — one dated thing (pre-con open house, closeout report).
+- `recurring` — a cadence (`freq` 'Bi-weekly', bounded by `milestone_start`/
+  `milestone_end`, which are free **TEXT** like "End of construction").
+- `fixed` — a quantity with no cadence (3 newsletters).
+
+The last two carry the end of the CONTRACT WINDOW in `due_date`. On a
+construction project most PI deliverables are one of those two, so the card
+collapsed into the project end date printed three times — and got worse as
+milestones completed. Seen live on PIN 15905: three rows, all "Oct 16, 2026",
+against an Oct 31 project end.
+
+**`devKind(d)`** is the rule. A declared `scope_type` wins; older rows (the demo
+seed writes none) are inferred from the record's shape — a `freq` means
+recurring, `contracted_qty > 1` means fixed — and it never guesses into
+`milestone`, the one kind that would put a fake deadline back on a client's
+screen.
+
+- **Overview → "Coming Up — Next 60 Days"**, built in the async block after the
+  fetches land (`#ov-coming`). Merges scheduled **events**, **milestone**
+  deliverables, **commitments coming due** and **comment period** open/close
+  dates. It is the ONLY forward-facing thing in the portal — Recent Activity and
+  the trend chart look back, Heads Up is exception-based.
+- **Division of labour with Heads Up:** Heads Up = wrong or urgent (overdue,
+  high-priority, closing within 14 days). Coming Up = the neutral schedule.
+  Past-due commitments are therefore excluded here, and a closing comment period
+  Heads Up already named is skipped (`attnPeriodIds`) so one screen never prints
+  the same line twice.
+- **Deliverables tab: the "Due Date" column became "Schedule"** (`devSchedule`).
+  Recurring shows cadence + window, fixed shows the contracted count (Progress
+  already carries delivered-of-contracted), milestone still shows its date.
+  `milestone_end` is printed **verbatim** — it is text, and `fmt()` rendered
+  "End of construction" as an em dash and silently lost it.
+- **Both boot fetches** now select `scope_type`, `freq`, `milestone_start`
+  (and comment periods select `start_date`) — remember there are always TWO
+  deliverable fetches to update, `bootApp` and `bootFromToken`.
+- Guarded by `test/tests/35-portal-coming-up.test.js` (33 checks). Its recurring
+  and fixed fixtures sit INSIDE the 60-day window on purpose, so their kind is
+  the only thing keeping them out.
+
 ### Demo dataset — `sql/2026-07-26_udot_conference_demo_seed.sql`
 Three realistic Utah projects with ~63 stakeholders, ~586 interactions,
 deliverables, events, issues, commitments, a comment period with 23 public

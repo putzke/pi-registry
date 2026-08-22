@@ -10267,6 +10267,19 @@ var TABLE_ELIGIBLE_TYPES = ['auto-concerns','auto-intlog','auto-del','auto-event
 // interactions from BEFORE pstart. Labelling those with the period claimed a
 // window over them that was never applied.
 var PERIOD_SCOPED_TYPES = ['auto-concerns'];
+
+// The report's prose voice — ONE declaration, shared by the overall summary and
+// every section narrative (which are the AI-drafted paragraphs). They had
+// drifted apart: the overall summary printed 13px upright #222 while every
+// section summary printed 12px ITALIC #444, so the same writer's prose changed
+// typeface halfway down the page and the AI-drafted sections read as a caption
+// rather than as the report's own text. The containers still differ — the
+// overall summary sits in a tinted box, a section narrative behind a left rule —
+// but the type does not. Mirrored in client-portal.html's
+// renderArchivedReportHTML() and, as Word run properties, in exportPIDocx().
+var RPT_PROSE_CSS   = 'font-size:13px;color:#222;line-height:1.6';
+var RPT_OVERALL_CSS = 'background:#f0f4f8;border-left:3px solid #4a9be8;padding:10px 14px;margin-bottom:18px;' + RPT_PROSE_CSS;
+var RPT_SECSUM_CSS  = 'border-left:2px solid #9ab;padding-left:10px;margin-bottom:8px;white-space:pre-wrap;' + RPT_PROSE_CSS;
 function _periodLabel(secType, pstart, pend) {
   if (PERIOD_SCOPED_TYPES.indexOf(secType) < 0) return '';
   if (!pstart || !pend) return '';
@@ -10618,8 +10631,18 @@ function _sectionAIRequest(secType, templateDraft) {
       // in-period interaction's own summary text — so ask for real substance, not
       // a 3-sentence stat recap. This section also OWNS the reporting date range;
       // the executive summary is told not to repeat it.
-      userContent: 'Write the narrative (5-8 sentences) for the "Recent public concerns and inquiries" '
+      //
+      // The LENGTH is a hard word budget, not a sentence count (Aug 2026). Asked
+      // for "5-8 sentences" the model complied on the count and blew past the
+      // intent — 265 words in six sentences of 40-plus words each, a wall of
+      // prose above a table that already carries the detail. A sentence count
+      // cannot constrain that; it says nothing about how long a sentence may be.
+      // 175 words is a third shorter with the same content: the instruction
+      // below cuts redundancy and per-item elaboration, NOT topics — dropping a
+      // theme would under-report public concern, which is a compliance figure.
+      userContent: 'Write the narrative for the "Recent public concerns and inquiries" '
         + 'section of a public involvement progress report.\n\n'
+        + 'LENGTH: about 175 words, and no more than 190 words. This is a hard limit.\n\n'
         + 'Open by stating the reporting period explicitly (this section is where the date range is '
         + 'reported). Then give a substantive account of what stakeholders actually raised, drawing on the '
         + 'content of the individual interaction summaries below — the specific concerns, questions, '
@@ -10627,10 +10650,15 @@ function _sectionAIRequest(secType, templateDraft) {
         + 'together and give the more consequential items more room than routine ones. Weave in the '
         + 'relevant counts (total interactions, primary contact channels, and how many still require '
         + 'follow-up) as supporting detail rather than as the main point.\n\n'
+        + 'Cover every distinct theme, but write tightly to stay inside the word budget: state each '
+        + 'point once, keep routine items to a clause rather than a sentence, and cut throat-clearing '
+        + 'and restatement. Losing a theme is worse than losing a phrase — compress, do not omit.\n\n'
         + 'Do not produce a list or go interaction-by-interaction, and do not name individual '
         + 'stakeholders — the data table below the narrative already carries those details. '
         + 'Base it strictly on these facts:\n\n' + facts,
-      maxTokens: 900
+      // ~190 words is ~260 tokens; the headroom is so a slight overrun ends on a
+      // finished sentence rather than being clipped mid-word by the ceiling.
+      maxTokens: 450
     };
   }
   return {
@@ -12079,7 +12107,7 @@ function renderLivePreview() {
 
   // Overall summary
   if (overall.trim()) {
-    html += '<div style="background:#f0f4f8;border-left:3px solid #4a9be8;padding:10px 14px;margin-bottom:18px;font-size:13px;color:#222;line-height:1.6">' + escHtml(overall) + '</div>';
+    html += '<div style="' + RPT_OVERALL_CSS + '">' + escHtml(overall) + '</div>';
   }
 
   // Sections
@@ -12092,7 +12120,7 @@ function renderLivePreview() {
 
     // Narrative first — it introduces the data block that follows.
     if (sec.summary) {
-      html += '<div style="font-size:12px;color:#444;font-style:italic;margin-bottom:8px;border-left:2px solid #9ab;padding-left:10px;line-height:1.6">' + escHtml(sec.summary) + '</div>';
+      html += '<div style="' + RPT_SECSUM_CSS + '">' + escHtml(sec.summary) + '</div>';
     } else if (isAuto) {
       html += '<div style="font-size:11px;color:#bbb;font-style:italic;margin-bottom:6px">Section narrative will appear here after AI draft or manual entry.</div>';
     }
@@ -12861,7 +12889,7 @@ function _buildArchivedPreviewHTML(rec, proj) {
 
   // Overall summary
   if ((rec.overallSummary||'').trim()) {
-    html += '<div style="background:#f0f4f8;border-left:3px solid #4a9be8;padding:10px 14px;margin-bottom:18px;font-size:13px;color:#222;line-height:1.6">'+escHtml(rec.overallSummary)+'</div>';
+    html += '<div style="'+RPT_OVERALL_CSS+'">'+escHtml(rec.overallSummary)+'</div>';
   }
 
   // Sections
@@ -12871,7 +12899,7 @@ function _buildArchivedPreviewHTML(rec, proj) {
     html += '<div style="font-size:13px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #cdd4dc;padding-bottom:4px;margin-bottom:10px">'+escHtml(sec.title||'')+'</div>';
     // Narrative first — it introduces the data block that follows.
     if (sec.summary) {
-      html += '<div style="font-size:12px;color:#444;font-style:italic;margin-bottom:8px;border-left:2px solid #9ab;padding-left:10px;line-height:1.6">'+escHtml(sec.summary)+'</div>';
+      html += '<div style="'+RPT_SECSUM_CSS+'">'+escHtml(sec.summary)+'</div>';
     } else if (isAuto && !sec.tableHtml) {
       html += '<div style="font-size:11px;color:#bbb;font-style:italic;margin-bottom:6px">No narrative captured for this section.</div>';
     }
@@ -13646,7 +13674,10 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
     // Section narrative prints ABOVE the data block — the prose introduces the
     // table/bullets that follow rather than trailing them.
     if(sec.summary&&sec.summary.trim()){
-      xml+='<w:p><w:pPr><w:spacing w:before="80" w:after="80" w:line="276" w:lineRule="auto"/>'+italicGrayRpr+'</w:pPr><w:r>'+italicGrayRpr+'<w:t xml:space="preserve">'+escXml(sec.summary.trim())+'</w:t></w:r></w:p>';
+      // bodyRpr, NOT italicGrayRpr — this is the report's prose, the same voice
+      // as the overall summary above, and it printed two points smaller and
+      // italic, which read as a caption on someone else's table.
+      xml+='<w:p><w:pPr><w:spacing w:before="80" w:after="80" w:line="276" w:lineRule="auto"/>'+bodyRpr+'</w:pPr><w:r>'+bodyRpr+'<w:t xml:space="preserve">'+escXml(sec.summary.trim())+'</w:t></w:r></w:p>';
       xml+=spacer();
     }
 

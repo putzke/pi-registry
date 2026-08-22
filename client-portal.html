@@ -1660,7 +1660,9 @@ function renderArchivedReportHTML(rec) {
     }
     // Narrative first — it introduces the data block that follows.
     if (sec.summary) {
-      html += `<div style="font-size:13px;color:#333;line-height:1.6;white-space:pre-wrap;margin-bottom:8px">${esc(sec.summary)}</div>`;
+      // Same type as the overall summary above — see RPT_PROSE_CSS in
+      // index.html; a section narrative is the report's prose, not a caption.
+      html += `<div style="border-left:2px solid #9ab;padding-left:10px;margin-bottom:8px;white-space:pre-wrap;font-size:13px;color:#222;line-height:1.6">${esc(sec.summary)}</div>`;
     } else if (isAuto && !sec.tableHtml) {
       html += `<div style="font-size:12px;color:#9ca3af;font-style:italic">See the Engagement, Deliverables, and Issues tabs for current detail on this section.</div>`;
     }

@@ -447,6 +447,44 @@ the report that was on screen when it was issued. Guarded by
 `test/tests/31-period-label.test.js`, which asserts both surfaces agree and that
 neither hand-rolls the string.
 
+### The report has ONE prose voice (`RPT_PROSE_CSS`, Aug 2026)
+The overall summary printed 13px upright #222; every section narrative — which
+is what the AI drafts — printed 12px **italic** #444. Same writer, same page,
+type changing halfway down, so the AI-drafted sections read as a caption on the
+table below them rather than as the report's own text. The `.docx` did the same
+thing in Word run properties: `bodyRpr` (Arial 10pt upright #3B3838) for the
+overall summary, `italicGrayRpr` (9pt italic #595959) for every section.
+
+`RPT_PROSE_CSS` is the single declaration; `RPT_OVERALL_CSS` and
+`RPT_SECSUM_CSS` append it to their own containers — the tinted box and the left
+rule stay, because sameness of TYPE was the point, not sameness of container.
+**Four surfaces carry this prose and all four must move together**: the live
+preview, `_buildArchivedPreviewHTML`, `client-portal.html`'s
+`renderArchivedReportHTML` (a fourth hand-written copy — the portal imports
+nothing), and `exportPIDocx` (now `bodyRpr`, not `italicGrayRpr`).
+`italicGrayRpr` is still correct for the things that ARE captions — the period
+label, the "interactions prior to…" note, the export footer. Guarded by
+`test/tests/32-report-prose.test.js`, which reads computed styles on the first
+two, unzips the generated `.docx` for the third, and diffs the portal's copy as
+text.
+
+### The concerns narrative is budgeted in WORDS, not sentences (Aug 2026)
+`_sectionAIRequest('auto-concerns')` asked for "5-8 sentences". The model
+complied on the count and blew past the intent — 265 words in six sentences of
+40-plus words each, a wall of prose above a table that already carries the
+detail. A sentence count cannot constrain length; it says nothing about how long
+a sentence may be. Now: **about 175 words, hard ceiling 190**, `maxTokens` 900 →
+450 (the headroom is so a slight overrun ends on a finished sentence instead of
+being clipped mid-word).
+
+**The cut must come out of elaboration, never out of topics.** The prompt says
+"compress, do not omit" and still requires every distinct theme, because how
+much public concern was raised is a compliance figure — a narrative that quietly
+drops a theme to hit a word count is a reporting error. "Draft all sections"
+reuses `_sectionAIRequest`, so both paths get the same instruction and budget;
+keep it that way or the batched copy comes out a different length from the
+per-section button's.
+
 ### Reports view tabs (S.rptTab)
 - **`'reports'`** — summary stats bar, distribution group checkboxes, 10 report-type cards
 - **`'pi-editor'`** — landing card with draft status + "Open editor" button (opens split-pane `openPIReport()`)

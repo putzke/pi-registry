@@ -485,6 +485,37 @@ reuses `_sectionAIRequest`, so both paths get the same instruction and budget;
 keep it that way or the batched copy comes out a different length from the
 per-section button's.
 
+### The UDOT logo lives in TWO places — update both (Aug 2026)
+Replaced Aug 2026 with the navy beehive mark (`UDOT_Logo_Blue.png`, 1000x258,
+transparent, kept in the repo root as the source of record). It is embedded
+twice and neither copy reads the other:
+- **`window._srUdotLogo`** (~line 498) — a data: URI, used by `_rptBrandHeader()`
+  for the HTML quick reports, the print package and the archived-report preview.
+- **`word/media/image2.png` inside `window._piDocxTemplateUdot`** — the .docx.
+  (`image3.png` in the same header is the Horizon COMPASS mark. Do not touch it.)
+
+A client can receive both from one project on the same day, so a swap applied to
+one and not the other ships two different UDOT logos under one firm's name. That
+is what `test/tests/36-brand-logo.test.js` guards: it asserts both copies are the
+**same bytes as the .png in the repo**, which survives a future logo change
+without needing to be rewritten.
+
+**`tools/swap-letterhead-logo.js`** does the .docx side —
+`node tools/swap-letterhead-logo.js udot <logo.png>` (`--dry-run` to preview).
+The data: URI is a plain base64 replace. **The .docx half is not just a byte
+swap:** `header1.xml` pins the image to an explicit `<wp:extent>` in EMU, so a
+replacement with a different aspect ratio gets stretched to the old box. The
+tool keeps the template's HEIGHT (523745 EMU / 0.57", which is what keeps the
+logo level with the COMPASS mark) and recomputes the width — 1615044 → 2030019
+EMU here, since the new mark is 3.88:1 against the old 3.08:1. It finds the part
+by following `header1.xml`'s first drawing through its relationship, never by
+file name (numbering differs across the three templates), and refuses a format
+change rather than producing a file Word will not open.
+
+Resolution: 1000px drawn at 2.22" is **450 DPI**, up from 600px at 1.77" (340).
+Upscaling the PNG would add pixels, not detail — only a higher-res original or
+the vector source would. `client-portal.html` carries no UDOT branding at all.
+
 ### The .docx letterhead is FIRST PAGE ONLY (`_firstPageHeaderOnly`, Aug 2026)
 Word needs two things together: the letterhead registered as the **first-page**
 header (`<w:headerReference w:type="first">`) AND `<w:titlePg/>` in the section

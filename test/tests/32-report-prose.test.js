@@ -10,8 +10,8 @@
 // Four surfaces carry this prose and all four must agree — the live preview,
 // the archived preview, the client portal's copy of the archived report, and
 // the .docx a client actually receives.
-const JSZip = (() => { try { return require('jszip'); } catch (e) { return null; } })();
-
+// JSZip comes from the PAGE — the app embeds it for its own .docx export and
+// the harness has no node-side zip library.
 module.exports = {
   name: 'report prose — one voice across preview, archive, portal and .docx',
   async run({ t }) {

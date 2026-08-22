@@ -8273,7 +8273,7 @@ function exportIssuesSummaryDocx(){
       var bodyIdx=docXml.indexOf('<w:body>');
       var beforeBody=docXml.substring(0,bodyIdx+8);
       var sectAndAfter=docXml.substring(sectIdx);
-      zip.file('word/document.xml',beforeBody+xml+sectAndAfter);
+      zip.file('word/document.xml',_firstPageHeaderOnly(beforeBody+xml+sectAndAfter));
       return zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
     });
   }).then(function(blob){
@@ -8416,7 +8416,7 @@ function exportIssueSingleDocx(issueId){
       var bodyIdx=docXml.indexOf('<w:body>');
       var beforeBody=docXml.substring(0,bodyIdx+8);
       var sectAndAfter=docXml.substring(sectIdx);
-      zip.file('word/document.xml',beforeBody+xml+sectAndAfter);
+      zip.file('word/document.xml',_firstPageHeaderOnly(beforeBody+xml+sectAndAfter));
       return zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
     });
   }).then(function(blob){
@@ -13442,6 +13442,43 @@ function buildDocx(proj,saved,periodInts,recipients,allStakes,dels,brand,recipie
   _buildDocxWithTemplate(proj,saved,periodInts,recipients,allStakes,dels,brand||'sunrise',recipientsByGroup||{});
 }
 
+// The letterhead belongs on page ONE, not on every page of a ten-page report.
+//
+// Word expresses that with a FIRST-page header plus <w:titlePg/> in the section
+// properties: the "first" header prints on page 1, and pages 2+ fall through to
+// the "default" header — which, once the letterhead is no longer registered as
+// the default, is simply absent. The Sunrise template was already authored this
+// way (headerReference w:type="first" + titlePg). The **UDOT and Sunrise Alt**
+// templates reference their letterhead as w:type="default" with no titlePg, so
+// the full graphic repeated at the top of every page.
+//
+// Page 1 is untouched: same header, same size, same top margin. Only pages 2+
+// change, and only by losing a graphic they should never have carried.
+//
+// FOOTERS are deliberately left alone. A page number or a firm line on every
+// page is correct, and the Sunrise template's default footer is there on
+// purpose — this function must never turn a repeating footer into a first-page
+// one. Idempotent, so it is safe to run over a template that already complies.
+function _firstPageHeaderOnly(docXmlStr){
+  return String(docXmlStr).replace(/<w:sectPr\b[\s\S]*?<\/w:sectPr>/g, function(sect){
+    var hasFirst = /<w:headerReference[^>]*w:type="first"/.test(sect);
+    sect = sect.replace(/<w:headerReference\b[^>]*w:type="default"[^>]*\/>/g, function(ref){
+      // A template carrying BOTH already has its first-page header; the default
+      // one is the copy that repeats, so drop it rather than end up with two.
+      return hasFirst ? '' : ref.replace('w:type="default"', 'w:type="first"');
+    });
+    // titlePg is what makes Word look for a first-page header at all — without
+    // it the "first" reference is ignored and NO header prints, anywhere.
+    // Schema order matters: it sits after <w:cols/> and before <w:docGrid/>.
+    if (!/<w:titlePg\s*\/>/.test(sect) && /<w:headerReference[^>]*w:type="first"/.test(sect)) {
+      if (/<w:docGrid\b/.test(sect))           sect = sect.replace(/<w:docGrid\b/, '<w:titlePg/><w:docGrid');
+      else if (/<w:cols\b[^>]*\/>/.test(sect)) sect = sect.replace(/(<w:cols\b[^>]*\/>)/, '$1<w:titlePg/>');
+      else                                     sect = sect.replace('</w:sectPr>', '<w:titlePg/></w:sectPr>');
+    }
+    return sect;
+  });
+}
+
 function _stripLetterheadFromZip(zip,docXmlStr){
   // Remove header/footer references from sectPr in document.xml
   var s=docXmlStr;
@@ -13496,7 +13533,7 @@ function _buildDocxWithTemplate(proj,saved,periodInts,recipients,allStakes,dels,
       var sectAndAfter=docXml.substring(sectIdx);
 
       // Inject report content
-      var finalDocXml=beforeBody+contentXML+sectAndAfter;
+      var finalDocXml=_firstPageHeaderOnly(beforeBody+contentXML+sectAndAfter);
       if(stripLH){
         zip=_stripLetterheadFromZip(zip,finalDocXml);
       } else {

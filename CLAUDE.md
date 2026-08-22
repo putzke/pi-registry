@@ -485,6 +485,40 @@ reuses `_sectionAIRequest`, so both paths get the same instruction and budget;
 keep it that way or the batched copy comes out a different length from the
 per-section button's.
 
+### The .docx letterhead is FIRST PAGE ONLY (`_firstPageHeaderOnly`, Aug 2026)
+Word needs two things together: the letterhead registered as the **first-page**
+header (`<w:headerReference w:type="first">`) AND `<w:titlePg/>` in the section
+properties. Without `titlePg` a "first" reference is ignored and **no** header
+prints anywhere — so the two must always be applied as a pair.
+
+The **Sunrise** template was authored correctly. **UDOT and Sunrise Alt** carried
+their letterhead as `w:type="default"` with no `titlePg`, so the full graphic
+repeated at the top of every page of a ten-page report — including the copies
+sent to clients. `_firstPageHeaderOnly(docXml)` rewrites the section properties
+at export time (it does not touch the embedded templates): converts a default
+header reference to `first`, drops it if a `first` one already exists, and
+inserts `titlePg` **in schema position** — after `<w:cols/>`, before
+`<w:docGrid/>`, or Word rejects the file. Idempotent, so it is safe over the
+template that already complies.
+
+- **FOOTERS are deliberately untouched.** A page number or firm line belongs on
+  every page; the Sunrise template's default footer is intentional. Never
+  generalise this helper to `footerReference`.
+- Applied by all three template-based exporters — `_buildDocxWithTemplate` (the
+  PI report) plus `exportIssuesSummaryDocx` / `exportIssueSingleDocx`, where it
+  is a no-op today and insurance against a template swap.
+- Letterhead **off** still strips everything: `_stripLetterheadFromZip` runs
+  after and removes the references, `titlePg` and the header part.
+- The HTML print package is a **separate, deliberate choice** — it repeats the
+  letterhead on every printed page (see `_openRptPopup`). Don't "fix" it to
+  match without asking.
+- Guarded by `test/tests/33-docx-first-page-header.test.js` (39 checks), which
+  exports a real file per brand and reads the section properties back out.
+  Verified independently with **python-docx**: before the fix Sunrise Alt and
+  UDOT report `different_first_page = False` with content in the every-page
+  header; after, `True` with content in the first-page header and an empty
+  every-page header, footers unchanged.
+
 ### Reports view tabs (S.rptTab)
 - **`'reports'`** — summary stats bar, distribution group checkboxes, 10 report-type cards
 - **`'pi-editor'`** — landing card with draft status + "Open editor" button (opens split-pane `openPIReport()`)

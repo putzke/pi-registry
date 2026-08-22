@@ -733,10 +733,29 @@ the capped generic prompt reaches no report narrative.
     + `.xlsx` dropdown. Report filtering matches these strings exactly.
   - **Interaction channels + direction** — the `f-ic` / `f-idr` selects in
     `index.html` are canonical; mirrored in the `.xlsx` template (sheet3).
+  - **Parcel status + acquisition type** — `PARCEL_STATUSES` in `index.html` is
+    canonical (6 values); mirrored as `PARCEL_STATUSES_IMP` / `PARCEL_ACQ_IMP`
+    in the importer and as the two dropdowns on the `.xlsx` **Parcel Import**
+    sheet. A template offering a status the importer would reject does not
+    error — `parcNormalizePick` silently falls back to "Not started" on every
+    row that used it.
   - Editing the `.xlsx` template = decode the base64 in `downloadTemplate()`
     (importer), edit the sheet XML, re-zip, re-base64. Verify all sheets survive
-    — the test asserts the entry count (19) precisely because a bad re-zip
-    silently drops sheets.
+    — the test asserts the entry count (**20**) precisely because a bad re-zip
+    silently drops sheets. Sheets: How to Use, Stakeholder Import, Interaction
+    Import, **Parcel Import** (sheet5, added Aug 2026), Legend & Defaults.
+    Adding a sheet means four parts, not one: the sheet XML, `xl/workbook.xml`,
+    `xl/_rels/workbook.xml.rels` and `[Content_Types].xml`. Validate the result
+    with **openpyxl** — LibreOffice is broken in this container and rejects even
+    a textbook-minimal .xlsx.
+  - **All three importer tabs offer the same download.** The Parcels tab shipped
+    without one (Aug 2026) — the wizard was complete and the workbook had no
+    parcel sheet to point at, so the tab looked half-built next to the other
+    two. `test/tests/06-shared-lists.test.js` now asserts the Parcels pane calls
+    `downloadTemplate()`, that every header on the Parcel Import sheet
+    auto-maps to a real field in `PARC_AUTO_MAP` (otherwise the template hands
+    the user columns the wizard leaves on "— ignore —"), and that the sheet's
+    two dropdowns match the app.
   - `normalizeType()` in the importer matches an exact canonical type first,
     then keyword rules, then falls back to `Other`. It used to return the raw
     input unchanged, which let `Nonprofit` or `Contracting` into the database as

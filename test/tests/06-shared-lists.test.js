@@ -108,8 +108,9 @@ module.exports = {
     const b64 = (imp.match(/const b64 = '([A-Za-z0-9+/=]+)';/) || [])[1];
     t.ok(b64, 'template base64 blob found');
     const { names, data } = unzip(Buffer.from(b64, 'base64'), 'xl/worksheets/sheet3.xml');
-    t.eq(names.length, 19, 'template still has all 19 zip entries');
+    t.eq(names.length, 20, 'template still has all 20 zip entries');
     t.ok(names.includes('xl/worksheets/sheet2.xml') && data, 'template sheets readable');
+    t.ok(names.includes('xl/worksheets/sheet5.xml'), 'including the Parcel Import sheet');
 
     const dropdowns = xml => [...xml.matchAll(/<formula1>"([^"]*)"<\/formula1>/g)]
       .map(m => m[1].replace(/&amp;/g, '&').split(','));
@@ -122,5 +123,47 @@ module.exports = {
     t.ok(has(s2, canon.support), '.xlsx support dropdown matches');
     t.ok(has(s3, canon.channel), '.xlsx channel dropdown matches the app');
     t.ok(has(s3, canon.dir),     '.xlsx direction dropdown matches the app');
+
+    // ── the Parcel Import sheet ─────────────────────────────────────────
+    // A fifth copy of two more lists. The importer normalises against its own
+    // constants, so a template offering a status the importer would reject
+    // silently becomes "Not started" on every row that used it.
+    const sheet5 = unzip(Buffer.from(b64, 'base64'), 'xl/worksheets/sheet5.xml').data.toString();
+    const s5 = dropdowns(sheet5);
+    const impStatuses = jsList(imp, /const PARCEL_STATUSES_IMP = (\[[\s\S]*?\]);/);
+    const impAcq      = jsList(imp, /const PARCEL_ACQ_IMP = (\[[\s\S]*?\]);/);
+    const appStatuses = jsList(idx, /const PARCEL_STATUSES = (\[[\s\S]*?\]);/);
+    t.ok(impStatuses && impStatuses.length, 'importer PARCEL_STATUSES_IMP found');
+    t.ok(impAcq && impAcq.length, 'importer PARCEL_ACQ_IMP found');
+    t.eq(sorted(impStatuses), sorted(appStatuses),
+         'importer parcel statuses match index.html PARCEL_STATUSES');
+    t.ok(has(s5, impStatuses), '.xlsx parcel-status dropdown matches');
+    t.ok(has(s5, impAcq),      '.xlsx acquisition-type dropdown matches');
+
+    // The header row is what the importer's auto-map reads, so it has to name
+    // fields the wizard actually offers.
+    const hdrs = [...sheet5.matchAll(/<c r="[A-Z]+4"[^>]*><v>([^<]*)<\/v><\/c>/g)].map(m => m[1]);
+    t.ok(hdrs.includes('ParcelNumber'), 'the sheet leads with the one required column');
+    ['SitusAddress','Latitude','Longitude','AcquisitionType','Status','NoticeDate','Notes',
+     'OwnerEmail','OwnerName'].forEach(h =>
+       t.ok(hdrs.includes(h), `the sheet offers ${h}`));
+
+    // Every header must auto-map to a real parcel field, or the template hands
+    // the user columns the wizard leaves on "— ignore —".
+    const parcAuto = imp.match(/const PARC_AUTO_MAP = \{([\s\S]*?)\};/);
+    t.ok(parcAuto, 'PARC_AUTO_MAP found');
+    const parcFields = [...imp.matchAll(/\{key:'(\w+)',\s*label:'[^']*'\}/g)].map(m => m[1]);
+    const autoKeys = [...parcAuto[1].matchAll(/'([^']+)'\s*:\s*'(\w+)'/g)];
+    hdrs.forEach(h => {
+      const lower = h.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+      const hit = autoKeys.some(([, k, v]) => lower.includes(k) && parcFields.includes(v));
+      t.ok(hit, `"${h}" auto-maps to a parcel field`);
+    });
+
+    // And the Parcels tab has to offer the download, or the sheet is unreachable.
+    const parcPane = imp.slice(imp.indexOf('id="parc-pane-1"'),
+                               imp.indexOf('id="parc-pane-2"'));
+    t.ok(/downloadTemplate\(\)/.test(parcPane),
+         'the Parcels tab offers the template download, like the other two tabs');
   },
 };

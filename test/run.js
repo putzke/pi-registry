@@ -43,12 +43,13 @@ class Assert {
 
   process.stdout.write('  applying migrations… ');
   // sql/ holds two kinds of file and only one of them is schema. A DATA script
-  // (the demo seed, or a scenario built for a manual walkthrough) must never be
-  // applied here: it runs before t.seed(), so its own project does not exist
-  // yet, and if it did it would rewrite the fixtures every other test asserts on.
-  const isData = f => /demo_seed|test_data/.test(f);
+  // must never be applied here: it runs before t.seed(), so its own project
+  // does not exist yet, and if it did it would rewrite the fixtures every other
+  // test asserts on. Scenario data lives in SUBFOLDERS (sql/sr154-report-test/),
+  // which the .sql filter skips on its own; the demo seed predates that
+  // convention and sits flat, so it is excluded by name.
   const migrations = fs.readdirSync(SQL)
-    .filter(f => f.endsWith('.sql') && !isData(f)).sort();
+    .filter(f => f.endsWith('.sql') && !/demo_seed/.test(f)).sort();
   for (const m of migrations) {
     // Migrations are additive against the live schema; several will already be
     // satisfied by test/schema.sql, which is fine — they're all idempotent.

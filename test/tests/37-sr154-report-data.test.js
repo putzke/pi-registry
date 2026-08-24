@@ -9,17 +9,23 @@
 // exists to make something happen between archives.
 const fs = require('fs'), path = require('path');
 
-// The file is authored as three blocks meant to be pasted one at a time, with
-// an archive step in between. Split on the block markers so the test can run
-// them in the same order a human would.
+// The scenario is five files meant to be pasted one at a time, with an archive
+// step in between. Read them in order so the test runs them exactly as a human
+// would — including the cleanup, which has to be safe to run first.
+const DIR = path.join(__dirname, '..', '..', 'sql', 'sr154-report-test');
+const FILES = {
+  'BLOCK 0': '00-cleanup.sql',
+  'BLOCK 1': '01-period-1.sql',
+  'BLOCK 2': '02-period-2.sql',
+  'BLOCK 3': '03-period-3.sql',
+  'Verify':  '04-verify.sql',
+};
 function blocks() {
-  const sql = fs.readFileSync(
-    path.join(__dirname, '..', '..', 'sql', '2026-08-22_sr154_report_test_data.sql'), 'utf8');
-  const marks = [...sql.matchAll(/^-- ═══ (BLOCK \d|Verify)/gm)].map(m => ({ i: m.index, n: m[1] }));
   const out = {};
-  marks.forEach((m, k) => {
-    out[m.n] = sql.slice(m.i, k + 1 < marks.length ? marks[k + 1].i : sql.length);
-  });
+  for (const [k, f] of Object.entries(FILES)) {
+    const p = path.join(DIR, f);
+    if (fs.existsSync(p)) out[k] = fs.readFileSync(p, 'utf8');
+  }
   return out;
 }
 
@@ -28,8 +34,15 @@ module.exports = {
   async run({ t }) {
     t.seed();
     const B = blocks();
-    ['BLOCK 0', 'BLOCK 1', 'BLOCK 2', 'BLOCK 3', 'Verify'].forEach(
-      n => t.ok(B[n], `${n} found in the script`));
+    Object.entries(FILES).forEach(([k, f]) => t.ok(B[k], `${f} exists`));
+    t.ok(fs.existsSync(path.join(DIR, 'README.md')),
+         'the folder documents the run order');
+    // These are DATA, not schema. test/run.js applies every *.sql in sql/ as a
+    // migration; a subfolder is skipped by that filter, which is the whole
+    // reason they live here rather than flat beside the migrations.
+    t.eq(fs.readdirSync(path.join(__dirname, '..', '..', 'sql'))
+           .filter(f => f.endsWith('.sql') && /sr154/.test(f)).length, 0,
+         'and none of them sits flat in sql/, where it would run as a migration');
 
     const proj = (await t.sql(
       `select id, pid from pi_projects where pid='25-154-001'`))[0];

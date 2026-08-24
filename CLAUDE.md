@@ -1300,8 +1300,30 @@ single current trend, prior ones kept as history.
    history + shared-reports list. `renderArchivedReportHTML()` renders sections
    read-only (mirrors desktop `_buildArchivedPreviewHTML`); `printSharedReport()`
    opens a clean print window = v1 "download" (true .docx deferred).
-5. ⬜ End-to-end test (after migration is run): share a report, publish a trend,
-   open portal link, confirm both render.
+5. ✅ **End-to-end test — DONE** (Aug 2026), automated rather than manual:
+   `test/tests/38-client-reporting-e2e.test.js` (27 checks) archives two
+   reports, shares ONE, publishes a trend, opens the portal by token and
+   asserts the shared report and the trend render while the unshared one does
+   not. Verified failing against three injected faults: a snapshot that
+   recomputes instead of freezing, a share toggle that writes nothing (the
+   migration-not-run case), and a portal that drops its `client_visible`
+   filter — which leaks an unshared report to a client.
+   **Its most valuable assertion is the freeze.** After archiving it
+   back-dates an interaction INTO the archived period and asserts the stored
+   `tableHtml` is byte-identical and the client still sees what was issued.
+   That is the entire reason snapshots exist and nothing was checking it.
+   Two things it turned up, both real:
+   - `loadReportSections()` prefers the Supabase draft and writes it back over
+     `localStorage`, so pre-seeding `pir4_pi_reports_<id>` is silently
+     discarded once a draft exists. Drive the editor inputs instead.
+   - `client_visible` is `not null default false` in production but has no
+     default in the generated harness schema, so a fresh row is `null` there
+     and `false` in the field. Benign direction, but assert "not true" rather
+     than `=== false`, and pin the production shape by reading the migration.
+   A manual walkthrough on real data is staged separately in
+   `sql/sr154-report-test/` — three periods whose state MOVES between archives,
+   because only `auto-concerns` is period-bounded and a trend over static data
+   has nothing to diff.
 
 **Cross-app:** reports module is desktop-only — mobile/importer unaffected.
 

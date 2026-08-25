@@ -1,0 +1,12 @@
+{
+  "name": "horizon-compass-tests",
+  "private": true,
+  "description": "Test harness: runs the real HTML apps against a real Postgres and a PostgREST shim.",
+  "scripts": {
+    "test": "node run.js"
+  },
+  "dependencies": {
+    "pg": "^8.13.1",
+    "playwright": "^1.49.1"
+  }
+}

@@ -1,6 +1,10 @@
 node_modules/
 package-lock.json
-package.json
+
+# NOT package.json — test/package.json is the harness's dependency manifest.
+# It was ignored, so when the container's node_modules was reclaimed there was
+# nothing in git to restore it from and the whole suite stopped running. The
+# repo has no other package.json to worry about.
 
 # Scratch output from the test harness (screenshots, preview builds)
 test/_*.png

@@ -265,7 +265,10 @@ create table pi_public_comments (
   response_text text,
   response_date date,
   linked_stakeholder_id text,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  commenter_email text,
+  responded_by text,
+  notes text
 );
 
 create table pi_report_archive (

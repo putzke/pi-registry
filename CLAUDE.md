@@ -801,6 +801,45 @@ Bulk CSV import wizard for stakeholders and interactions. ~2,420 lines.
   existing stakeholder on match) — same rationale as mobile: keep imported changes
   visible to desktop's concurrency guard. Keep `OCC_TABLES` in sync with `index.html`.
 
+### Public comments — ONE vocabulary over the table (Aug 2026)
+`saveComment()` built its record with names that were **absent from
+`SB_TO_INT.pi_public_comments`** — `commentText`, `topic`, `commentMethod`,
+`submittedDate`, `commenterName`, `commenterOrg`, `commentPeriodId`,
+`commentPeriodType`, `commenterEmail`, `respondedBy`, `notes`. `toSB()` drops
+what it cannot map, so a comment logged through the UI persisted as
+`project_id` + `response_status` and nothing else. It painted into the list from
+the cache, then vanished. **On a NEPA comment period the public comments ARE the
+formal record**, so those were blank rows on a compliance artifact.
+
+One table, two vocabularies: the form wrote and read one set, while the report
+sections read `c.summary` / `c.category` — the columns that exist. Seeded
+comments showed in reports and were blank in the form's views; form-created ones
+were shells no report counted. Fixed by collapsing to the **mapped** names
+(8 renames in `index.html`; the other apps never touched these fields), plus
+`sql/2026-08-25_public_comments_missing_columns.sql` for the three that had no
+column at all — `commenter_email` (the reply-to for a formal response),
+`responded_by` (attribution), `notes` (internal, deliberately not selected by
+the portal).
+
+**Section names are a trap here.** `auto-comments` does NOT read
+`pi_public_comments` — it reads INTERACTIONS whose channel is Comment card /
+Public meeting / Mail / In-person. Only **`auto-comment-matrix`** reads the
+comments table. Two different things both called "public comments" in the UI.
+
+### A text-PK upsert reported every success as a failure (Aug 2026)
+Found while fixing the above. `sbAdd()` sent `Prefer: resolution=merge-duplicates`
+for the three `TEXT_PK_TABLES`, which **replaces** the
+`Prefer: return=representation` default from `getAuthHeaders()`. PostgREST then
+answered 201 with an EMPTY body, `sbAdd` read no rows and returned `null`, and
+`DB._sync` counted a perfectly good insert as *"rejected by the database"* —
+rolling the optimistic cache entry back out from under a row sitting in the
+database. Affected every insert into `pi_comment_periods`, `pi_public_comments`
+and `pi_tribal_consultations`. The header now carries **both** values. (The
+importer has always been safe here: its `sbAdd` uses a plain POST, not an
+upsert.) Both bugs guarded by `test/tests/40-public-comments.test.js`, which
+asserts every key `saveComment` writes is mappable — the check that would have
+caught the original.
+
 ## Pending / next tasks
 
 **⚠ This list drifts — VERIFY in code before treating anything as "not built."**
@@ -823,7 +862,14 @@ shipped. Grep the actual functions before planning work off this list.
    `window.open` left in `index.html` launches `importer.html`, which is a
    separate app, not a report. Reports all go through `showInlineReport()`.
 2. **AI cross-report trend summary testing** — needs 2+ real exports to test fully.
-3. **Continue testing** stakeholders LEP/EJ checkboxes, public meeting equity toggle, public comments nav/form.
+3. ✅ **LEP/EJ + equity + public comments — DONE** (Aug 2026).
+   `test/tests/39-title-vi-fields.test.js` (23 checks) covers what worked:
+   both stakeholder checkboxes render, `saveStake` reads ids that exist, the
+   flags round-trip, **survive an unrelated edit**, untick cleanly, stay
+   findable via the filters, and reach `auto-pi-compliance`. Plus the meeting
+   equity toggle. `test/tests/40-public-comments.test.js` (25 checks) covers
+   the comment form — which turned out to be losing every field; see the
+   "Public comments — ONE vocabulary" section above.
 4. **Tribal consultation tracker** — nav view exists (`renderTribal()`), but classified
    as **in development / not production-ready**. Do not present as live to external
    users. Needs full testing and validation before going live.

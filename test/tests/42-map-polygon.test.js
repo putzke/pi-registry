@@ -189,14 +189,92 @@ module.exports = {
       t.ok(noMaps.toasts.some(m => /not loaded|Plot the map/i.test(m)),
            'it explains why instead');
 
-      // ── the drawing library is actually requested ────────────────────────
-      // Read the LOADER, not the DOM: the script tag is only appended when
-      // loadGoogleMaps() runs, and Maps cannot load here at all.
-      const libs = await app.page.evaluate(() => String(loadGoogleMaps));
-      t.ok(/libraries=[^&`'"]*drawing/.test(libs),
-           'the Maps script asks for the drawing library');
-      t.ok(/libraries=[^&`'"]*places/.test(libs),
-           'without dropping places, which the address autocomplete needs');
+      // ── google.maps.drawing is NOT used ──────────────────────────────────
+      // The Drawing library was deprecated in Aug 2025 and REMOVED in Maps JS
+      // v3.65 (June 2026). We pin no version, so the weekly channel took it
+      // away and "Draw area" threw in the live app. Nothing may depend on it
+      // again: the geometry was already ours, and now the drawing is too.
+      const src = await app.page.evaluate(() => ({
+        loader: String(loadGoogleMaps),
+        draw: [_mvDrawPoly, _mvDrawFinish, _mvDrawAddVertex, _mvDrawPreview]
+                .map(String).join('\n'),
+      }));
+      t.eq(/DrawingManager/.test(src.draw), false,
+           'no DrawingManager — it was REMOVED from the Maps API, not deprecated');
+      t.eq(/maps\.drawing|libraries=[^&`'"]*drawing/.test(src.draw + src.loader), false,
+           'and the drawing library is not requested or referenced at all');
+      t.ok(/libraries=[^&`'"]*places/.test(src.loader),
+           'places stays — the address autocomplete needs it');
+      t.ok(/google\.maps\.Polygon/.test(src.draw),
+           'the shape is drawn with core google.maps.Polygon, which is supported');
+
+      // ── a whole drawing, without a map ───────────────────────────────────
+      // This is what the rewrite bought: the vertex state machine is ours, so
+      // the harness can drive a complete drawing even though Maps cannot load.
+      // Only the click-event wiring is now beyond reach.
+      const drawn = await app.page.evaluate(() => {
+        window._mvGeocoded = [
+          { lat: 41.10, lng: -112.00, s:{ id:'s1', firstName:'In', lastName:'Side' }, lk:{support:'Champion'} },
+          { lat: 40.00, lng: -111.00, s:{ id:'s3', firstName:'Far', lastName:'Away' }, lk:{support:'Neutral'} },
+        ];
+        window._mvParcelsGeo = [];
+        S.mapLayer = 'contacts';
+        window.showToast = () => {};
+        // This box is ~16,000 acres, so the size guard asks first. Answer yes
+        // here; the refusal path is asserted below.
+        const asked = []; window.confirm = m => { asked.push(String(m)); return true; };
+        window._polyAsked = asked;
+        document.getElementById('main').insertAdjacentHTML('beforeend',
+          '<div id="mv-poly-panel" style="display:none"></div>');
+        const panel = () => document.getElementById('mv-poly-panel');
+
+        // Enter the state machine directly, the way the map's click listener
+        // would. _mvDrawPoly itself needs a map object and correctly refuses
+        // without one, which is asserted separately above.
+        window._mvDraw = { path: [], listeners: [] };
+        const hint0 = (_mvDrawHint(), panel().innerHTML);
+        _mvDrawAddVertex(41.08, -112.05);
+        const hint1 = panel().innerHTML;
+        _mvDrawAddVertex(41.08, -111.95);
+        const tooFew = _mvDrawFinish();      // 2 corners is not a polygon
+        _mvDrawAddVertex(41.15, -111.95);
+        _mvDrawAddVertex(41.15, -112.05);
+        const hint4 = panel().innerHTML;
+        const res = _mvDrawFinish();
+        return {
+          hint0, hint1, hint4, tooFew,
+          ids: res ? res.stakeholders.map(g => g.s.id) : null,
+          panelAfter: panel().innerHTML,
+          stateCleared: window._mvDraw === null,
+        };
+      });
+      t.ok(/Click the map/.test(drawn.hint0), 'an empty shape says what to do');
+      t.ok(/1<\/strong> corner\b/.test(drawn.hint1), 'it counts corners as they land');
+      t.ok(/at least 3/.test(drawn.hint1), 'and says 3 are needed');
+      t.eq(drawn.tooFew, null, 'finishing with 2 corners does nothing — not a polygon');
+      t.ok(/acres/.test(drawn.hint4), 'once closed-able it reports the acreage live');
+      t.eq(drawn.ids, ['s1'],
+           'and finishing runs the query — the contact inside, not the one outside');
+      t.ok(/Inside the drawn area/.test(drawn.panelAfter),
+           'the hint is replaced by the results panel');
+      t.ok(drawn.stateCleared, 'and the drawing state is torn down');
+
+      // The size guard asks before answering an enormous shape, and taking NO
+      // for an answer means abandoning the drawing, not querying it anyway.
+      const guard = await app.page.evaluate(() => {
+        const asked = window._polyAsked || [];
+        window.confirm = () => false;
+        window._mvDraw = { path: [
+          {lat:41.08,lng:-112.05},{lat:41.08,lng:-111.95},
+          {lat:41.15,lng:-111.95},{lat:41.15,lng:-112.05}] };
+        const res = _mvDrawFinish();
+        return { asked, res, cleared: window._mvDraw === null,
+                 hidden: document.getElementById('mv-poly-panel').style.display };
+      });
+      t.gt(guard.asked.length, 0, 'a shape over the acre limit asks before querying');
+      t.ok(/acres/.test(guard.asked[0] || ''), 'and says how big it is');
+      t.eq(guard.res, null, 'declining does not run the query');
+      t.ok(guard.cleared, 'and the drawing is abandoned rather than left half-open');
 
       t.eq(app.errors, [], 'no page errors during the run');
     } finally {

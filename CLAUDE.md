@@ -1704,7 +1704,35 @@ A configurable acreage threshold prevents accidental queries of enormous areas
 
 ### PHASE 1 — Internal polygon query — **BUILT (Aug 2026)**
 "Draw area" on the Map toolbar → `_mvDrawPoly()` → shape → `#mv-poly-panel` over
-the map. Covered by `test/tests/42-map-polygon.test.js` (44 checks).
+the map. Covered by `test/tests/42-map-polygon.test.js` (58 checks).
+
+- **`google.maps.drawing` is GONE — never depend on it again.** The Drawing
+  library was deprecated Aug 2025 and **REMOVED in Maps JS v3.65** (June 2026).
+  `loadGoogleMaps()` pins no version, so the weekly channel took it away on its
+  own schedule: Phase 1 shipped working against the docs and "Draw area" threw
+  *"The DrawingManager functionality … is no longer available"* in the live app
+  a day later. **Nothing in the test suite could have caught it** — Maps cannot
+  load in the harness, so a removed Google library looks exactly like the
+  library that never loads there anyway. That is the standing limitation, not a
+  gap to be closed.
+  Google points at **Terra Draw**; rejected — a third-party dependency, a new
+  CSP script host and a GeoJSON model, to replace "collect the clicks".
+  The vertices are now collected in `_mvDraw` / `_mvDrawAddVertex` /
+  `_mvDrawFinish` / `_mvDrawCancel` and rendered with `google.maps.Polyline`
+  and `Polygon` — **core shapes, still fully supported** (only the drawing
+  library was removed; `editable:true` on a Polygon covers vertex dragging).
+  `libraries=drawing` is dropped from the loader; `places` must stay.
+  The test asserts `DrawingManager` and `libraries=…drawing` appear nowhere.
+- **The rewrite made the drawing testable**, which the DrawingManager version
+  never was: the state machine is ours, so the harness drives a whole four-click
+  drawing — corner counting, the "at least 3" refusal, the live acreage, the
+  size-guard prompt in both answers, the query, and the teardown — without a map
+  object. Only the click-event wiring is now out of reach.
+- **Closing the shape: Finish button, double-click, or Enter** (Escape cancels).
+  NOT "click the first vertex again" — that needs a pixel-distance test against
+  the projection, which is zoom-dependent, fiddly, and untestable here.
+  `disableDoubleClickZoom` is toggled during the drawing and restored after, or
+  the closing double-click also zooms the map.
 
 - **The maths is hand-written, NOT `google.maps.geometry`** — `_polyContains()`
   (ray casting) and `_polyAreaAcres()` (spherical excess). This is the single

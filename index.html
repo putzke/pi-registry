@@ -368,7 +368,7 @@ function loadGoogleMaps() {
   if (window._googleMapsLoaded) return;
   window._googleMapsLoaded = true;
   const s = document.createElement('script');
-  s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places,drawing&loading=async&callback=onGoogleMapsReady`;
+  s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&loading=async&callback=onGoogleMapsReady`;
   s.async = true;
   s.defer = true;
   document.head.appendChild(s);
@@ -16819,58 +16819,167 @@ function _mvClearPolyFilter() {
   setView('stakeholders');
 }
 
-// Drawing is the one part that genuinely needs Google's library, so it is kept
-// to a thin shell: get a path out of the DrawingManager, hand it to
-// _mvPolyQuery, and never let anything else depend on the map object.
+// Drawing, WITHOUT google.maps.drawing.
+//
+// The Drawing library was deprecated in Aug 2025 and REMOVED in Maps JS v3.65
+// (June 2026). We do not pin a version, so the weekly channel took it away and
+// "Draw area" started throwing: "The DrawingManager functionality ... is no
+// longer available". Google points at Terra Draw; that is a third-party
+// dependency, a new CSP script host and a GeoJSON model, to replace what is
+// really just "collect the clicks".
+//
+// So the vertices are collected here and rendered with google.maps.Polyline /
+// Polygon — CORE shapes, not the drawing library, and not deprecated. That also
+// makes the state machine ours: _mvDrawAddVertex / _mvDrawFinish / _mvDrawCancel
+// run without a map object, so the harness can drive a whole drawing even though
+// Google Maps cannot load in it. What is left un-testable is only the event
+// wiring, which is the smallest it can be.
+//
+// Closing the shape: a Finish button, double-click, or Enter. NOT "click the
+// first vertex again" — that needs a pixel-distance test against the projection,
+// which is fiddly, zoom-dependent, and untestable here. A visible button is
+// never ambiguous.
+var _mvDraw = null;
+
+function _mvDrawHint() {
+  var el = document.getElementById('mv-poly-panel');
+  if (!el || !_mvDraw) return;
+  var n = _mvDraw.path.length;
+  el.style.display = 'block';
+  el.innerHTML =
+    '<div style="font-size:13px;font-weight:600;margin-bottom:4px">Drawing an area</div>'
+    + '<div style="font-size:12.5px;color:var(--mist);line-height:1.5">'
+    + (n === 0 ? 'Click the map to place the first corner.'
+       : n < 3  ? '<strong>' + n + '</strong> corner' + (n===1?'':'s') + ' placed — at least 3 are needed.'
+                : '<strong>' + n + '</strong> corners · about <strong>'
+                  + _polyAreaAcres(_mvDraw.path).toFixed(_polyAreaAcres(_mvDraw.path) < 10 ? 1 : 0)
+                  + '</strong> acres')
+    + '</div>'
+    + '<div style="font-size:11.5px;color:var(--fog);margin-top:6px">Double-click or press Enter to close the shape.</div>'
+    + '<div style="display:flex;gap:6px;margin-top:10px">'
+    + '<button class="btn btn-sm btn-primary" style="flex:1"' + (n < 3 ? ' disabled' : '')
+    + ' onclick="_mvDrawFinish()">Finish</button>'
+    + '<button class="btn btn-ghost btn-sm" onclick="_mvDrawCancel()">Cancel</button></div>';
+}
+
+// Redraw the in-progress shape. A polyline while it is still a line, a
+// translucent polygon once it encloses anything — so the area being asked about
+// is visible before it is queried, not after.
+function _mvDrawPreview() {
+  if (!_mvDraw || !window.google || !window.google.maps || !window._mvMap) return;
+  var path = _mvDraw.path;
+  if (_mvDraw.line) { _mvDraw.line.setMap(null); _mvDraw.line = null; }
+  if (_mvDraw.shape) { _mvDraw.shape.setMap(null); _mvDraw.shape = null; }
+  if (path.length >= 3) {
+    _mvDraw.shape = new window.google.maps.Polygon({
+      paths: path, map: window._mvMap, clickable: false, zIndex: 3,
+      fillColor:'#4a9be8', fillOpacity:0.18, strokeColor:'#4a9be8', strokeWeight:2
+    });
+  } else if (path.length >= 2) {
+    _mvDraw.line = new window.google.maps.Polyline({
+      path: path, map: window._mvMap, clickable: false, zIndex: 3,
+      strokeColor:'#4a9be8', strokeWeight:2
+    });
+  }
+}
+
+function _mvDrawAddVertex(lat, lng) {
+  if (!_mvDraw) return 0;
+  _mvDraw.path.push({ lat: lat, lng: lng });
+  _mvDrawPreview();
+  _mvDrawHint();
+  return _mvDraw.path.length;
+}
+
+// Close the shape and answer it. Returns the result so a caller (and the test)
+// can see what the drawing produced.
+function _mvDrawFinish() {
+  if (!_mvDraw || _mvDraw.path.length < 3) return null;
+  var path = _mvDraw.path.slice();
+  var acres = _polyAreaAcres(path);
+  // Ask before answering an enormous shape. A drag across the whole state is
+  // nearly always a slip, and 200 contacts is not an answer.
+  if (acres > POLY_AREA_WARN_ACRES &&
+      !confirm('That shape covers about ' + Math.round(acres).toLocaleString()
+        + ' acres. Query it anyway?')) { _mvDrawCancel(); return null; }
+  _mvDrawTeardown(true);
+  // Keep the finished shape on the map, editable, so the boundary stays visible
+  // beside its answer and a vertex can still be dragged.
+  if (window.google && window.google.maps && window._mvMap) {
+    window._mvPoly = new window.google.maps.Polygon({
+      paths: path, map: window._mvMap, clickable: false, editable: true, zIndex: 3,
+      fillColor:'#4a9be8', fillOpacity:0.18, strokeColor:'#4a9be8', strokeWeight:2
+    });
+    var gp = window._mvPoly.getPath();
+    var rerun = function(){
+      var pts = gp.getArray().map(function(pt){ return { lat: pt.lat(), lng: pt.lng() }; });
+      if (pts.length >= 3) _mvShowPolyResults(_mvPolyQuery(pts));
+    };
+    ['set_at','insert_at','remove_at'].forEach(function(ev){
+      window.google.maps.event.addListener(gp, ev, rerun);
+    });
+  }
+  var res = _mvPolyQuery(path);
+  _mvShowPolyResults(res);
+  return res;
+}
+
+function _mvDrawCancel() {
+  _mvDrawTeardown(false);
+  var el = document.getElementById('mv-poly-panel');
+  if (el) { el.style.display = 'none'; el.innerHTML = ''; }
+}
+
+// Drop the listeners and the in-progress overlays. keepNothing: the finished
+// polygon is created fresh by _mvDrawFinish, so the preview always goes.
+function _mvDrawTeardown(finished) {
+  if (!_mvDraw) return;
+  var d = _mvDraw; _mvDraw = null;
+  if (d.line) d.line.setMap(null);
+  if (d.shape) d.shape.setMap(null);
+  if (window.google && window.google.maps && window.google.maps.event) {
+    (d.listeners || []).forEach(function(l){ window.google.maps.event.removeListener(l); });
+  }
+  if (d.keyHandler) document.removeEventListener('keydown', d.keyHandler);
+  if (window._mvMap && d.prevDblClickZoom !== undefined) {
+    window._mvMap.setOptions({ disableDoubleClickZoom: d.prevDblClickZoom,
+                               draggableCursor: d.prevCursor || null });
+  }
+}
+
 function _mvDrawPoly() {
-  if (!window.google || !window.google.maps || !window.google.maps.drawing) {
-    showToast('The map drawing tools have not loaded yet — give the map a moment, then try again.', 'warn', 4000);
+  if (!window.google || !window.google.maps) {
+    showToast('The map has not loaded yet — give it a moment, then try again.', 'warn', 4000);
     return;
   }
   if (!window._mvMap) { showToast('Plot the map first.', 'warn', 3000); return; }
   _mvClearPoly();
-  var dm = window._mvDrawMgr;
-  if (!dm) {
-    dm = window._mvDrawMgr = new window.google.maps.drawing.DrawingManager({
-      drawingMode: window.google.maps.drawing.OverlayType.POLYGON,
-      drawingControl: false,
-      polygonOptions: { fillColor:'#4a9be8', fillOpacity:0.18, strokeColor:'#4a9be8',
-                        strokeWeight:2, clickable:false, editable:true, zIndex:1 }
-    });
-    window.google.maps.event.addListener(dm, 'polygoncomplete', function(poly){
-      window._mvPoly = poly;
-      dm.setDrawingMode(null);
-      var read = function(){
-        return poly.getPath().getArray().map(function(pt){
-          return { lat: pt.lat(), lng: pt.lng() };
-        });
-      };
-      var run = function(){
-        var path = read();
-        var acres = _polyAreaAcres(path);
-        // Ask before answering an enormous shape. A drag across the whole state
-        // is nearly always a slip, and 200 contacts is not an answer.
-        if (acres > POLY_AREA_WARN_ACRES &&
-            !confirm('That shape covers about ' + Math.round(acres).toLocaleString()
-              + ' acres. Query it anyway?')) { _mvClearPoly(); return; }
-        _mvShowPolyResults(_mvPolyQuery(path));
-      };
-      // Re-run when the shape is edited, so dragging a vertex updates the answer.
-      var path = poly.getPath();
-      ['set_at','insert_at','remove_at'].forEach(function(ev){
-        window.google.maps.event.addListener(path, ev, run);
-      });
-      run();
-    });
-  }
-  dm.setMap(window._mvMap);
-  dm.setDrawingMode(window.google.maps.drawing.OverlayType.POLYGON);
-  showToast('Click to place each corner, then click the first point to close the shape.', 'info', 5000);
+  _mvDraw = { path: [], listeners: [], line: null, shape: null,
+              prevDblClickZoom: !!window._mvMap.get('disableDoubleClickZoom'),
+              prevCursor: window._mvMap.get('draggableCursor') };
+  // A double-click must close the shape, not zoom the map.
+  window._mvMap.setOptions({ disableDoubleClickZoom: true, draggableCursor: 'crosshair' });
+
+  _mvDraw.listeners.push(window.google.maps.event.addListener(
+    window._mvMap, 'click', function(e){
+      if (e && e.latLng) _mvDrawAddVertex(e.latLng.lat(), e.latLng.lng());
+    }));
+  _mvDraw.listeners.push(window.google.maps.event.addListener(
+    window._mvMap, 'dblclick', function(){ _mvDrawFinish(); }));
+
+  _mvDraw.keyHandler = function(ev){
+    if (ev.key === 'Enter') { ev.preventDefault(); _mvDrawFinish(); }
+    else if (ev.key === 'Escape') { ev.preventDefault(); _mvDrawCancel(); }
+  };
+  document.addEventListener('keydown', _mvDraw.keyHandler);
+
+  _mvDrawHint();
+  showToast('Click each corner of the area. Double-click, press Enter, or use Finish to close it.', 'info', 5000);
 }
 
 function _mvClearPoly() {
+  _mvDrawTeardown(false);
   if (window._mvPoly) { window._mvPoly.setMap(null); window._mvPoly = null; }
-  if (window._mvDrawMgr) window._mvDrawMgr.setDrawingMode(null);
   window._mvPolyResult = null;
   var el = document.getElementById('mv-poly-panel');
   if (el) { el.style.display = 'none'; el.innerHTML = ''; }

@@ -1681,7 +1681,7 @@ every column declares a type, that the built schema matches, and spot-checks the
 nine that were previously guessed wrong.
 
 
-## FUTURE — Map: Polygon Drawing + Property Query (3 phases, July 2026)
+## Map: Polygon Drawing + Property Query (3 phases — **Phase 1 SHIPPED Aug 2026**)
 
 ### What it is
 User draws a freeform polygon on the map (minimum 3 clicks / triangle, unlimited
@@ -1702,35 +1702,49 @@ A configurable acreage threshold prevents accidental queries of enormous areas
 
 ---
 
-### PHASE 1 — Internal polygon query (build first, no external API)
-**What:** Google Maps Drawing Library polygon tool + query internal HC database
+### PHASE 1 — Internal polygon query — **BUILT (Aug 2026)**
+"Draw area" on the Map toolbar → `_mvDrawPoly()` → shape → `#mv-poly-panel` over
+the map. Covered by `test/tests/42-map-polygon.test.js` (44 checks).
 
-Technical details:
-- Load `google.maps.drawing.DrawingManager` with polygon mode (already have Maps API key)
-- Load `google.maps.geometry` library for `poly.containsLocation()` and
-  `spherical.computeArea()` (area threshold check)
-- On polygon close: query pi_stakeholders where lat/lng inside polygon,
-  query pi_parcels where coordinates inside polygon (both use containsLocation())
-- Area threshold: warn if polygon > [configurable, suggest 500 acres] before querying
-- Results panel (slide-out on map view):
-  - Polygon coordinates + total acreage
-  - Matched stakeholders (name, org, type, contact info, link to record)
-  - Matched pi_parcels (APN, owner, status, link to ROW record)
-  - Count badges: "14 stakeholders · 23 parcels within drawn area"
-- Option C behavior: results panel PLUS "View in contacts list" button that
-  pre-filters the project contacts view to matched stakeholders only
-- "Clear polygon" button resets the drawing
-- Do NOT show parcels from external sources in Phase 1 — internal data only
-
-**Build notes for Claude Code:**
-- Drawing Library is part of the existing Maps JavaScript API — add `libraries=drawing,geometry`
-  to the Maps script URL (check current URL to see what libraries are already loaded)
-- `google.maps.drawing.DrawingManager` with `drawingMode: 'polygon'`
-- On `polygoncomplete` event: get path, compute area, run containsLocation() loop
-  against all loaded stakeholder/parcel lat/lng values
-- Keep polygon on map after query so user can see the boundary alongside results
-- Mobile: polygon drawing may be difficult on touch — consider disabling on mobile.html
-  or adding a simplified "radius around point" mode for mobile
+- **The maths is hand-written, NOT `google.maps.geometry`** — `_polyContains()`
+  (ray casting) and `_polyAreaAcres()` (spherical excess). This is the single
+  most important decision in the phase and it was deliberate: **Google Maps
+  cannot load in the test harness at all**, so anything built on
+  `containsLocation()` / `spherical.computeArea()` would have been untestable
+  end to end. Both are exactly specifiable and total maybe 25 lines, so the
+  whole query path — containment, area, layer scoping, equity counts, the
+  panel, the hand-off — is reachable without a map object. Only the
+  DrawingManager shell is not. **Do not "simplify" these back to the library.**
+  The roadmap above originally specified `libraries=drawing,geometry`; only
+  `drawing` is loaded, and `places` (the address autocomplete) must stay.
+  Longitudes are compared raw — a hand-drawn shape never spans the
+  antimeridian, and pretending otherwise would be untested code.
+- **It queries what is PLOTTED, not what is stored** — `window._mvGeocoded` /
+  `window._mvParcelsGeo`, the caches the map already filled. So the query costs
+  no geocode and can never bill, and a record the map could not place is one the
+  shape cannot honestly claim. The empty-result panel says exactly that and
+  points at the `#mv-errors` list above the map. Do not "improve" this by
+  geocoding on demand inside a drawn shape — an unbounded geocode loop behind a
+  drag gesture is precisely the uncapped-cost shape the portal map was refused
+  for.
+- **`_mvPolyQuery` respects `S.mapLayer`.** Returning parcels on a screen
+  showing only contacts is a wrong answer, not a bonus; both directions are
+  asserted.
+- **The panel calls out LEP and EJ explicitly.** "Who inside this impact zone is
+  flagged LEP or underserved" is the EJ question a drawn boundary exists to
+  answer, and counting badges by eye down a list is not an answer.
+- **`POLY_AREA_WARN_ACRES = 500`** — a drag across the state is nearly always a
+  slip. Warns and asks; never blocks.
+- **Editing the shape re-runs the query** (`set_at`/`insert_at`/`remove_at`), so
+  dragging a vertex updates the answer instead of leaving a stale panel beside a
+  changed boundary.
+- **The hand-off sets `S.polyIds` and the contacts list SAYS SO.** `setView()`
+  does not clear `S.polyIds`, so without the banner (with "Back to map" and
+  "Clear") the user carries an invisible filter around the app — the same
+  failure class as the old Comments project-scoping bug, where the list filtered
+  correctly while telling you it was showing everything.
+- **Mobile: not built, deliberately.** Polygon drawing on touch is bad, and
+  mobile is a logging tool.
 
 ---
 

@@ -368,7 +368,7 @@ function loadGoogleMaps() {
   if (window._googleMapsLoaded) return;
   window._googleMapsLoaded = true;
   const s = document.createElement('script');
-  s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&loading=async&callback=onGoogleMapsReady`;
+  s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places,drawing&loading=async&callback=onGoogleMapsReady`;
   s.async = true;
   s.defer = true;
   document.head.appendChild(s);
@@ -4161,6 +4161,9 @@ function renderStakeholders(el){
   if(S.skOrgOnly)listItems=listItems.filter(s=>isOrgContact(s));
   if(S.skLEP)listItems=listItems.filter(s=>s.lep);
   if(S.skEJ)listItems=listItems.filter(s=>s.underserved);
+  // Handed over from a polygon drawn on the map. Narrowed to the contacts that
+  // fell inside the shape, so the list can be worked from.
+  if(S.polyIds&&S.polyIds.length){const _pset=new Set(S.polyIds);listItems=listItems.filter(s=>_pset.has(String(s.id)));}
   if(S.projectFilter)listItems=_applyGroupFilter(listItems,S.projectFilter);
   // Sort: Internal first by last name, then External by last name
   if(S.projectFilter){
@@ -4220,6 +4223,13 @@ function renderStakeholders(el){
     <button class="btn btn-sm${S.skEJ?' btn-primary':''}" style="${S.skEJ?'background:rgba(124,92,191,.25);border-color:#a98de8;color:#a98de8':'background:rgba(124,92,191,.08);border-color:rgba(124,92,191,.3);color:rgba(124,92,191,.7)'}" onclick="S.skEJ=!S.skEJ;renderStakeholders(document.getElementById('main'))">EJ</button>
     <div class="tb-sp"></div><span class="tb-info">${listItems.length} contact${listItems.length!==1?'s':''}</span>
   </div>`}
+  ${S.polyIds&&S.polyIds.length?`
+  <div style="display:flex;align-items:center;gap:10px;margin:0 0 10px;padding:8px 12px;background:rgba(74,155,232,.10);border:1px solid rgba(74,155,232,.35);border-radius:8px;font-size:12.5px">
+    <svg viewBox="0 0 16 16" fill="none" stroke="#4a9be8" stroke-width="1.6" style="width:14px;height:14px;flex-shrink:0"><path d="M2 5l5-3 7 4-2 8-8 1z"/></svg>
+    <span style="flex:1">Showing the <strong>${S.polyIds.length}</strong> contact${S.polyIds.length===1?'':'s'} inside the area drawn on the map${S.polyAcres?` <span style="color:var(--fog)">· ${S.polyAcres.toFixed(S.polyAcres<10?1:0)} acres</span>`:''}.</span>
+    <button class="btn btn-ghost btn-xs" onclick="setView('map')">Back to map</button>
+    <button class="btn btn-ghost btn-xs" onclick="_mvClearPolyFilter()">Clear</button>
+  </div>`:''}
   ${S.skView==='issues'&&S.projectFilter ? `
   <div class="content" id="issues-container">
     <div class="split">
@@ -16240,6 +16250,11 @@ function renderMapView(m) {
         <button class="btn btn-ghost" style="width:100%;font-size:12px;margin-bottom:6px" onclick="S.mapFSupport='';S.mapFType='';S.mapFInf='';S.mapFEJ=false;S.mapFLEP=false;S.mapFSearch='';S.mapFRole='External';S.mapColorBy='support';S.mapFParcSt='';renderMapView(document.getElementById('main'))">
           Clear all filters
         </button>
+        <button class="btn btn-ghost" style="width:100%;font-size:12px;margin-bottom:6px" onclick="_mvDrawPoly()"
+                title="Draw a shape on the map and see every plotted contact and parcel inside it — a corridor influence area, a neighbourhood, or an acquisition strip. No list filter can express a shape.">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M2 5l5-3 7 4-2 8-8 1z"/></svg>
+          Draw area
+        </button>
         <button class="btn btn-primary" style="width:100%;font-size:12px" onclick="_mapPrint()">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M4 6V2h8v4"/><rect x="2" y="6" width="12" height="7" rx="1"/><path d="M4 10h8M4 13h5"/></svg>
           Print / export
@@ -16263,7 +16278,10 @@ function renderMapView(m) {
         </div>
       </div>
       <!-- Map canvas -->
-      <div id="mv-map" style="flex:1;min-height:0;background:#1a2a3a"></div>
+      <div style="flex:1;min-height:0;position:relative">
+        <div id="mv-map" style="position:absolute;inset:0;background:#1a2a3a"></div>
+        <div id="mv-poly-panel" style="display:none;position:absolute;top:12px;right:12px;width:320px;max-width:calc(100% - 24px);background:#0E1E30;border:1px solid rgba(255,255,255,.16);border-radius:10px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.45);z-index:5"></div>
+      </div>
       <div id="mv-loading" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--slate);font-size:13px;display:flex;align-items:center;gap:8px;pointer-events:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:18px;height:18px;animation:spin 1s linear infinite"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
         Geocoding addresses…
@@ -16647,6 +16665,215 @@ function _mvParcGroupHTML(gp) {
         <div style="color:#6b7280;margin-top:4px">Match type: ${escHtml(_mvPrecision(gp.items[0]).code || 'unknown')}</div>
       </div>
     </div>`;
+}
+
+// ── POLYGON QUERY (Phase 1 — internal data only) ─────────────────────────
+//
+// Draw a shape on the map, get every stakeholder and parcel inside it. The
+// point: a corridor influence area, a neighbourhood, or a ROW acquisition strip
+// is a SHAPE, and no list filter can express one. For an EJ analysis it answers
+// "who inside this impact zone is flagged LEP or underserved" in one gesture.
+//
+// The two calculations below are deliberately NOT google.maps.geometry.
+// They are the only maths the query needs, both are exactly specifiable, and
+// doing them here means the entire query path is testable in the harness —
+// where Google Maps cannot load at all. The DRAWING still needs the Maps
+// drawing library; that part is untestable either way.
+
+// Ray casting. A point is inside when a ray crossing the edges an odd number of
+// times. Longitudes are used raw: a polygon drawn by hand on one screen never
+// spans the antimeridian, and pretending to handle that would be untested code.
+function _polyContains(path, lat, lng) {
+  if (!path || path.length < 3) return false;
+  var inside = false;
+  for (var i = 0, j = path.length - 1; i < path.length; j = i++) {
+    var yi = path[i].lat, xi = path[i].lng;
+    var yj = path[j].lat, xj = path[j].lng;
+    var straddles = (yi > lat) !== (yj > lat);
+    if (straddles && lng < (xj - xi) * (lat - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+// Spherical excess, in acres. A planar approximation is wrong by enough to
+// matter at corridor scale, and the acreage is what the size guard reads.
+var _EARTH_M = 6378137;
+function _polyAreaAcres(path) {
+  if (!path || path.length < 3) return 0;
+  var rad = function(d){ return d * Math.PI / 180; }, total = 0;
+  for (var i = 0; i < path.length; i++) {
+    var a = path[i], b = path[(i + 1) % path.length];
+    total += (rad(b.lng) - rad(a.lng)) * (2 + Math.sin(rad(a.lat)) + Math.sin(rad(b.lat)));
+  }
+  var m2 = Math.abs(total * _EARTH_M * _EARTH_M / 2);
+  return m2 / 4046.8564224;
+}
+
+// Acreage above which the query asks first. A polygon dragged across the whole
+// state is nearly always a slip, and answering it with 200 contacts is not
+// useful. Configurable rather than hardcoded at the call site.
+var POLY_AREA_WARN_ACRES = 500;
+
+// Query what is PLOTTED, not what is stored. Everything on the map has already
+// been geocoded and cached, so this costs no API call and can never bill —
+// and a record the map could not place is one the shape cannot honestly claim.
+function _mvPolyQuery(path) {
+  var geo  = window._mvGeocoded || [];
+  var parc = window._mvParcelsGeo || [];
+  var layer = S.mapLayer || 'contacts';
+  var res = { acres: _polyAreaAcres(path), stakeholders: [], parcels: [] };
+  if (layer !== 'parcels') {
+    res.stakeholders = geo.filter(function(g){ return _polyContains(path, g.lat, g.lng); });
+  }
+  if (layer !== 'contacts') {
+    res.parcels = parc.filter(function(p){ return _polyContains(path, p.lat, p.lng); });
+  }
+  return res;
+}
+
+// The results panel. Slides over the map rather than replacing it, so the shape
+// stays visible beside its answer — the boundary IS the finding.
+function _mvPolyPanelHTML(res) {
+  var esc = escHtml;
+  var sk = res.stakeholders, pc = res.parcels;
+  var counts = [];
+  if (sk.length || (S.mapLayer||'contacts') !== 'parcels')
+    counts.push('<strong>' + sk.length + '</strong> stakeholder' + (sk.length===1?'':'s'));
+  if (pc.length || (S.mapLayer||'contacts') !== 'contacts')
+    counts.push('<strong>' + pc.length + '</strong> parcel' + (pc.length===1?'':'s'));
+
+  // Equity flags are called out here rather than left to be counted by eye:
+  // "who inside the impact zone is LEP or underserved" is the EJ question a
+  // drawn boundary exists to answer.
+  var lep = sk.filter(function(g){ return g.s && g.s.lep; }).length;
+  var ej  = sk.filter(function(g){ return g.s && (g.s.underserved || g.s.ejCommunity || g.s.ej); }).length;
+  var eqLine = (lep || ej)
+    ? '<div style="margin-top:6px;font-size:11.5px">'
+      + (ej  ? '<span style="background:#e94040;color:#fff;padding:1px 6px;border-radius:4px;margin-right:5px">' + ej + ' EJ</span>' : '')
+      + (lep ? '<span style="background:#f59e0b;color:#000;padding:1px 6px;border-radius:4px">' + lep + ' LEP</span>' : '')
+      + '</div>'
+    : '';
+
+  var rows = '';
+  if (sk.length) {
+    rows += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);margin:12px 0 5px">Stakeholders</div>';
+    rows += sk.map(function(g){
+      var nm = ((g.s.firstName||'')+' '+(g.s.lastName||'')).trim() || g.s.org || 'Unknown';
+      var sup = (g.lk && g.lk.support) || 'Neutral';
+      var col = sup==='Champion'?'var(--green)':sup==='Opponent'?'var(--red)':'var(--slate)';
+      return '<div onclick="openContact(\'' + g.s.id + '\')" style="padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer;display:flex;gap:8px;align-items:baseline">'
+        + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(nm)
+        + (g.s.org && nm !== g.s.org ? ' <span style="color:var(--fog)">· ' + esc(g.s.org) + '</span>' : '') + '</span>'
+        + (g.s.lep ? '<span style="background:#f59e0b;color:#000;font-size:9px;padding:0 4px;border-radius:3px">LEP</span>' : '')
+        + ((g.s.underserved||g.s.ejCommunity||g.s.ej) ? '<span style="background:#e94040;color:#fff;font-size:9px;padding:0 4px;border-radius:3px">EJ</span>' : '')
+        + '<span style="color:' + col + ';font-size:11px;flex-shrink:0">' + esc(sup) + '</span></div>';
+    }).join('');
+  }
+  if (pc.length) {
+    rows += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);margin:12px 0 5px">Parcels</div>';
+    rows += pc.map(function(p){
+      return '<div style="padding:6px 0;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:baseline">'
+        + '<span style="font-family:var(--mono);flex-shrink:0">' + esc(p.parcelNumber || p.parcel || '—') + '</span>'
+        + '<span style="flex:1;min-width:0;color:var(--fog);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+        + esc(p.situsAddress || '') + '</span>'
+        + '<span style="font-size:11px;flex-shrink:0;color:' + _parcMapColor(p.status) + '">' + esc(p.status || '—') + '</span></div>';
+    }).join('');
+  }
+  if (!sk.length && !pc.length) {
+    rows = '<div style="color:var(--fog);font-size:12.5px;padding:14px 0;line-height:1.6">'
+      + 'Nothing plotted falls inside this shape.<br><span style="font-size:11.5px">Records the map could not place are '
+      + 'listed above the map and are not searched here — a shape can only claim what it can locate.</span></div>';
+  }
+
+  return '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px">'
+    + '<div style="font-size:13px;font-weight:600;flex:1">Inside the drawn area</div>'
+    + '<button class="btn btn-ghost btn-xs" onclick="_mvClearPoly()">Clear</button></div>'
+    + '<div style="font-size:12.5px;color:var(--mist)">' + counts.join(' · ')
+    + '<span style="color:var(--fog)"> · ' + res.acres.toFixed(res.acres < 10 ? 1 : 0) + ' acres</span></div>'
+    + eqLine
+    + (sk.length ? '<button class="btn btn-sm btn-primary" style="margin-top:10px;width:100%" onclick="_mvPolyToContacts()">View in contacts list</button>' : '')
+    + '<div style="margin-top:4px;max-height:300px;overflow-y:auto;font-size:12.5px">' + rows + '</div>';
+}
+
+function _mvShowPolyResults(res) {
+  var el = document.getElementById('mv-poly-panel');
+  if (!el) return;
+  el.innerHTML = _mvPolyPanelHTML(res);
+  el.style.display = 'block';
+  window._mvPolyResult = res;
+}
+
+// Hand the matched contacts to the Stakeholders list. The map answers "who is
+// in here"; the list is where you then work them — assign follow-ups, export,
+// check who has not been contacted.
+function _mvPolyToContacts() {
+  var res = window._mvPolyResult;
+  if (!res || !res.stakeholders.length) return;
+  S.polyIds = res.stakeholders.map(function(g){ return String(g.s.id); });
+  S.polyAcres = res.acres;
+  setView('stakeholders');
+}
+
+function _mvClearPolyFilter() {
+  S.polyIds = null; S.polyAcres = null;
+  setView('stakeholders');
+}
+
+// Drawing is the one part that genuinely needs Google's library, so it is kept
+// to a thin shell: get a path out of the DrawingManager, hand it to
+// _mvPolyQuery, and never let anything else depend on the map object.
+function _mvDrawPoly() {
+  if (!window.google || !window.google.maps || !window.google.maps.drawing) {
+    showToast('The map drawing tools have not loaded yet — give the map a moment, then try again.', 'warn', 4000);
+    return;
+  }
+  if (!window._mvMap) { showToast('Plot the map first.', 'warn', 3000); return; }
+  _mvClearPoly();
+  var dm = window._mvDrawMgr;
+  if (!dm) {
+    dm = window._mvDrawMgr = new window.google.maps.drawing.DrawingManager({
+      drawingMode: window.google.maps.drawing.OverlayType.POLYGON,
+      drawingControl: false,
+      polygonOptions: { fillColor:'#4a9be8', fillOpacity:0.18, strokeColor:'#4a9be8',
+                        strokeWeight:2, clickable:false, editable:true, zIndex:1 }
+    });
+    window.google.maps.event.addListener(dm, 'polygoncomplete', function(poly){
+      window._mvPoly = poly;
+      dm.setDrawingMode(null);
+      var read = function(){
+        return poly.getPath().getArray().map(function(pt){
+          return { lat: pt.lat(), lng: pt.lng() };
+        });
+      };
+      var run = function(){
+        var path = read();
+        var acres = _polyAreaAcres(path);
+        // Ask before answering an enormous shape. A drag across the whole state
+        // is nearly always a slip, and 200 contacts is not an answer.
+        if (acres > POLY_AREA_WARN_ACRES &&
+            !confirm('That shape covers about ' + Math.round(acres).toLocaleString()
+              + ' acres. Query it anyway?')) { _mvClearPoly(); return; }
+        _mvShowPolyResults(_mvPolyQuery(path));
+      };
+      // Re-run when the shape is edited, so dragging a vertex updates the answer.
+      var path = poly.getPath();
+      ['set_at','insert_at','remove_at'].forEach(function(ev){
+        window.google.maps.event.addListener(path, ev, run);
+      });
+      run();
+    });
+  }
+  dm.setMap(window._mvMap);
+  dm.setDrawingMode(window.google.maps.drawing.OverlayType.POLYGON);
+  showToast('Click to place each corner, then click the first point to close the shape.', 'info', 5000);
+}
+
+function _mvClearPoly() {
+  if (window._mvPoly) { window._mvPoly.setMap(null); window._mvPoly = null; }
+  if (window._mvDrawMgr) window._mvDrawMgr.setDrawingMode(null);
+  window._mvPolyResult = null;
+  var el = document.getElementById('mv-poly-panel');
+  if (el) { el.style.display = 'none'; el.innerHTML = ''; }
 }
 
 function _mvRenderMarkers(geocoded, parcGeo) {

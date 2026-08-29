@@ -368,7 +368,7 @@ Add new attendees to the stakeholder registry
 Follow up on the Spanish-language materials request',true,'Good turnout for a scoping meeting. Two Spanish-speaking attendees requested translated materials.'),
   ('sr154','Agency coordination meeting','2024-07-17','Agency coordination meeting','UDOT Region 2 Complex, 2010 S 2760 W, Salt Lake City','Completed',14,0,'Draft agency coordination summary, resource agency contact matrix','In-person','Coordinate resource agency review roles and the environmental review schedule.','UDWR raised wildlife movement through the south end of the corridor as a review item.','Circulate the agency coordination summary
 Set up the UDWR corridor discussion',false,'FHWA, UDWR, Salt Lake County and the three corridor cities attended.'),
-  ('sr154','DEIS public hearing','2025-10-22','Public hearing','Herriman High School, 11917 S Mustang Trail Way, Herriman','Completed',89,31,'Environmental document summary, comment forms, corridor display boards, Spanish-language fact sheet','In-person','Formal public hearing on the draft environmental document. Court reporter present for the record.','Noise wall request from the Harvest Hills HOA. Wildlife crossing adequacy at MP 14.2. Intersection operations at Redwood Road.','Submit the hearing transcript to FHWA
+  ('sr154','DEIS public hearing','2025-11-05','Public hearing','Herriman High School, 11917 S Mustang Trail Way, Herriman','Completed',89,31,'Environmental document summary, comment forms, corridor display boards, Spanish-language fact sheet','In-person','Formal public hearing on the draft environmental document. Court reporter present for the record.','Noise wall request from the Harvest Hills HOA. Wildlife crossing adequacy at MP 14.2. Intersection operations at Redwood Road.','Submit the hearing transcript to FHWA
 Enter all comment forms into the comment response matrix
 Respond to the noise wall request in writing',true,'Largest turnout of the project. Court reporter transcript ordered the same evening. Spanish interpretation provided.'),
   ('sr154','HOA meeting — Harvest Hills','2025-11-18','Community advisory committee','Harvest Hills Clubhouse, Riverton','Completed',37,0,'Noise study scope summary, corridor cross-section exhibits','In-person','Discuss the subdivision noise wall request and the noise study that will evaluate it.','Residents want a commitment that the noise study will be completed before the final environmental document.','Commit to the noise study in writing
@@ -433,7 +433,7 @@ from (values
   ('sr154','a-kirkham','Hold a project meeting with the HOA in Riverton','Harvest Hills HOA','J. Putzke','Meeting Follow-up','Fulfilled','2025-09-04','2025-11-30','2025-11-18','Meeting held at the Harvest Hills Clubhouse with 37 residents attending.','Committed after the DEIS public hearing.'),
   ('sr154','a-prescott','Conduct an intersection safety review at 11400 South','Corridor residents','S. Hansen','Access / Traffic','Fulfilled','2026-02-19','2026-05-29','2026-05-14','Safety review completed. Sightline condition confirmed and referred to design.','Committed in response to the resident sightline report.'),
   ('sr154','a-behunin','Follow up with UDWR on the minimum wildlife corridor width','Utah Division of Wildlife Resources','S. Bryner','Environmental','Open','2026-05-21','2026-08-28','','','Outstanding. UDWR is awaiting the revised corridor width exhibit.'),
-  ('sr154','a-brekke','Submit the public hearing transcript to FHWA','FHWA Utah Division','J. Putzke','Agency Coordination','Open','2025-10-22','2026-07-10','','','Transcript received from the court reporter; submittal package still being assembled.'),
+  ('sr154','a-brekke','Submit the public hearing transcript to FHWA','FHWA Utah Division','J. Putzke','Agency Coordination','Open','2025-11-05','2026-07-10','','','Transcript received from the court reporter; submittal package still being assembled.'),
   ('sr154','a-lindsey','Compile Title VI outreach documentation for the corridor','UDOT Region 2','S. Hansen','Other','Open','2026-04-15','2026-09-30','','','Ongoing. LEP and underserved-population contacts are already flagged in the registry.'),
   ('logan','b-hendricks','Post the construction schedule on the project website and keep it current','400 North residents and businesses','S. Hansen','Schedule / Timeline','Fulfilled','2025-02-20','2025-03-31','2025-03-12','Schedule page published and updated weekly with the look-ahead.','Committed at the February 2025 public meeting.'),
   ('logan','b-marchant','Hold a school zone safety meeting with the Ellis Elementary principal','Ellis Elementary School','S. Bryner','Access / Traffic','Fulfilled','2025-03-19','2025-04-30','2025-04-16','Meeting held with the principal and district transportation director. Walk route agreed.','Committed after the business corridor meeting raised school routing.'),
@@ -1298,7 +1298,7 @@ select
   'cp-sr154-deis-2025', p.id,
   'DEIS Comment Period',
   'EA-30DAY',
-  'Public review period on the draft environmental document for the SR-154 corridor. Notice of availability published in local and regional outlets; formal public hearing held October 22, 2025 with a court reporter present.',
+  'Public review period on the draft environmental document for the SR-154 corridor. Notice of availability published in local and regional outlets; formal public hearing held November 5, 2025 with a court reporter present.',
   date '2025-10-15', date '2025-11-15', 'Closed'
 from _seed_proj p where p.slug = 'sr154';
 
@@ -1310,9 +1310,20 @@ from _seed_proj p where p.slug = 'sr154';
 do $$
 declare
   vals constant jsonb := jsonb_build_object(
-    'venue',         'Herriman High School, 11917 S Mustang Trail Way, Herriman',
-    'hearing_date',  '2025-10-22',
-    'first_ad_date', '2025-10-15');
+    'venue',          'Herriman High School, 11917 S Mustang Trail Way, Herriman',
+    -- Utah Admin Code R930-2-5: two newspaper notices for a project public
+    -- hearing — the FIRST at least two weeks before the hearing, the SECOND
+    -- five to ten days before. Both are measured against the HEARING DATE, not
+    -- the close of the comment period.
+    --   1st ad 10/15 -> 21 days before the hearing  (also the comment period
+    --                   start, which is what "comment period start = day of
+    --                   first advertisement" asks for on an EA NOA)
+    --   2nd ad 10/28 ->  8 days before the hearing  (inside the 5-10 window)
+    -- The hearing previously sat on 10/22 with a single 10/15 ad, i.e. 7 days
+    -- of notice — non-compliant, and the kind of thing a UDOT reviewer checks.
+    'hearing_date',   '2025-11-05',
+    'first_ad_date',  '2025-10-15',
+    'second_ad_date', '2025-10-28');
   r record; applied text[] := '{}'; skipped text[] := '{}';
 begin
   for r in

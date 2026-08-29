@@ -17897,20 +17897,62 @@ function openPeriodModal(id){
           ${PERIOD_STATUSES.map(s=>`<option value="${s}" ${(p.status||'Open')===s?'selected':''}>${s}</option>`).join('')}
         </select>
       </div>
-      <div class="fr"><label>Hearing date</label><input type="date" id="f-phearing" value="${p.hearingDate||''}" title="Public hearing date"></div>
+      <div class="fr"><label>Hearing date</label><input type="date" id="f-phearing" value="${p.hearingDate||''}" oninput="_cpAdCheck()" title="Public hearing date"></div>
     </div>
     <div class="fr"><label>Hearing location / venue</label><input id="f-pvenue" value="${escHtml(p.venue||'')}" placeholder="Address or virtual meeting link"></div>
-    <div style="margin-top:10px;margin-bottom:4px;font-size:12px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.4px">Advertising — required notices (UDOT MOI Ch. 4.5(A)(4)(a))</div>
+    <div style="margin-top:10px;margin-bottom:4px;font-size:12px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.4px">Advertising — required notices (Utah Admin Code R930-2-5)</div>
     <div class="fgrid fg2f">
-      <div class="fr"><label>1st newspaper ad date <span style="color:var(--fog);font-weight:400">(≥15 days before deadline)</span></label><input type="date" id="f-pad1" value="${p.firstAdDate||''}"></div>
-      <div class="fr"><label>2nd newspaper ad date <span style="color:var(--fog);font-weight:400">(≥7 days before deadline)</span></label><input type="date" id="f-pad2" value="${p.secondAdDate||''}"></div>
+      <div class="fr"><label>1st newspaper ad date <span style="color:var(--fog);font-weight:400">(≥14 days before the hearing)</span></label><input type="date" id="f-pad1" value="${p.firstAdDate||''}" oninput="_cpAdCheck()"></div>
+      <div class="fr"><label>2nd newspaper ad date <span style="color:var(--fog);font-weight:400">(5–10 days before the hearing)</span></label><input type="date" id="f-pad2" value="${p.secondAdDate||''}" oninput="_cpAdCheck()"></div>
     </div>
+    <div id="f-pad-check" style="font-size:11.5px;line-height:1.6;margin:2px 0 4px"></div>
     <div class="fr" id="f-pfr-wrap" style="${curReq&&curReq.frRequired?'':'display:none'}"><label>Federal Register NOA date <span style="color:var(--amber);font-weight:400">(EIS required)</span></label><input type="date" id="f-pfr" value="${p.federalRegisterDate||''}"></div>
     <div class="fr"><label>Description / notes</label>
       <textarea id="f-pdesc" rows="3" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:10px 12px;resize:vertical;font-family:inherit;line-height:1.6">${escHtml(p.description||'')}</textarea>
     </div>
   `,`<button class="btn btn-ghost" onclick="closeM()">Cancel</button>
      <button class="btn btn-primary" onclick="savePeriod()">Save period</button>`,true);
+  // Show the notice-timing verdict for the record as it stands, not only after
+  // an edit — an already-saved period is exactly where a timing problem hides.
+  _cpAdCheck();
+}
+
+// Newspaper-notice timing for a project public hearing.
+//
+// Utah Admin Code R930-2-5 measures BOTH notices against the HEARING DATE:
+// the first at least two weeks prior, the second five to ten days prior. Not
+// against the comment-period end, and not against a request-for-hearing
+// deadline — that is a different NEPA step (23 CFR 771.111(h), offering the
+// OPPORTUNITY of a hearing), which applies when no hearing is actually held.
+// The label used to say only "before deadline" without naming which deadline,
+// measured against a date the app does not even store.
+//
+// Advisory, never blocking: a notice published late is still a fact that has to
+// be recorded truthfully. Saying so at entry time is the point.
+function _cpAdCheck(){
+  var el=document.getElementById('f-pad-check'); if(!el) return;
+  var v=function(id){ var e=document.getElementById(id); return e?e.value:''; };
+  var hd=v('f-phearing'), a1=v('f-pad1'), a2=v('f-pad2');
+  if(!hd){
+    el.innerHTML = (a1||a2)
+      ? '<span style="color:var(--fog)">Set a hearing date to check notice timing. '
+        + 'With no hearing these advertise the <em>opportunity to request</em> one '
+        + '(23 CFR 771.111(h)), not the hearing itself.</span>'
+      : '';
+    return;
+  }
+  var days=function(from){ if(!from) return null;
+    return Math.round((new Date(hd+'T12:00:00')-new Date(from+'T12:00:00'))/86400000); };
+  var d1=days(a1), d2=days(a2), out=[];
+  var ok=function(t){ return '<span style="color:var(--green)">\u2713 '+t+'</span>'; };
+  var no=function(t){ return '<span style="color:var(--amber)">\u26a0 '+t+'</span>'; };
+  if(d1!==null) out.push(d1>=14 ? ok('1st ad '+d1+' days before the hearing')
+    : no('1st ad '+d1+' day'+(d1===1?'':'s')+' before the hearing \u2014 R930-2-5 wants at least 14'));
+  if(d2!==null) out.push(d2>=5&&d2<=10 ? ok('2nd ad '+d2+' days before the hearing')
+    : no('2nd ad '+d2+' day'+(d2===1?'':'s')+' before the hearing \u2014 R930-2-5 wants 5 to 10'));
+  if(!out.length) out.push('<span style="color:var(--fog)">R930-2-5: two notices \u2014 the first \u226514 days '
+    + 'before the hearing, the second 5\u201310 days before.</span>');
+  el.innerHTML=out.join('<br>');
 }
 
 function savePeriod(){

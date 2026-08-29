@@ -840,6 +840,37 @@ upsert.) Both bugs guarded by `test/tests/40-public-comments.test.js`, which
 asserts every key `saveComment` writes is mappable — the check that would have
 caught the original.
 
+### Hearing notices are timed against the HEARING DATE (Aug 2026)
+**Utah Admin Code R930-2-5** governs newspaper notice for a UDOT project public
+hearing: at least two notices in a daily paper with statewide circulation, the
+**first ≥14 days before the hearing**, the **second 5–10 days before** it. Not
+against the comment-period close, and not against a request-for-hearing
+deadline.
+
+The comment-period form labelled both fields *"(≥15 days before deadline)"* /
+*"(≥7 days before deadline)"* without naming which deadline, and validated
+nothing. That phrasing came from the app's own NEPA checklist (CE-11 / EA-26),
+which cites UDOT MOI Ch. 4.5(A)(4)(a) and says **"request-for-hearing
+deadline"** — a DIFFERENT NEPA step (23 CFR 771.111(h): offering the
+*opportunity* of a hearing, which applies when no hearing is held). That
+deadline is **not a column on `pi_comment_periods`**, so the label pointed at a
+date the app does not store. The checklist text is left alone — it is correct
+for its own scenario.
+
+- `_cpAdCheck()` (next to `savePeriod`) reports the interval against the hearing
+  date, live on edit and on modal open. **Advisory, never blocking** — a notice
+  published late is still a fact that must be recorded truthfully.
+- With **no hearing date** it declines to judge and says why, rather than
+  applying R930-2-5 to a record the rule does not cover.
+- **The demo seed was non-compliant** and is corrected: the SR-154 hearing sat
+  on 2025-10-22 with a single 10-15 ad — seven days of notice. Now the hearing
+  is 2025-11-05 with ads on 10-15 (21 days) and 10-28 (8 days), which also keeps
+  the first ad on the comment-period start date, as the EA NOA guidance asks.
+  Moving the hearing rippled to the `pi_meetings` row, the period description
+  and the transcript commitment — all updated together.
+- Guarded by `test/tests/41-hearing-notice-timing.test.js` (20 checks), which
+  asserts the seeded record complies and that the old dates would be flagged.
+
 ## Pending / next tasks
 
 **⚠ This list drifts — VERIFY in code before treating anything as "not built."**

@@ -98,6 +98,24 @@ and several views. "Import stakeholders" now sits in the nav box beside Settings
 The freed height is deliberately left to the nav box (`overflow-y:auto`) so the
 Views list has room to grow.
 
+### The dashboard project card is IDENTITY + EXCEPTIONS (Aug 2026)
+`projCard()` (dashboard only — the Projects view builds its own cards) used to
+carry a sentiment-mix bar, a NEPA checklist bar, and a row of contacts /
+champions / opponents / interactions. **Every one of those is also on the
+Projects view card**, which is where you go to compare projects. On the
+dashboard they were duplicated detail costing four rows of vertical height per
+card, and the dashboard is the one screen where height is the scarce resource.
+
+What stays is what a dashboard is for: **overdue follow-ups** and **how long
+since the client got a status report** — things that are wrong or going stale,
+which no other screen surfaces at a glance. Card height 171px → 109px.
+
+The footer row is omitted entirely when a project has neither, rather than
+rendering an empty bordered strip. `fuTag` lost its `margin-left:auto` (it is
+now the first chip, not the last) and the portal chip keeps its own, so the two
+sit at opposite ends. The `psSt` / `champ` / `opp` / `ints2` scans went with the
+markup — they ran per card on every render for numbers nothing displayed.
+
 ### Events do NOT create follow-ups (Aug 2026)
 The Edit-event modal's "Action items" textarea used to create a `pi_interactions`
 row per line. Removed — the field is now documentation on the event record only.

@@ -2087,10 +2087,9 @@ function renderDash(el){
   const active=projs.filter(p=>p.status==='Active');
   const clientSums=DB.get('client_summaries')||[];
   function projCard(p){
-    const psSt=ps.filter(x=>x.projectId===p.id);
-    const champ=psSt.filter(x=>x.support==='Champion').length;
-    const opp=psSt.filter(x=>x.support==='Opponent').length;
-    const ints2=ints.filter(i=>i.projectId===p.id).length;
+    // No contact/sentiment/interaction counts on this card any more, so the
+    // scans that fed them are gone too — they ran per card on every dashboard
+    // render for numbers nothing displayed.
     const projFU=ints.filter(i=>i.projectId===p.id&&i.followUp&&!i.followUpDone).length;
     const projOD=ints.filter(i=>i.projectId===p.id&&i.followUp&&!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<new Date()).length;
     const card=document.createElement('div');
@@ -2099,13 +2098,7 @@ function renderDash(el){
     card.onmouseover=function(){card.style.transform='translateY(-2px)';card.style.borderTopColor='rgba(255,255,255,.28)';};
     card.onmouseout=function(){card.style.transform='';card.style.borderTopColor='rgba(255,255,255,.14)';};
     card.onclick=function(){filterByProject(p.id);setView('stakeholders');};
-    const fuTag=projFU>0?`<span style="color:${projOD>0?'var(--red)':'var(--amber)'};margin-left:auto;font-weight:500">${projOD>0?projOD+' overdue':projFU+' open FU'}</span>`:'';
-    const oppTag=opp>0?`<span style="color:var(--red)">${opp} opp.</span>`:'';
-    var neutCt=psSt.filter(x=>x.support==='Neutral').length;
-    var sentTot=champ+neutCt+opp||1;
-    var champPct=Math.round(champ/sentTot*100);
-    var neutPct=Math.round(neutCt/sentTot*100);
-    var oppPct=100-champPct-neutPct;
+    const fuTag=projFU>0?`<span style="color:${projOD>0?'var(--red)':'var(--amber)'};font-weight:500">${projOD>0?projOD+' overdue':projFU+' open FU'}</span>`:'';
     var pSums=clientSums.filter(function(s){return String(s.projectId)===String(p.id);});
     pSums.sort(function(a,b){return a.publishedAt>b.publishedAt?-1:1;});
     var lastSum=pSums[0];
@@ -2126,24 +2119,24 @@ function renderDash(el){
       portalChip='<span title="'+escHtml(pubTip)+'" style="color:'+(pubAge>=30?'var(--amber)':'var(--teal)')
                 +';font-size:11px;font-weight:600;margin-left:auto;cursor:help">✦ Portal: '+fmt(pubDay)+'</span>';
     }
-    card.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-      <div><div style="font-weight:600;font-size:14px;margin-bottom:2px">${p.name}</div>
+    // The dashboard card is IDENTITY + EXCEPTIONS, nothing else.
+    //
+    // It used to carry a sentiment mix bar, a NEPA checklist bar, and a row of
+    // contacts / champions / opponents / interactions. Every one of those also
+    // appears on the Projects view card, which is where you go to compare
+    // projects — so on the dashboard they were duplicated detail costing four
+    // rows of vertical space per card, and the dashboard is the one screen
+    // where height is the scarce resource.
+    //
+    // What stays is what a dashboard is for: overdue follow-ups, and how long
+    // it has been since the client got a status report. Both are things that
+    // are WRONG or GOING STALE, which no other screen surfaces at a glance.
+    const chips=[fuTag,portalChip].filter(Boolean).join('');
+    card.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px${chips?';margin-bottom:8px':''}">
+      <div style="min-width:0"><div style="font-weight:600;font-size:14px;margin-bottom:2px">${p.name}</div>
       <div style="font-size:12px;color:var(--fog);font-family:var(--mono)">${p.pid} · ${p.client}</div></div>
-      <span class="badge b-sky">${p.phase}</span></div>
-      <div style="height:4px;border-radius:2px;overflow:hidden;background:rgba(255,255,255,.06);margin-bottom:${p.nepaChecklist&&p.nepaChecklist.length>0?'6':'10'}px;display:flex">
-        <div style="width:${champPct}%;background:var(--green)"></div>
-        <div style="width:${neutPct}%;background:var(--slate)"></div>
-        <div style="width:${oppPct}%;background:var(--red)"></div>
-      </div>
-      ${(()=>{const cl=p.nepaChecklist||[];if(!cl.length)return'';const done=cl.filter(x=>x.checked).length;const pct=Math.round(done/cl.length*100);const col=pct===100?'var(--green)':pct>=60?'#4db6ac':'var(--sky-lt)';return'<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px"><span style="font-size:10px;color:var(--fog);font-weight:600;text-transform:uppercase;letter-spacing:.4px">NEPA checklist</span><span style="font-size:10px;color:'+col+';font-weight:700">'+done+'/'+cl.length+' ('+pct+'%)</span></div><div style="height:3px;border-radius:2px;overflow:hidden;background:rgba(255,255,255,.06)"><div style="width:'+pct+'%;height:100%;background:'+col+';border-radius:2px;transition:width .3s"></div></div></div>';})()}
-      <div style="display:flex;gap:12px;font-size:12px;flex-wrap:wrap;padding-top:8px;border-top:1px solid var(--border);align-items:center">
-        <span style="color:var(--mist)">${psSt.length} contacts</span>
-        <span style="color:var(--green)">${champ} champ.</span>
-        ${oppTag}
-        <span style="color:var(--slate)">${ints2} interactions</span>
-        ${fuTag}
-        ${portalChip}
-      </div>`;
+      <span class="badge b-sky" style="flex-shrink:0">${p.phase}</span></div>
+      ${chips?`<div style="display:flex;gap:12px;font-size:12px;align-items:center;padding-top:8px;border-top:1px solid var(--border)">${chips}</div>`:''}`;
     return card.outerHTML;
   }
   const dels=DB.get('deliverables');

@@ -1,7 +1,7 @@
 // UGRC reconciliation — Polygon Phase 2a (Aug 2026).
 //
 // Checks a parcel this app already tracks against Utah's statewide county GIS
-// records (UGRC's Parcels_Utah layer), one APN at a time. Unlike the map's
+// records (UGRC's UtahStatewideParcels layer), one APN at a time. Unlike the map's
 // polygon-draw feature, this needs no Google Maps object at all — it is a
 // plain fetch — so unlike test 42 it CAN be driven end to end here, including
 // the network-failure path.

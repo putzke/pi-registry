@@ -1842,7 +1842,7 @@ pi_parcels row** — that stays 2b's job. `_ugrcReconcileParcel` /
 `_ugrcReconcileList` / `ugrcReconcileVisible` / `ugrcReconcileOne`, next to
 `delParcel` in `index.html`.
 
-- **Endpoint:** `https://services1.arcgis.com/99lidPhWCzftIe9K/ArcGIS/rest/services/Parcels_Utah/FeatureServer/0`
+- **Endpoint:** `https://services1.arcgis.com/99lidPhWCzftIe9K/arcgis/rest/services/UtahStatewideParcels/FeatureServer/0`
   — the statewide basic layer (all 29 counties, one mosaic), CC BY 4.0, no API
   key (ArcGIS Online hosted feature layers published for public access, unlike
   the separate key-gated `api.mapserv.utah.gov` UGRC API). Fields used:
@@ -1851,11 +1851,34 @@ pi_parcels row** — that stays 2b's job. `_ugrcReconcileParcel` /
   yet** — those live on UGRC's per-county LIR layers, a different endpoint per
   county, and are staged as a later enrichment step on top of this one, per
   the roadmap's own priority (statewide basic now, LIR later).
-  ⚠ **This exact endpoint could not be verified live from the build
-  environment** (egress to `*.arcgis.com` and `*.gis.utah.gov` is blocked
-  there) — it is corroborated by multiple independent search results
-  referencing the same org id and layer name, not by a direct request. Smoke-
-  test one real APN against production before relying on this in the field.
+  **⚠ This was WRONG for the first day it shipped, and the wrong-ness was
+  invisible in exactly the way the caveat below warned about.** The sandboxed
+  build environment cannot reach `*.arcgis.com` at all, so the endpoint was
+  picked from search-result corroboration — three independent hits naming the
+  same org id and a layer called `Parcels_Utah` — and shipped without a live
+  request. `Parcels_Utah` turned out to be a REAL service under the same org:
+  correctly schemaed, fully populated (284,759 rows), and answering every
+  query with a clean 200. It just isn't the statewide layer — its actual
+  coverage, decoded from its own extent, is roughly the Salt Lake Valley
+  (lng -112.13..-110.98, lat 39.83..40.65). Every test against it for Weber
+  County came back a well-formed `{count:0}` — indistinguishable from
+  "genuinely nothing here" without decoding the extent. Found live, in the
+  field, by a user drawing a real polygon around real tracked parcels and
+  getting nothing back — ruled out ring winding, missing `where=1=1`, and
+  location specificity one at a time before checking the layer's total row
+  count (non-zero) and finally its extent (wrong region) settled it.
+  **The per-APN match in `_ugrcQueryByApn` was affected too, and more
+  seriously** — it matches on the bare 9-digit `PARCEL_ID` with no county
+  scoping, so a "match" against the wrong regional layer is not a near-miss,
+  it is a **coincidental digit collision with an unrelated parcel** presented
+  as a confirmed compliance fact. `ugrc_matched`/`ugrc_own_type` values written
+  before this fix are unverified and should be re-checked, not trusted.
+  Corrected via `gis.utah.gov`'s own dataset page → "View API Resources" →
+  GeoService, confirmed live (non-zero statewide count, non-zero Weber County
+  count, extent decoding to the whole state) before merging. The lesson isn't
+  "verify endpoints" in the abstract — it's that **a live 200 response proves
+  nothing about coverage**, and search-result corroboration cannot substitute
+  for decoding the actual extent of whatever the URL turns out to point at.
 - **OWN_TYPE is not an owner name and never will be from this layer** — UGRC's
   own documentation says owner identity is withheld from parcel GIS sharing
   by design (a county data-sales protection). `ugrc_own_type` is a

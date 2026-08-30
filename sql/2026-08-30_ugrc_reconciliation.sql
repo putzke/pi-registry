@@ -1,6 +1,8 @@
 -- Polygon Phase 2a — reconcile pi_parcels against UGRC's statewide parcel
--- layer (Parcels_Utah, ArcGIS Online org 99lidPhWCzftIe9K, all 29 counties in
--- one mosaic). This is the RECONCILE half of Phase 2, not the DISCOVER half:
+-- layer (UtahStatewideParcels, ArcGIS Online org 99lidPhWCzftIe9K, all 29
+-- counties in one mosaic — see the CLAUDE.md note on the wrong-endpoint fix
+-- shipped the same week, if the service name here ever looks unfamiliar).
+-- This is the RECONCILE half of Phase 2, not the DISCOVER half:
 -- it checks parcels the app already tracks against county GIS records, one
 -- APN at a time. It does not create new pi_parcels rows and does not draw a
 -- parcel-boundary layer on the map — that is deliberately staged for later

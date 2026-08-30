@@ -18795,7 +18795,7 @@ async function delParcel(id){
 //
 // This is the RECONCILE half of the roadmap's Phase 2, not the DISCOVER half.
 // It checks a parcel this app ALREADY tracks against Utah's statewide parcel
-// GIS layer (UGRC's "Parcels_Utah" mosaic of all 29 counties) — it never
+// GIS layer (UGRC's "UtahStatewideParcels" mosaic of all 29 counties) — it never
 // creates a pi_parcels row. "Untracked parcels in this polygon" and the
 // "Import" button that follows are a separate, later step; see the roadmap
 // note in CLAUDE.md for why reconcile comes first.
@@ -18822,7 +18822,29 @@ async function delParcel(id){
 // — no wildcard, no fuzzy fallback. That mirrors the importer's owner-matching
 // rule elsewhere in this app: a compliance record either matches or it is left
 // for a human to resolve, never guessed into place.
-const UGRC_PARCELS_URL = 'https://services1.arcgis.com/99lidPhWCzftIe9K/ArcGIS/rest/services/Parcels_Utah/FeatureServer/0/query';
+// FIXED live in the field, Aug 2026: this pointed at "Parcels_Utah" under the
+// same org, which turned out to be a REAL, fully-schemaed, fully-populated
+// (284,759 rows) service that just isn't the statewide layer — its actual
+// coverage is roughly the Salt Lake Valley (lng -112.13..-110.98,
+// lat 39.83..40.65), decoded from its own extent. Every query against it for
+// Weber County came back a clean, well-formed {count:0} — indistinguishable
+// from "genuinely nothing here" without decoding the extent, which is exactly
+// what happened here before it was caught. Worse: _ugrcQueryByApn's per-APN
+// match ALSO ran against it, with no county scoping on the 9-digit PARCEL_ID,
+// so an earlier "match" on a Weber County parcel was very likely a
+// coincidental digit collision with an unrelated Salt Lake Valley parcel, not
+// a genuine confirmation — any ugrc_matched/ugrc_own_type value written before
+// this fix should be treated as unverified and re-checked.
+// "UtahStatewideParcels" (confirmed via gis.utah.gov's own dataset page → View
+// API Resources → GeoService) decodes to an extent of roughly
+// lng -114.05..-108.99, lat 37.24..41.75 — the whole state — and returns a
+// real, non-zero count for a small Weber County test box. Same org id, same
+// field names (PARCEL_ID/PARCEL_ADD/PARCEL_CITY/PARCEL_ZIP/OWN_TYPE) as the
+// wrong one, which is exactly how the wrong one looked plausible enough to
+// ship without a live check that this sandboxed build environment could not
+// perform (egress to *.arcgis.com is blocked here — see the note this
+// replaced). Confirmed live, from the browser, before merging this fix.
+const UGRC_PARCELS_URL = 'https://services1.arcgis.com/99lidPhWCzftIe9K/ArcGIS/rest/services/UtahStatewideParcels/FeatureServer/0/query';
 
 function _ugrcNormalizeApn(raw){
   return String(raw||'').replace(/[^0-9]/g,'');

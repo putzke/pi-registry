@@ -1681,6 +1681,37 @@ every column declares a type, that the built schema matches, and spot-checks the
 nine that were previously guessed wrong.
 
 
+## Google Maps API — standing deprecations (Aug 2026)
+
+`loadGoogleMaps()` pins **no version**, so we ride the weekly channel and Google's
+removals land on us without warning. That is how `DrawingManager` broke (see
+Polygon Phase 1 below). **Maps cannot load in the test harness, so NO test can
+catch one of these** — a removed Google library is indistinguishable there from
+the library that never loads. They surface only in the browser console.
+
+**`google.maps.Marker` — deprecated Feb 2024, NOT removed.** Console prints a
+notice on every map init. Google's wording is deliberately soft: *not scheduled
+to be discontinued, will keep getting fixes for major regressions, at least 12
+months notice before discontinuation*. What is lost is fixes for existing minor
+bugs. **Decision: left alone**, and the reason is not laziness —
+
+- The replacement, `AdvancedMarkerElement`, **requires a cloud Map ID**, and a
+  map with a `mapId` **ignores the inline `styles` array**. All three of our maps
+  pass that array for the dark navy theme. Migrating therefore moves part of the
+  app's appearance out of this repo and into a Google Cloud console setting, on
+  Jeff's account — a real loss for a single-file app with no build step, and not
+  something Claude can do.
+- Advanced markers take a DOM element, not `icon`. The numbered contact circles
+  (`SymbolPath.CIRCLE` + label) become styled divs; the parcel squares are the
+  easy half, since `_mvParcIcon` already emits an SVG.
+- Four call sites, all `index.html`: `_mvRenderMarkers` (contacts + parcels) and
+  two other stakeholder maps. Static Maps (print/export) is a different API and
+  is unaffected.
+
+Revisit when Google announces an actual removal date, or when Jeff is in the
+Cloud console anyway. **`Polygon`, `Polyline` and `InfoWindow` are core and are
+not deprecated** — only the optional drawing library was removed.
+
 ## Map: Polygon Drawing + Property Query (3 phases — **Phase 1 SHIPPED Aug 2026**)
 
 ### What it is

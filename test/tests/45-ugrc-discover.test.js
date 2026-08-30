@@ -55,6 +55,21 @@ module.exports = {
 
       const box = [{ lat: 40.5, lng: -111.9 }, { lat: 40.5, lng: -111.8 }, { lat: 40.6, lng: -111.8 }, { lat: 40.6, lng: -111.9 }];
 
+      // ── the ring is always wound clockwise, regardless of click order ───
+      // Found live on a real drawn shape: Esri JSON requires the exterior
+      // ring clockwise (opposite of GeoJSON), and a counter-clockwise ring is
+      // silently treated by ArcGIS Server as having no area to intersect —
+      // a spatial query against it comes back a genuine, well-formed zero
+      // that looks identical to "nothing here" in the UI, except it isn't.
+      const winding = await app.page.evaluate((pts) => {
+        const shoelaceArea = ring => { let a = 0; for (let i=0;i<ring.length-1;i++) a += ring[i][0]*ring[i+1][1] - ring[i+1][0]*ring[i][1]; return a; };
+        const ccw = _ugrcRingFromPath(pts); // pts is CCW by construction (see `box` above)
+        const cw = _ugrcRingFromPath(pts.slice().reverse());
+        return { ccwArea: shoelaceArea(ccw), cwArea: shoelaceArea(cw) };
+      }, box);
+      t.ok(winding.ccwArea < 0, 'a counter-clockwise click order is flipped to clockwise (negative shoelace sum)');
+      t.ok(winding.cwArea < 0, 'a clockwise click order is left as clockwise — the fix does not double-flip it');
+
       // ── guard: no project selected — no network call at all ────────────
       const noProj = await app.page.evaluate(async pts => {
         S.projectFilter = '';

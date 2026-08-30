@@ -19026,6 +19026,18 @@ function _ugrcRingFromPath(path){
   var ring = path.map(function(p){ return [p.lng, p.lat]; });
   var first = ring[0], last = ring[ring.length-1];
   if (!first || !last || first[0]!==last[0] || first[1]!==last[1]) ring.push(first.slice());
+  // Esri JSON requires the EXTERIOR ring wound CLOCKWISE — the opposite of
+  // GeoJSON's counter-clockwise convention. The user's click order is not
+  // guaranteed to come out that way, and a counter-clockwise "exterior" ring
+  // is exactly the kind of thing ArcGIS Server can silently treat as having
+  // no area to intersect — a spatial query against it comes back with a
+  // genuine, well-formed zero that looks identical to "nothing here", except
+  // it isn't. Found live: a real drawn shape around three tracked parcels
+  // came back 0 from _ugrcCountInPolygon. Enforce the winding here rather
+  // than trust the click order.
+  var area = 0;
+  for (var i=0;i<ring.length-1;i++){ area += ring[i][0]*ring[i+1][1] - ring[i+1][0]*ring[i][1]; }
+  if (area > 0) ring.reverse(); // positive shoelace sum = counter-clockwise; flip it
   return ring;
 }
 

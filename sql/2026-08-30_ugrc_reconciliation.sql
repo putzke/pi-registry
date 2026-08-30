@@ -1,0 +1,54 @@
+-- Polygon Phase 2a — reconcile pi_parcels against UGRC's statewide parcel
+-- layer (Parcels_Utah, ArcGIS Online org 99lidPhWCzftIe9K, all 29 counties in
+-- one mosaic). This is the RECONCILE half of Phase 2, not the DISCOVER half:
+-- it checks parcels the app already tracks against county GIS records, one
+-- APN at a time. It does not create new pi_parcels rows and does not draw a
+-- parcel-boundary layer on the map — that is deliberately staged for later
+-- (see the CLAUDE.md note next to this migration for why).
+--
+-- Four columns, all nullable, all advisory:
+--   ugrc_own_type    — UGRC's generalized OWN_TYPE (Federal/Private/State/
+--                       Tribal) for cross-check, NOT an owner name. UGRC's own
+--                       documentation is explicit that owner identity is
+--                       withheld from this layer by design (county data-sales
+--                       protection) — that gap is exactly what Phase 3's county
+--                       assessor APIs exist to close. Do not treat this column
+--                       as an owner name field.
+--   ugrc_address      — the address UGRC has on file for the matched parcel,
+--                        kept SEPARATE from situs_address so a discrepancy is
+--                        visible rather than silently overwriting a value the
+--                        consultant entered.
+--   ugrc_matched       — tri-state, not a plain boolean the app happens to
+--                         leave at its default: NULL = never checked, TRUE =
+--                         found, FALSE = checked and genuinely not found (a
+--                         real answer from the service, zero features). A
+--                         failed request (network error, non-200, malformed
+--                         JSON) must NEVER be written here — this app has
+--                         already learned that lesson once, the hard way, with
+--                         sbGet turning a 401 into an empty table that looked
+--                         indistinguishable from "no rows". Same failure
+--                         shape here: a lookup that couldn't reach UGRC is not
+--                         evidence the parcel doesn't exist in county records.
+--   ugrc_checked_at    — set ONLY alongside a genuine TRUE/FALSE answer, never
+--                         on a request that threw. Distinguishes "never
+--                         checked" from "checked and not found" in the UI.
+--
+-- Deliberately NOT added here: acreage, market value, property class. Those
+-- live on UGRC's per-county LIR layers, not the statewide basic layer this
+-- phase reads — pulling them in is the LIR-enrichment step staged for later.
+--
+-- Coordinates: reconciliation may backfill pi_parcels.latitude/longitude from
+-- the matched feature's geometry, but ONLY when both are currently blank.
+-- latitude/longitude on this table are survey-grade by convention elsewhere in
+-- this app (see the parcel map-layer notes in CLAUDE.md) and a value already
+-- on the record is never overwritten by an approximate bounding-box centroid.
+--
+-- No RLS/grant change needed: these are new columns on an existing table whose
+-- policies and grants already apply at the table level.
+--
+-- Idempotent: safe to run more than once.
+
+alter table pi_parcels add column if not exists ugrc_own_type   text;
+alter table pi_parcels add column if not exists ugrc_address    text;
+alter table pi_parcels add column if not exists ugrc_matched    boolean;
+alter table pi_parcels add column if not exists ugrc_checked_at timestamptz;

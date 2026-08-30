@@ -3,7 +3,7 @@
 <head>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiIgdmlld0JveD0iMCAwIDMyIDMyIiByb2xlPSJpbWciIGFyaWEtbGFiZWw9Ikhvcml6b24gQ09NUEFTUyBzeW1ib2wiPgogIDxnIHRyYW5zZm9ybT0ic2NhbGUoMC4zMikiPgogICAgPGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iMzciIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzE0MUEyNCIgc3Ryb2tlLXdpZHRoPSIzIj48L2NpcmNsZT4KICAgIDxsaW5lIHgxPSIxNCIgeTE9IjUwIiB4Mj0iODYiIHkyPSI1MCIgc3Ryb2tlPSIjMTQxQTI0IiBzdHJva2Utd2lkdGg9IjIuNCIgb3BhY2l0eT0iMC4zMiI+PC9saW5lPgogICAgPHBhdGggZD0iTTUwIDEzIEEzNyAzNyAwIDAgMSA4NyA1MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMUY3QTlDIiBzdHJva2Utd2lkdGg9IjcuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIj48L3BhdGg+CiAgICA8cG9seWdvbiBwb2ludHM9IjY1LjYsMzQuNCA1Mi45Nyw1Mi45NyA0Ny4wMyw0Ny4wMyIgZmlsbD0iI0E0MzAyQSI+PC9wb2x5Z29uPgogICAgPHBvbHlnb24gcG9pbnRzPSIzOCw2MiA1Mi45Nyw1Mi45NyA0Ny4wMyw0Ny4wMyIgZmlsbD0iIzNBNDI1MCI+PC9wb2x5Z29uPgogICAgPGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNCIgZmlsbD0iIzE0MUEyNCI+PC9jaXJjbGU+CiAgPC9nPgo8L3N2Zz4=">
   <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://maps.googleapis.com https://maps.gstatic.com; style-src 'unsafe-inline' https://fonts.googleapis.com https://maps.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://ncfbblhlsiglxkoiounv.supabase.co https://maps.googleapis.com https://places.googleapis.com https://api.anthropic.com https://cdnjs.cloudflare.com; img-src 'self' data: https://maps.gstatic.com https://maps.googleapis.com;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://maps.googleapis.com https://maps.gstatic.com; style-src 'unsafe-inline' https://fonts.googleapis.com https://maps.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://ncfbblhlsiglxkoiounv.supabase.co https://maps.googleapis.com https://places.googleapis.com https://api.anthropic.com https://cdnjs.cloudflare.com https://services1.arcgis.com; img-src 'self' data: https://maps.gstatic.com https://maps.googleapis.com;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Horizon COMPASS — Public Involvement Management</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -831,7 +831,11 @@ const SB_TO_INT = {
     id:'id', projectId:'project_id', parcelNumber:'parcel_number',
     situsAddress:'situs_address', latitude:'latitude', longitude:'longitude',
     acquisitionType:'acquisition_type', status:'status', noticeDate:'notice_date',
-    notes:'notes'
+    notes:'notes',
+    // UGRC reconciliation (Phase 2a) — see sql/2026-08-30_ugrc_reconciliation.sql
+    // for why each is nullable/tri-state rather than a plain flag.
+    ugrcOwnType:'ugrc_own_type', ugrcAddress:'ugrc_address',
+    ugrcMatched:'ugrc_matched', ugrcCheckedAt:'ugrc_checked_at'
   },
   pi_parcel_owners: {
     id:'id', parcelId:'parcel_id', stakeholderId:'stakeholder_id',
@@ -18579,7 +18583,8 @@ function renderParcels(el){
         <option value="">All projects</option>${projs.map(p=>`<option value="${p.id}"${String(projF)===String(p.id)?' selected':''}>${escHtml(p.pid||'')} — ${escHtml(p.name||'')}</option>`).join('')}
       </select>
       ${scoped.length?`<button class="btn" onclick="printRowRegister()" title="Parcel register and mailing list, on screen and print-ready. Every parcel in scope — the search and status filters do not apply."><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6V2h8v4"/><rect x="2" y="6" width="12" height="7" rx="1"/><path d="M4 10h8M4 13h5"/></svg>Print register</button>
-      <button class="btn" onclick="exportRowRegisterXlsx()" title="Excel workbook — Parcel register plus a Mailing list with one row per owner and their mailing address. Every parcel in scope, filters do not apply. Imports straight into Google Sheets."><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 2v8M5 7l3 3 3-3M3 13h10"/></svg>Export .xlsx</button>`:''}
+      <button class="btn" onclick="exportRowRegisterXlsx()" title="Excel workbook — Parcel register plus a Mailing list with one row per owner and their mailing address. Every parcel in scope, filters do not apply. Imports straight into Google Sheets."><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 2v8M5 7l3 3 3-3M3 13h10"/></svg>Export .xlsx</button>
+      <button class="btn" onclick="ugrcReconcileVisible()" title="Check each parcel below against Utah's statewide county GIS records (UGRC) — confirms the APN exists and cross-checks owner type and address. Respects the current search/status filters; clear them to check everything."><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 8a6 6 0 0 1 10.5-4M14 8a6 6 0 0 1-10.5 4M11.5 1.5V4H9M4.5 14.5V12H7"/></svg>Reconcile with UGRC</button>`:''}
       <button class="btn btn-primary" onclick="openParcelModal()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v10M3 8h10"/></svg>Add parcel</button>
     </div>
   </div>
@@ -18625,7 +18630,7 @@ function renderParcels(el){
           const loc=p.situsAddress||((p.latitude&&p.longitude)?`${p.latitude}, ${p.longitude}`:'');
           return `<tr>
             <td class="td-mono" style="white-space:nowrap"><div class="td-link" onclick="openParcelModal('${p.id}')">${escHtml(p.parcelNumber||'—')}</div></td>
-            <td style="font-size:12px;color:var(--mist)">${loc?escHtml(loc):'<span style="color:var(--fog);font-style:italic">Not located</span>'}${(!p.situsAddress&&p.latitude&&p.longitude)?'<div style="font-size:10px;color:var(--fog)">coordinates</div>':''}</td>
+            <td style="font-size:12px;color:var(--mist)">${loc?escHtml(loc):'<span style="color:var(--fog);font-style:italic">Not located</span>'}${(!p.situsAddress&&p.latitude&&p.longitude)?'<div style="font-size:10px;color:var(--fog)">coordinates</div>':''}${_ugrcBadge(p)}</td>
             <td>${owners.length===0?'<span style="color:var(--red);font-size:12px">⚠ No owner attached</span>'
               :owners.map(o=>`<span class="badge b-dark" style="margin:1px 3px 1px 0;cursor:pointer" onclick="openContact('${o.stake.id}','${p.projectId||''}')">${escHtml(dispName(o.stake))}${o.link.ownershipRole&&o.link.ownershipRole!=='Owner'?' · '+escHtml(o.link.ownershipRole):''}</span>`).join('')}</td>
             <td style="font-size:12px;color:var(--mist)">${escHtml(p.acquisitionType||'—')}</td>
@@ -18659,6 +18664,9 @@ function openParcelModal(id){
     <div class="fr"><label>Longitude</label><input id="f-pclng" value="${escHtml(p.longitude||'')}" placeholder="-111.9385"></div>
   </div>
   <div style="font-size:11px;color:var(--fog);margin:-4px 0 10px">Unsubdivided land with no dwelling can only be designated by coordinates — enter them here and the parcel still tracks normally.</div>
+  <div id="f-pc-ugrc" style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:10px">
+    ${id?_ugrcPanelHTML(p):'<span style="font-size:12px;color:var(--fog)">Save the parcel first, then check it against UGRC.</span>'}
+  </div>
   <div class="fgrid fg3f">
     <div class="fr"><label>Acquisition</label><select id="f-pcacq">${PARCEL_ACQ.map(a=>`<option value="${escHtml(a)}"${(p.acquisitionType||'')===a?' selected':''}>${a||'—'}</option>`).join('')}</select></div>
     <div class="fr"><label>Status</label><select id="f-pcst">${PARCEL_STATUSES.map(x=>`<option${(p.status||'Not started')===x?' selected':''}>${x}</option>`).join('')}</select></div>
@@ -18774,6 +18782,211 @@ async function delParcel(id){
   await DB.set('parcel_owners',(DB.get('parcel_owners')||[]).filter(l=>String(l.parcelId)!==String(id)));
   await DB.set('parcels',(DB.get('parcels')||[]).filter(p=>String(p.id)!==String(id)));
   closeM(); S.editId=null; refreshBadges(); renderParcels(document.getElementById('main'));
+}
+
+// ══════════════════════════════════════════════════════════════════
+// UGRC RECONCILIATION — Polygon Phase 2a (Aug 2026).
+//
+// This is the RECONCILE half of the roadmap's Phase 2, not the DISCOVER half.
+// It checks a parcel this app ALREADY tracks against Utah's statewide parcel
+// GIS layer (UGRC's "Parcels_Utah" mosaic of all 29 counties) — it never
+// creates a pi_parcels row. "Untracked parcels in this polygon" and the
+// "Import" button that follows are a separate, later step; see the roadmap
+// note in CLAUDE.md for why reconcile comes first.
+//
+// What it answers, per parcel: does the county's own GIS record for this APN
+// exist, and does UGRC's OWN_TYPE / address agree with what's on file here.
+// It does NOT answer "who owns this parcel" — UGRC's documentation is explicit
+// that owner identity is withheld from this layer by design (a county
+// data-sales protection), so OWN_TYPE is a generalized Federal/Private/
+// State/Tribal category, never a name. Closing that gap is Phase 3's job
+// (county assessor APIs), not this one's.
+//
+// No parcel-boundary layer is drawn here, on purpose. An always-on statewide
+// tile layer answers a question nobody asked on most projects, and a
+// viewport-fetched layer re-queries on every pan/zoom — exactly the unbounded
+// cost behind a drag gesture this app has already refused once (the portal
+// map note in CLAUDE.md). A boundary is worth rendering only for a parcel
+// this app already has a reason to show — that stays deferred to whichever
+// later step actually returns a bounded set of parcels to draw.
+//
+// Matching: pi_parcels.parcel_number is free text (imported, hand-typed, or a
+// county format like "12-047-0001"); UGRC's PARCEL_ID is a plain digit string.
+// _ugrcNormalizeApn strips everything but digits and compares EXACT MATCH ONLY
+// — no wildcard, no fuzzy fallback. That mirrors the importer's owner-matching
+// rule elsewhere in this app: a compliance record either matches or it is left
+// for a human to resolve, never guessed into place.
+const UGRC_PARCELS_URL = 'https://services1.arcgis.com/99lidPhWCzftIe9K/ArcGIS/rest/services/Parcels_Utah/FeatureServer/0/query';
+
+function _ugrcNormalizeApn(raw){
+  return String(raw||'').replace(/[^0-9]/g,'');
+}
+
+// Bounding-box centroid of the outer ring, NOT a true polygon centroid — cheap
+// and stable enough to place a marker. This is a FALLBACK location only, used
+// when the parcel has neither coordinates nor a geocodable situs address; the
+// existing geocode path (an actual address lookup) is always preferred and is
+// untouched by this feature.
+function _ugrcCentroid(geometry){
+  var ring = geometry && geometry.rings && geometry.rings[0];
+  if (!ring || !ring.length) return null;
+  var minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
+  for (var i=0;i<ring.length;i++){
+    var x=ring[i][0], y=ring[i][1];
+    if (x<minX) minX=x; if (x>maxX) maxX=x;
+    if (y<minY) minY=y; if (y>maxY) maxY=y;
+  }
+  return { lat:(minY+maxY)/2, lng:(minX+maxX)/2 };
+}
+
+// Throws on anything short of a genuine answer — network failure, non-2xx, an
+// ArcGIS-level {error:...} payload, or unparseable JSON. The caller MUST NOT
+// record ugrc_matched/ugrc_checked_at when this throws: a lookup that could
+// not reach UGRC is not evidence the parcel is missing from county records.
+// This app has paid for that exact confusion once already (see the sbGet
+// strict-mode note in CLAUDE.md) and is not repeating it here.
+async function _ugrcQueryByApn(apn){
+  var url = UGRC_PARCELS_URL
+    + '?where=' + encodeURIComponent("PARCEL_ID='" + apn + "'")
+    + '&outFields=' + encodeURIComponent('PARCEL_ID,PARCEL_ADD,PARCEL_CITY,PARCEL_ZIP,OWN_TYPE')
+    + '&returnGeometry=true&outSR=4326&f=json';
+  var r = await fetch(url);
+  if (!r.ok) throw new Error('UGRC HTTP ' + r.status);
+  var j = await r.json();
+  if (j.error) throw new Error('UGRC error: ' + (j.error.message || j.error.code || 'unknown'));
+  var feats = j.features || [];
+  if (!feats.length) return null; // a real answer: zero features, genuinely not found
+  var a = feats[0].attributes || {};
+  var pt = _ugrcCentroid(feats[0].geometry);
+  return {
+    ownType: a.OWN_TYPE || '',
+    address: [a.PARCEL_ADD, a.PARCEL_CITY, a.PARCEL_ZIP].filter(Boolean).join(', '),
+    lat: pt ? pt.lat : null, lng: pt ? pt.lng : null
+  };
+}
+
+// Single-parcel reconcile, driven from the parcel modal or the row badge.
+// Returns the patch applied (or null on a skip/failure) so a bulk caller can
+// tally results without re-deriving them.
+async function _ugrcReconcileParcel(id){
+  // Found via _syncCache directly, NOT DB.get() — DB.get() returns a deep
+  // clone (JSON.parse(JSON.stringify(...))), so mutating what it returns would
+  // silently patch a throwaway copy and leave the live cache (and every
+  // render that reads it) stale. toggleReportShared does the same thing for
+  // the same reason.
+  var rec = (_syncCache['parcels']||[]).find(function(p){ return String(p.id)===String(id); });
+  if (!rec) return null;
+  var apn = _ugrcNormalizeApn(rec.parcelNumber);
+  if (!apn) { showToast('No parcel number to match against.', 'warn'); return null; }
+
+  var result;
+  try { result = await _ugrcQueryByApn(apn); }
+  catch (e) {
+    console.error('UGRC lookup failed:', e.message);
+    showToast('Could not reach UGRC — try again later.', 'error');
+    return null;
+  }
+
+  var patch = {
+    ugrcMatched: !!result,
+    ugrcCheckedAt: new Date().toISOString(),
+    ugrcOwnType: result ? result.ownType : null,
+    ugrcAddress: result ? result.address : null
+  };
+  // Coordinates on this record are survey-grade by convention (see the map
+  // layer notes in CLAUDE.md) — an approximate bounding-box centroid fills a
+  // blank, it never overwrites a value already on file.
+  if (result && result.lat != null && result.lng != null && !(rec.latitude && rec.longitude)) {
+    patch.latitude = String(result.lat);
+    patch.longitude = String(result.lng);
+  }
+  var ok = await sbUpdate('parcels', id, patch);
+  if (ok === false) { showToast('Could not save the UGRC result.', 'error'); return null; }
+  Object.assign(rec, patch);
+  return patch;
+}
+
+// Bulk reconcile, scoped to whatever the Parcels view is currently showing —
+// respecting the search/status filters is deliberate here (unlike the ROW
+// register export, which ignores them on purpose): this is a targeted
+// maintenance action, not a compliance snapshot, so "just the filtered list"
+// is the useful default and clearing filters reconciles everything.
+// Sequential with a short stagger, same posture as the map's geocode loop —
+// a good citizen of a free public service, not a burst of parallel requests.
+async function _ugrcReconcileList(ids){
+  if (!ids.length) return;
+  var matched=0, notFound=0, skipped=0, failed=0;
+  showToast('Checking ' + ids.length + ' parcel' + (ids.length===1?'':'s') + ' against UGRC…', 'info', 2500);
+  for (var i=0;i<ids.length;i++){
+    var patch = await _ugrcReconcileParcel(ids[i]);
+    if (patch === null) {
+      var rec = (DB.get('parcels')||[]).find(function(p){ return String(p.id)===String(ids[i]); });
+      if (rec && rec.ugrcCheckedAt) failed++; else skipped++;
+    } else if (patch.ugrcMatched) matched++; else notFound++;
+    if (i < ids.length-1) await new Promise(function(res){ setTimeout(res,150); });
+  }
+  renderParcels(document.getElementById('main'));
+  var parts = [matched + ' matched'];
+  if (notFound) parts.push(notFound + ' not in county records');
+  if (skipped) parts.push(skipped + ' skipped (no parcel #)');
+  if (failed) parts.push(failed + ' could not be checked');
+  showToast(parts.join(' · '), notFound||failed ? 'warn' : 'info', 6000);
+}
+
+async function ugrcReconcileOne(id){ await _ugrcReconcileParcel(id); renderParcels(document.getElementById('main')); }
+
+function ugrcReconcileVisible(){
+  var projF=S.projectFilter||'', search=(S.parcSearch||'').toLowerCase(), statusF=S.parcStatus||'';
+  var list=(DB.get('parcels')||[]).filter(function(p){ return !projF||String(p.projectId)===String(projF); });
+  if (search) list=list.filter(function(p){
+    var owners=_parcOwners(p.id).map(function(o){ return dispName(o.stake)+' '+(o.stake.org||''); }).join(' ');
+    return ((p.parcelNumber||'')+' '+(p.situsAddress||'')+' '+owners).toLowerCase().indexOf(search)>-1;
+  });
+  if (statusF) list=list.filter(function(p){ return (p.status||'Not started')===statusF; });
+  _ugrcReconcileList(list.map(function(p){ return p.id; }));
+}
+
+// Compact table-row badge — matched / not-found / silent-when-never-checked,
+// so a data-quality gap is visible without opening every parcel.
+function _ugrcBadge(p){
+  if (p.ugrcMatched===true) return '<div style="font-size:10px;color:var(--green)">✓ UGRC' + (p.ugrcOwnType?' · '+escHtml(p.ugrcOwnType):'') + '</div>';
+  if (p.ugrcMatched===false) return '<div style="font-size:10px;color:var(--amber)">⚠ not in UGRC</div>';
+  return '';
+}
+
+// The modal panel — refreshed in place so "Check now" doesn't close the modal
+// the consultant is mid-edit on.
+function _ugrcPanelHTML(p){
+  var status;
+  if (p.ugrcMatched===true) {
+    status = '<span style="color:var(--green)">✓ Matched</span>'
+      + (p.ugrcOwnType ? ' <span style="color:var(--fog)">· '+escHtml(p.ugrcOwnType)+'</span>' : '')
+      + (p.ugrcAddress ? '<div style="font-size:11px;color:var(--fog);margin-top:2px">UGRC address on file: '+escHtml(p.ugrcAddress)+'</div>' : '');
+  } else if (p.ugrcMatched===false) {
+    status = '<span style="color:var(--amber)">⚠ Not found in county GIS records</span>'
+      + '<div style="font-size:11px;color:var(--fog);margin-top:2px">Check the parcel number, or the county has not published this APN yet.</div>';
+  } else {
+    status = '<span style="color:var(--fog)">Not checked against UGRC yet.</span>';
+  }
+  return '<div style="flex:1">' + status
+    + (p.ugrcCheckedAt ? '<div style="font-size:10px;color:var(--fog);margin-top:2px">Checked '+_ugrcFmtChecked(p.ugrcCheckedAt)+'</div>' : '')
+    + '</div><button class="btn btn-xs" onclick="_ugrcReconcileFromModal(\''+p.id+'\')">Check now</button>';
+}
+
+// fmt() appends 'T00:00:00' to its input, which is correct for the app's plain
+// DATE columns but corrupts a full ISO timestamp like ugrc_checked_at — so this
+// stays separate rather than reusing fmt() on a value it was not built for.
+function _ugrcFmtChecked(iso){
+  var d=new Date(iso);
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+}
+
+async function _ugrcReconcileFromModal(id){
+  var box=document.getElementById('f-pc-ugrc');
+  if (box) box.innerHTML='<span style="color:var(--fog)">Checking UGRC…</span>';
+  await _ugrcReconcileParcel(id);
+  var p=(DB.get('parcels')||[]).find(function(x){ return String(x.id)===String(id); });
+  if (box && p) box.innerHTML=_ugrcPanelHTML(p);
 }
 
 // ══════════════════════════════════════════════════════════════════

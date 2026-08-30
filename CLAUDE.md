@@ -781,8 +781,10 @@ the capped generic prompt reaches no report narrative.
 
 ## CSP (line 6)
 ```
-connect-src https://ncfbblhlsiglxkoiounv.supabase.co https://maps.googleapis.com https://places.googleapis.com https://api.anthropic.com https://cdnjs.cloudflare.com;
+connect-src https://ncfbblhlsiglxkoiounv.supabase.co https://maps.googleapis.com https://places.googleapis.com https://api.anthropic.com https://cdnjs.cloudflare.com https://services1.arcgis.com;
 ```
+(`services1.arcgis.com` added Aug 2026 for UGRC parcel reconciliation — see the
+Polygon Phase 2a section.)
 
 ## Mobile app (`mobile.html`)
 Field companion for logging interactions, managing contacts, follow-ups, and issues. ~2,420 lines.
@@ -1821,33 +1823,108 @@ the map. Covered by `test/tests/42-map-polygon.test.js` (58 checks).
 
 ---
 
-### PHASE 2 — UGRC Utah statewide parcel overlay (design session first)
-**What:** Display Utah parcel boundaries as a layer + query UGRC Feature Service
-within the drawn polygon to find parcels NOT yet in pi_parcels
+### PHASE 2a — UGRC reconciliation — **BUILT (Aug 2026)**
+The roadmap below originally planned Phase 2 as one design session covering a
+boundary layer, a polygon-draw query against UGRC, and an Import button, all
+together. Split instead into RECONCILE (2a, built now) and DISCOVER (2b, still
+pending) — reconcile is the smaller, verifiable step and doesn't need the
+design session the combined version did; discover still does (untracked-parcel
+import creates records off a still-unproven-in-production integration, which
+is exactly the kind of decision this file's other "design session first" notes
+exist to gate).
 
-Data source: Utah UGRC (Utah Geospatial Resource Center)
-- Statewide parcel layer: public, CC BY 4.0, ArcGIS Feature Service
-- Coordinates with all 29 Utah counties monthly
-- Fields: PARCEL_ID (APN), PARCEL_ADD, PARCEL_CITY, PARCEL_ZIP, OWN_TYPE
-  (Federal/Private/State/Tribal — generalized, not actual owner name), RECORDER
-- REST endpoint: queryable via standard ArcGIS REST API — no ESRI license required
-- UGRC API also has: GET https://api.mapserv.utah.gov/api/v1/parcelinfo?lat={lat}&lng={lng}
-  for single-point parcel lookup
+**What 2a does:** "Reconcile with UGRC" (Parcels view toolbar, scoped to the
+current search/status filters — clear them to check everything) and "Check
+now" (inside the parcel modal, `#f-pc-ugrc`) look a tracked parcel's APN up
+against UGRC's statewide parcel layer and record whether the county's own GIS
+has that APN, cross-checking `OWN_TYPE` and address. **It never creates a
+pi_parcels row** — that stays 2b's job. `_ugrcReconcileParcel` /
+`_ugrcReconcileList` / `ugrcReconcileVisible` / `ugrcReconcileOne`, next to
+`delParcel` in `index.html`.
 
-**What Phase 2 adds:**
-- Show UGRC parcel boundaries as a map tile layer (toggle on/off)
-- On polygon draw: query UGRC Feature Service for parcels intersecting polygon
-- Cross-reference against existing pi_parcels — show "Untracked parcels" section
-  in results panel for parcels in UGRC but not yet in HC
-- "Import" button on each untracked parcel: creates pi_parcel record pre-filled
-  with UGRC data (APN, address, acreage, OWN_TYPE)
-- NOTE: OWN_TYPE is generalized (Private/Federal/State/Tribal) — actual owner
-  name requires county assessor query (Phase 3)
+- **Endpoint:** `https://services1.arcgis.com/99lidPhWCzftIe9K/ArcGIS/rest/services/Parcels_Utah/FeatureServer/0`
+  — the statewide basic layer (all 29 counties, one mosaic), CC BY 4.0, no API
+  key (ArcGIS Online hosted feature layers published for public access, unlike
+  the separate key-gated `api.mapserv.utah.gov` UGRC API). Fields used:
+  `PARCEL_ID`, `PARCEL_ADD`/`_CITY`/`_ZIP`, `OWN_TYPE`. **LIR enrichment
+  (acreage, market value, property class) is deliberately NOT pulled in
+  yet** — those live on UGRC's per-county LIR layers, a different endpoint per
+  county, and are staged as a later enrichment step on top of this one, per
+  the roadmap's own priority (statewide basic now, LIR later).
+  ⚠ **This exact endpoint could not be verified live from the build
+  environment** (egress to `*.arcgis.com` and `*.gis.utah.gov` is blocked
+  there) — it is corroborated by multiple independent search results
+  referencing the same org id and layer name, not by a direct request. Smoke-
+  test one real APN against production before relying on this in the field.
+- **OWN_TYPE is not an owner name and never will be from this layer** — UGRC's
+  own documentation says owner identity is withheld from parcel GIS sharing
+  by design (a county data-sales protection). `ugrc_own_type` is a
+  Federal/Private/State/Tribal cross-check field, nothing more; Phase 3 (county
+  assessor APIs) is the only path to an actual owner name.
+- **Matching is EXACT-MATCH ONLY**, same rule as the importer's owner
+  attachment and for the same reason: a compliance-adjacent record either
+  matches or is left for a human to resolve, never guessed into place.
+  `_ugrcNormalizeApn` strips everything but digits (`pi_parcels.parcel_number`
+  is free text like `"12-047-0001"`; UGRC's `PARCEL_ID` is a plain digit
+  string) and queries for that exact value. No wildcard, no fuzzy fallback —
+  a parcel number that doesn't reduce to a matching APN is a genuine
+  not-found, not a bug to work around with a looser query.
+- **A failed lookup is never recorded as "not found."** `ugrc_matched` is
+  tri-state — `null` = never checked, `true`/`false` = a genuine answer was
+  received. `ugrc_checked_at` is set ONLY alongside a real true/false. A
+  network error, non-200, or an ArcGIS-level `{error:...}` payload throws and
+  leaves both columns untouched. This app already paid for the alternative
+  once, in production, when `sbGet` turned a 401 into an empty array
+  indistinguishable from a table with genuinely no rows (see the "failed READ
+  must never look like an empty table" note above) — the same shape of bug
+  here would tell a consultant a parcel is missing from county records when
+  the real story is "couldn't reach UGRC." `test/tests/44-ugrc-reconcile.test.js`
+  asserts this by mocking a 500 and checking both columns stay `null`, then
+  mocking success on the same parcel and asserting it recovers cleanly.
+- **Coordinates are backfilled, never overwritten.** `latitude`/`longitude`
+  are survey-grade by convention elsewhere in this app (see the map-layer
+  notes above); reconciliation fills them from the matched feature's geometry
+  bounding-box centroid ONLY when both are currently blank on the record. A
+  centroid is an approximation, not a survey point, and is never allowed to
+  replace one.
+- **No boundary layer, no tile overlay, in this phase.** An always-on
+  statewide tile answers a question nobody asked on most projects; a
+  viewport-fetched boundary layer re-queries on every pan/zoom, which is the
+  same unbounded-cost-behind-a-drag-gesture shape the portal map was already
+  refused for (see the parcel map-layer section above). Rendering a real
+  parcel boundary is worth doing only for a bounded set of parcels the app
+  already has a reason to show — that stays with whichever later step
+  actually returns one (2b's polygon-draw query, most likely).
+- **Fully testable, unlike the polygon-draw feature it sits next to.** Phase 1
+  (`_polyContains`/`_polyAreaAcres`) had to be hand-written because Google Maps
+  cannot load in the harness at all. This feature is a plain `fetch()` with no
+  map dependency, so `test/tests/44-ugrc-reconcile.test.js` drives the whole
+  thing end to end — matched, genuine not-found, and the network-failure path —
+  by intercepting the ArcGIS request the same way the harness already
+  intercepts Supabase.
+- Migration: `sql/2026-08-30_ugrc_reconciliation.sql` (4 nullable columns on
+  `pi_parcels`; no grant change — existing table-level policies already cover
+  new columns). CSP `connect-src` gained `https://services1.arcgis.com`
+  (desktop only — mobile and importer don't touch parcel reconciliation, same
+  "mobile reads, desktop manages" rule as the rest of the parcels module).
 
-**Requires design session before build** — need to decide:
-- Which UGRC Feature Service endpoint to use (county-specific vs statewide)
-- How to handle parcel boundary rendering performance for large polygons
-- Whether to store UGRC-sourced parcels differently from manually entered ones
+### PHASE 2b — UGRC discovery: untracked parcels + boundary rendering (still needs a design session)
+**What it adds, on top of 2a:** on a drawn polygon (Phase 1), query the same
+UGRC layer for every parcel intersecting the shape, diff against `pi_parcels`,
+and surface an "Untracked parcels" section in the results panel with an
+Import button that creates a `pi_parcels` row pre-filled with UGRC data.
+
+**Still genuinely open, now that 2a exists to build on:**
+- Whether Import should require the human to review/confirm before the row is
+  created (2a's own philosophy — never guess a compliance record into place —
+  argues for a review step, not a one-click create).
+- Whether a real parcel boundary (not the bounding-box centroid 2a uses) is
+  worth fetching for the returned set — bounded to a drawn polygon's results,
+  this sidesteps the always-on/viewport-fetch cost problem 2a's design
+  explicitly avoided, but it's still a new rendering path to get right.
+- Whether the query should extend to per-county LIR layers for richer
+  attributes on discovered parcels, or stay on the statewide basic layer 2a
+  already uses for consistency.
 
 ---
 

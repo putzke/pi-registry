@@ -203,7 +203,11 @@ create table pi_parcels (
   notes text,
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
-  updated_by text
+  updated_by text,
+  ugrc_own_type text,
+  ugrc_address text,
+  ugrc_matched boolean,
+  ugrc_checked_at timestamptz
 );
 
 create table pi_portal_links (

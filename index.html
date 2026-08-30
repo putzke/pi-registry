@@ -16917,7 +16917,7 @@ function _mvDrawFinish() {
     var gp = window._mvPoly.getPath();
     var rerun = function(){
       var pts = gp.getArray().map(function(pt){ return { lat: pt.lat(), lng: pt.lng() }; });
-      if (pts.length >= 3) _mvShowPolyResults(_mvPolyQuery(pts));
+      if (pts.length >= 3) { _mvShowPolyResults(_mvPolyQuery(pts)); _mvDiscoverUntracked(pts); }
     };
     ['set_at','insert_at','remove_at'].forEach(function(ev){
       window.google.maps.event.addListener(gp, ev, rerun);
@@ -16925,6 +16925,11 @@ function _mvDrawFinish() {
   }
   var res = _mvPolyQuery(path);
   _mvShowPolyResults(res);
+  // Fire-and-forget: _mvDrawFinish must stay synchronous (test 42 asserts its
+  // return value directly), so the UGRC discovery section is appended to the
+  // panel asynchronously once it resolves, same pattern _mvGeocode already
+  // uses for filling in markers after the synchronous "no location" list.
+  _mvDiscoverUntracked(path);
   return res;
 }
 
@@ -16985,6 +16990,7 @@ function _mvClearPoly() {
   _mvDrawTeardown(false);
   if (window._mvPoly) { window._mvPoly.setMap(null); window._mvPoly = null; }
   window._mvPolyResult = null;
+  window._mvUntracked = null;
   var el = document.getElementById('mv-poly-panel');
   if (el) { el.style.display = 'none'; el.innerHTML = ''; }
 }
@@ -18987,6 +18993,203 @@ async function _ugrcReconcileFromModal(id){
   await _ugrcReconcileParcel(id);
   var p=(DB.get('parcels')||[]).find(function(x){ return String(x.id)===String(id); });
   if (box && p) box.innerHTML=_ugrcPanelHTML(p);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// UGRC DISCOVERY — Polygon Phase 2b (Aug 2026).
+//
+// The other half of Phase 2: on a drawn polygon (Phase 1), find parcels UGRC
+// has on record inside the shape that are NOT yet in pi_parcels, and offer
+// them for import — REVIEWED import, never one-click. A parcel is a
+// compliance record; the same "never guess it into place" rule that governs
+// 2a's exact-APN matching governs this too, so nothing is created until a
+// human checks a box and presses Import.
+//
+// _mvDrawFinish() MUST stay synchronous — test 42 asserts its return value
+// directly, and the whole point of the Phase 1 rewrite was a state machine
+// the harness can drive without a map object. So discovery is wired in as a
+// fire-and-forget async call AFTER the synchronous point-in-polygon answer is
+// already shown: the same "answer sync facts immediately, patch in async ones
+// as they land" pattern _mvShowNoLoc/_mvGeocode already use for geocoding.
+//
+// Bounded by a FEATURE COUNT, not acreage: acreage doesn't bound parcel count
+// (a rural corridor can be huge and sparse; a city block small and dense), and
+// every result here costs a human a checkbox, not just a number on a screen.
+// returnCountOnly=true is asked FIRST so an oversized area is refused before
+// a large geometry+attribute fetch runs at all — mirrors 2a's own
+// never-silently-truncate rule.
+var UGRC_DISCOVER_MAX_FEATURES = 300;
+
+// Esri JSON needs [lng,lat] pairs and a CLOSED ring (first point repeated as
+// last); the drawn path is [{lat,lng},...] and is not guaranteed closed.
+function _ugrcRingFromPath(path){
+  var ring = path.map(function(p){ return [p.lng, p.lat]; });
+  var first = ring[0], last = ring[ring.length-1];
+  if (!first || !last || first[0]!==last[0] || first[1]!==last[1]) ring.push(first.slice());
+  return ring;
+}
+
+function _ugrcPolyGeomParam(path){
+  return encodeURIComponent(JSON.stringify({ rings:[_ugrcRingFromPath(path)], spatialReference:{wkid:4326} }));
+}
+
+// Same throw-on-anything-short-of-a-real-answer rule as _ugrcQueryByApn.
+async function _ugrcCountInPolygon(path){
+  var url = UGRC_PARCELS_URL + '?geometry=' + _ugrcPolyGeomParam(path)
+    + '&geometryType=esriGeometryPolygon&inSR=4326&spatialRel=esriSpatialRelIntersects'
+    + '&returnCountOnly=true&f=json';
+  var r = await fetch(url);
+  if (!r.ok) throw new Error('UGRC HTTP ' + r.status);
+  var j = await r.json();
+  if (j.error) throw new Error('UGRC error: ' + (j.error.message || j.error.code || 'unknown'));
+  return typeof j.count === 'number' ? j.count : 0;
+}
+
+async function _ugrcQueryPolygon(path){
+  var url = UGRC_PARCELS_URL + '?geometry=' + _ugrcPolyGeomParam(path)
+    + '&geometryType=esriGeometryPolygon&inSR=4326&spatialRel=esriSpatialRelIntersects'
+    + '&outFields=' + encodeURIComponent('PARCEL_ID,PARCEL_ADD,PARCEL_CITY,PARCEL_ZIP,OWN_TYPE')
+    + '&returnGeometry=true&outSR=4326&f=json';
+  var r = await fetch(url);
+  if (!r.ok) throw new Error('UGRC HTTP ' + r.status);
+  var j = await r.json();
+  if (j.error) throw new Error('UGRC error: ' + (j.error.message || j.error.code || 'unknown'));
+  var feats = (j.features || []).map(function(f){
+    var a=f.attributes||{}, pt=_ugrcCentroid(f.geometry);
+    return { apn: _ugrcNormalizeApn(a.PARCEL_ID), ownType: a.OWN_TYPE || '',
+             address: [a.PARCEL_ADD, a.PARCEL_CITY, a.PARCEL_ZIP].filter(Boolean).join(', '),
+             lat: pt ? pt.lat : null, lng: pt ? pt.lng : null };
+  }).filter(function(f){ return f.apn; });
+  return { features: feats, exceededTransferLimit: !!j.exceededTransferLimit };
+}
+
+// Both sides normalized to digits-only before comparing — the same rule 2a's
+// APN matching uses, so a dashed local entry and UGRC's undashed PARCEL_ID
+// are recognized as the same parcel rather than looking like two.
+function _ugrcDiffUntracked(features, projId){
+  var tracked = new Set((DB.get('parcels')||[])
+    .filter(function(p){ return String(p.projectId)===String(projId); })
+    .map(function(p){ return _ugrcNormalizeApn(p.parcelNumber); })
+    .filter(Boolean));
+  return features.filter(function(f){ return !tracked.has(f.apn); });
+}
+
+function _mvUntrackedHTML(list, capped){
+  var esc = escHtml;
+  return '<div style="font-size:12px;font-weight:600;margin-bottom:4px">Untracked parcels — UGRC (' + list.length + ')</div>'
+    + (capped ? '<div style="font-size:10.5px;color:var(--amber);margin-bottom:4px">UGRC capped its answer here — a smaller shape may find more.</div>' : '')
+    + '<div style="font-size:11px;color:var(--fog);margin-bottom:6px">In county GIS records inside this shape, not yet on this project. Nothing is created until you press Import.</div>'
+    + '<div style="max-height:180px;overflow-y:auto">' + list.map(function(f,i){
+        return '<label style="display:flex;gap:6px;align-items:baseline;padding:3px 0;font-size:12px">'
+          + '<input type="checkbox" class="mv-untracked-cb" data-i="' + i + '" checked style="margin-top:2px">'
+          + '<span style="flex:1"><span style="font-family:var(--mono)">' + esc(f.apn) + '</span>'
+          + (f.address ? ' <span style="color:var(--fog)">· ' + esc(f.address) + '</span>' : '')
+          + (f.ownType ? ' <span style="color:var(--fog)">· ' + esc(f.ownType) + '</span>' : '') + '</span></label>';
+      }).join('') + '</div>'
+    + '<button class="btn btn-sm btn-primary" style="margin-top:8px;width:100%" onclick="_mvImportUntracked()">Import checked</button>';
+}
+
+// Fire-and-forget from _mvDrawFinish. Appends a section to the ALREADY-SHOWN
+// results panel rather than replacing it — _mvShowPolyResults has already run
+// synchronously by the time this is called.
+async function _mvDiscoverUntracked(path){
+  var panel = document.getElementById('mv-poly-panel');
+  if (!panel || panel.style.display === 'none') return; // drawing was cleared before this resolved
+
+  var projId = S.projectFilter;
+  var oldSection = document.getElementById('mv-poly-untracked');
+  if (oldSection) oldSection.remove();
+  // No project, or the parcels layer isn't even showing: nothing to discover
+  // against, and surfacing parcel content while looking at contacts-only
+  // would be a different feature's business. Same layer rule _mvPolyQuery uses.
+  if (!projId || (S.mapLayer||'contacts')==='contacts') { window._mvUntracked=null; return; }
+
+  var section = document.createElement('div');
+  section.id = 'mv-poly-untracked';
+  section.style.cssText = 'margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.12)';
+  section.innerHTML = '<div style="font-size:11px;color:var(--fog)">Checking UGRC for untracked parcels…</div>';
+  panel.appendChild(section);
+
+  var count;
+  try { count = await _ugrcCountInPolygon(path); }
+  catch(e){
+    console.error('UGRC discovery count failed:', e.message);
+    section.innerHTML = '<div style="font-size:11px;color:var(--amber)">⚠ Could not reach UGRC to look for untracked parcels.</div>';
+    return;
+  }
+  if (!document.body.contains(section)) return; // panel was cleared/redrawn while the count was in flight
+  if (count === 0) { section.remove(); return; } // nothing there — say nothing rather than clutter the panel
+  if (count > UGRC_DISCOVER_MAX_FEATURES) {
+    section.innerHTML = '<div style="font-size:11px;color:var(--amber)">⚠ ' + count.toLocaleString()
+      + ' parcels in county records fall inside this shape — too many to review here. Draw a smaller area.</div>';
+    return;
+  }
+
+  var result;
+  try { result = await _ugrcQueryPolygon(path); }
+  catch(e){
+    console.error('UGRC discovery query failed:', e.message);
+    section.innerHTML = '<div style="font-size:11px;color:var(--amber)">⚠ Could not reach UGRC to look for untracked parcels.</div>';
+    return;
+  }
+  if (!document.body.contains(section)) return;
+
+  var untracked = _ugrcDiffUntracked(result.features, projId);
+  window._mvUntracked = untracked;
+  if (!untracked.length) {
+    section.innerHTML = '<div style="font-size:11px;color:var(--fog)">Every parcel UGRC has on file inside this shape is already tracked here.</div>';
+    return;
+  }
+  section.innerHTML = _mvUntrackedHTML(untracked, result.exceededTransferLimit);
+}
+
+async function _mvImportUntracked(){
+  var projId = S.projectFilter;
+  var list = window._mvUntracked || [];
+  var checked = [];
+  document.querySelectorAll('.mv-untracked-cb').forEach(function(cb){
+    if (cb.checked) checked.push(list[Number(cb.dataset.i)]);
+  });
+  if (!checked.length) { showToast('Nothing checked to import.', 'warn'); return; }
+
+  // Re-checked at import time, not just at query time — the list was built
+  // from a query that may be a little stale (another tab, or an earlier
+  // reconcile), and this mirrors pi_parcels' own per-project uniqueness rule.
+  // NOTE: existing parcel numbers are normalized the same way the diff above
+  // was, but pi_parcels' OWN duplicate guard (saveParcel, and the database's
+  // unique index) is NOT — both compare the raw string. An imported parcel is
+  // stored under UGRC's undashed APN, so a later hand-entry in a dashed local
+  // format would not be caught as the same parcel by either of those. That is
+  // a real, pre-existing gap this feature makes more likely to bite, not one
+  // it invents; normalizing saveParcel's guard and the DB index is a separate
+  // decision affecting every existing row, not made here.
+  var all = DB.get('parcels')||[];
+  var existing = new Set(all
+    .filter(function(p){ return String(p.projectId)===String(projId); })
+    .map(function(p){ return _ugrcNormalizeApn(p.parcelNumber); }));
+  var added=0, skipped=0, imported=[];
+  checked.forEach(function(f){
+    if (!f.apn || existing.has(f.apn)) { skipped++; return; }
+    all.push({
+      id: DB.uid(), projectId: projId, parcelNumber: f.apn,
+      situsAddress: f.address||'', latitude: f.lat!=null?String(f.lat):'', longitude: f.lng!=null?String(f.lng):'',
+      acquisitionType:'', status:'Not started', noticeDate:null,
+      notes:'Imported from UGRC — parcel number is the county’s raw APN; reformat if this project uses a different style.',
+      ugrcOwnType: f.ownType||null, ugrcAddress: f.address||null, ugrcMatched:true, ugrcCheckedAt:new Date().toISOString()
+    });
+    existing.add(f.apn);
+    imported.push(f);
+    added++;
+  });
+  if (added) await DB.set('parcels', all);
+  showToast(added + ' parcel' + (added===1?'':'s') + ' imported' + (skipped?(' · '+skipped+' already tracked'):''),
+            'info', 5000);
+
+  window._mvUntracked = list.filter(function(f){ return imported.indexOf(f)===-1; });
+  var section = document.getElementById('mv-poly-untracked');
+  if (section) section.innerHTML = window._mvUntracked.length
+    ? _mvUntrackedHTML(window._mvUntracked, false)
+    : '<div style="font-size:11px;color:var(--fog)">All reviewed parcels have been imported. Reopen the Parcels view to see them.</div>';
 }
 
 // ══════════════════════════════════════════════════════════════════

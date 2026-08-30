@@ -1908,23 +1908,71 @@ pi_parcels row** — that stays 2b's job. `_ugrcReconcileParcel` /
   (desktop only — mobile and importer don't touch parcel reconciliation, same
   "mobile reads, desktop manages" rule as the rest of the parcels module).
 
-### PHASE 2b — UGRC discovery: untracked parcels + boundary rendering (still needs a design session)
-**What it adds, on top of 2a:** on a drawn polygon (Phase 1), query the same
-UGRC layer for every parcel intersecting the shape, diff against `pi_parcels`,
-and surface an "Untracked parcels" section in the results panel with an
-Import button that creates a `pi_parcels` row pre-filled with UGRC data.
+### PHASE 2b — UGRC discovery: untracked parcels in a drawn area — **BUILT (Aug 2026)**
+On a drawn polygon (Phase 1), queries the same UGRC layer for every parcel
+intersecting the shape, diffs against `pi_parcels` for the current project, and
+appends an "Untracked parcels — UGRC" section to the polygon results panel
+(`_mvDiscoverUntracked`, next to the reconciliation block in `index.html`).
+Checkboxes, all checked by default; **Import creates nothing until pressed** —
+the three open questions the roadmap left here were answered by the person
+who'd actually use it (Jeff), locking scope BEFORE the build rather than
+guessing:
+- **Discovery only, not owner names.** UGRC has no owner identity to give —
+  `OWN_TYPE` is Federal/Private/State/Tribal, never a name — so this phase
+  answers "what's in this shape and is it already tracked," not "who do I
+  contact." Getting an actual name means Phase 3 (county assessor APIs),
+  which stays unbuilt and is its own decision.
+- **Review before create.** Every checkbox starts checked, but nothing writes
+  to `pi_parcels` until "Import checked" is pressed — same reasoning 2a
+  already established for matching (never guess a compliance record into
+  place), applied to creation this time instead of matching.
+- **No boundary rendering.** 2a's reasoning against a tile/viewport layer
+  holds here too — still an unbounded cost behind a drag gesture. What's new
+  is only a bounded checklist of parcels UGRC returned, not a rendered shape.
 
-**Still genuinely open, now that 2a exists to build on:**
-- Whether Import should require the human to review/confirm before the row is
-  created (2a's own philosophy — never guess a compliance record into place —
-  argues for a review step, not a one-click create).
-- Whether a real parcel boundary (not the bounding-box centroid 2a uses) is
-  worth fetching for the returned set — bounded to a drawn polygon's results,
-  this sidesteps the always-on/viewport-fetch cost problem 2a's design
-  explicitly avoided, but it's still a new rendering path to get right.
-- Whether the query should extend to per-county LIR layers for richer
-  attributes on discovered parcels, or stay on the statewide basic layer 2a
-  already uses for consistency.
+**Bounded by a FEATURE COUNT, not acreage** — acreage doesn't bound parcel
+count (a rural corridor can be huge and sparse, a city block small and dense),
+and every result here costs a human a checkbox. `_ugrcCountInPolygon` asks
+`returnCountOnly=true` FIRST; past `UGRC_DISCOVER_MAX_FEATURES` (300) the full
+geometry+attribute query never runs at all — the same never-fetch-what-you're-
+about-to-refuse discipline as 2a's own count-first design.
+
+**`_mvDrawFinish()` stays synchronous** — test 42 asserts its return value
+directly, and the whole point of the Phase 1 rewrite was a state machine the
+harness can drive without a map object. So discovery is wired in as a
+fire-and-forget async call made AFTER the synchronous point-in-polygon answer
+is already shown (`_mvShowPolyResults` runs first; `_mvDiscoverUntracked` then
+appends its own section once the network round-trip resolves) — the same
+"answer sync facts immediately, patch in async ones as they land" pattern
+`_mvGeocode` already uses for filling in markers after the synchronous
+"no location" list.
+
+**The diff normalizes both sides.** `_ugrcDiffUntracked` compares
+`_ugrcNormalizeApn` on both the locally-tracked parcel numbers and UGRC's
+`PARCEL_ID`, the same rule 2a's matching uses — a dashed local entry
+("12-047-1001") and UGRC's undashed APN ("120471001") are recognized as the
+same parcel, not two.
+
+**A residual gap this makes more likely to bite, flagged rather than
+silently fixed:** an imported row is stored under UGRC's raw undashed APN
+(reformatting it into a guessed dash pattern would be exactly the kind of
+guess this feature's own philosophy refuses). `saveParcel`'s duplicate guard
+and the database's own unique index compare the RAW string, not a normalized
+one — so a later hand-typed dashed entry for the same parcel would not be
+caught as a duplicate by either. The import path's own re-check is normalized
+(so a race against another import or a reconcile is caught), but the
+general-purpose guards are not. That's a pre-existing gap this feature
+increases the odds of hitting, not one it invents — normalizing `saveParcel`'s
+guard and the unique index is a separate decision affecting every existing
+row and hasn't been made.
+
+Covered by `test/tests/45-ugrc-discover.test.js` (24 checks): both early-exit
+guards (no project selected, contacts-only layer) make zero network calls; the
+count-too-high guard refuses before the full query ever runs; a genuine zero
+stays quiet rather than cluttering the panel; a count-check failure is
+reported as a failure, never as "nothing found"; import writes only the
+checked, genuinely-untracked parcel and never duplicates the already-tracked
+one; and `_mvDrawFinish` actually triggers discovery with the finished path.
 
 ---
 

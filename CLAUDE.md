@@ -919,9 +919,23 @@ shipped. Grep the actual functions before planning work off this list.
    equity toggle. `test/tests/40-public-comments.test.js` (25 checks) covers
    the comment form — which turned out to be losing every field; see the
    "Public comments — ONE vocabulary" section above.
-4. **Tribal consultation tracker** — nav view exists (`renderTribal()`), but classified
-   as **in development / not production-ready**. Do not present as live to external
-   users. Needs full testing and validation before going live.
+4. **Tribal consultation tracker — PARKED, deliberately hidden (Aug 2026, Jeff's
+   call).** Built (`renderTribal()`, `openTribalModal()`, `pi_tribal_consultations`)
+   but **not reachable**, and that is the decision, not an oversight. It was never
+   fully tested or validated, and tribal consultation is a government-to-government
+   process under EO 13175 / UDOT 08A2-07 and Section 106 — a half-validated tracker
+   for THAT is worse than none, because it invites a consultant to treat an untested
+   record as the consultation file.
+   The gate is **one line in `setView()`**: `v==='tribal'` toasts "not available yet"
+   and returns. `S.view` is assigned only after it and is never restored from
+   storage, so the view cannot be reached. The nav item is a greyed `<div>` with no
+   handler, so nothing invites a user in either.
+   **Do not remove that line while tidying**, and do not "fix" the render dispatch at
+   `S.view==='tribal'` as unreachable code — it is the re-enable switch. The module
+   is parked, not dead: enabling it later should be small, not a rebuild.
+   Guarded by `test/tests/43-tribal-hidden.test.js` (16 checks), which asserts the
+   gate holds, that nothing calls `setView('tribal')`, and that the module is still
+   present to re-enable.
 5. **Client reporting redesign — end-to-end test** (redesign section below, step 5):
    confirm `sql/2026-07-06_portal_shared_reports.sql` was run, then share a report +
    publish a trend and confirm both render in the portal. Shipped-but-untested; client-facing.

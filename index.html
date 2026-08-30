@@ -16991,6 +16991,7 @@ function _mvClearPoly() {
   if (window._mvPoly) { window._mvPoly.setMap(null); window._mvPoly = null; }
   window._mvPolyResult = null;
   window._mvUntracked = null;
+  _mvClearUntrackedBoundaries();
   var el = document.getElementById('mv-poly-panel');
   if (el) { el.style.display = 'none'; el.innerHTML = ''; }
 }
@@ -19079,6 +19080,17 @@ async function _ugrcCountInPolygon(path){
   return typeof j.count === 'number' ? j.count : 0;
 }
 
+// The outer ring, as {lat,lng} points, in the same shape google.maps.Polygon
+// paths already use elsewhere in this app (_mvDraw.path, _mvPoly). Holes
+// (inner rings) are not drawn — a residential lot is essentially never a
+// donut, and rendering only the outer boundary is a reasonable simplification
+// for an outline that exists to orient the eye, not to survey the parcel.
+function _ugrcRingToPath(geometry){
+  var ring = geometry && geometry.rings && geometry.rings[0];
+  if (!ring || ring.length < 3) return null;
+  return ring.map(function(pt){ return { lat: pt[1], lng: pt[0] }; });
+}
+
 async function _ugrcQueryPolygon(path){
   var url = UGRC_PARCELS_URL + '?geometry=' + _ugrcPolyGeomParam(path)
     + '&geometryType=esriGeometryPolygon&inSR=4326&spatialRel=esriSpatialRelIntersects'
@@ -19092,7 +19104,8 @@ async function _ugrcQueryPolygon(path){
     var a=f.attributes||{}, pt=_ugrcCentroid(f.geometry);
     return { apn: _ugrcNormalizeApn(a.PARCEL_ID), ownType: a.OWN_TYPE || '',
              address: [a.PARCEL_ADD, a.PARCEL_CITY, a.PARCEL_ZIP].filter(Boolean).join(', '),
-             lat: pt ? pt.lat : null, lng: pt ? pt.lng : null };
+             lat: pt ? pt.lat : null, lng: pt ? pt.lng : null,
+             path: _ugrcRingToPath(f.geometry) };
   }).filter(function(f){ return f.apn; });
   return { features: feats, exceededTransferLimit: !!j.exceededTransferLimit };
 }
@@ -19112,8 +19125,12 @@ function _mvUntrackedHTML(list, capped){
   var esc = escHtml;
   return '<div style="font-size:12px;font-weight:600;margin-bottom:4px">Untracked parcels — UGRC (' + list.length + ')</div>'
     + (capped ? '<div style="font-size:10.5px;color:var(--amber);margin-bottom:4px">UGRC capped its answer here — a smaller shape may find more.</div>' : '')
-    + '<div style="font-size:11px;color:var(--fog);margin-bottom:6px">In county GIS records inside this shape, not yet on this project. Nothing is created until you press Import.</div>'
-    + '<div style="max-height:180px;overflow-y:auto">' + list.map(function(f,i){
+    + '<div style="font-size:11px;color:var(--fog);margin-bottom:6px">In county GIS records inside this shape, not yet on this project. Outlined in amber on the map. Nothing is created until you press Import.</div>'
+    + '<div style="display:flex;gap:10px;margin-bottom:4px">'
+      + '<span onclick="_mvSetAllUntracked(true)" style="font-size:11px;color:var(--sky-lt);cursor:pointer">Check all</span>'
+      + '<span onclick="_mvSetAllUntracked(false)" style="font-size:11px;color:var(--sky-lt);cursor:pointer">Uncheck all</span>'
+    + '</div>'
+    + '<div style="max-height:260px;overflow-y:auto">' + list.map(function(f,i){
         return '<label style="display:flex;gap:6px;align-items:baseline;padding:3px 0;font-size:12px">'
           + '<input type="checkbox" class="mv-untracked-cb" data-i="' + i + '" checked style="margin-top:2px">'
           + '<span style="flex:1"><span style="font-family:var(--mono)">' + esc(f.apn) + '</span>'
@@ -19121,6 +19138,32 @@ function _mvUntrackedHTML(list, capped){
           + (f.ownType ? ' <span style="color:var(--fog)">· ' + esc(f.ownType) + '</span>' : '') + '</span></label>';
       }).join('') + '</div>'
     + '<button class="btn btn-sm btn-primary" style="margin-top:8px;width:100%" onclick="_mvImportUntracked()">Import checked</button>';
+}
+
+function _mvSetAllUntracked(state){
+  document.querySelectorAll('.mv-untracked-cb').forEach(function(cb){ cb.checked = state; });
+}
+
+// Outline shapes for discovered-but-untracked parcels, kept separate from
+// _mvPoly (the user's drawn boundary) and the app's own tracked-parcel
+// markers. Amber, to read as "found but not yet yours" rather than either of
+// those. Cleared on every re-run (a vertex drag re-queries) and on _mvClearPoly
+// — never left stacking shapes from a previous shape or a previous project.
+var _mvUntrackedShapes = [];
+function _mvClearUntrackedBoundaries(){
+  _mvUntrackedShapes.forEach(function(s){ s.setMap(null); });
+  _mvUntrackedShapes = [];
+}
+function _mvDrawUntrackedBoundaries(list){
+  _mvClearUntrackedBoundaries();
+  if (!window.google || !window.google.maps || !window._mvMap) return;
+  (list||[]).forEach(function(f){
+    if (!f.path || f.path.length < 3) return;
+    _mvUntrackedShapes.push(new window.google.maps.Polygon({
+      paths: f.path, map: window._mvMap, clickable: false, zIndex: 2,
+      fillColor: '#f59e0b', fillOpacity: 0.12, strokeColor: '#f59e0b', strokeWeight: 1.5
+    }));
+  });
 }
 
 // Fire-and-forget from _mvDrawFinish. Appends a section to the ALREADY-SHOWN
@@ -19133,6 +19176,7 @@ async function _mvDiscoverUntracked(path){
   var projId = S.projectFilter;
   var oldSection = document.getElementById('mv-poly-untracked');
   if (oldSection) oldSection.remove();
+  _mvClearUntrackedBoundaries(); // a rerun (vertex drag) must not stack shapes from the last answer
   // No project, or the parcels layer isn't even showing: nothing to discover
   // against, and surfacing parcel content while looking at contacts-only
   // would be a different feature's business. Same layer rule _mvPolyQuery uses.
@@ -19175,6 +19219,7 @@ async function _mvDiscoverUntracked(path){
     return;
   }
   section.innerHTML = _mvUntrackedHTML(untracked, result.exceededTransferLimit);
+  _mvDrawUntrackedBoundaries(untracked);
 }
 
 async function _mvImportUntracked(){
@@ -19185,6 +19230,10 @@ async function _mvImportUntracked(){
     if (cb.checked) checked.push(list[Number(cb.dataset.i)]);
   });
   if (!checked.length) { showToast('Nothing checked to import.', 'warn'); return; }
+  // "Check all" makes a large batch one click away — a confirmation here is
+  // the same size-guard spirit as the drawn shape's own acreage warning, just
+  // for the create side instead of the query side.
+  if (checked.length > 20 && !confirm('Import ' + checked.length + ' parcels onto this project?')) return;
 
   // Re-checked at import time, not just at query time — the list was built
   // from a query that may be a little stale (another tab, or an earlier

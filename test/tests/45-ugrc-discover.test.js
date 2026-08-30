@@ -112,6 +112,61 @@ module.exports = {
       t.ok(/Untracked parcels/.test(found.html), 'the panel names the section');
       t.ok(/120471002/.test(found.html), 'the untracked APN is listed');
       t.ok(!/120471001/.test(found.html), 'the already-tracked APN is NOT listed');
+      t.ok(Array.isArray(found.untracked[0].path) && found.untracked[0].path.length >= 3,
+           'a geometry-bearing feature carries an outline path, not just a centroid');
+      t.eq(found.untracked[0].path[0], { lat: 40.5, lng: -111.9 },
+           'the path is built from the ring, in {lat,lng} order matching the rest of the app');
+
+      // ── check all / uncheck all ─────────────────────────────────────────
+      const toggled = await app.page.evaluate(() => {
+        _mvSetAllUntracked(false);
+        const allUnchecked = [...document.querySelectorAll('.mv-untracked-cb')].every(cb => !cb.checked);
+        _mvSetAllUntracked(true);
+        const allChecked = [...document.querySelectorAll('.mv-untracked-cb')].every(cb => cb.checked);
+        return { allUnchecked, allChecked };
+      });
+      t.ok(toggled.allUnchecked, '"Uncheck all" clears every box');
+      t.ok(toggled.allChecked, '"Check all" re-checks every box');
+
+      // ── importing a large batch asks first ──────────────────────────────
+      // "Check all" makes a big batch one click away, so more than 20 checked
+      // parcels gets a confirmation — decline it and nothing should be created.
+      const bigBatch = Array.from({ length: 21 }, (_, i) => ({
+        apn: '9' + String(i).padStart(8, '0'), ownType: 'Private', address: '', lat: null, lng: null,
+      }));
+      const declined = await app.page.evaluate(async (a) => {
+        window._mvUntracked = a.list;
+        document.getElementById('mv-poly-untracked').innerHTML = a.list.map((f, i) =>
+          '<input type="checkbox" class="mv-untracked-cb" data-i="' + i + '" checked>').join('');
+        let asked = null;
+        window.confirm = (m) => { asked = m; return false; };
+        await _mvImportUntracked();
+        return asked;
+      }, { list: bigBatch });
+      t.ok(/Import 21 parcels/.test(declined || ''), 'a batch over 20 asks for confirmation, naming the count');
+      const noneCreated = await t.sql(
+        `select count(*) c from pi_parcels where parcel_number like '9________'`);
+      t.eq(Number(noneCreated[0].c), 0, 'declining the confirmation creates nothing');
+
+      const accepted = await app.page.evaluate(async (a) => {
+        window._mvUntracked = a.list;
+        document.getElementById('mv-poly-untracked').innerHTML = a.list.map((f, i) =>
+          '<input type="checkbox" class="mv-untracked-cb" data-i="' + i + '" checked>').join('');
+        window.confirm = () => true;
+        await _mvImportUntracked();
+      }, { list: bigBatch });
+      await app.page.waitForTimeout(600);
+      const created = await t.sql(
+        `select count(*) c from pi_parcels where parcel_number like '9________'`);
+      t.eq(Number(created[0].c), 21, 'accepting the confirmation imports the full batch');
+
+      // Restore the real discovery result the big-batch detour borrowed the
+      // panel and window._mvUntracked for, so the next step imports the
+      // genuine untracked parcel rather than the synthetic fixture above.
+      await app.page.evaluate((list) => {
+        window._mvUntracked = list;
+        document.getElementById('mv-poly-untracked').innerHTML = _mvUntrackedHTML(list, false);
+      }, found.untracked);
 
       // ── import: writes the checked parcel, never the unchecked kind ────
       await app.page.evaluate(() => _mvImportUntracked());

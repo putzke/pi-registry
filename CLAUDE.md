@@ -1989,13 +1989,37 @@ increases the odds of hitting, not one it invents — normalizing `saveParcel`'s
 guard and the unique index is a separate decision affecting every existing
 row and hasn't been made.
 
-Covered by `test/tests/45-ugrc-discover.test.js` (24 checks): both early-exit
+**Outlines on the map, and a review-all convenience — both added after the
+Aug 2026 endpoint fix, live-tested against real Weber County data (158
+untracked parcels in a 162-acre corridor).** `_ugrcQueryPolygon` already asked
+UGRC for full geometry (`returnGeometry=true`) to compute the centroid marker
+position; `_ugrcRingToPath` keeps the outer ring too, and
+`_mvDrawUntrackedBoundaries` draws each untracked parcel as an amber
+`google.maps.Polygon` outline — a CORE shape, same as Phase 1's own drawing,
+no new dependency. Inner rings (holes) are not drawn; a residential lot is
+essentially never a donut, and the outline exists to orient the eye, not to
+survey the parcel. Shapes are tracked in `_mvUntrackedShapes` and cleared on
+every re-run (a vertex drag re-queries) and on `_mvClearPoly`, so they never
+stack across shapes or survive a cleared drawing. **"Check all" / "Uncheck
+all"** (`_mvSetAllUntracked`) sit above the checklist once a real corridor
+turned up 158 candidates in one pass — reviewing each individually did not
+scale. Because "Check all" makes a big batch one click away, **importing more
+than 20 checked parcels asks for confirmation** naming the count, the same
+size-guard spirit as the drawn shape's own acreage warning, just on the create
+side instead of the query side.
+
+Covered by `test/tests/45-ugrc-discover.test.js` (33 checks): both early-exit
 guards (no project selected, contacts-only layer) make zero network calls; the
 count-too-high guard refuses before the full query ever runs; a genuine zero
 stays quiet rather than cluttering the panel; a count-check failure is
 reported as a failure, never as "nothing found"; import writes only the
 checked, genuinely-untracked parcel and never duplicates the already-tracked
-one; and `_mvDrawFinish` actually triggers discovery with the finished path.
+one; `_mvDrawFinish` actually triggers discovery with the finished path; a
+geometry-bearing feature carries an outline path in the same `{lat,lng}` shape
+the rest of the app's map code uses; Check all / Uncheck all toggle every box;
+and the >20 import confirmation is asked, named correctly, and actually gates
+creation in both directions (decline creates nothing, accept creates all of
+it).
 
 ---
 

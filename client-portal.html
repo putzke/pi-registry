@@ -641,12 +641,17 @@ async function bootFromToken(token) {
   showApp();
   setTopbarMode(true);
   try {
-    const rows = await sbFetch(`pi_portal_links?token=eq.${encodeURIComponent(token)}&select=project_id`);
-    if (!rows.length) {
+    // pi_portal_links itself is no longer directly readable by anon — see
+    // sql/2026-08-31_portal_client_isolation.sql. A raw SELECT with no
+    // filter used to hand back every project's token, not just the one this
+    // link resolves; this RPC returns only the single project_id (or null)
+    // for the exact token presented. It's declared STABLE, which is what
+    // lets PostgREST accept it as a GET with the arg as a query param.
+    const projId = await sbFetch(`rpc/pi_resolve_portal_token?t=${encodeURIComponent(token)}`);
+    if (!projId) {
       setContent('<div class="error-box">This portal link is not valid or has been revoked. Please contact your project manager.</div>');
       return;
     }
-    const projId = rows[0].project_id;
     const [projects, deliverables, clientSummaries, sharedReports] = await Promise.all([
       sbFetch(`pi_projects?id=eq.${projId}&select=id,name,pid,client,phase,status,start_date,end_date,nepa_classification,nepa_stage`),
       sbFetch(`pi_deliverables?project_id=eq.${projId}&select=id,project_id,title,deliverable_type,scope_type,freq,status,progress,contracted_qty,delivered_count,due_date,milestone_start,milestone_end&order=due_date.asc.nullslast`),

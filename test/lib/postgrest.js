@@ -106,8 +106,26 @@ function buildOrder(params) {
   return ' order by ' + parts.join(', ');
 }
 
+// `/rpc/<fn>?arg=val` — real PostgREST accepts this as a GET for a STABLE or
+// IMMUTABLE function (which is exactly what client-portal.html relies on for
+// pi_resolve_portal_token, so a signed-in caller never needs a POST body).
+// Args are passed positionally, in the order they appear on the URL — fine
+// for every RPC this app actually calls, all single-argument. A
+// scalar-returning function's response body is the bare JSON value, not an
+// array of rows — mirrored here so sbFetch's res.json() gets back exactly
+// what it would from the real API (a number or null, not [{result: ...}]).
+async function handleRpc(pool, fn, sp) {
+  if (!/^[a-z_][a-z0-9_]*$/.test(fn)) throw new Error('bad function: ' + fn);
+  const args = [...sp.values()];
+  const ph = args.map((_, i) => `$${i + 1}`).join(',');
+  const { rows } = await pool.query(`select ${fn}(${ph}) as result`, args);
+  return { status: 200, body: rows[0] ? rows[0].result : null };
+}
+
 async function handle(pool, req, body) {
   const url = new URL(req.url, 'http://local');
+  const rpcMatch = url.pathname.match(/^\/rest\/v1\/rpc\/([a-z_][a-z0-9_]*)\/?$/);
+  if (rpcMatch) return handleRpc(pool, rpcMatch[1], url.searchParams);
   const table = url.pathname.replace(/^\/rest\/v1\//, '').replace(/\/$/, '');
   if (!/^[a-z_][a-z0-9_]*$/.test(table)) throw new Error('bad table: ' + table);
   const params = [...url.searchParams.entries()];

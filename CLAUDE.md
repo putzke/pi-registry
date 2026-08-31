@@ -1280,6 +1280,117 @@ screen.
   and fixed fixtures sit INSIDE the 60-day window on purpose, so their kind is
   the only thing keeping them out.
 
+### Client portal data isolation — real, server-side RLS (Aug 2026)
+`sql/2026-08-31_portal_client_isolation.sql`. Both portal access paths were
+audited and found to be *worse* than "unscoped" in specific, concrete ways —
+not just the general "permissive RLS" note this file already carried.
+
+**What was actually found, before any fix:**
+- **`pi_portal_links` was directly listable by anon.** Its `anon_select`
+  policy was `for select to anon using (true)` — no filter. A bare
+  `select token, project_id from pi_portal_links` with no WHERE clause handed
+  back **every project's real token**, not a guess at anything. The
+  "unguessable UUID" premise was moot the moment the table itself could just
+  be listed with the public anon key.
+- **`pi_parcels` / `pi_parcel_owners` / `pi_client_summaries`** carried
+  `for all to anon, authenticated using (true) with check (true)` — anon
+  could read **and write** any project's parcel data or trend narrative,
+  no scoping at all.
+- **`pi_report_archive`'s existing `anon_portal_read` policy never checked
+  `client_visible`.** It scoped by project but not by share state, so a raw
+  REST call that skipped the app's own `client_visible=eq.true` filter read
+  every archived report for a project, shared or not.
+- **The one piece of real per-table client scoping that predates this
+  migration was dead code.** `pi_deliverables`' policy from
+  `sql/2026-07-02_client_portal_step1.sql` matched on `user_id = auth.uid()`.
+  `sql/2026-07-13_client_access_by_email.sql` switched grant provisioning to
+  email-only and never backfills `user_id`, so that column has been NULL on
+  every grant since. **The magic-link path has had zero real per-table
+  enforcement since Phase 1 shipped** — isolation was client-side query
+  filters in `client-portal.html` only.
+- **The reason (that last one) couldn't be fixed by just adding a scoped
+  policy**: an OTP-logged-in client and signed-in staff both land on the SAME
+  Postgres role, `authenticated` (`index.html`/`mobile.html` always require
+  login — `DEV_BYPASS` is `false`). RLS policies are OR'd and can only ever
+  grant MORE access — a table's blanket `for ... to authenticated using
+  (true)` policy (which staff need) stays fully open to a client's JWT no
+  matter what scoped policy is added on top. The blanket policy itself had to
+  be rewritten to exclude a client session.
+
+**The mechanism.** `pi_is_portal_client()` (SECURITY DEFINER) is true iff the
+caller's JWT email exists in `pi_client_access` — no new auth-side tagging
+needed, that table already IS the client roster. Staff policies became
+`using (not pi_is_portal_client())`; new client policies are
+`using (pi_is_portal_client() and project_id in (their granted projects))`.
+**Operational caveat: never grant portal access under a staff member's own
+login email** — `pi_is_portal_client()` would then be true for their session
+and every staff policy would stop applying to their own account. Use a
+separate email, or the token link, to preview the client experience.
+
+`pi_portal_links` itself is now revoked from anon entirely (SELECT included).
+Two SECURITY DEFINER functions replace direct table access:
+`pi_resolve_portal_token(uuid)` (the one lookup `bootFromToken()` needs — one
+token in, its project_id out, or null) and `pi_portal_project_ids()` (lets
+every other table's anon policy keep scoping by "this project has an active
+link" without querying `pi_portal_links` directly, which a plain policy
+subquery can no longer do once anon's grant on it is gone).
+
+Thirteen tables get the same three-policy shape now: `<table>_staff_all` /
+`anon_portal_read` / `<table>_client_portal_read`. `pi_tribal_consultations`
+is staff-only, full stop — no anon or client policy at all, matching its
+already-parked/hidden status (see the tribal section above) rather than
+leaving a raw-REST path to it the UI was already built to avoid.
+
+**A gap this does NOT close, documented loudly in the migration file itself:**
+the anon policies still scope by "this project has SOME active portal link,"
+not "the caller proved possession of THIS project's specific token" — Postgres
+RLS can't see a different table's query-string filter. Closing it needs the
+held token checked on every request (e.g. a custom header PostgREST exposes to
+RLS via the `request.headers` GUC — a real, documented PostgREST mechanism).
+**Not implemented**, because it could not be verified against the live
+Supabase project from the sandbox that built this — this codebase already
+shipped one integration wrong from search-result confidence instead of a live
+check (see the UGRC endpoint story below) and this would be the same mistake
+shape. Verify the header GUC live against the real project first, then extend
+every `anon_portal_read` policy — this is the next task on this project, not
+a someday item. Project ids are small sequential integers, so this residual
+gap is closeable by guessing, not just by holding a leaked token.
+
+**Column-level exposure is also unchanged and out of scope here**: RLS gates
+ROWS, not COLUMNS. A portal client with access to their own project's row
+still gets every column PostgREST is asked for. If any of these tables ever
+carry an internal-only column that shouldn't reach the client even for their
+own project, that needs a view — a separate decision, not made here.
+
+**Test harness note — this is the reason the whole thing could be verified at
+all.** `test/lib/build-schema.js` now stubs a minimal `auth` schema
+(`auth.users`, `auth.jwt()` reading `request.jwt.claims`, matching Supabase's
+real implementation) — a bare Postgres cluster has neither, and this went
+unnoticed for weeks: `run.js` swallows a migration's error per file, so
+`sql/2026-07-13_client_access_by_email.sql`'s own `auth.jwt()`-referencing
+policy had been **silently failing to even apply in the harness since July**,
+harmless only because the harness's REST shim always queries as the
+`postgres` superuser, which bypasses RLS entirely — no existing test could
+tell a policy wasn't really there. Fixing that also surfaced that dashboard-
+created tables in the synthetic schema had **no grants at all** (real
+Supabase auto-grants both roles on those; the harness never replicated it
+because nothing needed it before), fixed in the same file. `test/lib/
+postgrest.js`'s shim gained minimal RPC support (`/rpc/<fn>?arg=val`, GET only
+— what `pi_resolve_portal_token` needs) so `client-portal.html`'s new call
+resolves through the shim like everything else.
+`test/tests/46-portal-rls-isolation.test.js` is the one test in the suite
+that actually switches Postgres role and JWT claims on a raw connection
+(inside a transaction that is always rolled back, never committed, so nothing
+leaks into the shared pool) and proves the isolation for real — anon and a
+granted client each see only their own project, `client_visible` holds even
+without the app's own filter, and neither can write. `test/tests/
+17-grants.test.js` also changed: its "every policy must name both roles"
+check assumed the one-policy-per-table shape every migration used before this
+one; it's now a per-table coverage check (does every role holding a grant
+have SOME applicable policy, not necessarily the same one) — which, as a side
+effect of fixing a regex that couldn't parse quoted multi-word policy names,
+also made it check `pi_client_access`'s policies for the first time ever.
+
 ### Demo dataset — `sql/2026-07-26_udot_conference_demo_seed.sql`
 Three realistic Utah projects with ~63 stakeholders, ~586 interactions,
 deliverables, events, issues, commitments, a comment period with 23 public
@@ -1329,10 +1440,19 @@ Built for the UDOT conference demo.
   artifacts; a commented-out block at the bottom of the file converts it to a
   full EIS (and to the 45-day DEIS comment period) in one paste.
 
-**Security note (unchanged / known):** token isolation is client-side; the
-anon key is public and RLS is permissive (blanket anon read on portal tables).
-Server-side token-scoped RLS is the separate hardening project (ties to
-multi-tenant org_id work).
+**Security note — UPDATED Aug 2026, see the "Client portal data isolation"
+section below.** This used to say token isolation was client-side and RLS was
+blanket-permissive. That is now real, server-side, per-table RLS for both
+portal access paths — see `sql/2026-08-31_portal_client_isolation.sql`. One
+piece of the old note is still true and is NOT closed by that migration: a raw
+REST call scoped to a project the caller never received a token for, but which
+has SOME active portal link, still passes anon's RLS today (the policy checks
+"this project has a link", not "the caller holds THIS project's specific
+token" — Postgres RLS can't see a different table's query-string filter).
+Closing that needs the caller's token checked on every request, e.g. via a
+custom header PostgREST exposes to RLS as a GUC, which is documented as the
+next step in that migration file rather than shipped, because it could not be
+verified against the live Supabase project from the sandbox that built it.
 
 ### GRANT BOTH ROLES — every migration, every time
 A table a migration creates starts with NO grants (only dashboard-created tables
@@ -1513,8 +1633,12 @@ tracking). The answer is a **server-side proxy**, not either of those.
 1. **Multi-tenant data isolation — the long pole.** Add `org_id` to every table;
    replace today's permissive anon RLS ("anon can read/write everything") with
    tenant-scoped policies. This is the real gate on a paid launch, not the AI
-   proxy. Ties to the portal's known "token isolation is client-side / RLS is
-   permissive" hardening note (see Client Portal section).
+   proxy. This is a DIFFERENT axis from the portal client-isolation migration
+   (Aug 2026, see Client Portal section) — that one scopes a single firm's
+   clients to their own project within the firm's data; this one scopes an
+   entire FIRM's data from another firm's, for when more than one firm shares
+   this Supabase project. The portal work did not need to wait on this, and
+   this still hasn't started.
 2. **Unified AI/API gateway (Supabase Edge Function).** Browser calls a Horizon
    endpoint, NOT `api.anthropic.com` / Google directly. The function holds the
    single key server-side, checks the caller's Supabase JWT (which tenant), and

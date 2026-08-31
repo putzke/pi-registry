@@ -11,6 +11,19 @@ begin
   end if;
 end $$;
 
+create schema if not exists auth;
+create table if not exists auth.users (
+  id uuid primary key,
+  email text
+);
+create or replace function auth.jwt() returns jsonb
+language sql stable
+as $auth_jwt$
+  select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb
+$auth_jwt$;
+grant usage on schema auth to anon, authenticated;
+grant execute on function auth.jwt() to anon, authenticated;
+
 create table pi_client_access (
   id bigint generated always as identity primary key,
   user_id uuid,
@@ -48,6 +61,8 @@ create table pi_comment_periods (
   federal_register_date date
 );
 
+grant select, insert, update, delete on pi_comment_periods to anon, authenticated;
+
 create table pi_commitments (
   id bigserial primary key,
   project_id bigint,
@@ -64,6 +79,8 @@ create table pi_commitments (
   notes text,
   created_at timestamptz default now()
 );
+
+grant select, insert, update, delete on pi_commitments to anon, authenticated;
 
 create table pi_deliverables (
   id bigserial primary key,
@@ -84,11 +101,15 @@ create table pi_deliverables (
   progress integer
 );
 
+grant select, insert, update, delete on pi_deliverables to anon, authenticated;
+
 create table pi_dismissed_pairs (
   id bigserial primary key,
   id_a bigint,
   id_b bigint
 );
+
+grant select, insert, update, delete on pi_dismissed_pairs to anon, authenticated;
 
 create table pi_group_members (
   id bigserial primary key,
@@ -96,6 +117,8 @@ create table pi_group_members (
   stakeholder_id bigint,
   created_at timestamptz default now()
 );
+
+grant select, insert, update, delete on pi_group_members to anon, authenticated;
 
 create table pi_groups (
   id bigserial primary key,
@@ -108,6 +131,8 @@ create table pi_groups (
   sort_order integer,
   created_at timestamptz default now()
 );
+
+grant select, insert, update, delete on pi_groups to anon, authenticated;
 
 create table pi_interactions (
   id bigserial primary key,
@@ -135,11 +160,15 @@ create table pi_interactions (
   follow_up_assigned_to text
 );
 
+grant select, insert, update, delete on pi_interactions to anon, authenticated;
+
 create table pi_issue_interactions (
   id bigserial primary key,
   issue_id bigint,
   interaction_id text
 );
+
+grant select, insert, update, delete on pi_issue_interactions to anon, authenticated;
 
 create table pi_issues (
   id bigserial primary key,
@@ -159,6 +188,8 @@ create table pi_issues (
   updated_at timestamptz default now(),
   updated_by text
 );
+
+grant select, insert, update, delete on pi_issues to anon, authenticated;
 
 create table pi_meetings (
   id bigserial primary key,
@@ -181,6 +212,8 @@ create table pi_meetings (
   equity_form_submitted boolean,
   attendee_ids jsonb
 );
+
+grant select, insert, update, delete on pi_meetings to anon, authenticated;
 
 create table pi_parcel_owners (
   id bigint generated always as identity primary key,
@@ -231,6 +264,8 @@ create table pi_project_stakeholders (
   influence text
 );
 
+grant select, insert, update, delete on pi_project_stakeholders to anon, authenticated;
+
 create table pi_projects (
   id bigint generated always as identity primary key,
   name text,
@@ -252,6 +287,8 @@ create table pi_projects (
   phase_history jsonb,
   nepa_stage_history jsonb
 );
+
+grant select, insert, update, delete on pi_projects to anon, authenticated;
 
 create table pi_public_comments (
   id text primary key,
@@ -275,6 +312,8 @@ create table pi_public_comments (
   notes text
 );
 
+grant select, insert, update, delete on pi_public_comments to anon, authenticated;
+
 create table pi_report_archive (
   id bigserial primary key,
   project_id bigint,
@@ -290,6 +329,8 @@ create table pi_report_archive (
   client_visible boolean,
   snapshot jsonb
 );
+
+grant select, insert, update, delete on pi_report_archive to anon, authenticated;
 
 create table pi_reports (
   id bigserial primary key,
@@ -309,6 +350,8 @@ create table pi_reports (
   include_internal boolean,
   dist_groups jsonb
 );
+
+grant select, insert, update, delete on pi_reports to anon, authenticated;
 
 create table pi_stakeholders (
   id bigint generated always as identity primary key,
@@ -335,6 +378,8 @@ create table pi_stakeholders (
   updated_at timestamptz default now(),
   updated_by text
 );
+
+grant select, insert, update, delete on pi_stakeholders to anon, authenticated;
 
 create table pi_tribal_consultations (
   id text primary key,
@@ -370,6 +415,8 @@ create table pi_tribal_consultations (
   included_in_annual_report boolean,
   annual_report_year text
 );
+
+grant select, insert, update, delete on pi_tribal_consultations to anon, authenticated;
 
 create unique index pi_portal_links_proj_uniq on pi_portal_links(project_id);
 

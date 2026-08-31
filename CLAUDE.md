@@ -1391,6 +1391,32 @@ have SOME applicable policy, not necessarily the same one) — which, as a side
 effect of fixing a regex that couldn't parse quoted multi-word policy names,
 also made it check `pi_client_access`'s policies for the first time ever.
 
+**Found only by running the migration's own verify query against the live
+database — `sql/2026-08-31_portal_legacy_policy_cleanup.sql`.** Eight
+policies existed in production that were in NO file in this repo:
+`"client viewer can read own project <table>"` on `pi_comment_periods`,
+`pi_commitments`, `pi_interactions`, `pi_issues`, `pi_meetings`,
+`pi_projects`, `pi_public_comments`, and `pi_tribal_consultations` — applied
+to role **`{public}`** (every role, anon included), using the same
+`user_id = auth.uid()` condition as the one dead policy already known about
+on `pi_deliverables`. Someone had evidently extended
+`sql/2026-07-02_client_portal_step1.sql`'s pattern to the rest of
+`sql/2026-07-04_portal_links.sql`'s nine tables directly in the Supabase SQL
+editor, at some point, and never written it back to a migration — so nothing
+in this repo's history, and no static audit of it, could ever have found
+this. Confirmed inert (every `pi_client_access.user_id` is still NULL, so the
+condition matches nothing today) but a real latent risk: `public`-role and
+no `pi_is_portal_client()` check at all, so backfilling `user_id` on even one
+grant row — a plausible future fix for the OTHER known gap, not a
+hypothetical — would reactivate all eight instantly, `pi_tribal_consultations`
+included, which this project deliberately made staff-only. Dropped by exact
+name; the file's own verify query confirms zero policies anywhere still name
+`public`. **The lesson for next time:** this migration's own design doc said
+"the live database hides the mistake" as the reason for a verify-query step —
+that step is what caught this, and it would not have been caught any other
+way, including by everything in this session that came before actually
+running it.
+
 ### Demo dataset — `sql/2026-07-26_udot_conference_demo_seed.sql`
 Three realistic Utah projects with ~63 stakeholders, ~586 interactions,
 deliverables, events, issues, commitments, a comment period with 23 public

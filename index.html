@@ -2101,7 +2101,7 @@ function renderDash(el){
     card.style.cssText='background:linear-gradient(135deg,#1e3a5f 0%,#1A3050 100%);border:1px solid rgba(255,255,255,.14);border-left:3px solid '+pStatus+';border-radius:var(--radius-lg);padding:14px 16px;cursor:pointer;transition:border-color .15s,transform .15s';
     card.onmouseover=function(){card.style.transform='translateY(-2px)';card.style.borderTopColor='rgba(255,255,255,.28)';};
     card.onmouseout=function(){card.style.transform='';card.style.borderTopColor='rgba(255,255,255,.14)';};
-    card.onclick=function(){filterByProject(p.id);setView('stakeholders');};
+    card.onclick=function(){filterByProject(p.id);setView('interactions');};
     const fuTag=projFU>0?`<span style="color:${projOD>0?'var(--red)':'var(--amber)'};font-weight:500">${projOD>0?projOD+' overdue':projFU+' open FU'}</span>`:'';
     var pSums=clientSums.filter(function(s){return String(s.projectId)===String(p.id);});
     pSums.sort(function(a,b){return a.publishedAt>b.publishedAt?-1:1;});

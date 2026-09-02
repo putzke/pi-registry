@@ -2096,12 +2096,7 @@ function renderDash(el){
     // render for numbers nothing displayed.
     const projFU=ints.filter(i=>i.projectId===p.id&&i.followUp&&!i.followUpDone).length;
     const projOD=ints.filter(i=>i.projectId===p.id&&i.followUp&&!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<new Date()).length;
-    const card=document.createElement('div');
     var pStatus=p.status==='Active'?'var(--green)':p.status==='On hold'?'var(--amber)':'var(--fog)';
-    card.style.cssText='background:linear-gradient(135deg,#1e3a5f 0%,#1A3050 100%);border:1px solid rgba(255,255,255,.14);border-left:3px solid '+pStatus+';border-radius:var(--radius-lg);padding:14px 16px;cursor:pointer;transition:border-color .15s,transform .15s';
-    card.onmouseover=function(){card.style.transform='translateY(-2px)';card.style.borderTopColor='rgba(255,255,255,.28)';};
-    card.onmouseout=function(){card.style.transform='';card.style.borderTopColor='rgba(255,255,255,.14)';};
-    card.onclick=function(){filterByProject(p.id);setView('interactions');};
     const fuTag=projFU>0?`<span style="color:${projOD>0?'var(--red)':'var(--amber)'};font-weight:500">${projOD>0?projOD+' overdue':projFU+' open FU'}</span>`:'';
     var pSums=clientSums.filter(function(s){return String(s.projectId)===String(p.id);});
     pSums.sort(function(a,b){return a.publishedAt>b.publishedAt?-1:1;});
@@ -2136,12 +2131,25 @@ function renderDash(el){
     // it has been since the client got a status report. Both are things that
     // are WRONG or GOING STALE, which no other screen surfaces at a glance.
     const chips=[fuTag,portalChip].filter(Boolean).join('');
-    card.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px${chips?';margin-bottom:8px':''}">
+    // A real DOM node (document.createElement) used to build this, with
+    // onclick/onmouseover/onmouseout set as JS properties — then the function
+    // returned card.outerHTML. That discards them: outerHTML serializes
+    // MARKUP, not the IDL event-handler properties, so the card that actually
+    // lands in the page (built fresh from this string via innerHTML) has
+    // never had a click handler, or the hover animation, at all. Not "goes to
+    // the wrong view" — goes nowhere, silently, since the day this was
+    // written. Inline onclick="..." attribute strings (the pattern the rest
+    // of this codebase uses successfully, e.g. the Projects view's own
+    // filterByProject(...) links) survive being turned into HTML.
+    return `<div onclick="filterByProject('${p.id}');setView('interactions')"
+      onmouseover="this.style.transform='translateY(-2px)';this.style.borderTopColor='rgba(255,255,255,.28)'"
+      onmouseout="this.style.transform='';this.style.borderTopColor='rgba(255,255,255,.14)'"
+      style="background:linear-gradient(135deg,#1e3a5f 0%,#1A3050 100%);border:1px solid rgba(255,255,255,.14);border-left:3px solid ${pStatus};border-radius:var(--radius-lg);padding:14px 16px;cursor:pointer;transition:border-color .15s,transform .15s">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px${chips?';margin-bottom:8px':''}">
       <div style="min-width:0"><div style="font-weight:600;font-size:14px;margin-bottom:2px">${p.name}</div>
       <div style="font-size:12px;color:var(--fog);font-family:var(--mono)">${p.pid} · ${p.client}</div></div>
       <span class="badge b-sky" style="flex-shrink:0">${p.phase}</span></div>
-      ${chips?`<div style="display:flex;gap:12px;font-size:12px;align-items:center;padding-top:8px;border-top:1px solid var(--border)">${chips}</div>`:''}`;
-    return card.outerHTML;
+      ${chips?`<div style="display:flex;gap:12px;font-size:12px;align-items:center;padding-top:8px;border-top:1px solid var(--border)">${chips}</div>`:''}</div>`;
   }
   const dels=DB.get('deliverables');
   const totalDels=dels.length;

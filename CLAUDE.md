@@ -1418,7 +1418,7 @@ because nothing needed it before), fixed in the same file. `test/lib/
 postgrest.js`'s shim gained minimal RPC support (`/rpc/<fn>?arg=val`, GET only
 — what `pi_resolve_portal_token` needs) so `client-portal.html`'s new call
 resolves through the shim like everything else.
-`test/tests/46-portal-rls-isolation.test.js` is the one test in the suite
+`test/tests/47-portal-rls-isolation.test.js` is the one test in the suite
 that actually switches Postgres role and JWT claims on a raw connection
 (inside a transaction that is always rolled back, never committed, so nothing
 leaks into the shared pool) and proves the isolation for real — anon and a

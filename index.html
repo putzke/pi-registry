@@ -7237,6 +7237,11 @@ let QL_ROWS = 12;
 const QL_ROWS_MAX = 50;
 const QL_CHANNELS = ['Phone','Email','In-person','Public meeting','Public event','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'];
 const QL_DIRECTIONS = ['Incoming','Outgoing','In-person'];
+// Shared with the Log/Edit interaction modals (f-isub / f-inat) and Quick
+// Log's own Subject/Nature columns — one list each, not three copies to keep
+// in sync.
+const INT_SUBJECTS = ['General','Traffic','Property Access','Property Issue','Environmental','Utility Service','Information','Noise / Hours','ROW / Easement','Other'];
+const INT_NATURES = ['Inquiry','Complaint','Compliment','Comment','Request','Concern','Support','Notification'];
 const QL_INP = 'width:100%;font-size:11px;padding:4px 5px;height:28px;background:var(--navy-mid);border:1px solid var(--border);border-radius:4px;color:var(--white);box-sizing:border-box';
 
 function openQuickLog(){
@@ -7260,13 +7265,21 @@ function _qlRowHTML(i){
   // that row's arrows rather than leaving four dead controls on screen.
   const dn='class="ql-dn" style="position:absolute;right:2px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:11px;color:var(--sky-lt)"';
   const chOpts=QL_CHANNELS.map(c=>`<option${c==='Phone'?' selected':''}>${c}</option>`).join('');
-  const drOpts=QL_DIRECTIONS.map(d=>`<option${d==='Incoming'?' selected':''}>${d}</option>`).join('');
+  // Bulk initial outreach — the whole reason this grid exists — is almost
+  // always the team reaching OUT (a mass email delivering the flyer, a phone
+  // call referring someone to the project website), not fielding an inbound
+  // contact. Defaulted to Outgoing accordingly (Aug 2026 was Incoming).
+  const drOpts=QL_DIRECTIONS.map(d=>`<option${d==='Outgoing'?' selected':''}>${d}</option>`).join('');
+  const subOpts=INT_SUBJECTS.map(s=>`<option${s==='General'?' selected':''}>${s}</option>`).join('');
+  const natOpts=INT_NATURES.map(n=>`<option${n==='Inquiry'?' selected':''}>${n}</option>`).join('');
   return `<tr id="qlrow${i}">`
     + `<td style="text-align:center;padding:3px 2px;width:40px;white-space:nowrap"><span style="font-size:11px;color:var(--fog)">${i+1}</span> <span onclick="qlClearRow(${i})" title="Clear row ${i+1}" style="cursor:pointer;font-size:14px;color:var(--fog);vertical-align:middle" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--fog)'">×</span></td>`
     + `<td style="padding:3px 3px"><div style="position:relative"><input id="qld${i}" type="date" value="${localToday()}" style="${inp};padding-right:16px" onchange="qlRowTouch(${i})"><span onclick="qlApplyDown('qld',${i})" title="Copy date down" ${dn}>⇩</span></div></td>`
     + `<td style="padding:3px 3px"><input id="qls${i}" type="text" autocomplete="off" placeholder="Anonymous — search…" style="${inp}" oninput="document.getElementById('qlsid${i}').value='';qlStakeInput(this,${i})" onfocus="qlStakeInput(this,${i})" onblur="qlStakeBlur(${i})"><input type="hidden" id="qlsid${i}"></td>`
     + `<td style="padding:3px 3px"><div style="position:relative"><select id="qlc${i}" style="${sel};padding-right:16px" onchange="qlRowTouch(${i})">${chOpts}</select><span onclick="qlApplyDown('qlc',${i})" title="Copy channel down" ${dn}>⇩</span></div></td>`
     + `<td style="padding:3px 3px"><div style="position:relative"><select id="qldr${i}" style="${sel};padding-right:16px" onchange="qlRowTouch(${i})">${drOpts}</select><span onclick="qlApplyDown('qldr',${i})" title="Copy direction down" ${dn}>⇩</span></div></td>`
+    + `<td style="padding:3px 3px"><div style="position:relative"><select id="qlsub${i}" style="${sel};padding-right:16px" onchange="qlRowTouch(${i})">${subOpts}</select><span onclick="qlApplyDown('qlsub',${i})" title="Copy subject down" ${dn}>⇩</span></div></td>`
+    + `<td style="padding:3px 3px"><div style="position:relative"><select id="qlnat${i}" style="${sel};padding-right:16px" onchange="qlRowTouch(${i})">${natOpts}</select><span onclick="qlApplyDown('qlnat',${i})" title="Copy nature down" ${dn}>⇩</span></div></td>`
     + `<td style="padding:3px 3px"><textarea id="qlsu${i}" rows="1" placeholder="What was said / done…" style="${inp};height:28px;min-height:28px;resize:vertical;line-height:1.45;font-family:inherit" oninput="qlGrow(this);qlRowTouch(${i})" onkeydown="qlSummaryKey(event,${i})"></textarea></td>`
     + `<td style="padding:3px 3px"><div style="position:relative"><input id="qlby${i}" type="text" maxlength="20" value="${escHtml(getLoggedBy())}" style="${inp};padding-right:16px;text-transform:uppercase" oninput="qlRowTouch(${i})"><span onclick="qlApplyDown('qlby',${i})" title="Copy logged-by down" ${dn}>⇩</span></div></td>`
     + `</tr>`;
@@ -7297,13 +7310,15 @@ function renderQuickLog(el){
   <div class="content">
     <div style="overflow-x:auto;width:100%;box-sizing:border-box;padding:12px 20px">
       <table style="border-collapse:collapse;width:100%;min-width:900px">
-        <colgroup><col style="width:40px"><col style="width:128px"><col style="width:200px"><col style="width:118px"><col style="width:106px"><col><col style="width:96px"></colgroup>
+        <colgroup><col style="width:40px"><col style="width:128px"><col style="width:180px"><col style="width:110px"><col style="width:96px"><col style="width:150px"><col style="width:110px"><col><col style="width:96px"></colgroup>
         <thead><tr style="border-bottom:1px solid var(--border)">
           <th style="${th};padding-left:2px"></th>
           <th style="${th}">Date <span style="color:var(--sky-lt)" title="Copy down">⇩</span></th>
           <th style="${th}">Stakeholder</th>
           <th style="${th}">Channel <span style="color:var(--sky-lt)" title="Copy down">⇩</span></th>
           <th style="${th}">Direction <span style="color:var(--sky-lt)" title="Copy down">⇩</span></th>
+          <th style="${th}">Subject <span style="color:var(--sky-lt)" title="Copy down">⇩</span></th>
+          <th style="${th}">Nature <span style="color:var(--sky-lt)" title="Copy down">⇩</span></th>
           <th style="${th}">Summary</th>
           <th style="${th}">Logged by <span style="color:var(--sky-lt)" title="Copy down">⇩</span></th>
         </tr></thead>
@@ -7312,8 +7327,10 @@ function renderQuickLog(el){
       <div style="font-size:11px;color:var(--fog);margin-top:8px;padding-left:26px">
         Leave the stakeholder blank to log an anonymous contact · ⇩ copies a value down to every row below ·
         Enter moves to the next row, Shift+Enter adds a line break.<br>
-        Subject and nature default to General / Inquiry, and no follow-up is created —
-        use <b>Log interaction</b> for anything needing a follow-up, an issue link, or a new contact.
+        Direction defaults to Outgoing, Subject to General, Nature to Inquiry — for a bulk outreach batch
+        (flyer emails, referral calls), set row 1's Nature to <b>Notification</b> and ⇩ copy it down the batch.
+        No follow-up is created here — use <b>Log interaction</b> for anything needing a follow-up, an issue
+        link, or a new contact.
       </div>
     </div>
   </div>
@@ -7368,12 +7385,13 @@ function _qlGetRows(){
   const rows=[];
   for(let i=0;i<QL_ROWS;i++){
     rows.push({idx:i,date:v('qld'+i),stakeId:v('qlsid'+i),channel:v('qlc'+i),
-               direction:v('qldr'+i),summary:v('qlsu'+i).trim(),by:v('qlby'+i).trim().toUpperCase()});
+               direction:v('qldr'+i),subject:v('qlsub'+i),nature:v('qlnat'+i),
+               summary:v('qlsu'+i).trim(),by:v('qlby'+i).trim().toUpperCase()});
   }
   return rows;
 }
 // A row is in play once it names somebody or says something. Date/channel/
-// direction/logged-by all carry defaults, so they can't signal intent.
+// direction/subject/nature/logged-by all carry defaults, so they can't signal intent.
 function _qlInPlay(r){ return !!(r.summary||r.stakeId); }
 
 function qlRowTouch(){ _qlUpdateFooter(); }
@@ -7494,9 +7512,10 @@ async function saveQuickLog(){
     if(!r.stakeId){ anonN++; anonLbl=anonN===1?'Anonymous':'Anonymous '+anonN; }
     all.push({id:DB.uid(),projectId:projId,stakeholderId:r.stakeId||null,anonLabel:anonLbl,
       date:r.date,channel:r.channel,direction:r.direction,
-      // Same defaults saveInt() writes when its selects are untouched, so a
-      // quick-logged row is indistinguishable from a modal-logged one in filters.
-      subject:'General',nature:'Inquiry',summary:r.summary,
+      // Subject/Nature are now real per-row columns (Sep 2026) rather than a
+      // hardcoded default — the fallback here only covers a row somehow
+      // saved with the select blank, matching saveInt()'s own fallback.
+      subject:r.subject||'General',nature:r.nature||'Inquiry',summary:r.summary,
       loggedBy:r.by||me,nepaStage:nepaStage,
       followUp:false,followUpNote:'',followUpDue:null,followUpDone:false,
       followUpResolved:'',followUpAssignedTo:''});
@@ -7555,8 +7574,8 @@ function openIntModal(preStake){
   </div>
   <div class="fgrid fg3f">
     <div class="fr"><label>Direction</label><select id="f-idr">${['Incoming','Outgoing','In-person'].map(d=>`<option>${d}</option>`).join('')}</select></div>
-    <div class="fr"><label>Subject</label><select id="f-isub">${['General','Traffic','Property Access','Property Issue','Environmental','Utility Service','Information','Noise / Hours','ROW / Easement','Other'].map(s=>`<option>${s}</option>`).join('')}</select></div>
-    <div class="fr"><label>Nature</label><select id="f-inat">${['Inquiry','Complaint','Compliment','Comment','Request','Concern','Support'].map(n=>`<option>${n}</option>`).join('')}</select></div>
+    <div class="fr"><label>Subject</label><select id="f-isub">${INT_SUBJECTS.map(s=>`<option>${s}</option>`).join('')}</select></div>
+    <div class="fr"><label>Nature</label><select id="f-inat">${INT_NATURES.map(n=>`<option>${n}</option>`).join('')}</select></div>
   <input type="hidden" id="f-il">
   </div>
   <div class="fr"><label>Summary *</label><textarea id="f-isu" style="min-height:86px" placeholder="Describe the interaction in detail…"></textarea></div>
@@ -7621,8 +7640,8 @@ async function openEditIntModal(id){
   </div>
   <div class="fgrid fg3f">
     <div class="fr"><label>Direction</label><select id="f-idr">${['Incoming','Outgoing','In-person'].map(d=>`<option${i.direction===d?' selected':''}>${d}</option>`).join('')}</select></div>
-    <div class="fr"><label>Subject</label><select id="f-isub">${['General','Traffic','Property Access','Property Issue','Environmental','Utility Service','Information','Noise / Hours','ROW / Easement','Other'].map(s=>`<option${(i.subject||'General')===s?' selected':''}>${s}</option>`).join('')}</select></div>
-    <div class="fr"><label>Nature</label><select id="f-inat">${['Inquiry','Complaint','Compliment','Comment','Request','Concern','Support'].map(n=>`<option${(i.nature||'Inquiry')===n?' selected':''}>${n}</option>`).join('')}</select></div>
+    <div class="fr"><label>Subject</label><select id="f-isub">${INT_SUBJECTS.map(s=>`<option${(i.subject||'General')===s?' selected':''}>${s}</option>`).join('')}</select></div>
+    <div class="fr"><label>Nature</label><select id="f-inat">${INT_NATURES.map(n=>`<option${(i.nature||'Inquiry')===n?' selected':''}>${n}</option>`).join('')}</select></div>
   </div>
   <input type="hidden" id="f-il" value="${i.loggedBy||getLoggedBy()}">
   <div class="fr"><label>Summary</label><textarea id="f-isu" style="min-height:86px">${i.summary||''}</textarea></div>

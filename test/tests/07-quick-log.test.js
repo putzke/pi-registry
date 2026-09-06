@@ -41,14 +41,14 @@ module.exports = {
       t.eq(await app.page.$$eval('#ql-body tr', r => r.length), 12, 'grid opens with 12 rows');
 
       // The copy-down arrows propagate a changed value downward, so the last
-      // row's four arrows would copy to nothing. They are hidden, and "+ Add
+      // row's six arrows would copy to nothing. They are hidden, and "+ Add
       // rows" has to give them back to the row that is no longer last.
       const arrows = await app.page.evaluate(() => {
         const vis = i => [...document.getElementById('qlrow' + i).querySelectorAll('.ql-dn')]
           .filter(a => a.style.display !== 'none').length;
         return { first: vis(0), last: vis(11) };
       });
-      t.eq(arrows.first, 4, 'row 1 offers copy-down on all four defaulted columns');
+      t.eq(arrows.first, 6, 'row 1 offers copy-down on all six defaulted columns');
       t.eq(arrows.last, 0, 'the last row has no copy-down arrows');
 
       await app.page.evaluate(() => qlAddMoreRows());
@@ -59,8 +59,32 @@ module.exports = {
                  wasLast: vis(11), nowLast: vis(21) };
       });
       t.eq(grown.rows, 22, '+ Add rows appended 10 more');
-      t.eq(grown.wasLast, 4, 'the previously-last row got its arrows back');
+      t.eq(grown.wasLast, 6, 'the previously-last row got its arrows back');
       t.eq(grown.nowLast, 0, 'and the new last row has none');
+
+      // ── Direction defaults to Outgoing; Subject/Nature are now real
+      // per-row columns defaulting to General/Inquiry ─────────────────────
+      const defaults = await app.page.evaluate(() => ({
+        direction: document.getElementById('qldr0').value,
+        subject: document.getElementById('qlsub0').value,
+        nature: document.getElementById('qlnat0').value,
+        natureHasNotification: [...document.getElementById('qlnat0').options].some(o => o.value === 'Notification'),
+      }));
+      t.eq(defaults.direction, 'Outgoing', 'direction defaults to Outgoing — bulk initial outreach is the common case');
+      t.eq(defaults.subject, 'General', 'subject defaults to General');
+      t.eq(defaults.nature, 'Inquiry', 'nature defaults to Inquiry');
+      t.ok(defaults.natureHasNotification, 'Nature offers Notification, for bulk outreach batches');
+
+      // ⇩ on Nature should propagate to every row below, same as the other
+      // defaulted columns. Uses rows 15/18 (unused by the fill/save flow
+      // below, which relies on rows 0-4) so this doesn't disturb the
+      // 'Inquiry' default those later assertions check.
+      const natureCopy = await app.page.evaluate(() => {
+        document.getElementById('qlnat15').value = 'Notification';
+        qlApplyDown('qlnat', 15);
+        return document.getElementById('qlnat18').value;
+      });
+      t.eq(natureCopy, 'Notification', 'copy-down works on the new Nature column');
 
       // ── the picker is confined to contacts already on the project ────────
       const picker = await app.page.evaluate(id => {

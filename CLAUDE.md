@@ -1077,26 +1077,41 @@ button on the Interactions view (shown only when a project is selected) →
 `openQuickLog()` → `renderQuickLog()` replaces `#main`. 12 rows, cap
 `QL_ROWS_MAX = 50`, "+ Add rows" **appends to `#ql-body` rather than
 re-rendering** (a re-render would wipe everything typed).
-- Columns: date · stakeholder typeahead · channel · direction · summary ·
-  logged-by. `⇩` on date/channel/direction/logged-by copies down to every row
-  below. Enter advances a row, Shift+Enter is a line break.
-- **Every one of those four columns opens pre-filled** (today / Phone / Incoming
-  / your initials). The `⇩` is for propagating a CHANGED value — set row 1 to
-  yesterday's date, click ⇩ — not for the initial state, so date is treated no
-  differently from Channel. Blanking rows 2+ was considered and rejected: it
-  costs a click or twelve date entries in the common "today's batch" case, and
-  save requires a date (correctly — it's a compliance field, so silently
-  defaulting a blank one would mis-date the record). `_qlDnRefresh()` hides the
-  arrows on whichever row is last, since they'd copy to nothing, and re-runs
-  after "+ Add rows".
-- **Deviation from the original spec, deliberate:** the spec said direction
+- Columns: date · stakeholder typeahead · channel · direction · subject ·
+  nature · summary · logged-by. `⇩` on date/channel/direction/subject/nature/
+  logged-by copies down to every row below. Enter advances a row, Shift+Enter
+  is a line break.
+- **Every one of those six columns opens pre-filled** (today / Phone /
+  Outgoing / General / Inquiry / your initials). The `⇩` is for propagating a
+  CHANGED value — set row 1 to yesterday's date, click ⇩ — not for the initial
+  state, so date is treated no differently from Channel. Blanking rows 2+ was
+  considered and rejected: it costs a click or twelve date entries in the
+  common "today's batch" case, and save requires a date (correctly — it's a
+  compliance field, so silently defaulting a blank one would mis-date the
+  record). `_qlDnRefresh()` hides the arrows on whichever row is last, since
+  they'd copy to nothing, and re-runs after "+ Add rows".
+- **Direction defaults to Outgoing (Sep 2026; was Incoming at ship).** The
+  primary use of this grid is bulk INITIAL outreach on a new project — the
+  team accumulating external contacts from scratch and then reaching out to
+  all of them at once (a mass flyer email, a round of referral calls pointing
+  people at the project website) — not fielding inbound contact. Outgoing
+  matches that reality; a genuinely inbound batch still overrides per row.
+- **Subject and Nature became real per-row columns in the same change**
+  (previously hardcoded to `General`/`Inquiry` on every row, matching
+  `saveInt()`'s own defaults when its selects are left untouched — see the
+  "Deviation from the original spec" history below). They still default to
+  General/Inquiry, `INT_SUBJECTS`/`INT_NATURES` (shared with the Log/Edit
+  interaction modals' `f-isub`/`f-inat` — one list each, not three copies) —
+  but a bulk-outreach batch is usually a `Notification`, not an `Inquiry`, and
+  now that's a one-click ⇩ copy-down on row 1 rather than an `Log interaction`
+  detour. `Notification` itself is a Sep 2026 addition to `INT_NATURES` for
+  exactly this case (email/mail/newsletter reaching out to say something,
+  as opposed to fielding one).
+- **Deviation from the original spec, historical:** the spec said direction
   blank, `subject`/`category` blank, `sentiment` 'Neutral'. `pi_interactions`
   has no `sentiment` and no `category` column (it's `nature`), and a blank
-  direction renders as an empty badge in the interaction list. So: direction is
-  a per-row select (default Incoming) and subject/nature are written as
-  `General`/`Inquiry` — **the same defaults `saveInt()` writes** when its selects
-  are untouched, which keeps a quick-logged row indistinguishable from a
-  modal-logged one in every filter.
+  direction renders as an empty badge in the interaction list — hence
+  defaulted selects instead of blanks, from the start.
 - **Locked constraints held:** the picker only offers stakeholders ALREADY
   linked to the project (no create, no master-list link, no fuzzy matching), so
   a save never touches `pi_project_stakeholders`. Blank stakeholder = anonymous.
@@ -1111,8 +1126,9 @@ re-rendering** (a re-render would wipe everything typed).
   (`S.showQuickLog || S.showBulkAdd`); both hold unsaved rows in the DOM, and the
   60s refresh would re-render them away the moment focus left a field. That
   hazard already existed for bulk-add.
-- Covered by `test/tests/07-quick-log.test.js` (32 checks), including that the
-  picker never offers an unlinked contact.
+- Covered by `test/tests/07-quick-log.test.js` (42 checks), including that the
+  picker never offers an unlinked contact, the new columns default correctly
+  (Outgoing / General / Inquiry), and ⇩ copy-down works on Nature.
 
 ## Competitive positioning (researched June 29, 2026)
 

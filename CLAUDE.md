@@ -1457,6 +1457,51 @@ that step is what caught this, and it would not have been caught any other
 way, including by everything in this session that came before actually
 running it.
 
+### Client Portal Access — staff can save directly now (Sep 2026)
+`sql/2026-09-06_client_access_self_serve.sql`. The Settings → Client Portal
+Access panel used to only generate copy-paste SQL (Phase 1, "Option C") — the
+app itself could never write a grant, because `pi_client_access` only ever
+granted `authenticated` SELECT, and before `pi_is_portal_client()` existed
+there was no way to open write access to that role without also opening it to
+every OTP-logged-in client (same shared-role problem the isolation migration
+above solved for the data tables). With that function in place, staff and
+client sessions can finally be told apart here too: `pi_client_access_staff_
+insert`/`_delete` check `not pi_is_portal_client()`, so a client's own attempt
+is rejected regardless of which project_id they try. `caSaveAccess()` /
+`caRevokeAccess()` now write directly via the signed-in staff session
+(`getAuthHeaders()`), with a `confirm()` summarizing exactly what will change
+standing in for the old "read the SQL before pasting it" review step. If the
+migration hasn't been run yet, the write fails and the panel falls back to
+showing the equivalent hand-run SQL — the Phase 1 behavior, not a dead end.
+
+**A DELETE-only policy silently did nothing, and this would have shipped
+broken without live verification.** PostgreSQL requires a row to also pass an
+applicable **SELECT** policy before an UPDATE/DELETE's own USING clause is
+even consulted — a row must be "visible" to be modified. The pre-existing
+`client reads own grants by email` SELECT policy
+(`sql/2026-07-13_client_access_by_email.sql`) scopes to
+`lower(email) = lower(auth.jwt() ->> 'email')`, correct for a client reading
+their own row — but staff's own email never matches any grant row, so that
+policy ANDs into every staff DELETE and zeroes it out. The delete reports
+success (no error, 0 rows removed) — indistinguishable from "nothing to
+delete" without checking. Caught with `EXPLAIN (ANALYZE)` against a real
+Postgres before this shipped: the plan's Filter clause showed the unrelated
+SELECT qual ANDed onto the DELETE's own. Fixed by adding
+`pi_client_access_staff_select` (`for select to authenticated using
+(not pi_is_portal_client())`) — OR'd with the existing client policy, so a
+client session gains no additional visibility from it (their own
+`pi_is_portal_client()` is true), while a real staff session can now see
+every grant row, which both makes the DELETE work and lets `_clientAccessFetch`
+read grants via a real staff login rather than only the anon key. Not yet
+switched over — `_clientAccessFetch` still reads via anon (the documented
+Phase-1 trade-off) since that wasn't what this change set out to fix; doing
+so is now possible and would close that trade-off, but is a separate decision.
+Verified against a real Postgres with the same `auth.jwt()` stub as the
+isolation migration: staff insert+delete both work and are visible
+immediately; a client's insert is rejected outright (RLS violation error) and
+their delete of their own existing grant reports 0 rows affected; anon gets a
+hard permission-denied on any write attempt.
+
 ### Demo dataset — `sql/2026-07-26_udot_conference_demo_seed.sql`
 Three realistic Utah projects with ~63 stakeholders, ~586 interactions,
 deliverables, events, issues, commitments, a comment period with 23 public

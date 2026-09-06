@@ -47,9 +47,16 @@ const ALLOWED = {
   // pi_resolve_portal_token(uuid), a SECURITY DEFINER function that reveals
   // only the one project_id for the one token presented, never the table.
   pi_portal_links: { anon: [] },
-  // Grants are pasted in by an admin (Option C provisioning). anon having no
-  // write is what stops a client self-granting access to another project.
-  pi_client_access: { anon: ['SELECT'], authenticated: ['SELECT'] },
+  // anon having no write at all is what stops a client self-granting access
+  // to another project. Staff self-serve migration (2026-09-06,
+  // sql/2026-09-06_client_access_self_serve.sql) opened INSERT/DELETE to
+  // `authenticated` — safe now that pi_is_portal_client() (2026-08-31) can
+  // tell a real staff session from an OTP client one, so the accompanying
+  // policies reject a client's own attempt regardless of project_id. Before
+  // that function existed, `authenticated` was shared with no way to
+  // distinguish the two, so this had to stay SELECT-only for both roles
+  // (Option C: grants pasted in by an admin) until now.
+  pi_client_access: { anon: ['SELECT'], authenticated: ['SELECT', 'INSERT', 'DELETE'] },
   // Portal client-isolation migration (2026-08-31,
   // sql/2026-08-31_portal_client_isolation.sql) revokes anon's write access
   // on these three: client-portal.html (the only anon-role app) never writes

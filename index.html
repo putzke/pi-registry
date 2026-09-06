@@ -20159,10 +20159,16 @@ function renderSettings(m) {
   setTimeout(function(){ if(document.getElementById('client-access-panel')) renderClientAccessPanel(); }, 0);
 }
 
-// ── CLIENT PORTAL ACCESS (Phase 1: manual grant-by-email provisioning) ────────
+// ── CLIENT PORTAL ACCESS (Phase 2: staff can save directly, Sep 2026) ─────────
 // Reads pi_client_access with the anon key (so the anon RLS policy applies
-// regardless of any consultant session) and generates copy-paste SQL to add or
-// revoke grants in Supabase. The app never writes grants itself.
+// regardless of any consultant session — see _clientAccessFetch). Writes go
+// through the signed-in staff session (getAuthHeaders()): sql/2026-09-06_
+// client_access_self_serve.sql opened INSERT/DELETE to `authenticated` for a
+// real staff login specifically (pi_is_portal_client() lets the database
+// reject a client session's own attempt), so a click here now takes effect
+// immediately — no more copy-pasting into the Supabase SQL Editor. If that
+// migration hasn't been run yet, the write is rejected and this falls back
+// to showing the equivalent SQL, same as the old Phase 1 flow.
 async function _clientAccessFetch() {
   try {
     var r = await fetch(SUPA_REST + '/pi_client_access?select=id,email,project_id,user_id,created_at&order=email.asc', {
@@ -20191,16 +20197,19 @@ async function renderClientAccessPanel() {
 
   var builder = '<div style="border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:14px;margin-bottom:16px">'
     + '<div style="font-size:12px;font-weight:700;color:var(--white);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Grant or edit access</div>'
-    + '<div style="font-size:11px;color:var(--fog);margin-bottom:10px;line-height:1.45">Type a <strong style="color:var(--slate)">new</strong> email to grant, or click <strong style="color:var(--slate)">Edit access</strong> on a client below to load their current projects. The checked projects become the client’s <strong style="color:var(--slate)">complete</strong> access — the generated SQL adds the newly checked and removes the unchecked.</div>'
+    + '<div style="font-size:11px;color:var(--fog);margin-bottom:10px;line-height:1.45">Type a <strong style="color:var(--slate)">new</strong> email to grant, or click <strong style="color:var(--slate)">Edit access</strong> on a client below to load their current projects. The checked projects become the client’s <strong style="color:var(--slate)">complete</strong> access — Save applies it immediately.</div>'
     + '<input id="ca-email" type="email" placeholder="client@email.com" onblur="caPrefillFromEmail()" style="'+inp+';width:100%;margin-bottom:10px">'
     + '<div style="font-size:11px;color:var(--fog);margin-bottom:6px">Projects this client can see:</div>'
     + '<div style="max-height:180px;overflow-y:auto;border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:8px 10px;margin-bottom:10px">'+(projCbs||'<span style="color:var(--fog)">No projects</span>')+'</div>'
-    + '<button class="btn btn-primary" onclick="caGenerateAccessSQL()">Generate access SQL</button>'
+    + '<button class="btn btn-primary" onclick="caSaveAccess()">Save access</button>'
     + '</div>';
 
+  // Only shown when a direct save is rejected (sql/2026-09-06_client_access_
+  // self_serve.sql not run yet, or some other write failure) — the Phase 1
+  // manual fallback, not the normal path any more.
   var sqlBox = '<div id="ca-sql-wrap" style="display:none;margin-bottom:16px">'
     + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
-    + '<span style="font-size:11px;color:var(--fog)">Copy and run once in Supabase → SQL Editor</span>'
+    + '<span style="font-size:11px;color:var(--amber)">Could not save directly — copy and run once in Supabase → SQL Editor instead</span>'
     + '<button class="btn btn-sm" onclick="caCopySQL()">Copy SQL</button></div>'
     + '<pre id="ca-sql-out" style="background:#0d1a2b;border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:12px;font-family:var(--mono);font-size:12px;color:#cfe0f5;white-space:pre-wrap;word-break:break-word;margin:0"></pre></div>';
 
@@ -20221,14 +20230,14 @@ async function renderClientAccessPanel() {
           var label = p ? (p.pid+' — '+p.name) : ('Project '+g.project_id);
           return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--mist);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:3px 10px;margin:2px">'
             + escHtml(label)
-            + '<span onclick="caGenerateRevokeSQL(\''+eJs+'\','+Number(g.project_id)+')" title="Generate revoke SQL for this project" style="cursor:pointer;color:var(--red);font-weight:700">×</span></span>';
+            + '<span onclick="caRevokeAccess(\''+eJs+'\','+Number(g.project_id)+')" title="Revoke this project" style="cursor:pointer;color:var(--red);font-weight:700">×</span></span>';
         }).join('');
         return '<div style="border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px 12px;margin-bottom:8px">'
           + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">'
           + '<span style="font-size:13px;font-weight:600;color:var(--white)">'+escHtml(e)+'</span>'
           + '<div style="display:flex;gap:6px">'
           +   '<button class="btn btn-sm" style="font-size:11px" onclick="caLoadClient(\''+eJs+'\')">Edit access</button>'
-          +   '<button class="btn btn-sm btn-ghost" style="color:var(--red);font-size:11px" onclick="caGenerateRevokeSQL(\''+eJs+'\',null)">Revoke all</button>'
+          +   '<button class="btn btn-sm btn-ghost" style="color:var(--red);font-size:11px" onclick="caRevokeAccess(\''+eJs+'\',null)">Revoke all</button>'
           + '</div></div>'
           + '<div>'+chips+'</div></div>';
       }).join('');
@@ -20247,10 +20256,12 @@ function _caShowSQL(sql){
 }
 
 // Reconcile the client's access to exactly the checked projects: INSERT the
-// newly checked, DELETE the unchecked-but-currently-granted. The generated SQL
-// is shown for review before you paste it into Supabase (Option C), so a wrong
-// checkbox never silently changes access.
-function caGenerateAccessSQL(){
+// newly checked, DELETE the unchecked-but-currently-granted, via the staff's
+// own signed-in session (getAuthHeaders() — sql/2026-09-06_client_access_
+// self_serve.sql is what lets that succeed). A confirm() summarizing exactly
+// what changes stands in for the old "read the SQL before pasting it" gate,
+// since a click here now takes effect immediately with no review step.
+async function caSaveAccess(){
   var email = ((document.getElementById('ca-email')||{}).value || '').trim().toLowerCase();
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('Enter a valid client email.', 'warn'); return; }
   var checked = DB.get('projects').filter(function(p){ var el=document.getElementById('ca-proj-'+p.id); return el&&el.checked; }).map(function(p){ return String(p.id); });
@@ -20261,21 +20272,15 @@ function caGenerateAccessSQL(){
   var toAdd = checked.filter(function(id){ return !curSet[id]; });
   var toRemove = current.filter(function(id){ return !chkSet[id]; });
   if (!toAdd.length && !toRemove.length) {
-    _caShowSQL('-- No changes: '+email+' already has exactly the checked projects.');
     showToast('No changes — already matches this client’s access.', 'info', 2500); return;
   }
-  var sql = '';
-  if (toAdd.length) {
-    sql += "insert into pi_client_access (email, project_id) values\n"
-      + toAdd.map(function(id){ return "  ('"+_caSqlEsc(email)+"', "+Number(id)+")"; }).join(',\n')
-      + "\non conflict (email, project_id) do nothing;";
-  }
-  if (toRemove.length) {
-    if (sql) sql += "\n\n";
-    sql += "delete from pi_client_access where lower(email)=lower('"+_caSqlEsc(email)+"') and project_id in ("+toRemove.map(Number).join(',')+");";
-  }
-  _caShowSQL(sql);
-  showToast((toAdd.length?('+'+toAdd.length+' add'):'')+(toAdd.length&&toRemove.length?' · ':'')+(toRemove.length?('−'+toRemove.length+' remove'):''), 'info', 3000);
+  var label = function(id){ var p=DB.get('projects').find(function(x){return String(x.id)===String(id);}); return p?(p.pid+' — '+p.name):('project '+id); };
+  var msg = 'Update portal access for '+email+'?\n'
+    + (toAdd.length ? '\nGrant: '+toAdd.map(label).join(', ') : '')
+    + (toRemove.length ? '\nRevoke: '+toRemove.map(label).join(', ') : '')
+    + '\n\nTakes effect immediately.';
+  if (!confirm(msg)) return;
+  await _caApplyAccessChange(email, toAdd, toRemove);
 }
 
 function _caCheckProjects(email){
@@ -20287,19 +20292,60 @@ function caLoadClient(email){
   var inp=document.getElementById('ca-email'); if(inp) inp.value=email;
   _caCheckProjects(email);
   if(inp) inp.scrollIntoView({behavior:'smooth',block:'center'});
-  showToast('Loaded '+email+' — adjust the checked projects, then Generate access SQL.', 'info', 3000);
+  showToast('Loaded '+email+' — adjust the checked projects, then Save access.', 'info', 3000);
 }
 function caPrefillFromEmail(){
   var email=((document.getElementById('ca-email')||{}).value||'').trim().toLowerCase();
   if(email && _caGrantsByEmail[email]) _caCheckProjects(email);
 }
 
-function caGenerateRevokeSQL(email, projectId){
-  var sql = (projectId===null || projectId===undefined)
-    ? "delete from pi_client_access where lower(email)=lower('"+_caSqlEsc(email)+"');"
-    : "delete from pi_client_access where lower(email)=lower('"+_caSqlEsc(email)+"') and project_id = "+Number(projectId)+";";
-  _caShowSQL(sql);
-  showToast('Revoke SQL generated below.', 'info', 2000);
+async function caRevokeAccess(email, projectId){
+  var whole = (projectId===null || projectId===undefined);
+  var label = whole ? 'ALL projects' : (function(){ var p=DB.get('projects').find(function(x){return String(x.id)===String(projectId);}); return p?(p.pid+' — '+p.name):('project '+projectId); })();
+  if (!confirm('Revoke '+email+'’s access to '+label+'? Takes effect immediately.')) return;
+  await _caApplyAccessChange(email, [], whole ? (_caGrantsByEmail[(email||'').toLowerCase()]||[]).map(String) : [String(projectId)]);
+}
+
+// Shared write path for both Save access and Revoke — POST the additions,
+// DELETE the removals, both as the signed-in staff session. On any failure
+// (most likely: sql/2026-09-06_client_access_self_serve.sql hasn't been run
+// in Supabase yet, so the new INSERT/DELETE policies don't exist), fall back
+// to showing the equivalent hand-run SQL, exactly like the Phase 1 flow this
+// replaced — so provisioning never just silently fails with no way forward.
+async function _caApplyAccessChange(email, toAdd, toRemove){
+  try {
+    if (toAdd.length) {
+      var r1 = await fetch(SUPA_REST + '/pi_client_access?on_conflict=email,project_id', {
+        method: 'POST',
+        headers: Object.assign({}, getAuthHeaders(), {'Prefer':'return=minimal,resolution=ignore-duplicates'}),
+        body: JSON.stringify(toAdd.map(function(id){ return {email:email, project_id:Number(id)}; }))
+      });
+      if (!r1.ok) throw new Error('grant insert failed (HTTP '+r1.status+')');
+    }
+    if (toRemove.length) {
+      var r2 = await fetch(SUPA_REST + '/pi_client_access?email=eq.'+encodeURIComponent(email)+'&project_id=in.('+toRemove.map(Number).join(',')+')', {
+        method: 'DELETE',
+        headers: Object.assign({}, getAuthHeaders(), {'Prefer':'return=minimal'})
+      });
+      if (!r2.ok) throw new Error('grant delete failed (HTTP '+r2.status+')');
+    }
+    showToast('Access updated for '+email+'.', 'info', 3000);
+    renderClientAccessPanel();
+  } catch(e) {
+    console.error('caSaveAccess/caRevokeAccess error:', e);
+    var sql = '';
+    if (toAdd.length) {
+      sql += "insert into pi_client_access (email, project_id) values\n"
+        + toAdd.map(function(id){ return "  ('"+_caSqlEsc(email)+"', "+Number(id)+")"; }).join(',\n')
+        + "\non conflict (email, project_id) do nothing;";
+    }
+    if (toRemove.length) {
+      if (sql) sql += "\n\n";
+      sql += "delete from pi_client_access where lower(email)=lower('"+_caSqlEsc(email)+"') and project_id in ("+toRemove.map(Number).join(',')+");";
+    }
+    _caShowSQL(sql);
+    showToast('Could not save directly — run sql/2026-09-06_client_access_self_serve.sql in Supabase if you haven’t yet. SQL to run manually is shown below.', 'warn', 8000);
+  }
 }
 
 function caCopySQL(){

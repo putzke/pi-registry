@@ -20160,19 +20160,24 @@ function renderSettings(m) {
 }
 
 // ── CLIENT PORTAL ACCESS (Phase 2: staff can save directly, Sep 2026) ─────────
-// Reads pi_client_access with the anon key (so the anon RLS policy applies
-// regardless of any consultant session — see _clientAccessFetch). Writes go
-// through the signed-in staff session (getAuthHeaders()): sql/2026-09-06_
-// client_access_self_serve.sql opened INSERT/DELETE to `authenticated` for a
-// real staff login specifically (pi_is_portal_client() lets the database
-// reject a client session's own attempt), so a click here now takes effect
-// immediately — no more copy-pasting into the Supabase SQL Editor. If that
-// migration hasn't been run yet, the write is rejected and this falls back
-// to showing the equivalent SQL, same as the old Phase 1 flow.
+// Reads and writes both go through the signed-in staff session
+// (getAuthHeaders()) now. Reads used to go through the anon key instead,
+// because the authenticated-role read policy at the time only let a session
+// see grant rows matching ITS OWN email — useless for an admin wanting every
+// client's grants. That meant anyone holding the public anon key (embedded
+// in client-portal.html, no login required) could list every client's email
+// and project access directly — sql/2026-09-06_client_access_anon_lockdown.sql
+// closes that: it revokes anon's SELECT entirely now that
+// pi_client_access_staff_select (added alongside the INSERT/DELETE policies
+// in sql/2026-09-06_client_access_self_serve.sql) lets a real staff session
+// see every row through its own login. If the anon-lockdown migration hasn't
+// run yet, this still works exactly the same — the anon SELECT policy simply
+// hasn't been revoked yet, so it's redundant with this one rather than
+// something this code depends on.
 async function _clientAccessFetch() {
   try {
     var r = await fetch(SUPA_REST + '/pi_client_access?select=id,email,project_id,user_id,created_at&order=email.asc', {
-      headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY, 'Accept': 'application/json' }
+      headers: getAuthHeaders()
     });
     if (!r.ok) return { ok:false, status:r.status, rows:[] };
     return { ok:true, rows: await r.json() };

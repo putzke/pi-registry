@@ -1492,15 +1492,30 @@ SELECT qual ANDed onto the DELETE's own. Fixed by adding
 client session gains no additional visibility from it (their own
 `pi_is_portal_client()` is true), while a real staff session can now see
 every grant row, which both makes the DELETE work and lets `_clientAccessFetch`
-read grants via a real staff login rather than only the anon key. Not yet
-switched over — `_clientAccessFetch` still reads via anon (the documented
-Phase-1 trade-off) since that wasn't what this change set out to fix; doing
-so is now possible and would close that trade-off, but is a separate decision.
+read grants via a real staff login rather than only the anon key.
 Verified against a real Postgres with the same `auth.jwt()` stub as the
 isolation migration: staff insert+delete both work and are visible
 immediately; a client's insert is rejected outright (RLS violation error) and
 their delete of their own existing grant reports 0 rows affected; anon gets a
 hard permission-denied on any write attempt.
+
+**The anon-exposure trade-off is now closed too, same day —
+`sql/2026-09-06_client_access_anon_lockdown.sql`.** The "admin lists grants
+(anon)" policy from `sql/2026-07-13_client_access_by_email.sql` was a bare
+`using (true)` — anyone holding the public anon key (embedded in
+`client-portal.html`, which requires no login at all) could
+`GET /pi_client_access?select=*` and list every client's email and which
+projects they're granted, no exploit needed, just an unfiltered request.
+Confirmed live before fixing it: a fresh Postgres with the pre-lockdown
+policy really does hand back every row to `anon`. It existed only because
+staff had no other way to see every grant at once; `pi_client_access_staff_
+select` (added hours earlier by the self-serve migration) removed that
+reason, so this migration revokes anon's `SELECT` outright and drops the
+policy. `_clientAccessFetch` now reads via `getAuthHeaders()` (the signed-in
+staff session) instead of the anon key. Re-verified after the fix: anon gets
+a hard permission-denied on the same query that used to succeed; staff still
+sees every row through their own login; a client still sees only their own
+grant row, unaffected.
 
 ### Demo dataset — `sql/2026-07-26_udot_conference_demo_seed.sql`
 Three realistic Utah projects with ~63 stakeholders, ~586 interactions,

@@ -1,0 +1,41 @@
+-- Client Portal Access — close the anon-exposure trade-off on pi_client_access.
+--
+-- THE EXPOSURE
+--   sql/2026-07-13_client_access_by_email.sql's "admin lists grants (anon)"
+--   policy is `for select to anon using (true)` — no filter at all. Anyone
+--   holding the public anon key (embedded in client-portal.html, a page
+--   requiring no login whatsoever) can issue a raw
+--   `GET /pi_client_access?select=*` and get back EVERY client's email
+--   address and which projects they're granted portal access to. Not
+--   project data — the roster of who has access to what. Documented at the
+--   time as "PHASE-1 TRADEOFF ... tighten this in Phase 3."
+--
+--   It existed because the ALTERNATIVE — reading via a real staff login —
+--   didn't work: the authenticated-role policy
+--   ("client reads own grants by email") only lets a session see grant rows
+--   matching ITS OWN email, which for a staff member matches nothing. The
+--   desktop admin panel (_clientAccessFetch in index.html) used the anon key
+--   as a workaround specifically to get an unscoped view.
+--
+-- WHY THIS IS SAFE TO CLOSE NOW
+--   sql/2026-09-06_client_access_self_serve.sql added
+--   pi_client_access_staff_select — `for select to authenticated using
+--   (not pi_is_portal_client())` — so a REAL staff session can now see every
+--   grant row through its OWN login, with no anon workaround needed. Nothing
+--   else in this app reads pi_client_access via anon: client-portal.html
+--   itself never queries this table at all (bootApp/bootFromToken only ever
+--   ask "what am I granted", scoped by their own session, never "list
+--   everyone's grants"). So anon has no legitimate reason to read this table
+--   any more.
+--
+-- Idempotent — safe to run more than once.
+
+drop policy if exists "admin lists grants (anon)" on pi_client_access;
+revoke select on pi_client_access from anon;
+
+-- ── Verify (run after) ───────────────────────────────────────────────────────
+--   select has_table_privilege('anon','pi_client_access','SELECT') as anon_sel,
+--          has_table_privilege('authenticated','pi_client_access','SELECT') as auth_sel;
+-- Expect anon_sel = false, auth_sel = true (staff still reads fine via their
+-- own session — see index.html's _clientAccessFetch, switched to
+-- getAuthHeaders() in the same change that ships this migration).

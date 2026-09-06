@@ -56,7 +56,16 @@ const ALLOWED = {
   // that function existed, `authenticated` was shared with no way to
   // distinguish the two, so this had to stay SELECT-only for both roles
   // (Option C: grants pasted in by an admin) until now.
-  pi_client_access: { anon: ['SELECT'], authenticated: ['SELECT', 'INSERT', 'DELETE'] },
+  //
+  // anon lost its SELECT entirely in the same session
+  // (sql/2026-09-06_client_access_anon_lockdown.sql) — that policy was a bare
+  // `using (true)`, so anyone holding the public anon key (client-portal.html
+  // requires no login at all) could list every client's email and project
+  // access directly. It only existed because the desktop admin panel had no
+  // other way to see every grant; pi_client_access_staff_select (added by the
+  // self-serve migration above) gives a real staff session that same view
+  // through its own login, so the anon path had nothing left depending on it.
+  pi_client_access: { anon: [], authenticated: ['SELECT', 'INSERT', 'DELETE'] },
   // Portal client-isolation migration (2026-08-31,
   // sql/2026-08-31_portal_client_isolation.sql) revokes anon's write access
   // on these three: client-portal.html (the only anon-role app) never writes

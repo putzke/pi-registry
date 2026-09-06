@@ -1106,7 +1106,11 @@ re-rendering** (a re-render would wipe everything typed).
   now that's a one-click ⇩ copy-down on row 1 rather than an `Log interaction`
   detour. `Notification` itself is a Sep 2026 addition to `INT_NATURES` for
   exactly this case (email/mail/newsletter reaching out to say something,
-  as opposed to fielding one).
+  as opposed to fielding one). `mobile.html`'s own `#log-nature` list — a
+  hand-typed, not-cross-app-tracked subset that already happened to mirror
+  desktop's other seven values — got `Notification` added too: a PI staffer
+  physically handing a notice to a property owner in the field is the exact
+  same outbound-outreach case, on the one app built for logging in the field.
 - **Deviation from the original spec, historical:** the spec said direction
   blank, `subject`/`category` blank, `sentiment` 'Neutral'. `pi_interactions`
   has no `sentiment` and no `category` column (it's `nature`), and a blank

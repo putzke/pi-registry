@@ -116,6 +116,46 @@ now the first chip, not the last) and the portal chip keeps its own, so the two
 sit at opposite ends. The `psSt` / `champ` / `opp` / `ints2` scans went with the
 markup — they ran per card on every render for numbers nothing displayed.
 
+### A freshly logged interaction could open its own Edit modal blank (Aug 2026)
+`saveQuickLog()` and `saveInt()` push a new row into the cache under a
+**temporary local id** (`DB.uid()`, prefixed `tmp_`) before the real Supabase
+insert has happened, then call `DB.set(...)` — which starts that insert in the
+background — **without awaiting it**, and immediately call `render()`. The
+interaction table's "Edit" button is drawn with the id in the cache **at that
+exact moment**, i.e. the temporary one. Moments later the insert resolves and
+`DB._sync` swaps the temporary id for the real one **inside the cache**, but
+nothing re-renders to match — so the button already on screen keeps pointing
+at an id the cache no longer has. Click Edit on a row logged within roughly
+the last second (which, for a small quick-log batch, is easily faster than
+moving the mouse to the button) and `openEditIntModal(id)`'s lookup finds
+nothing, falls back to `{}`, and opens the modal with every field blank
+rather than the interaction you just logged.
+
+Reported live as "the interaction log window was blank" right after logging a
+batch of interactions through Quick Log — nothing to do with the data itself,
+and the row edits correctly on any later attempt, once a fresh `render()` has
+drawn from the now-settled cache. That "works the second time" pattern is the
+signature of this exact race, not a data problem.
+
+Fixed by making both save functions `async` and `await DB.set(...)` before
+`render()` — the id baked into the DOM is then always the final one.
+`delInt()` does not create a new row, so the race does not apply to it and it
+was left alone. **This is a narrow, scoped fix, not a sweep** — roughly 50
+other `DB.set(...)` call sites in `index.html` don't await it either, and any
+of them that immediately re-render after creating a NEW row (not just
+updating an existing one) could have the same latent race. Only the two
+functions this bug actually hit were changed.
+
+Guarded by `test/tests/46-interaction-save-id-race.test.js` (9 checks):
+asserts the id baked into a freshly-rendered Edit button is the real numeric
+id, never `tmp_...`, for both Quick Log and the single Log Interaction modal;
+separately demonstrates the failure mode itself (opening the modal by an id
+the cache genuinely doesn't have really does blank every field), so the
+regression this guards against is unambiguous rather than a coincidental
+pass. Verified against the actual bug by reverting the fix locally and
+confirming the test fails with exactly the reported symptom before
+re-applying it.
+
 ### Events do NOT create follow-ups (Aug 2026)
 The Edit-event modal's "Action items" textarea used to create a `pi_interactions`
 row per line. Removed — the field is now documentation on the event record only.

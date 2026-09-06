@@ -7461,7 +7461,7 @@ function qlStakeBlur(i){
   },200);
 }
 
-function saveQuickLog(){
+async function saveQuickLog(){
   const projId=S.projectFilter;
   if(!projId){ showToast('Select a project first.','warn'); return; }
   const rows=_qlGetRows().filter(_qlInPlay);
@@ -7501,7 +7501,14 @@ function saveQuickLog(){
       followUp:false,followUpNote:'',followUpDue:null,followUpDone:false,
       followUpResolved:'',followUpAssignedTo:''});
   });
-  DB.set('interactions',all);
+  // Awaited: DB.set replaces each new row's temporary local id with the real
+  // Supabase id once the insert lands. render() below draws the table from
+  // that same cache — if it ran before this resolved, every "Edit" button
+  // would be built with the temporary id. The id then gets swapped out from
+  // under the DOM by the background write, with nothing to redraw it, so
+  // clicking Edit shortly after a save found no matching row and opened a
+  // blank modal. Found live, right after logging a quick-log batch.
+  await DB.set('interactions',all);
   showToast('✓ '+rows.length+' interaction'+(rows.length>1?'s':'')+' logged.','info');
   S.showQuickLog=false;
   refreshBadges();
@@ -7645,7 +7652,7 @@ async function openEditIntModal(id){
   <button class="btn" onclick="closeM()">Cancel</button>
   <button class="btn btn-primary" onclick="saveInt()">Save changes</button>`,true);
 }
-function saveInt(){
+async function saveInt(){
   const v=id=>document.getElementById(id)?.value||'';
   const vDate=id=>{const val=document.getElementById(id)?.value||'';return val||null;};
   const projId=v('f-ip'),stakeId=v('f-is')||null;
@@ -7664,11 +7671,15 @@ function saveInt(){
   const psAll=DB.get('project_stakeholders');
   if(stakeId&&!psAll.find(x=>x.projectId===projId&&x.stakeholderId===stakeId)){
     psAll.push({id:DB.uid(),projectId:projId,stakeholderId:stakeId,support:'Neutral',issueTags:'',addedDate:data.date,notes:'Auto-linked via interaction log.',distributionGroups:'',stakeholderRole:'External'});
-    DB.set('project_stakeholders',psAll);
+    await DB.set('project_stakeholders',psAll);
   }
   const all=DB.get('interactions');
   if(S.editId){const i=all.findIndex(x=>x.id===S.editId);if(i>-1)all[i]=data;}else all.push(data);
-  DB.set('interactions',all);
+  // Awaited so a NEW interaction's temporary id is replaced with the real one
+  // before render() below draws the table — otherwise the Edit button just
+  // built points at an id the cache no longer has by the time it's clicked,
+  // and the modal opens with every field blank. Same race as saveQuickLog().
+  await DB.set('interactions',all);
 
   // Handle issue link
   const selectedIssueId=document.getElementById('f-iissue')?.value||'';
@@ -7677,7 +7688,7 @@ function saveInt(){
   if(selectedIssueId){
     cleanedLinks.push({id:DB.uid(),issueId:selectedIssueId,interactionId:data.id});
   }
-  DB.set('issue_interactions',cleanedLinks);
+  await DB.set('issue_interactions',cleanedLinks);
 
   closeM();refreshBadges();render();
 }

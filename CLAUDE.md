@@ -543,6 +543,53 @@ reuses `_sectionAIRequest`, so both paths get the same instruction and budget;
 keep it that way or the batched copy comes out a different length from the
 per-section button's.
 
+### The overall summary is scoped to the report, and outbound ≠ inbound (Sep 2026)
+`_buildOverallDraft()` (feeds `_overallDraftCall()`, which deliberately never
+sees the other sections' drafted text — see its own comment) had two problems,
+both found by reading the code rather than assuming from its output:
+
+1. **It ignored which sections were actually checked into the report.** It
+   pulled deliverable progress, issue/commitment alerts and the stakeholder
+   sentiment mix from the WHOLE PROJECT unconditionally. A report with only
+   "Recent public concerns" selected could still have its overall summary cite
+   a fact — an overdue commitment, a sentiment split — that appears nowhere
+   else in the document. That's an unsupported claim in a compliance record,
+   even when the fact is true of the project generally: the reader can't check
+   a number the report never shows them. Fixed with `hasSec(type)` reading
+   `loadReportSections(projF).sections` — deliverables/issues/commitments/
+   sentiment facts are now only gathered when `auto-del`/`auto-issues`/
+   `auto-commitments`/`auto-sentiment` is in the report, and the whole
+   interaction-based block (outreach counts, most-engaged stakeholder, top
+   topics) only runs when `auto-concerns` or `auto-intlog` is.
+2. **It folded outbound and inbound interactions into one undifferentiated
+   count, and keyword-scanned ALL of them for "topics raised."** A project
+   whose early activity is mostly the team notifying stakeholders (mass flyer
+   emails, phone referrals to the project website — the primary Quick Log use
+   case, see that section above) would have the team's OWN outreach language
+   ("sent detour exhibit for review") scanned and reported back as what the
+   public raised — exactly backwards, and worse the earlier in a project's
+   life the report runs, since that's precisely when outbound notification
+   is most of what has happened yet.
+   **The fix keeps outbound work in the narrative — it just gets its own
+   clause.** `periodInts` is split into `outboundInts` (`direction ===
+   'Outgoing'`) and `inboundInts` (everything else). The outreach sentence
+   now reads "sent N outbound project notifications and logged M inbound or
+   in-person stakeholder interactions" as two clauses, not one blended count,
+   and states explicitly when inbound is zero ("No inbound public inquiries
+   have been received to date") rather than silently omitting it — an early,
+   notification-only period is real, reportable work, and the absence of
+   inbound contact yet is itself a fact worth stating plainly, not hiding.
+   "Most engaged stakeholder" and the keyword-scanned topics sentence both
+   moved to `inboundInts` only, and are skipped entirely when it's empty — a
+   stakeholder the team merely notified several times was not "engaged," and
+   there is nothing to report as "raised" when nobody has raised anything yet.
+   Guarded by `test/tests/48-overall-summary-scope.test.js` (18 checks):
+   asserts an all-outbound period gets the honest two-clause treatment and
+   skips the engagement/topics sentences; a mixed period keeps both clauses
+   and scopes topics to inbound only; and deliverable/issue/commitment/
+   sentiment facts each appear only when their section is in the report and
+   are absent otherwise, on the identical underlying data.
+
 ### The UDOT logo lives in TWO places — update both (Aug 2026)
 Replaced Aug 2026 with the navy beehive mark (`UDOT_Logo_Blue.png`, 1000x258,
 transparent, kept in the repo root as the source of record). It is embedded

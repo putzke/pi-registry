@@ -11220,6 +11220,19 @@ function _buildOverallDraft() {
   if (!proj) return null;
 
   var saved = loadReportSections(projF);
+  // Facts are scoped to sections actually INCLUDED in this report. Citing a
+  // fact (deliverable progress, an overdue commitment, stakeholder sentiment)
+  // that appears nowhere else in the document is an unsupported claim in a
+  // compliance record, even when it's true of the project generally — a
+  // reader can't check a number the report never shows them.
+  var secTypes = (saved.sections||[]).map(function(s){ return s.type; });
+  var hasSec = function(t){ return secTypes.indexOf(t)>=0; };
+  var showInts = hasSec('auto-concerns') || hasSec('auto-intlog');
+  var showDels = hasSec('auto-del');
+  var showIssues = hasSec('auto-issues');
+  var showComms = hasSec('auto-commitments');
+  var showSentiment = hasSec('auto-sentiment');
+
   var ps = DB.get('project_stakeholders').filter(function(x){ return String(x.projectId)===String(projF); });
   var allStakes = DB.getActive('stakeholders');
   var ints = DB.get('interactions').filter(function(i){ return String(i.projectId)===String(projF); });
@@ -11232,13 +11245,23 @@ function _buildOverallDraft() {
     if (saved.periodEnd && i.date > saved.periodEnd) return false;
     return true;
   });
-  var dels = DB.get('deliverables').filter(function(d){ return String(d.projectId)===String(projF); });
+  // Outbound (the team reaching OUT — notifications, flyer deliveries,
+  // referral calls) vs inbound/in-person (the public reaching IN, or a
+  // genuine two-way contact). Conflating the two invents public engagement
+  // out of the team's own outreach — the keyword-scanned "topics raised"
+  // sentence below used to scan outbound notification text (e.g. "sent
+  // detour exhibit for review") and could report the team's OWN language
+  // back as what the public raised. Outbound activity is real, reportable
+  // work; it just gets its own clause instead of the "raised" framing.
+  var outboundInts = periodInts.filter(function(i){ return i.direction === 'Outgoing'; });
+  var inboundInts = periodInts.filter(function(i){ return i.direction !== 'Outgoing'; });
+  var dels = showDels ? DB.get('deliverables').filter(function(d){ return String(d.projectId)===String(projF); }) : [];
   var meetings = DB.get('meetings').filter(function(m){ return String(m.projectId)===String(projF); });
-  var commitments = DB.get('commitments').filter(function(c){ return String(c.projectId)===String(projF); });
-  var issues = DB.get('issues').filter(function(i){ return String(i.projectId)===String(projF); });
-  var stakes = externalPS.map(function(lk){
+  var commitments = showComms ? DB.get('commitments').filter(function(c){ return String(c.projectId)===String(projF); }) : [];
+  var issues = showIssues ? DB.get('issues').filter(function(i){ return String(i.projectId)===String(projF); }) : [];
+  var stakes = showSentiment ? externalPS.map(function(lk){
     return allStakes.find(function(s){ return String(s.id)===String(lk.stakeholderId); });
-  }).filter(Boolean);
+  }).filter(Boolean) : [];
 
   if (periodInts.length === 0 && ints.length === 0 && ps.length === 0) return null;
 
@@ -11255,24 +11278,32 @@ function _buildOverallDraft() {
   else opener += ' public involvement activities are summarized below.';
   lines.push(opener);
 
-  // ── Sentence 2: Period outreach activity ─────────────────────────────────
-  if (periodInts.length > 0) {
+  // ── Sentence 2: Period outreach activity — outbound and inbound reported
+  // as separate clauses, never folded into one undifferentiated count. An
+  // early, notification-heavy period should read as real outreach work, not
+  // vanish, and it should never read as public engagement it isn't. ────────
+  if (showInts && periodInts.length > 0) {
     var compEvts = meetings.filter(function(m){ return m.status==='Completed'; }).length;
     var needFU = periodInts.filter(function(i){ return i.followUp && !i.followUpDone; }).length;
-    var s2 = 'During '+periodLabel+', the project team conducted '+periodInts.length
-      +' external stakeholder interaction'+(periodInts.length!==1?'s':'');
-    if (compEvts > 0) s2 += ' and '+compEvts+' public outreach event'+(compEvts!==1?'s':'');
+    var parts2 = [];
+    if (outboundInts.length > 0) parts2.push('sent '+outboundInts.length+' outbound project notification'+(outboundInts.length!==1?'s':''));
+    if (inboundInts.length > 0) parts2.push('logged '+inboundInts.length+' inbound or in-person stakeholder interaction'+(inboundInts.length!==1?'s':''));
+    var s2 = 'During '+periodLabel+', the project team '+parts2.join(' and ');
+    if (compEvts > 0) s2 += ', including '+compEvts+' public outreach event'+(compEvts!==1?'s':'');
     s2 += '.';
+    if (inboundInts.length === 0 && outboundInts.length > 0) s2 += ' No inbound public inquiries have been received to date.';
     if (needFU > 0) s2 += ' '+needFU+' interaction'+(needFU!==1?'s require':' requires')+' follow-up.';
     lines.push(s2);
-  } else if (ints.length > 0) {
+  } else if (showInts && ints.length > 0) {
     lines.push('A total of '+ints.length+' stakeholder interaction'+(ints.length!==1?'s have':' has')+' been logged for this project to date.');
   }
 
-  // ── Sentence 3: Most active stakeholder ──────────────────────────────────
-  if (periodInts.length > 1) {
+  // ── Sentence 3: Most active stakeholder — INBOUND contact only. A
+  // stakeholder the team merely notified several times was not "engaged" —
+  // they never engaged back. ───────────────────────────────────────────────
+  if (showInts && inboundInts.length > 1) {
     var intCounts = {};
-    periodInts.forEach(function(i){
+    inboundInts.forEach(function(i){
       var id = String(i.stakeholderId);
       intCounts[id] = (intCounts[id]||0) + 1;
     });
@@ -11289,8 +11320,12 @@ function _buildOverallDraft() {
     }
   }
 
-  // ── Sentence 4: Top concern topics (keyword scan on period interactions) ──
-  if (periodInts.length > 0) {
+  // ── Sentence 4: Top concern topics — keyword scan over INBOUND interactions
+  // only. Scanning outbound notification text (e.g. "sent detour exhibit for
+  // review") would report the team's own outreach language back as what the
+  // public raised, which is exactly backwards for an early, notification-
+  // heavy period. ───────────────────────────────────────────────────────────
+  if (showInts && inboundInts.length > 0) {
     var keywords = [
       // ── Transportation / construction ──────────────────────────────────────
       {label:'construction access',       terms:['access','driveway','entrance','ingress','egress']},
@@ -11324,7 +11359,7 @@ function _buildOverallDraft() {
       {label:'utilities and service',     terms:['utility','sewer','pipe','outage','service','electric','gas','telecom']}
     ];
     var topicCounts = {};
-    periodInts.forEach(function(i){
+    inboundInts.forEach(function(i){
       var text = ((i.summary||'')+' '+(i.notes||'')).toLowerCase();
       keywords.forEach(function(kw){
         kw.terms.forEach(function(t){
@@ -11340,7 +11375,7 @@ function _buildOverallDraft() {
     if (topTopics.length > 0) {
       var topicStr = topTopics.length === 1 ? topTopics[0]
         : topTopics.slice(0,-1).join(', ')+' and '+topTopics[topTopics.length-1];
-      lines.push('The most frequently raised topics during this period include '+topicStr+'.');
+      lines.push('The most frequently raised topics among inbound stakeholder contacts during this period include '+topicStr+'.');
     }
   }
 

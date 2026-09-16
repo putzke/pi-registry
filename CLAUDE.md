@@ -774,6 +774,30 @@ the capped generic prompt reaches no report narrative.
     here is the live Storage SERVICE itself (no network path to `*.supabase.co`
     from this sandbox) — test the real upload → share → sign → download round
     trip by hand once this ships.
+  - **Caught only by actually running it against the live project — the
+    migration originally ran `alter table storage.objects enable row level
+    security` before its policies, and Jeff hit `ERROR: 42501: must be owner
+    of table objects` running it in the Supabase SQL Editor.** `storage.objects`
+    is owned by Supabase's own `supabase_storage_admin` role, not the
+    `postgres` role the SQL Editor connects as, and Supabase already has RLS
+    permanently enabled on it regardless — the ALTER was both forbidden and
+    redundant. `CREATE POLICY` on `storage.objects` does not hit the same
+    wall; that's Supabase's own documented pattern for managing storage
+    policies from the SQL Editor. **The scratch-Postgres verification above
+    could not have caught this**: a stub table's creator owns it there, so
+    the same ALTER just quietly succeeded in the harness. Fixed by moving
+    `enable row level security` OUT of the migration and INTO the harness's
+    `storage.objects` stub itself (`test/lib/build-schema.js`) — that's where
+    it belongs conceptually too, since it's reproducing a pre-existing fact
+    about real Supabase's schema, not something this feature's migration
+    should be responsible for turning on. Simply deleting the line without
+    also enabling it in the stub would have silently left RLS OFF in the
+    harness, which does not fail loudly — it just makes every row visible to
+    every role regardless of policy, so `test/tests/49-report-docx-attachment.test.js`'s
+    own role-switched assertions would have started passing for the wrong
+    reason (nothing scoped, but nothing asked for more than one project's
+    worth of data either) rather than actually failing. Re-verified after
+    the fix: same role-switch test, same result.
 - **FROZEN SNAPSHOTS (July 2026).** An archived report is a point-in-time
   compliance record. `_buildReportSnapshot(projF, saved)` captures, at archive
   time, everything the report renders: `recipients` (the Distributed-To

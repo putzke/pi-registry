@@ -82,6 +82,22 @@
 --   upload/sign/download round trip. Test that once, by hand, against the
 --   real project before relying on it for a real client delivery.
 --
+--   ONE THING THE SCRATCH POSTGRES COULDN'T CATCH, because it's not a real
+--   ownership boundary there: this migration originally also ran
+--   `alter table storage.objects enable row level security;` before the
+--   policies. Run for real against the live project it failed outright —
+--   `ERROR: 42501: must be owner of table objects` — because storage.objects
+--   is owned by Supabase's own `supabase_storage_admin` role, not the
+--   `postgres` role the SQL Editor connects as, and Supabase already has RLS
+--   permanently enabled on that table regardless. The scratch harness's
+--   storage.objects stand-in is owned by whatever role creates it there, so
+--   the same statement just quietly succeeds in the harness — a real gap
+--   between what the harness can prove and what only a live run catches,
+--   same shape as (though far smaller than) the UGRC endpoint story. The
+--   line is removed below; CREATE POLICY on storage.objects does not hit the
+--   same wall — that's Supabase's own documented pattern for managing
+--   storage policies from the SQL Editor, and it worked.
+--
 -- Idempotent — every statement below is safe to run more than once.
 -- ═══════════════════════════════════════════════════════════════════════════
 
@@ -122,8 +138,16 @@ create trigger trg_report_archive_require_docx
   for each row execute function pi_report_archive_require_docx();
 
 -- ── 4. Storage RLS on the new bucket ──────────────────────────────────────
-alter table storage.objects enable row level security;
-
+-- No `alter table storage.objects enable row level security` here —
+-- deliberately, found the hard way. `storage.objects` is owned by Supabase's
+-- own internal `supabase_storage_admin` role, not the `postgres` role the SQL
+-- Editor runs as, and RLS is already permanently enabled on it by Supabase
+-- itself. Running that ALTER against the live project failed outright —
+-- `ERROR: 42501: must be owner of table objects` — which is also the
+-- confirmation that RLS doesn't need to be (and can't be) turned on here.
+-- CREATE POLICY on storage.objects is a different, well-documented Supabase
+-- pattern (their own docs show this exact statement run from the SQL
+-- Editor) and does not hit the same ownership wall.
 drop policy if exists report_files_staff_all on storage.objects;
 drop policy if exists report_files_client_portal_read on storage.objects;
 drop policy if exists report_files_anon_portal_read on storage.objects;

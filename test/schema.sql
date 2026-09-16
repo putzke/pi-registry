@@ -39,6 +39,7 @@ create table if not exists storage.objects (
   updated_at timestamptz default now(),
   metadata jsonb
 );
+alter table storage.objects enable row level security;
 create or replace function storage.foldername(name text) returns text[]
 language sql immutable
 as $storage_foldername$

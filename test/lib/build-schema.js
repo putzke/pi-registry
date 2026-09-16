@@ -101,6 +101,19 @@ grant execute on function auth.jwt() to anon, authenticated;`);
 // the same reasoning as the auth schema stub above: without it, those
 // statements would silently fail per-file under run.js's per-file try/catch,
 // and no test could tell a storage policy wasn't really there.
+//
+// storage.objects gets RLS enabled RIGHT HERE, not by a migration — that
+// matches real Supabase, where storage.objects already has RLS permanently
+// enabled and is owned by the internal `supabase_storage_admin` role, not
+// the `postgres` role migrations run as. sql/2026-09-16_report_final_docx_attachment.sql
+// originally tried `alter table storage.objects enable row level security`
+// itself; that passed here (this stub's creator owns it) but failed against
+// the real project — `ERROR: 42501: must be owner of table objects` — and
+// removing it from the migration without doing this instead would have
+// silently left RLS OFF in the harness (a stub table starts with RLS off,
+// unlike real Supabase's), so every storage policy test would have kept
+// passing for the wrong reason: RLS disabled means every row is visible to
+// everyone regardless of what the policies say.
 out.push(`create schema if not exists storage;
 create table if not exists storage.buckets (
   id text primary key,
@@ -116,6 +129,7 @@ create table if not exists storage.objects (
   updated_at timestamptz default now(),
   metadata jsonb
 );
+alter table storage.objects enable row level security;
 create or replace function storage.foldername(name text) returns text[]
 language sql immutable
 as $storage_foldername$

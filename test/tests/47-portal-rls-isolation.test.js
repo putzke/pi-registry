@@ -37,9 +37,16 @@ module.exports = {
       await client.query(`insert into pi_client_access (email, project_id) values ('client@b.example', 2)`);
       await client.query(`insert into pi_deliverables (project_id, title) values ('1','A deliverable'), ('2','B deliverable')`);
       await client.query(`insert into pi_parcels (project_id, parcel_number) values ('1','A-1'), ('2','B-1')`);
+      // client_visible=true rows need a docx_path — a fresh insert with none
+      // is refused by pi_report_archive_require_docx (see
+      // sql/2026-09-16_report_final_docx_attachment.sql). Irrelevant to what
+      // THIS test checks (project scoping, not the attachment requirement),
+      // so just give the shared rows a placeholder path rather than working
+      // around the trigger.
       await client.query(`
-        insert into pi_report_archive (project_id, client_visible, report_title)
-        values (1, true, 'A shared'), (1, false, 'A unshared'), (2, true, 'B shared')`);
+        insert into pi_report_archive (project_id, client_visible, report_title, docx_path)
+        values (1, true, 'A shared', '1/a-shared.docx'), (1, false, 'A unshared', null),
+               (2, true, 'B shared', '2/b-shared.docx')`);
 
       // A statement that errors aborts the rest of the transaction in
       // Postgres until a ROLLBACK — so every "this should be refused" check

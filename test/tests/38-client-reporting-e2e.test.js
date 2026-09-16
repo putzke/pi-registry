@@ -86,7 +86,16 @@ module.exports = {
       t.ok(frozen && frozen.tableHtml && /<table/i.test(frozen.tableHtml),
            'including the rendered interaction table, not a query to re-run');
 
-      // ── share ONE of them ────────────────────────────────────────────────
+      // ── attach the final .docx, then share ONE of them ──────────────────
+      // Sharing requires a real file attached (see
+      // sql/2026-09-16_report_final_docx_attachment.sql) — toggleReportShared
+      // itself now refuses a bare share with no docx_path, both client-side
+      // and (as a second line of defense) via a database trigger.
+      await app.page.evaluate(async id => {
+        const f = new File(['final report bytes'], 'Final.docx',
+          { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+        await _doUploadReportDocx(id, f);
+      }, sharedId);
       await app.page.evaluate(id => toggleReportShared(id), sharedId);
       await app.page.waitForTimeout(900);
       const shared = (await t.sql(

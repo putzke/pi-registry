@@ -24,6 +24,35 @@ $auth_jwt$;
 grant usage on schema auth to anon, authenticated;
 grant execute on function auth.jwt() to anon, authenticated;
 
+create schema if not exists storage;
+create table if not exists storage.buckets (
+  id text primary key,
+  name text not null,
+  public boolean not null default false
+);
+create table if not exists storage.objects (
+  id uuid primary key default gen_random_uuid(),
+  bucket_id text references storage.buckets(id),
+  name text,
+  owner uuid,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  metadata jsonb
+);
+create or replace function storage.foldername(name text) returns text[]
+language sql immutable
+as $storage_foldername$
+  select (string_to_array(name, '/'))[1 : array_length(string_to_array(name, '/'), 1) - 1]
+$storage_foldername$;
+create or replace function storage.filename(name text) returns text
+language sql immutable
+as $storage_filename$
+  select (string_to_array(name, '/'))[array_length(string_to_array(name, '/'), 1)]
+$storage_filename$;
+grant usage on schema storage to anon, authenticated;
+grant select on storage.buckets to anon, authenticated;
+grant select, insert, update, delete on storage.objects to anon, authenticated;
+
 create table pi_client_access (
   id bigint generated always as identity primary key,
   user_id uuid,

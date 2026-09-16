@@ -825,7 +825,7 @@ const SB_TO_INT = {
     reportSubtitle:'report_subtitle', periodStart:'period_start', periodEnd:'period_end',
     overallSummary:'overall_summary', sections:'sections',
     archivedAt:'archived_at', archivedBy:'archived_by', clientVisible:'client_visible',
-    snapshot:'snapshot'
+    snapshot:'snapshot', docxPath:'docx_path', docxUploadedAt:'docx_uploaded_at'
   },
   pi_parcels: {
     id:'id', projectId:'project_id', parcelNumber:'parcel_number',
@@ -12542,6 +12542,19 @@ async function _occFetchReportRow(projF){
 // compliance record, so nothing here is ever auto-deleted.
 const ARCHIVE_LIMIT = 50;
 
+// The final, hand-edited .docx as the report of record (Sep 2026) — see
+// sql/2026-09-16_report_final_docx_attachment.sql. The consultant downloads
+// the exported .docx and edits the prose (sometimes adding photos/graphics
+// the app has no model for) before delivering it to the client, so the
+// frozen JSON snapshot below was never actually what got delivered. The
+// snapshot stays — it still drives the AI trend tool and is the fallback
+// render for anything archived before this shipped (grandfathered, per the
+// migration) — but a NEW report can't be shared with the client until the
+// real file is attached here. The database enforces that too (a trigger on
+// pi_report_archive), so this is a UI convenience over a real guarantee, not
+// the only thing standing between a half-finished report and a client link.
+const REPORT_DOCX_BUCKET = 'report-files';
+
 async function manualArchiveReport() {
   var projF = S.projectFilter;
   if (!projF) { showToast('No project selected.', 'warn'); return; }
@@ -12803,6 +12816,15 @@ async function toggleReportShared(archiveId) {
   var rec = (_syncCache['report_archive']||[]).find(function(r){ return String(r.id)===String(archiveId); });
   if (!rec) { showToast('Archive record not found', 'error'); return; }
   var newVal = !rec.clientVisible;
+  // A brand-new share requires the real .docx to already be attached — the
+  // database enforces this too (pi_report_archive_require_docx), so this is
+  // just the friendly version of the same rule. A report already shared
+  // before this feature shipped (grandfathered, docxPath still null) can
+  // still be freely UNshared; it just can't be re-shared without a file.
+  if (newVal && !rec.docxPath) {
+    showToast('Attach the final .docx before sharing this report with the client.', 'warn', 5000);
+    return;
+  }
   try {
     // sbUpdate returns false (does not throw) on a rejected write — check it so a
     // failed DB update can't silently look "Shared" in the UI.
@@ -12818,6 +12840,67 @@ async function toggleReportShared(archiveId) {
   } catch(e) {
     console.error('toggleReportShared error:', e);
     showToast('Error updating share state: '+e.message, 'error', 4000);
+  }
+}
+
+// Opens the browser's file picker for attaching the final, hand-edited
+// .docx to an archived report — the file the client actually receives, per
+// sql/2026-09-16_report_final_docx_attachment.sql. A hidden <input> is
+// created and clicked rather than kept permanently in the DOM, since one
+// row can trigger this for any archive id and re-using a single static
+// input would need re-wiring its handler on every click anyway.
+function uploadReportDocx(archiveId) {
+  var input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  input.onchange = function() {
+    if (input.files && input.files[0]) _doUploadReportDocx(archiveId, input.files[0]);
+  };
+  input.click();
+}
+
+async function _doUploadReportDocx(archiveId, file) {
+  var rec = (_syncCache['report_archive']||[]).find(function(r){ return String(r.id)===String(archiveId); });
+  if (!rec) { showToast('Archive record not found', 'error'); return; }
+  if (!/\.docx$/i.test(file.name)) {
+    showToast('Please attach a .docx file — that is what the client portal will offer for download.', 'warn', 5000);
+    return;
+  }
+  var path = String(rec.projectId) + '/' + String(archiveId) + '.docx';
+  showToast('Uploading final report…', 'info', 2000);
+  try {
+    var sess = getSession();
+    var uploadRes = await fetch(SUPA_URL + '/storage/v1/object/' + REPORT_DOCX_BUCKET + '/' + path, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPA_KEY,
+        'Authorization': 'Bearer ' + (sess ? sess.access_token : SUPA_KEY),
+        'Content-Type': file.type || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        // Overwrite on re-upload (a further hand-edit) rather than erroring
+        // on an existing object — this is expected to happen more than once
+        // per report as the consultant revises the delivered copy.
+        'x-upsert': 'true'
+      },
+      body: file
+    });
+    if (!uploadRes.ok) {
+      var errText = await uploadRes.text().catch(function(){ return ''; });
+      throw new Error('Upload failed (' + uploadRes.status + ')' + (errText ? ': ' + errText : ''));
+    }
+    var uploadedAt = new Date().toISOString();
+    var ok = await sbUpdate('report_archive', archiveId, { docxPath: path, docxUploadedAt: uploadedAt });
+    if (ok === false) {
+      showToast('File uploaded, but could not record it on the archive — try again.', 'error', 6000);
+      return;
+    }
+    rec.docxPath = path;
+    rec.docxUploadedAt = uploadedAt;
+    var panel = document.getElementById('rpt-archive-panel');
+    if (panel) panel.innerHTML = _buildArchiveHTML(S.projectFilter);
+    showToast('Final report attached.', 'info', 2500);
+  } catch(e) {
+    console.error('Report docx upload error:', e);
+    showToast('Error uploading final report: ' + e.message, 'error', 6000);
   }
 }
 
@@ -12872,7 +12955,14 @@ function _buildArchiveHTML(projF) {
     var date = r.archivedAt ? new Date(r.archivedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
     var period = (r.periodStart||r.periodEnd) ? ((r.periodStart?fmt(r.periodStart):'?')+' – '+(r.periodEnd?fmt(r.periodEnd):'?')) : 'No period set';
     var secCount = (r.sections||[]).length;
-    html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:8px">'
+    var hasDocx = !!r.docxPath;
+    // Share is disabled (client-side) until a real file is attached — the
+    // same rule the database trigger enforces. A report shared before this
+    // feature shipped (grandfathered) keeps working and can still be
+    // unshared freely; it just can't be RE-shared without a file.
+    var canShare = hasDocx || r.clientVisible;
+    html += '<div style="display:flex;flex-direction:column;gap:6px;padding:10px 14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:8px">'
+      +'<div style="display:flex;align-items:center;gap:10px">'
       +'<div style="flex:1;min-width:0">'
       +'<div style="font-size:12px;font-weight:600;color:var(--white);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
       +(r.reportTitle||'Untitled')+(r.reportNum?' <span style="color:var(--fog);font-weight:400">#'+r.reportNum+'</span>':'')
@@ -12885,10 +12975,24 @@ function _buildArchiveHTML(projF) {
       +(r.clientVisible
         ? '<span style="flex-shrink:0;display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--green);padding:0 6px" title="This report is visible in the client portal"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px"><path d="M2 8l4 4 8-8"/></svg> Shared</span>'
           +'<button class="btn btn-xs" style="flex-shrink:0;color:var(--amber);border-color:rgba(217,164,65,.4)" onclick="toggleReportShared(\''+r.id+'\')" title="Remove this report from the client portal">Unshare</button>'
-        : '<button class="btn btn-xs" style="flex-shrink:0;color:var(--sky-lt);border-color:rgba(90,135,198,.4)" onclick="toggleReportShared(\''+r.id+'\')" title="Publish this report to the client portal"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:10px;height:10px"><circle cx="12" cy="4" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="12" r="2"/><path d="M6 7.5l4-2M6 8.5l4 2"/></svg> Share</button>')
+        : (canShare
+          ? '<button class="btn btn-xs" style="flex-shrink:0;color:var(--sky-lt);border-color:rgba(90,135,198,.4)" onclick="toggleReportShared(\''+r.id+'\')" title="Publish this report to the client portal"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:10px;height:10px"><circle cx="12" cy="4" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="12" r="2"/><path d="M6 7.5l4-2M6 8.5l4 2"/></svg> Share</button>'
+          : '<button class="btn btn-xs" disabled style="flex-shrink:0;opacity:.45;cursor:not-allowed" title="Attach the final .docx before sharing">Share</button>'))
       +'<button class="btn btn-xs" style="flex-shrink:0" onclick="previewArchivedReport(\''+r.id+'\')">Preview</button>'
       +'<button class="btn btn-xs" style="color:var(--red);border-color:rgba(220,80,80,.3);background:rgba(220,80,80,.08);flex-shrink:0" '
       +'onclick="deleteArchivedReport(\''+r.id+'\')">Delete</button>'
+      +'</div>'
+      // Final-file row — the report of record. Grandfathered reports (shared
+      // before this feature existed) show the honest "not attached" state
+      // rather than pretending one exists.
+      +'<div style="display:flex;align-items:center;gap:8px;padding-top:4px;border-top:1px solid rgba(255,255,255,.06)">'
+      +(hasDocx
+        ? '<span style="flex-shrink:0;display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--green)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px"><path d="M4 2h6l3 3v9H4z"/><path d="M10 2v3h3"/></svg>Final .docx attached'
+          +(r.docxUploadedAt?' · '+fmt(String(r.docxUploadedAt).slice(0,10)):'')+'</span>'
+          +'<button class="btn btn-xs" style="flex-shrink:0" onclick="uploadReportDocx(\''+r.id+'\')" title="Upload a revised copy — overwrites the current file">Replace file</button>'
+        : '<span style="flex-shrink:0;font-size:11px;color:var(--fog)">No final .docx attached'+(r.clientVisible?' (shared before this was required)':'')+'</span>'
+          +'<button class="btn btn-xs" style="flex-shrink:0;color:var(--sky-lt);border-color:rgba(90,135,198,.4)" onclick="uploadReportDocx(\''+r.id+'\')">Attach final .docx</button>')
+      +'</div>'
       +'</div>';
   });
 

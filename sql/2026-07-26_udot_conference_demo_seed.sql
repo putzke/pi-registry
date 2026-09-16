@@ -1439,7 +1439,27 @@ on conflict (email, project_id) do nothing;
 --
 --   client_visible is false on SR-154 report #5 on purpose: the share toggle is
 --   a real gate, and the demo should show one report held back.
+--
+--   pi_report_archive_require_docx (sql/2026-09-16_report_final_docx_attachment.sql)
+--   blocks a FRESH client_visible=true insert with no docx_path — correct for
+--   a real new share, but these rows are standing in for reports that were
+--   archived and shared long before that requirement existed, exactly the
+--   grandfathered case that migration's own trigger logic is designed to
+--   leave alone for a row already in the table. A seed INSERT can't be "already
+--   in the table" the way production's pre-migration rows are, so the trigger
+--   is disabled for this one insert to simulate that — the same technique
+--   test/tests/49-report-docx-attachment.test.js uses to prove the grandfather
+--   behavior for real, not a workaround invented just to make the seed pass.
 -- ═══════════════════════════════════════════════════════════════════════════
+-- Guarded rather than a bare ALTER TABLE: this seed must still run standalone
+-- against a database where sql/2026-09-16_report_final_docx_attachment.sql
+-- (and therefore the trigger) hasn't been applied yet.
+do $$
+begin
+  if exists (select 1 from pg_trigger where tgname = 'trg_report_archive_require_docx') then
+    execute 'alter table pi_report_archive disable trigger trg_report_archive_require_docx';
+  end if;
+end $$;
 insert into pi_report_archive
   (project_id, report_num, report_title, report_subtitle, period_start, period_end,
    overall_summary, sections, snapshot, client_visible, archived_at, archived_by)
@@ -1454,6 +1474,12 @@ from (values
   ('logan',22,'PI Weekly Report','Logan City 400 North Reconstruction — Weekly Public Involvement Summary','2026-06-22','2026-06-28','Quieter week on the corridor as the crew moved to the east end. Hotline volume dropped by roughly half. The bakery access issue is unchanged and remains the only open high-priority item on the project.','{"trendFacts": {}, "projName": "Logan City 400 North Reconstruction", "projPid": "25-LC-400N", "brand": "sunrise", "generatedAt": "2026-07-01T12:00:00.000Z", "periodLabel": "Jun 22, 2026 \u2013 Jun 28, 2026", "recipients": ["Mark Nielsen", "Amber Stucki", "Wes Cardon", "Ted Brimhall", "Garrett Poulsen", "Lisa Hyer"], "includeInternal": false, "sections": [{"title": "Stakeholder Concerns & Coordination", "type": "auto-concerns", "summary": "Fourteen contacts logged, down from nineteen the previous week as work moved away from the densest business frontage.", "content": "", "showTable": true, "countsLabel": "7-day report period \u00b7 14 interactions in period", "tableHtml": "<table style=\"width:100%;border-collapse:collapse;margin-top:8px;table-layout:fixed\"><thead><tr><th style=\"padding:5px 8px;background:#1a3a5c;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.4px;text-align:left;white-space:nowrap\">Date</th><th style=\"padding:5px 8px;background:#1a3a5c;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.4px;text-align:left;white-space:nowrap\">Stakeholder</th><th style=\"padding:5px 8px;background:#1a3a5c;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.4px;text-align:left;white-space:nowrap\">Channel</th><th style=\"padding:5px 8px;background:#1a3a5c;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.4px;text-align:left;white-space:nowrap\">Summary</th></tr></thead><tbody><tr><td style=\"padding:6px 8px;border-bottom:1px solid #e0e0e0;font-size:11px;vertical-align:top;white-space:nowrap\">06/23/2026</td><td style=\"padding:6px 8px;border-bottom:1px solid #e0e0e0;font-size:11px;vertical-align:top\"><strong>Hotline caller \u2014 400 N & 700 E</strong></td><td style=\"padding:6px 8px;border-bottom:1px solid #e0e0e0;font-size:11px;vertical-align:top\">Phone</td><td style=\"padding:6px 8px;border-bottom:1px solid #e0e0e0;font-size:11px;vertical-align:top;color:#666\">Resident asked about the water shutoff scheduled for the block.</td></tr><tr><td style=\"padding:6px 8px;border-bottom:1px solid #e0e0e0;font-size:11px;vertical-align:top;white-space:nowrap\">06/25/2026</td><td style=\"padding:6px 8px;border-bottom:1px solid #e0e0e0;font-size:11px;vertical-align:top\"><strong>Lisa Hyer</strong></td><td style=\"padding:6px 8px;border-bottom:1px solid #e0e0e0;font-size:11px;vertical-align:top\">Phone</td><td style=\"padding:6px 8px;border-bottom:1px solid #e0e0e0;font-size:11px;vertical-align:top;color:#666\">Transit confirmed the temporary stop locations for the east segment.</td></tr></tbody></table>"}]}',true,'2026-06-29T08:50:00.000Z')
 ) as v(pslug,num,title,subtitle,pstart,pend,overall,snapshot,visible,archived)
 join _seed_proj p on p.slug = v.pslug;
+do $$
+begin
+  if exists (select 1 from pg_trigger where tgname = 'trg_report_archive_require_docx') then
+    execute 'alter table pi_report_archive enable trigger trg_report_archive_require_docx';
+  end if;
+end $$;
 
 -- Published trend narratives. The most recent published_at per project is what
 -- the portal shows as the current "Project Status"; older rows fall into the

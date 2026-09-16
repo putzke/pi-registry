@@ -616,7 +616,7 @@ async function bootApp() {
       sbFetch(`pi_projects?id=in.(${ids})&select=id,name,pid,client,phase,status,start_date,end_date,nepa_classification,nepa_stage&order=name.asc`),
       sbFetch(`pi_deliverables?project_id=in.(${ids})&select=id,project_id,title,deliverable_type,scope_type,freq,status,progress,contracted_qty,delivered_count,due_date,milestone_start,milestone_end&order=due_date.asc.nullslast`),
       sbFetch(`pi_client_summaries?project_id=in.(${ids})&select=id,project_id,content_recent,content_full,period_start,period_end,published_at,published_by&order=published_at.desc`),
-      sbFetch(`pi_report_archive?project_id=in.(${ids})&client_visible=eq.true&select=id,project_id,report_num,report_title,report_subtitle,period_start,period_end,overall_summary,sections,snapshot,archived_at&order=archived_at.desc`)
+      sbFetch(`pi_report_archive?project_id=in.(${ids})&client_visible=eq.true&select=id,project_id,report_num,report_title,report_subtitle,period_start,period_end,overall_summary,sections,snapshot,archived_at,docx_path,docx_uploaded_at&order=archived_at.desc`)
     ]);
     if (!projects.length) {
       setContent(_noAccessHTML());
@@ -656,7 +656,7 @@ async function bootFromToken(token) {
       sbFetch(`pi_projects?id=eq.${projId}&select=id,name,pid,client,phase,status,start_date,end_date,nepa_classification,nepa_stage`),
       sbFetch(`pi_deliverables?project_id=eq.${projId}&select=id,project_id,title,deliverable_type,scope_type,freq,status,progress,contracted_qty,delivered_count,due_date,milestone_start,milestone_end&order=due_date.asc.nullslast`),
       sbFetch(`pi_client_summaries?project_id=eq.${projId}&select=id,project_id,content_recent,content_full,period_start,period_end,published_at,published_by&order=published_at.desc`),
-      sbFetch(`pi_report_archive?project_id=eq.${projId}&client_visible=eq.true&select=id,project_id,report_num,report_title,report_subtitle,period_start,period_end,overall_summary,sections,snapshot,archived_at&order=archived_at.desc`)
+      sbFetch(`pi_report_archive?project_id=eq.${projId}&client_visible=eq.true&select=id,project_id,report_num,report_title,report_subtitle,period_start,period_end,overall_summary,sections,snapshot,archived_at,docx_path,docx_uploaded_at&order=archived_at.desc`)
     ]);
     if (!projects.length) {
       setContent('<div class="error-box">Project not found. Please contact your project manager.</div>');
@@ -1712,24 +1712,35 @@ function renderSummary() {
   }
 
   // ── Shared reports ──
+  // A report with a real, hand-finished .docx attached (the report of
+  // record — see sql/2026-09-16_report_final_docx_attachment.sql) gets a
+  // single Download button and no in-browser preview: the JSON-snapshot
+  // rendering below was never byte-identical to what the client actually
+  // received once the consultant started hand-editing the exported file, so
+  // showing both would risk the client reading the wrong one. A report
+  // shared before this feature existed (docx_path still null, grandfathered
+  // per that migration) keeps the original View / Print behavior — it is
+  // the only copy that has ever existed for that report.
   let reportsHtml;
   if (reports.length) {
     const items = reports.map((r, i) => {
       const pl = (r.period_start||r.period_end) ? `${fmt(r.period_start)} – ${fmt(r.period_end)}` : 'No period set';
       const ad = fmt(r.archived_at ? r.archived_at.slice(0,10) : '');
       const title = esc(r.report_title||'PI Report') + (r.report_num ? ` <span style="color:#9ca3af;font-weight:400">#${esc(String(r.report_num))}</span>` : '');
+      const hasDocx = !!r.docx_path;
+      const actions = hasDocx
+        ? `<button onclick="downloadSharedReportDocx('${r.id}')" style="padding:6px 12px;border-radius:6px;border:1px solid #4f46e5;background:#4f46e5;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Download report (.docx)</button>`
+        : `<button onclick="var b=document.getElementById('rpt-body-${i}');b.style.display=b.style.display==='none'?'block':'none'" style="padding:6px 12px;border-radius:6px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:12px;font-weight:500;cursor:pointer">View</button>
+            <button onclick="printSharedReport('${r.id}')" style="padding:6px 12px;border-radius:6px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:12px;font-weight:500;cursor:pointer">Print / PDF</button>`;
       return `<div style="border:1px solid #e5e7eb;border-radius:10px;margin-bottom:10px;overflow:hidden">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;background:#fafbfc">
           <div style="min-width:0">
             <div style="font-size:14px;font-weight:600;color:#111827">${title}</div>
             <div style="font-size:12px;color:#6b7280;margin-top:2px">${pl} &middot; shared ${ad}</div>
           </div>
-          <div style="display:flex;gap:6px;flex-shrink:0">
-            <button onclick="var b=document.getElementById('rpt-body-${i}');b.style.display=b.style.display==='none'?'block':'none'" style="padding:6px 12px;border-radius:6px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:12px;font-weight:500;cursor:pointer">View</button>
-            <button onclick="printSharedReport('${r.id}')" style="padding:6px 12px;border-radius:6px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:12px;font-weight:500;cursor:pointer">Print / PDF</button>
-          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">${actions}</div>
         </div>
-        <div id="rpt-body-${i}" style="display:none;padding:16px 18px;border-top:1px solid #e5e7eb">${renderArchivedReportHTML(r)}</div>
+        ${hasDocx ? '' : `<div id="rpt-body-${i}" style="display:none;padding:16px 18px;border-top:1px solid #e5e7eb">${renderArchivedReportHTML(r)}</div>`}
       </div>`;
     }).join('');
     reportsHtml = `<div class="card" style="margin-top:16px">
@@ -1801,6 +1812,36 @@ function renderArchivedReportHTML(rec) {
   });
   if (!sections.length) html += `<div style="color:#9ca3af;font-style:italic;padding:12px 0">This report has no sections.</div>`;
   return html;
+}
+
+// Download the real, hand-finished .docx for a shared report — the report
+// of record (see sql/2026-09-16_report_final_docx_attachment.sql). Uses
+// Supabase Storage's own signed-URL endpoint, which checks the caller's own
+// RLS read access on storage.objects before issuing one — the same
+// anonHdrs()/authHdrs() this page already sends on every other request are
+// enough; no separate download permission check is needed here because the
+// signing endpoint IS the permission check.
+async function downloadSharedReportDocx(archiveId) {
+  const rec = _sharedReports.find(r => String(r.id) === String(archiveId));
+  if (!rec || !rec.docx_path) return;
+  try {
+    const headers = _tokenMode ? anonHdrs() : authHdrs();
+    const res = await fetch(`${SUPA_URL}/storage/v1/object/sign/report-files/${rec.docx_path}?expiresIn=120`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' }
+    });
+    if (!res.ok) throw new Error(`Could not prepare the download (${res.status})`);
+    const data = await res.json();
+    if (!data.signedURL) throw new Error('No download link returned');
+    const a = document.createElement('a');
+    a.href = `${SUPA_URL}/storage/v1${data.signedURL}`;
+    a.download = `${(rec.report_title || 'PI Report').replace(/[^\w\- ]+/g, '')}.docx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } catch (err) {
+    alert(`Unable to download this report right now: ${err.message}. Please try again or contact your project manager.`);
+  }
 }
 
 // Open a clean print window for a single shared report (the v1 "download").

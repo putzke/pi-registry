@@ -710,9 +710,73 @@ the capped generic prompt reaches no report narrative.
 - `resetPIReportDraft()` — async, deletes from Supabase + localStorage
 
 ### Report archive
-- **FROZEN SNAPSHOTS (July 2026) — do not break this.** An archived report is a
-  point-in-time compliance record. `_buildReportSnapshot(projF, saved)` captures,
-  at archive time, everything the report renders: `recipients` (the Distributed-To
+- **The final, hand-edited .docx is the report of record (Sep 2026) —
+  `sql/2026-09-16_report_final_docx_attachment.sql`.** The FROZEN SNAPSHOT below
+  (July 2026) was treated as "the compliance record" for two months, but that was
+  never actually true: the consultant downloads the exported .docx and hand-edits
+  the prose — sometimes adding photos or reformatted tables the app has no model
+  for — before delivering it to the client. The archived JSON snapshot and the
+  document the client received have been two different artifacts since the
+  feature shipped. The snapshot is demoted, not deleted — see below for what it
+  still does.
+  - `pi_report_archive.docx_path` (a Supabase Storage path, bucket
+    `report-files`, `{project_id}/{archive_id}.docx`) and `docx_uploaded_at`.
+    `uploadReportDocx(archiveId)` / `_doUploadReportDocx()` in the Report Archive
+    panel (`_buildArchiveHTML`) upload via `POST /storage/v1/object/report-files/…`
+    with `x-upsert: true` — re-uploading (a further hand-edit) overwrites in
+    place rather than erroring, which is expected to happen more than once per
+    report.
+  - **A NEW share requires a real file attached, enforced twice.**
+    `toggleReportShared()` refuses client-side with a toast if `!rec.docxPath`;
+    the database ALSO enforces it — a trigger,
+    `pi_report_archive_require_docx()`, blocks any `client_visible` false→true
+    transition (or an insert already `true`) with no `docx_path`. The client-side
+    check is a courtesy; the trigger is the real guarantee, verified directly
+    against a real Postgres by role-switching (see
+    `test/tests/49-report-docx-attachment.test.js`), not just asserted through
+    the app.
+  - **Grandfathered, on purpose — "yes, grandfather them in" was the explicit
+    call.** The trigger only fires on a FRESH transition to `client_visible=true`;
+    a row already sharing before this shipped is never re-validated (real
+    Postgres triggers don't fire retroactively against existing rows either), so
+    nothing already visible to a client was force-hidden. Both `_buildArchiveHTML`
+    and the portal render the honest "no final .docx attached (shared before this
+    was required)" state for those rows rather than pretending one exists — they
+    keep the ORIGINAL in-browser snapshot preview, which is the only copy that
+    has ever existed for them. The demo seed's own shared report rows simulate
+    this the same way `test/tests/49-*` proves it: the trigger is disabled for
+    just that one `insert into pi_report_archive`, since a seed INSERT can't be
+    "already in the table" the way a real pre-migration row is — see the comment
+    at that insert if you touch it.
+  - **Download, not in-browser render, once a file exists.** The client portal
+    drops the rendered-HTML preview for any shared report that has a
+    `docx_path` — "Download report (.docx)" is the only action, via Supabase
+    Storage's `POST /storage/v1/object/sign/report-files/{path}` signed-URL
+    endpoint. That endpoint checks the CALLER's own RLS read access before
+    issuing a URL, so no new permission check or RPC was needed — the Storage
+    RLS policies below (mirroring `pi_is_portal_client()` /
+    `pi_portal_project_ids()` from the isolation migration, same three-policy
+    shape as every table there: staff / OTP client / token-link anon) ARE the
+    access control. A report with no `docx_path` (grandfathered) keeps View +
+    Print/PDF exactly as before.
+  - **Same residual gap as the rest of the portal, not a new one.** The anon
+    (token-link) Storage policy scopes by "this project has SOME active portal
+    link," identical to every other `anon_portal_read` policy's documented
+    incompleteness (see the isolation migration's own note on the
+    `request.headers` GUC) — not attempted here for the same reason: it needs
+    live verification against the real Supabase project first.
+  - What could and could not be verified from this sandbox: `storage.objects`
+    RLS is a documented, stable Supabase primitive (not a guessed third-party
+    endpoint like the UGRC story below) — the policy logic was verified for
+    real, role-switched, against a scratch Postgres with a stand-in
+    `storage.objects`/`storage.buckets` schema (`test/lib/build-schema.js`,
+    same technique as the `auth` schema stub). What could NOT be verified from
+    here is the live Storage SERVICE itself (no network path to `*.supabase.co`
+    from this sandbox) — test the real upload → share → sign → download round
+    trip by hand once this ships.
+- **FROZEN SNAPSHOTS (July 2026).** An archived report is a point-in-time
+  compliance record. `_buildReportSnapshot(projF, saved)` captures, at archive
+  time, everything the report renders: `recipients` (the Distributed-To
   list), and per section the `countsLabel` + `tableHtml` (built with the SAME
   `_buildSectionPreviewTable` the live preview uses, so it matches exactly), plus
   `projName`/`projPid`/`periodLabel`/`brand`. Stored in `pi_report_archive.snapshot`
@@ -728,6 +792,9 @@ the capped generic prompt reaches no report narrative.
   it identically without duplicating desktop CSS. `_rptBrandHeader(modeOverride)`
   takes an optional brand so archived copies keep the letterhead they were issued
   under.
+  **Demoted, not removed, as of Sep 2026** — see above. It is now the AI trend
+  tool's input and the fallback render for a grandfathered report with no
+  `docx_path`, not "the record" for a report that has a real file attached.
 - **Project Status Report (replaced the AI trend analysis, July 2026).** Button in
   the Report Archive: `generateTrendSummary()` (name kept; UI says "AI: Project
   Status Report"). A trend gets vaguer as reports accumulate, so this reports
@@ -1042,8 +1109,20 @@ shipped. Grep the actual functions before planning work off this list.
    index.html pair, because a bulk import printed every contact in the file.
    **Now enforced**: `test/tests/01-schema-drift.test.js` asserts zero
    `console.log` in all three apps, and that each still has failure logging.
-
-## PARKED — Survey/public-input ingestion bridge (validate first, July 2026)
+7. **Closeout report generator — deprioritizes `_buildTrendComparison()`'s
+   archive-diffing, decided but NOT designed or built (Sep 2026, Jeff's call).**
+   Prompted by the same conversation that produced the docx-attachment feature
+   above: once the real delivered document is the .docx (not the frozen JSON
+   snapshot), diffing several archived snapshots against each other to produce
+   a trend is solving a problem that matters less than it did — what the
+   consultant actually wants at project close is one strong report built from
+   the FULL live project history, not a summary-of-summaries stitched from
+   whatever got archived along the way. `_buildStatusMetrics` /
+   `_buildTrendComparison` / `generateTrendSummary()` stay as they are for
+   now — nothing here has been touched — this is a placeholder for a future
+   session to actually design the closeout report (what it pulls from, how it
+   differs from a regular PI report, whether it also gets the same
+   docx-attachment/portal-download treatment) before building it.
 
 **Idea:** Jeff floated a built-in survey tool (prompted by QuestionPro). Decision:
 **do NOT build a survey engine.** The survey-builder market (QuestionPro,
@@ -1497,6 +1576,19 @@ one; it's now a per-table coverage check (does every role holding a grant
 have SOME applicable policy, not necessarily the same one) — which, as a side
 effect of fixing a regex that couldn't parse quoted multi-word policy names,
 also made it check `pi_client_access`'s policies for the first time ever.
+
+**The same stub-schema technique was reused Sep 2026** for the final-.docx
+attachment feature (see the Report archive section above). `build-schema.js`
+now also stubs a minimal `storage` schema — `storage.buckets`,
+`storage.objects`, and the `storage.foldername()`/`storage.filename()` helper
+functions every Storage RLS policy uses — for the identical reason the `auth`
+stub exists: without it, `sql/2026-09-16_report_final_docx_attachment.sql`'s
+`insert into storage.buckets` and its `storage.objects` policies would fail
+per-file under `run.js`'s swallowed errors, and no test could tell a Storage
+policy wasn't really there either. `test/tests/49-report-docx-attachment.test.js`
+follows the same role-switched, rolled-back-transaction pattern as
+`47-portal-rls-isolation.test.js` to prove the trigger and the Storage
+policies for real, not just through the app.
 
 **Found only by running the migration's own verify query against the live
 database — `sql/2026-08-31_portal_legacy_policy_cleanup.sql`.** Eight

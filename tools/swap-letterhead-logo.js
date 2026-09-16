@@ -208,14 +208,47 @@ console.log(`aspect     : ${(oldSize.w/oldSize.h).toFixed(2)}:1 → ${(newSize.w
 
 if (dryRun) { console.log('\n--dry-run: nothing written.'); process.exit(0); }
 
-// Only the FIRST extent — the second is the Horizon COMPASS mark.
-let patchedHeader = headerXml.replace(
-  `<wp:extent cx="${oldCxStr}" cy="${oldCyStr}"/>`,
-  `<wp:extent cx="${newCx}" cy="${newCy}"/>`);
-// a:ext mirrors wp:extent inside the shape geometry; Word honours both.
-patchedHeader = patchedHeader.replace(
-  new RegExp(`<a:ext cx="${oldCxStr}" cy="${oldCyStr}"/>`),
-  `<a:ext cx="${newCx}" cy="${newCy}"/>`);
+// Only the FIRST drawing — the second is the Horizon COMPASS mark. Patched by
+// POSITION, not by assuming the inner <a:ext> textually equals the old
+// <wp:extent> — that assumption used to be this tool's own bug. Word draws a
+// picture from TWO places that are supposed to agree: <wp:extent> on the
+// inline anchor and <a:ext> inside <pic:spPr><a:xfrm>, one level in. This
+// tool used to `.replace()` the inner one by searching for the OLD wp:extent
+// text — a no-op with no error when it doesn't match, which is silent by
+// construction. On a real run against the UDOT template the two had ALREADY
+// diverged before this tool ever touched the file (the inner <a:ext> carried
+// something close to the template's original pre-swap numbers, unrelated to
+// what wp:extent said at the time), so the replace matched nothing, the
+// outer extent got the new correct 3.88:1 ratio and the inner one silently
+// kept the old ~3.08:1 — a real aspect-ratio distortion that shipped and was
+// only caught later by someone looking at the exported .docx in Word.
+// Locating both extents structurally (wherever they actually sit inside the
+// FIRST <w:drawing>...</w:drawing> block) can't have this failure mode: it
+// either finds exactly one of each, or it dies instead of silently doing
+// half the job.
+const drawBlocks = [...headerXml.matchAll(/<w:drawing>[\s\S]*?<\/w:drawing>/g)];
+if (!drawBlocks.length) die('header1.xml has no <w:drawing> block');
+const firstDraw = drawBlocks[0];
+const drawStart = firstDraw.index;
+const drawEnd = drawStart + firstDraw[0].length;
+const drawBlock = firstDraw[0];
+
+const aExtMatches = [...drawBlock.matchAll(/<a:ext cx="(\d+)" cy="(\d+)"\/>/g)];
+if (aExtMatches.length !== 1) {
+  die(`expected exactly one <a:ext> inside the logo's drawing block, found ${aExtMatches.length}`);
+}
+const [aExtFull] = aExtMatches[0];
+
+const patchedDrawBlock = drawBlock
+  .replace(`<wp:extent cx="${oldCxStr}" cy="${oldCyStr}"/>`, `<wp:extent cx="${newCx}" cy="${newCy}"/>`)
+  .replace(aExtFull, `<a:ext cx="${newCx}" cy="${newCy}"/>`);
+if (!patchedDrawBlock.includes(`<wp:extent cx="${newCx}" cy="${newCy}"/>`)) {
+  die('the <wp:extent> replacement did not apply — old value not found where expected');
+}
+if (!patchedDrawBlock.includes(`<a:ext cx="${newCx}" cy="${newCy}"/>`)) {
+  die('the <a:ext> replacement did not apply — old value not found where expected');
+}
+const patchedHeader = headerXml.slice(0, drawStart) + patchedDrawBlock + headerXml.slice(drawEnd);
 
 part.data   = newBuf;
 header.data = Buffer.from(patchedHeader, 'utf8');
@@ -230,6 +263,20 @@ const rt = check.find(e => e.name === partName);
 if (!rt || !rt.data.equals(newBuf)) die('the new logo did not survive the round-trip');
 const rh = check.find(e => e.name === 'word/header1.xml').data.toString('utf8');
 if (!rh.includes(`cx="${newCx}"`)) die('the resized extent did not survive the round-trip');
+
+// The check that would have caught the original bug: both extents inside the
+// logo's drawing block must describe the SAME aspect ratio, or Word distorts
+// the picture regardless of which one "looks" right in a diff.
+const rDraw = ([...rh.matchAll(/<w:drawing>[\s\S]*?<\/w:drawing>/g)])[0][0];
+const rWp = rDraw.match(/<wp:extent cx="(\d+)" cy="(\d+)"\/>/);
+const rA  = rDraw.match(/<a:ext cx="(\d+)" cy="(\d+)"\/>/);
+const wpRatio = Number(rWp[1]) / Number(rWp[2]);
+const aRatio  = Number(rA[1]) / Number(rA[2]);
+if (Math.abs(wpRatio - aRatio) > 0.001) {
+  die(`the rebuilt drawing still has mismatched aspect ratios — wp:extent `
+    + `${wpRatio.toFixed(4)}:1 vs a:ext ${aRatio.toFixed(4)}:1. This would `
+    + `distort the logo in Word; nothing was written.`);
+}
 
 const b64 = rebuilt.toString('base64');
 fs.writeFileSync(INDEX, html.replace(m[0], `${varName}="${b64}"`));

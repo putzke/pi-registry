@@ -76,7 +76,16 @@ module.exports = {
         const logo   = target ? await zip.file('word/' + target).async('base64') : null;
         return { relId, target, logo,
                  extents: [...header.matchAll(/<wp:extent cx="(\d+)" cy="(\d+)"\/>/g)]
-                   .map(m => ({ cx: Number(m[1]), cy: Number(m[2]) })) };
+                   .map(m => ({ cx: Number(m[1]), cy: Number(m[2]) })),
+                 // <a:ext> inside <pic:spPr><a:xfrm> is a SECOND declaration
+                 // of the same picture's size, one level inside <wp:extent> —
+                 // Word draws from this one, and swap-letterhead-logo.js used
+                 // to only patch the outer <wp:extent>, leaving this one at
+                 // the OLD logo's aspect ratio with no error. Captured per
+                 // drawing block so it pairs up with `extents` above by index.
+                 innerExts: [...header.matchAll(/<w:drawing>[\s\S]*?<\/w:drawing>/g)]
+                   .map(d => (d[0].match(/<a:ext cx="(\d+)" cy="(\d+)"\/>/) || [])
+                     .slice(1).map(Number)) };
       });
       t.ok(docx.relId, 'the .docx header references an image');
       t.ok(docx.target, `it resolves to a media part (${docx.target})`);
@@ -94,6 +103,27 @@ module.exports = {
       const dpi = srcW / (box.cx / 914400);
       t.ok(dpi >= 300, `it prints at ${Math.round(dpi)} DPI, above the 300 DPI standard`);
       t.eq(docx.extents[1].cx, 2683017, 'and the COMPASS mark beside it was not disturbed');
+
+      // The inner <a:ext> must agree with the outer <wp:extent> — a
+      // real, live mismatch here (3.88:1 outer vs 3.08:1 inner, the outer
+      // fixed by an earlier swap and the inner silently left behind) visibly
+      // stretched the logo in Word despite this test's own <wp:extent> check
+      // passing the whole time. Fixed in swap-letterhead-logo.js by locating
+      // both extents structurally within the same drawing block rather than
+      // assuming the inner one's old value; this is the check that would
+      // have caught it.
+      t.eq(docx.innerExts.length, docx.extents.length,
+           'every drawing has both an outer <wp:extent> and an inner <a:ext>');
+      docx.extents.forEach((outer, i) => {
+        const inner = docx.innerExts[i];
+        t.ok(inner && inner.length === 2, `drawing ${i}: inner <a:ext> found`);
+        if (!inner || inner.length !== 2) return;
+        const outerRatio = outer.cx / outer.cy, innerRatio = inner[0] / inner[1];
+        t.ok(Math.abs(outerRatio - innerRatio) < 0.001,
+             `drawing ${i}: <wp:extent> (${outerRatio.toFixed(4)}:1) and <a:ext> `
+             + `(${innerRatio.toFixed(4)}:1) agree — Word draws the picture `
+             + `distorted whenever they don't`);
+      });
 
       t.eq(app.errors, [], 'no page errors during the run');
     } finally {

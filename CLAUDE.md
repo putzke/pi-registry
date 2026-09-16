@@ -590,6 +590,53 @@ both found by reading the code rather than assuming from its output:
    sentiment facts each appear only when their section is in the report and
    are absent otherwise, on the identical underlying data.
 
+### "Include data table" hid the table in the .docx, not the data (Sep 2026)
+Every `TABLE_ELIGIBLE_TYPES` section's `.docx` renderer (`_buildDocxWithTemplate`)
+had a THIRD state the checkbox never offered: `showTable` on printed a Word
+table; off, with items present, fell back to a full **bulleted itemization of
+every underlying record** — names, org, channel, one-line summaries, issue
+descriptions and resolution text, even an issue's linked interactions —
+instead of the "nothing beyond the narrative and the counts" the live preview
+(`renderLivePreview`) and the archived snapshot (`_buildReportSnapshot`) both
+correctly show when the box is unchecked. Affected: `auto-concerns`,
+`auto-intlog`, `auto-followups`, `auto-del`, `auto-comments`,
+`auto-comment-matrix`, `auto-events`, `auto-commitments`, `auto-issues` — nine
+copies of the same shape. `auto-pi-compliance` was NOT affected — its
+non-table fallback was already aggregate-only, no per-record leak, and stayed
+untouched.
+
+Reported live: a consultant unchecked "Include data table in report" on
+auto-concerns, the Live Preview correctly showed no interaction list, and the
+exported `.docx` still printed every named stakeholder contact as a bulleted
+line. **That is a compliance/privacy defect, not a cosmetic one** — the
+checkbox promised to keep individually identifying records out of a document
+that gets distributed to a client, and silently kept them in, in a format
+nobody previewed before export. `auto-issues` was the worst of the nine: its
+fallback included the full issue description, resolution summary, AND every
+linked interaction's name/channel/summary — none of which the table view ever
+showed even when checked.
+
+Fixed by removing each type's itemized-dump `else` branch entirely — matching
+`auto-contacts`, which never had one. Where an aggregate summary line already
+printed unconditionally above the branch (deliverable %, follow-up
+open/resolved/total, commitment open/fulfilled/total, etc.), it stays; only
+the per-record fallback went. `auto-issues` needed restructuring since its
+"N issues total · M open" line used to be duplicated inside both branches —
+hoisted to print once, unconditionally, ahead of the table-only block.
+
+Guarded by `test/tests/50-docx-table-toggle-parity.test.js` (38 checks):
+fabricates one marker-tagged record per affected type, exports twice (every
+checkbox off, then every checkbox on) and asserts NONE of the itemized
+markers appear in the off export while the aggregate lines still do, and ALL
+of them appear in the on export (proving the checkbox still works, not that
+the feature was removed outright). Two things this test turned up along the
+way, matching a gotcha already documented elsewhere in this file:
+`loadReportSections()` prefers a `_syncCache.reports`/Supabase draft over
+localStorage, so a second export in the same session needs the FIRST
+export's persisted `pi_reports` row deleted for real (not just the in-memory
+cache cleared) or it silently wins over the second export's fresh section
+config.
+
 ### The UDOT logo lives in TWO places — update both (Aug 2026)
 Replaced Aug 2026 with the navy beehive mark (`UDOT_Logo_Blue.png`, 1000x258,
 transparent, kept in the repo root as the source of record). It is embedded
@@ -620,6 +667,34 @@ change rather than producing a file Word will not open.
 Resolution: 1000px drawn at 2.22" is **450 DPI**, up from 600px at 1.77" (340).
 Upscaling the PNG would add pixels, not detail — only a higher-res original or
 the vector source would. `client-portal.html` carries no UDOT branding at all.
+
+**A picture in a .docx drawing is sized in TWO places, and the tool only ever
+patched one — the UDOT logo shipped visibly stretched in Word (Sep 2026).**
+`<wp:extent>` on the inline anchor and `<a:ext>` one level in, inside
+`<pic:spPr><a:xfrm>`, are supposed to agree; Word actually draws from the
+inner one. The tool's old code patched the inner `<a:ext>` by **searching for
+the OLD `<wp:extent>`'s text** — a `.replace()` against a string that doesn't
+occur is a silent no-op, not an error. On the real UDOT template the two had
+already diverged for unrelated reasons before the tool ever ran (the inner
+`<a:ext>` carried something close to the template's ORIGINAL pre-swap numbers,
+not whatever `<wp:extent>` happened to say), so the outer extent got correctly
+updated to the new logo's 3.88:1 ratio and the inner one silently kept
+~3.08:1 — a real, visible distortion, reported by Jeff from the exported
+.docx open in Word. `test/tests/36-brand-logo.test.js`'s existing aspect-ratio
+check only ever read `<wp:extent>`, so it passed the whole time; it now also
+reads the inner `<a:ext>` per drawing and asserts the two ratios agree —
+confirmed to fail against the un-fixed file with exactly this symptom before
+the fix, not just after.
+
+Fixed by locating both extents **structurally** — wherever they actually sit
+inside the FIRST `<w:drawing>...</w:drawing>` block — instead of assuming the
+inner one's old value; the tool now also dies loudly (before writing anything)
+if the rebuilt package's own two ratios still disagree, so this exact failure
+mode can't ship silently again. Corrected in place by re-running
+`node tools/swap-letterhead-logo.js udot UDOT_Logo_Blue.png` against the same
+already-correct source file — the outer extent was untouched (it was right),
+only the inner `<a:ext>` moved, from `1672304×542314` (3.08:1) to
+`2030019×523745` (3.88:1, matching `<wp:extent>` exactly).
 
 ### The .docx letterhead is FIRST PAGE ONLY (`_firstPageHeaderOnly`, Aug 2026)
 Word needs two things together: the letterhead registered as the **first-page**

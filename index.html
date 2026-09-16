@@ -10341,12 +10341,16 @@ function _periodLabel(secType, pstart, pend) {
   return d > 0 ? d + '-day report period · ' : '';
 }
 
+// Deliverable / scope status is deliberately NOT a default — it's a real
+// section (still offered in getAvailableSections()), but not every project
+// tracks deliverables the way this section expects, and a report shouldn't
+// open with an empty or irrelevant section a consultant has to notice and
+// remove. Add it explicitly when it applies (Sep 2026).
 function getDefaultSections(){
   return[
     {id:'concerns',title:'Recent public concerns and inquiries',type:'auto-concerns',content:''},
     {id:'actions',title:'Recent PI action items',type:'manual',content:''},
-    {id:'planned',title:'Planned PI activities',type:'manual',content:''},
-    {id:'deliverables',title:'Deliverable / scope status',type:'auto-del',content:''}
+    {id:'planned',title:'Planned PI activities',type:'manual',content:''}
   ];
 }
 
@@ -10603,16 +10607,21 @@ function _claudeSectionSystemPrompt() {
 // depend on the section narratives having been written yet — so no two-pass
 // generation and no ordering assumption.
 function _claudeExecSystemPrompt() {
-  return 'You are a professional public involvement coordinator at a transportation engineering firm. '
-    + 'Write a 3-4 sentence executive summary that opens an FHWA/NEPA public involvement progress report. '
-    + 'Its job is to ORIENT the reader, not to recap the report: state briefly what the project is and '
-    + 'where it stands, identify the single most consequential development of the period, and close with '
-    + 'what needs attention or a decision. '
-    + 'Do NOT summarise the report section by section, and do NOT restate counts, statistics or the '
-    + 'reporting date range — the sections and tables below already carry those, and repeating them is '
-    + 'redundant. Prefer significance over completeness: one thing that matters, said well. '
-    + 'Use plain, factual language. Do not use headers, bullet points, or markdown. '
-    + 'Do not invent data — only use the facts provided.';
+  return 'You are a public involvement coordinator at a transportation engineering firm. '
+    + 'Write a short opening summary (3-4 sentences) for an FHWA/NEPA public involvement progress report. '
+    + 'Its job is to state the period\'s activity plainly, not to build a narrative around it: say what '
+    + 'phase the project is in, how much outreach happened, and anything that genuinely needs attention '
+    + '(an overdue item, a high-priority issue) — reporting the numbers, not interpreting them. '
+    + 'Refer to the project as "this project" or "the project," never by its name or PIN — the report '
+    + 'header already carries both, and naming it again here is redundant. '
+    + 'A project sending more outbound notifications than it receives inbound contact is normal, expected '
+    + 'early-project work, not a finding — never characterize that gap as an imbalance, a shortfall, or '
+    + 'anything needing explanation. State the interaction volume plainly and move on. '
+    + 'Do NOT summarise the report section by section, and do NOT restate the reporting date range — the '
+    + 'sections and tables below already carry that. '
+    + 'Write at about a 9th-10th grade reading level: short sentences, everyday words, no jargon beyond '
+    + 'the standard PI/NEPA terms already used elsewhere in the report. '
+    + 'Do not use headers, bullet points, or markdown. Do not invent data — only use the facts provided.';
 }
 
 function _claudeSystemPrompt() {
@@ -10730,18 +10739,23 @@ function _sectionDraftCall(secType, templateDraft) {
   var req = _sectionAIRequest(secType, templateDraft);
   return _claudeNarrative(_claudeSectionSystemPrompt(), req.userContent, req.maxTokens);
 }
-// The executive summary has its OWN system prompt: it orients rather than
-// recaps, and drafting it under the section prompt turns it back into a recap.
+// The executive summary has its OWN system prompt: it states the period's
+// activity plainly rather than recapping the sections or narrating what it
+// means, and drafting it under the section prompt turns it back into a recap.
 function _overallDraftCall(templateDraft) {
   var projF = S.projectFilter;
   var proj = projF ? (DB.get('projects').find(function(p){ return p.id===projF; }))||{} : {};
-  // Deliberately does NOT receive the section narratives: this summary orients the
-  // reader rather than recapping the sections, and feeding it their text just pulls
-  // it back toward a recap. The project facts are enough to pick the headline.
-  var userContent = 'Write the opening executive summary for a public involvement progress report for project "'
-    + (proj.name||'this project') + '" (' + (proj.pid||'') + ').\n\n'
-    + 'Identify the most consequential development and what needs attention. Do not recap the report\'s '
-    + 'sections and do not restate the date range or the counts shown in the tables.\n\n'
+  // Deliberately does NOT receive the section narratives: this summary reports
+  // the period's facts rather than recapping the sections, and feeding it
+  // their text just pulls it back toward a recap. The project facts are
+  // enough. The project's name/PID are deliberately NOT passed here either —
+  // saying "for project X" up front is exactly what cues the model to open
+  // by naming it, which the report header already does.
+  var userContent = 'Write the opening summary for this project\'s public involvement progress report.\n\n'
+    + 'State the period\'s activity plainly — how much outreach happened and anything that genuinely needs '
+    + 'attention. Do not draw conclusions from the outbound-vs-inbound volume; more outbound than inbound '
+    + 'is normal early in a project and is not itself worth commenting on. Do not recap the report\'s '
+    + 'sections one by one, and do not restate the date range.\n\n'
     + 'PROJECT FACTS:\n' + templateDraft;
   return _claudeNarrative(_claudeExecSystemPrompt(), userContent, 400);
 }
@@ -11271,11 +11285,15 @@ function _buildOverallDraft() {
 
   var lines = [];
 
-  // ── Sentence 1: Project context opener ───────────────────────────────────
-  var opener = proj.name;
-  if (proj.client) opener += ' ('+proj.client+')';
+  // ── Sentence 1: Project context opener — "This project," never the name.
+  // The report header already names the project; opening the summary with
+  // it again is redundant, and the model tends to mirror this fact line
+  // closely, so fixing the wording here is what actually fixes the AI's
+  // own opening sentence too. ────────────────────────────────────────────
+  var opener = 'This project';
+  if (proj.client) opener += ' for '+proj.client;
   if (proj.phase) opener += ' is currently in the '+proj.phase+' phase.';
-  else opener += ' public involvement activities are summarized below.';
+  else opener += "'s public involvement activities are summarized below.";
   lines.push(opener);
 
   // ── Sentence 2: Period outreach activity — outbound and inbound reported

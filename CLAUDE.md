@@ -590,6 +590,68 @@ both found by reading the code rather than assuming from its output:
    sentiment facts each appear only when their section is in the report and
    are absent otherwise, on the identical underlying data.
 
+### The overall summary's PROMPT needed fixing too — not just its facts (Sep 2026)
+Live feedback on real generated reports, after the fact-scoping fix above had
+already shipped: the prose itself still had problems the facts alone couldn't
+cause.
+1. **It opened with the project's NAME, every time.** `_buildOverallDraft()`'s
+   sentence 1 led with `"ProjectName (Client) is currently in the X phase."`,
+   the model tends to mirror that opening line closely since it's handed as
+   "PROJECT FACTS," and `_overallDraftCall()`'s own `userContent` additionally
+   said `for project "X" (PID)` — two reinforcing cues to name a project the
+   report header already names. Fixed in both places: the deterministic
+   opener now reads `"This project ..."`, and the userContent no longer
+   passes the name/PID at all. `_claudeExecSystemPrompt()` also says so
+   explicitly now — "never by its name" — since the instruction is what
+   holds once the AI paraphrases rather than echoes the facts verbatim.
+2. **"Identify the single most consequential development of the period"
+   invited editorializing about the outbound/inbound gap.** A PI team's real
+   workflow front-loads outbound notification — mass flyer emails, referral
+   calls — well before any inbound reply is expected, so an early report
+   handed a big outbound number and a near-zero inbound number, then told to
+   find "the most consequential development," would draw a conclusion from
+   that gap as if it meant something. It doesn't; it's the normal, expected
+   shape of early PI work. That framing is gone from the system prompt,
+   replaced with an explicit instruction: state the outbound/inbound volume
+   plainly, never characterize the gap as an imbalance or a finding. The
+   `userContent` says the same thing a second time — the section-level
+   prompts in this app have always reinforced instructions in both places
+   (see `_claudeSectionSystemPrompt()`/`_sectionAIRequest()`), not just relied
+   on the system prompt alone.
+3. **The prose read at roughly a college level; a PI report is read by
+   agency staff and the public, not policy analysts.** The system prompt now
+   asks for "about a 9th-10th grade reading level: short sentences, everyday
+   words, no jargon beyond the standard PI/NEPA terms already used elsewhere
+   in the report" — a concrete target, not just "use plain language," which
+   the earlier version already said and which evidently wasn't concrete
+   enough to hold.
+4. **"Deliverable / scope status" (`auto-del`) is no longer a DEFAULT
+   section** (`getDefaultSections()`) — not every project tracks deliverables
+   the way this section expects, and a brand-new report shouldn't open with
+   a section a consultant has to notice and remove. It's still a real,
+   addable section in `getAvailableSections()`; only the default changed.
+
+Model choice was raised and deliberately left alone: the fix here is a
+prompt-engineering problem (tone, framing, what the model is asked to look
+for), not a capability gap Sonnet has and Haiku doesn't. Swapping models for
+just this one call also risks breaking `RPT_PROSE_CSS`'s "one prose voice"
+guarantee — the overall summary sits on the same page as Sonnet-drafted
+section narratives, and a different model is a real way for the voice to
+drift between them even with an identical prompt. `_overallDraftCall()`
+still calls `_claudeNarrative()` with no explicit model argument, i.e. its
+default (`claude-sonnet-5`).
+
+Guarded by `test/tests/51-overall-summary-tone.test.js` (16 checks): asserts
+`getDefaultSections()` excludes `auto-del` while `getAvailableSections()`
+still offers it; the system prompt's own wording (names the project as "this
+project," drops the old "most consequential" phrase, frames the
+outbound/inbound gap as normal, states a concrete reading-level target); the
+deterministic opener says "This project" and never the project's actual
+name, using a deliberately identifying fabricated name to prove it; and,
+driving `generateOverallDraft()` for real with `_claudeNarrative` stubbed
+(same technique as `test/tests/34-draft-all-parity.test.js`), that the
+`userContent` actually sent to the model carries none of it either.
+
 ### "Include data table" hid the table in the .docx, not the data (Sep 2026)
 Every `TABLE_ELIGIBLE_TYPES` section's `.docx` renderer (`_buildDocxWithTemplate`)
 had a THIRD state the checkbox never offered: `showTable` on printed a Word

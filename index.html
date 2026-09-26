@@ -713,7 +713,7 @@ const SB_TO_INT = {
     parcelId:'parcel_id', type:'stakeholder_type', influenceTier:'influence_tier',
     prefContact:'pref_contact', isMaster:'is_master',
     isArchived:'is_archived', lep:'lep', underserved:'underserved',
-    stakeholderRole:'stakeholder_role',
+    stakeholderRole:'stakeholder_role', needsReview:'needs_review',
     notes:'notes'
   },
   pi_project_stakeholders: {
@@ -940,7 +940,7 @@ function fromSB(table, row) {
     result[intKey] = row[sbCol] !== undefined ? row[sbCol] : (intKey.startsWith('is') ? false : '');
   }
   // Normalize booleans
-  ['isMaster','isAnonymous','followUp','followUpDone','isArchived','equityFormSubmitted','lep','underserved'].forEach(f => {
+  ['isMaster','isAnonymous','followUp','followUpDone','isArchived','equityFormSubmitted','lep','underserved','needsReview'].forEach(f => {
     if (result[f] !== undefined) result[f] = result[f] === true || result[f] === 1;
   });
   // OCC baseline: carry updated_at/updated_by into the cache record so the next
@@ -4303,7 +4303,7 @@ function renderStakeholders(el){
                 <div class="lrow-sub">${s.org||s.type||'—'}${s.title?' · '+s.title:''}</div>
               </div>
               <div class="lrow-meta">
-                ${lk?`<span class="badge ${(lk.stakeholderRole||'External')==='Internal'?'b-sky':'b-teal'}" style="font-size:10px">${lk.stakeholderRole||'External'}</span>`:''}
+                ${s.needsReview?'<span class="badge" style="font-size:10px;background:rgba(217,164,65,.18);color:#e6bd6e;border:1px solid rgba(217,164,65,.35)">Needs review</span>':(lk?`<span class="badge ${(lk.stakeholderRole||'External')==='Internal'?'b-sky':'b-teal'}" style="font-size:10px">${lk.stakeholderRole||'External'}</span>`:'')}
                 ${lk?supBadge(lk.support):''}
                 ${intCt>0?`<span style="font-size:11px;color:var(--slate)">${intCt} log${intCt!==1?'s':''}</span>`:'<span style="font-size:11px;color:var(--slate)">No interactions</span>'}
               </div>
@@ -5163,6 +5163,10 @@ function renderStakeDetail(s,link){
   const tab=S.stakeTab||'info';
   const cb=S.view==='master'?`renderMaster(document.getElementById('main'))`:`renderStakeholders(document.getElementById('main'))`;
   const infoHTML=`<div class="det-body">
+    ${s.needsReview?`<div style="background:rgba(217,164,65,.08);border:1px solid rgba(217,164,65,.3);border-left:3px solid #d9a441;border-radius:8px;padding:10px 12px;margin-bottom:14px;display:flex;align-items:center;gap:12px">
+      <div style="flex:1;font-size:12px;color:#e6bd6e;line-height:1.5">⚠ Auto-created from a drawn map area — the address on file is the property's situs address, not a confirmed mailing address. Add the real name, phone and email once you've spoken with the resident or owner in the field.</div>
+      <button class="btn btn-sm" style="flex-shrink:0" onclick="openStakeModal('${s.id}')">Edit contact</button>
+    </div>`:''}
     <div class="fg fg3" style="margin-bottom:14px">
       <div class="fi"><div class="fl">Type</div><div class="fv">${s.type||'—'}</div></div>
       ${s.lep||s.underserved?`<div class="fi"><div class="fl">Equity flags</div><div class="fv">${s.lep?'<span class="badge" style="font-size:10px;background:rgba(232,160,32,.18);color:#e8a020;border:1px solid rgba(232,160,32,.3);margin-right:4px">LEP</span>':''}${s.underserved?'<span class="badge" style="font-size:10px;background:rgba(124,92,191,.18);color:#a98de8;border:1px solid rgba(124,92,191,.3)">EJ</span>':''}</div></div>`:''}
@@ -5307,7 +5311,7 @@ function renderStakeDetail(s,link){
         <div class="det-badges">
           <span class="badge b-gray">${s.type||'—'}</span>
           ${link?supBadge(link.support):''}
-          ${s.isMaster?'<span class="badge b-purple">Master list</span>':'<span class="badge b-dark">Project only</span>'}
+          ${s.needsReview?'<span class="badge" style="background:rgba(217,164,65,.18);color:#e6bd6e;border:1px solid rgba(217,164,65,.35)">Needs review</span>':(s.isMaster?'<span class="badge b-purple">Master list</span>':'<span class="badge b-dark">Project only</span>')}
         </div>
       </div>
       <div class="det-acts">
@@ -17038,7 +17042,7 @@ function _mvDrawFinish() {
     var gp = window._mvPoly.getPath();
     var rerun = function(){
       var pts = gp.getArray().map(function(pt){ return { lat: pt.lat(), lng: pt.lng() }; });
-      if (pts.length >= 3) { _mvShowPolyResults(_mvPolyQuery(pts)); _mvDiscoverUntracked(pts); }
+      if (pts.length >= 3) { _mvShowPolyResults(_mvPolyQuery(pts)); _mvDiscoverUntracked(pts); _mvDiscoverContacts(pts); }
     };
     ['set_at','insert_at','remove_at'].forEach(function(ev){
       window.google.maps.event.addListener(gp, ev, rerun);
@@ -17047,10 +17051,13 @@ function _mvDrawFinish() {
   var res = _mvPolyQuery(path);
   _mvShowPolyResults(res);
   // Fire-and-forget: _mvDrawFinish must stay synchronous (test 42 asserts its
-  // return value directly), so the UGRC discovery section is appended to the
-  // panel asynchronously once it resolves, same pattern _mvGeocode already
+  // return value directly), so the UGRC discovery sections are appended to the
+  // panel asynchronously once each resolves, same pattern _mvGeocode already
   // uses for filling in markers after the synchronous "no location" list.
+  // Called in this order so their "Checking UGRC…" placeholders land in the
+  // panel in a stable, predictable order regardless of which resolves first.
   _mvDiscoverUntracked(path);
+  _mvDiscoverContacts(path);
   return res;
 }
 
@@ -19394,6 +19401,231 @@ async function _mvImportUntracked(){
   if (section) section.innerHTML = window._mvUntracked.length
     ? _mvUntrackedHTML(window._mvUntracked, false)
     : '<div style="font-size:11px;color:var(--fog)">All reviewed parcels have been imported. Reopen the Parcels view to see them.</div>';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// DRAW-AREA PLACEHOLDER CONTACTS (Sep 2026) — a field canvass on a small
+// block of properties knows the situs address of each house before it knows
+// who lives or owns there. Sits beside "Untracked parcels — UGRC" in the same
+// polygon results panel, reads the SAME UtahStatewideParcels layer for the
+// same reason that section does (situs addresses are already right there in
+// county GIS records), but writes ordinary CONTACTS (pi_stakeholders +
+// pi_project_stakeholders) — never a pi_parcels row. This is contact
+// creation, not ROW/acquisition tracking, and stays out of the Parcels module
+// entirely on purpose (see the CLAUDE.md note on this feature).
+//
+// Deliberately a SEPARATE UGRC query from _mvDiscoverUntracked rather than a
+// shared fetch: UGRC is a public, keyless, free-to-query layer, so the extra
+// round trip costs nothing that matters, and keeping the two features'
+// queries independent means neither one's tests or gating rules have to
+// account for the other.
+// ══════════════════════════════════════════════════════════════════
+
+// A deliberate workflow-scoping choice, not a technical ceiling like
+// UGRC_DISCOVER_MAX_FEATURES — this is meant to be walked in one small block
+// at a time, not used to bulk-import a whole neighborhood's contacts sight
+// unseen. Softer than that cap: candidates beyond it are simply not shown,
+// with a note to draw a smaller shape, rather than refusing the whole result.
+var DRAW_AREA_CONTACT_MAX = 10;
+
+// Loose match on the STREET portion only (before the first comma) — UGRC's
+// city/zip formatting and whatever a stakeholder's address happens to have
+// been typed or picked as don't line up closely enough to compare the whole
+// string. A false negative here (showing a candidate that already has a
+// contact) is safe — the human reviewing the checklist just unchecks it. A
+// false positive (hiding a real gap) would not be, so this errs toward
+// showing more candidates, never fewer.
+function _normAddr(s){
+  return String(s||'').split(',')[0].toLowerCase().replace(/[^a-z0-9\s]/g,'').replace(/\s+/g,' ').trim();
+}
+
+// Only offers an address with NO contact already linked to this project —
+// never a reason to create a second placeholder next to a real, already-
+// logged contact at the same house.
+function _mvContactCandidateDiff(features, projId){
+  var linkedIds = new Set((DB.get('project_stakeholders')||[])
+    .filter(function(ps){ return String(ps.projectId)===String(projId); })
+    .map(function(ps){ return String(ps.stakeholderId); }));
+  var existingAddrs = new Set((DB.get('stakeholders')||[])
+    .filter(function(s){ return linkedIds.has(String(s.id)); })
+    .map(function(s){ return _normAddr(s.address); })
+    .filter(Boolean));
+  return features.filter(function(f){
+    var street = _normAddr(f.address);
+    return street && !existingAddrs.has(street);
+  });
+}
+
+// getAnonLabel() counts what is already STORED so a batch never restarts its
+// numbering at 1 — same rule here: several draws on the same project must not
+// both mint a "Property 1", which would be two different houses sharing one
+// name in the contact list.
+function _mvNextPropertyNum(projId){
+  var linkedIds = new Set((DB.get('project_stakeholders')||[])
+    .filter(function(ps){ return String(ps.projectId)===String(projId); })
+    .map(function(ps){ return String(ps.stakeholderId); }));
+  var maxN = (DB.get('stakeholders')||[]).reduce(function(m, s){
+    if (!linkedIds.has(String(s.id))) return m;
+    if (s.firstName !== 'Property' || !/^\d+$/.test(String(s.lastName||''))) return m;
+    return Math.max(m, Number(s.lastName));
+  }, 0);
+  return maxN + 1;
+}
+
+function _mvContactCandidatesHTML(list, capped){
+  var esc = escHtml;
+  return '<div style="font-size:12px;font-weight:600;margin-bottom:4px">New contacts — draw area (' + list.length + ')</div>'
+    + '<div style="font-size:11px;color:var(--fog);margin-bottom:4px">Situs addresses inside this shape with no linked contact yet — up to ' + DRAW_AREA_CONTACT_MAX + ' per capture.</div>'
+    + (capped ? '<div style="font-size:10.5px;color:var(--amber);margin-bottom:4px">Showing the first ' + DRAW_AREA_CONTACT_MAX + ' — draw a smaller area to review the rest.</div>' : '')
+    + '<div style="display:flex;gap:10px;margin-bottom:4px">'
+      + '<span onclick="_mvSetAllContacts(true)" style="font-size:11px;color:var(--sky-lt);cursor:pointer">Check all</span>'
+      + '<span onclick="_mvSetAllContacts(false)" style="font-size:11px;color:var(--sky-lt);cursor:pointer">Uncheck all</span>'
+    + '</div>'
+    + '<div style="max-height:220px;overflow-y:auto">' + list.map(function(f,i){
+        return '<label style="display:flex;gap:6px;align-items:baseline;padding:3px 0;font-size:12px">'
+          + '<input type="checkbox" class="mv-contact-cb" data-i="' + i + '" checked style="margin-top:2px">'
+          + '<span style="flex:1">' + esc(f.address || '(no address on file)') + '</span>'
+          + '</label>';
+      }).join('') + '</div>'
+    + '<div style="font-size:10.5px;color:var(--fog);margin-top:6px">Each creates a Property Owner contact tagged <span style="color:var(--amber)">Needs review</span> — fill in the real name once you’ve spoken with them.</div>'
+    + '<button class="btn btn-sm btn-primary" style="margin-top:8px;width:100%" onclick="_mvCreateContactCandidates()">Create placeholder contacts</button>';
+}
+
+function _mvSetAllContacts(state){
+  document.querySelectorAll('.mv-contact-cb').forEach(function(cb){ cb.checked = state; });
+}
+
+// Fire-and-forget from _mvDrawFinish, same pattern as _mvDiscoverUntracked —
+// appends its own section to the ALREADY-SHOWN results panel.
+async function _mvDiscoverContacts(path){
+  var panel = document.getElementById('mv-poly-panel');
+  if (!panel || panel.style.display === 'none') return; // drawing was cleared before this resolved
+
+  var projId = S.projectFilter;
+  var oldSection = document.getElementById('mv-poly-contacts');
+  if (oldSection) oldSection.remove();
+  // No project, or the parcels-only layer is showing: nothing to offer, and
+  // surfacing contact content while looking at parcels-only would be a
+  // different feature's business — the same layer rule _mvDiscoverUntracked
+  // applies in the other direction.
+  if (!projId || (S.mapLayer||'contacts')==='parcels') { window._mvContactCandidates=null; return; }
+
+  var section = document.createElement('div');
+  section.id = 'mv-poly-contacts';
+  section.style.cssText = 'margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.12)';
+  section.innerHTML = '<div style="font-size:11px;color:var(--fog)">Checking UGRC for addresses without a contact…</div>';
+  panel.appendChild(section);
+
+  var count;
+  try { count = await _ugrcCountInPolygon(path); }
+  catch(e){
+    console.error('UGRC contact discovery count failed:', e.message);
+    section.innerHTML = '<div style="font-size:11px;color:var(--amber)">⚠ Could not reach UGRC to look for addresses.</div>';
+    return;
+  }
+  if (!document.body.contains(section)) return; // panel was cleared/redrawn while the count was in flight
+  if (count === 0) { section.remove(); return; } // nothing there — say nothing rather than clutter the panel
+  if (count > UGRC_DISCOVER_MAX_FEATURES) {
+    section.innerHTML = '<div style="font-size:11px;color:var(--amber)">⚠ ' + count.toLocaleString()
+      + ' parcels in county records fall inside this shape — too many to review here. Draw a smaller area.</div>';
+    return;
+  }
+
+  var result;
+  try { result = await _ugrcQueryPolygon(path); }
+  catch(e){
+    console.error('UGRC contact discovery query failed:', e.message);
+    section.innerHTML = '<div style="font-size:11px;color:var(--amber)">⚠ Could not reach UGRC to look for addresses.</div>';
+    return;
+  }
+  if (!document.body.contains(section)) return;
+
+  var candidates = _mvContactCandidateDiff(result.features, projId);
+  if (!candidates.length) {
+    section.remove(); // every address in the shape already has a contact — nothing to review
+    return;
+  }
+  var capped = candidates.length > DRAW_AREA_CONTACT_MAX;
+  window._mvContactCandidates = candidates.slice(0, DRAW_AREA_CONTACT_MAX);
+  section.innerHTML = _mvContactCandidatesHTML(window._mvContactCandidates, capped);
+}
+
+async function _mvCreateContactCandidates(){
+  var projId = S.projectFilter;
+  var list = window._mvContactCandidates || [];
+  var checked = [];
+  document.querySelectorAll('.mv-contact-cb').forEach(function(cb){
+    if (cb.checked) checked.push(list[Number(cb.dataset.i)]);
+  });
+  if (!checked.length) { showToast('Nothing checked to create.', 'warn'); return; }
+
+  var section = document.getElementById('mv-poly-contacts');
+  var nextNum = _mvNextPropertyNum(projId);
+  var created = 0, errors = [];
+  var allStakes = (_syncCache['stakeholders']||[]).slice();
+  var allPS = (_syncCache['project_stakeholders']||[]).slice();
+
+  // Sequential sbAdd calls, each awaited for its real Supabase id before the
+  // next starts — same pattern the Bulk-add grid uses for new stakeholders,
+  // and for the same reason: a stakeholder created with a temporary id and
+  // re-rendered before the insert settles can open its Edit modal blank if
+  // clicked within about a second, exactly the race documented for freshly
+  // logged interactions. Reviewing a placeholder right after creating it is
+  // the expected next action here, so this is squarely that failure's risk
+  // window, not a hypothetical one.
+  for (var i = 0; i < checked.length; i++) {
+    var f = checked[i];
+    var num = nextNum + created;
+    var stake = {
+      id: DB.uid(),
+      firstName: 'Property', lastName: String(num),
+      org: '', title: '', email: '', phone: '',
+      type: 'Property Owner', influenceTier: 'Medium',
+      isMaster: false, isAnonymous: false,
+      notes: 'Auto-created from a drawn map area on ' + fmt(localToday())
+        + '. Address is the situs address from county GIS records — confirm the real name and mailing address in the field.',
+      address: f.address || '', parcelId: '', isArchived: false,
+      needsReview: true
+    };
+    var realId = await sbAdd('stakeholders', stake);
+    if (!realId) { errors.push('Property ' + num + ': failed to save'); continue; }
+    stake.id = realId;
+    allStakes.push(stake);
+    _syncCache['stakeholders'] = allStakes;
+
+    var psLink = {
+      id: DB.uid(), projectId: projId, stakeholderId: realId,
+      support: 'Neutral', influence: 'Medium', issueTags: '',
+      addedDate: localToday(), notes: '', distributionGroups: '',
+      stakeholderRole: 'External'
+    };
+    var psId = await sbAdd('project_stakeholders', psLink);
+    if (psId) {
+      psLink.id = psId;
+      allPS.push(psLink);
+      _syncCache['project_stakeholders'] = allPS;
+    } else {
+      errors.push('Property ' + num + ': saved but project link failed');
+    }
+    created++;
+  }
+
+  // Force a fresh load, same belt-and-suspenders as Bulk-add — the manual
+  // cache pushes above make the panel and any open list correct immediately;
+  // this guards against the two ever drifting apart.
+  cacheClear('stakeholders');
+  cacheClear('project_stakeholders');
+  await loadAllData();
+
+  window._mvContactCandidates = list.filter(function(f){ return checked.indexOf(f)===-1; });
+  if (section) {
+    section.innerHTML = window._mvContactCandidates.length
+      ? _mvContactCandidatesHTML(window._mvContactCandidates, false)
+      : '<div style="font-size:11px;color:var(--green)">' + created + ' placeholder contact' + (created!==1?'s':'') + ' created, tagged Needs review.</div>'
+        + '<button class="btn btn-sm" style="margin-top:6px;width:100%" onclick="setView(\'stakeholders\')">Open project contacts</button>';
+  }
+  if (errors.length) { console.error('Draw-area contact creation errors:', errors); showToast(created + ' created · ' + errors.length + ' failed', 'warn', 6000); }
+  else showToast(created + ' placeholder contact' + (created!==1?'s':'') + ' created.', 'info', 4000);
 }
 
 // ══════════════════════════════════════════════════════════════════

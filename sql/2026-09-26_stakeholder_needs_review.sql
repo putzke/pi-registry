@@ -1,0 +1,32 @@
+-- Draw-area placeholder contacts (Sep 2026). A field canvass on a small block
+-- of properties (up to 10 per capture) knows the situs address of each house
+-- before it knows who lives or owns there. "New contacts — draw area" on the
+-- Map view's polygon results panel (next to the existing "Untracked parcels —
+-- UGRC" section) creates a pi_stakeholders row per selected address with a
+-- placeholder name (firstName "Property", lastName a running number — same
+-- convention getAnonLabel() already uses for anonymous interactions: count
+-- what's already stored, don't restart at 1 on every capture) and the situs
+-- address filled into the existing `address` column, since there is nowhere
+-- else on a plain contact record to put "which house this is" and the whole
+-- point of the capture is knowing where to knock.
+--
+-- needs_review is the flag that keeps that provisional address from silently
+-- passing as reviewed data — the address may be exactly right (the owner
+-- lives there) or may need correcting once a renter answers the door and the
+-- owner turns out to live elsewhere (see the CLAUDE.md note on this feature:
+-- a renter is logged as their own separate contact, never used to overwrite
+-- the placeholder). Master List and the project contact list badge this
+-- amber instead of the normal type tag, so it reads as an open to-do rather
+-- than a completed record.
+--
+-- Not booked as its own table and not touching pi_parcels — this is ordinary
+-- contact creation (pi_stakeholders + pi_project_stakeholders), same locked
+-- scope as the rest of contact-only AI/bulk import in this app. No new
+-- parcel record, no acquisition tracking.
+--
+-- No RLS/grant change needed: a new column on an existing table whose
+-- policies and grants already apply at the table level.
+--
+-- Idempotent: safe to run more than once.
+
+alter table pi_stakeholders add column if not exists needs_review boolean not null default false;

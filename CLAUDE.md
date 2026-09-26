@@ -2618,6 +2618,117 @@ Utah county assessor data availability:
 
 ---
 
+### Draw-area placeholder contacts — BUILT (Sep 2026)
+A small in-person canvass (walking a block of property owners door to door)
+knows the situs address of a house before it knows who lives or owns there —
+name, phone and email, several of which the app requires to save a contact,
+simply aren't known yet at the moment of drawing the shape. "New contacts —
+draw area" sits beside the existing "Untracked parcels — UGRC" section (Phase
+2b, above) in the same polygon results panel, reads the SAME
+UtahStatewideParcels layer for the same reason that section does (situs
+addresses are already right there in county GIS records), and offers up to
+10 addresses per capture with no linked contact yet, for reviewed creation.
+
+**This is contact creation, not ROW/acquisition tracking — no pi_parcels row
+is written, ever.** Confirmed explicitly before building: the feature
+populates the project's ordinary contact list (`pi_stakeholders` +
+`pi_project_stakeholders`), the same list `renderBulkAdd`'s AI contact
+importer feeds, not the Parcels module. A canvassing project like this one
+usually isn't a ROW/acquisition project at all, and the two modules track
+different things — acquisition status and notice dates have no meaning here.
+
+- **`DRAW_AREA_CONTACT_MAX = 10`** — a deliberate workflow-scoping choice
+  (this is meant to be walked one small block at a time), not a technical
+  ceiling like `UGRC_DISCOVER_MAX_FEATURES`. Softer than that cap too:
+  candidates beyond it are simply not shown, with a note to draw a smaller
+  shape, rather than refusing the whole result the way an oversized area
+  refuses Phase 2b's discovery.
+- **A SEPARATE UGRC query from `_mvDiscoverUntracked`, not a shared fetch.**
+  UGRC is a public, keyless, free-to-query layer, so a second round trip when
+  the layer is "Both" costs nothing that matters, and keeping the two
+  features' queries independent means neither one's tests or gating rules
+  have to account for the other. Mirrors Phase 2b's own count-first,
+  never-silently-truncate, failure-is-never-silently-zero discipline exactly
+  (`_ugrcCountInPolygon` before `_ugrcQueryPolygon`; a network error leaves
+  the panel saying so, never "nothing found").
+- **Layer gating is the mirror image of the untracked-parcels section's.**
+  That section bails when the layer is contacts-only; this one bails when the
+  layer is parcels-only (`(S.mapLayer||'contacts')==='parcels'`) — showing
+  contact candidates while looking at a parcels-only map would be exactly the
+  wrong-content-for-the-view mistake the other section's own rule exists to
+  avoid, just in the other direction.
+- **The candidate diff (`_mvContactCandidateDiff`) matches on the STREET
+  address only**, normalized (`_normAddr` — lowercase, strip punctuation,
+  collapse whitespace, compare the segment before the first comma), against
+  every stakeholder already linked to the project. UGRC's city/zip
+  formatting and whatever a contact's address was typed or Places-picked as
+  don't line up closely enough to compare the whole string. A false negative
+  here (offering a candidate that already has a contact) is safe — the human
+  reviewing the checklist just unchecks it; a false positive (hiding a real
+  gap) would not be, so the match errs toward showing more, never fewer.
+- **Naming: `firstName` "Property", `lastName` a running number, scoped to
+  the project and never restarting.** `_mvNextPropertyNum` counts what is
+  already stored — the same rule `getAnonLabel()` already uses for anonymous
+  interaction labels — so a second capture on the same project continues
+  from Property 4, say, rather than minting a second "Property 1" that would
+  collide with a different house's placeholder in the contact list.
+- **`needs_review` (new `pi_stakeholders` column,
+  `sql/2026-09-26_stakeholder_needs_review.sql`) is the flag, not the name.**
+  Earlier drafts of this feature considered encoding "unverified" only in the
+  placeholder name, and that was deliberately rejected: this app has already
+  been bitten more than once by something that *looks* complete but silently
+  isn't (the anonymous-interaction-as-internal bug, the docx table-toggle
+  leak — both elsewhere in this file), and "Property 3" reads as a real
+  logged contact the moment it appears in a report or export. The flag badges
+  amber ("Needs review") in place of the normal role/type tag everywhere a
+  contact renders — the project contact list row and the detail pane, which
+  also shows a callout banner explaining the address is a situs address, not
+  a confirmed mailing address, with a one-click "Edit contact" straight into
+  the real edit modal. Placeholders are `is_master:false` — project-only,
+  never added to the firm's master registry, since nothing about them has
+  been confirmed yet.
+- **The address IS populated immediately, deliberately — not left blank.**
+  A live design question while planning this feature: should the mailing
+  address stay blank until confirmed, matching the parcels module's owner-
+  mailing-address-vs-situs split? Rejected for THIS feature specifically —
+  without a linked `pi_parcels` row (there isn't one here) there is nowhere
+  else on a plain contact record to put "which house this is," and the whole
+  point of the capture is knowing where to knock. So `address` is filled with
+  the situs address right away — often correct (the owner lives there) and
+  when it isn't, `needs_review` plus the notes field it seeds say so loudly
+  rather than leaving the field team with no address at all.
+- **A renter answering the door is a SEPARATE contact, never a patch to the
+  placeholder.** Discussed explicitly before building: if the person at the
+  door turns out to be a renter, not the owner, they get logged as their own
+  contact (type `Resident`, their own real address) rather than overwriting
+  the placeholder meant to represent the owner — the placeholder still stands
+  for "someone owns this parcel, needs review," and the renter conversation's
+  detail (owner lives elsewhere, is unresponsive, whatever) goes in that
+  interaction's summary, not into either contact record's static fields.
+- **Sequential `sbAdd` per row, real id awaited before the next starts —
+  never the lazier `DB.set`-with-a-temporary-id pattern** the untracked-
+  parcels import next to it uses. This is the SAME race this codebase has
+  already diagnosed and fixed once (see the "freshly logged interaction
+  could open its own Edit modal blank" note above): a new row rendered
+  before its real Supabase id lands can open blank if clicked within about a
+  second. Reviewing a placeholder immediately after creating it — editing in
+  the real name once you've spoken to someone — is the expected next action
+  here, squarely inside that failure's risk window, not a hypothetical one.
+  Mirrors the Bulk-add grid's own stakeholder-creation loop for exactly this
+  reason.
+- Guarded by `test/tests/52-draw-area-contacts.test.js` (34 checks): both
+  layer-gating guards (no project, parcels-only) make zero network calls; an
+  address with an existing contact is excluded from the checklist; the
+  10-per-capture cap trims the list and says so; the over-threshold and
+  network-failure paths behave exactly as Phase 2b's own do; creation writes
+  the checked candidates only, tagged `needs_review`, typed Property Owner,
+  project-only; numbering continues across two separate captures on the same
+  project rather than restarting; the "Needs review" badge and callout
+  banner render on the created contact; and `_mvDrawFinish` actually wires
+  discovery in.
+
+---
+
 ### Strategic note
 This feature set directly addresses the FHWA AID Demonstration grant narrative —
 geospatial querying for environmental review and public involvement is exactly the

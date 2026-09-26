@@ -406,7 +406,8 @@ create table pi_stakeholders (
   lep boolean,
   underserved boolean,
   updated_at timestamptz default now(),
-  updated_by text
+  updated_by text,
+  needs_review boolean
 );
 
 grant select, insert, update, delete on pi_stakeholders to anon, authenticated;

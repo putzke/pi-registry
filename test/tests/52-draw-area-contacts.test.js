@@ -138,9 +138,21 @@ module.exports = {
         { attributes: { PARCEL_ID: '400000004', OWN_TYPE: 'Private', PARCEL_ADD: '950 Testcase Ave', PARCEL_CITY: 'Ogden', PARCEL_ZIP: '84404' }, geometry: null },
       ];
       countResponse = { count: 1 };
+      // A second addressless contact, INTERNAL (an agency PM, say) — this one
+      // must NOT appear in the warning. An internal team member is essentially
+      // never who you'd meet walking a construction route, and a real project
+      // can carry dozens of internal rows with no address on file simply
+      // because nobody ever puts one on a colleague's record; flagging those
+      // would bury the genuinely useful signal in noise.
       const addressless = await app.page.evaluate(async (a) => {
-        _syncCache.stakeholders = [{ id: 'fix2', firstName: 'Bob', lastName: 'Nobody', org: '', address: '', isMaster: false }];
-        _syncCache.project_stakeholders = [{ id: 'fixps2', projectId: a.pid, stakeholderId: 'fix2' }];
+        _syncCache.stakeholders = [
+          { id: 'fix2', firstName: 'Bob', lastName: 'Nobody', org: '', address: '', isMaster: false },
+          { id: 'fix3', firstName: 'Dana', lastName: 'Internal', org: '', address: '', isMaster: false },
+        ];
+        _syncCache.project_stakeholders = [
+          { id: 'fixps2', projectId: a.pid, stakeholderId: 'fix2', stakeholderRole: 'External' },
+          { id: 'fixps3', projectId: a.pid, stakeholderId: 'fix3', stakeholderRole: 'Internal' },
+        ];
         document.getElementById('mv-poly-panel').remove();
         document.body.insertAdjacentHTML('beforeend', '<div id="mv-poly-panel" style="display:block"></div>');
         await _mvDiscoverContacts(a.pts);
@@ -148,7 +160,8 @@ module.exports = {
       }, { pid: projId, pts: box });
       t.eq(addressless.candidates.length, 1, 'the addressless contact does NOT suppress the candidate — there is nothing to match it against');
       t.ok(/950 Testcase Ave/.test(addressless.html), 'the candidate still appears');
-      t.ok(/Bob Nobody/.test(addressless.html), 'the addressless existing contact is named in a warning, so the reviewer can check by eye');
+      t.ok(/Bob Nobody/.test(addressless.html), 'the addressless EXTERNAL contact is named in a warning, so the reviewer can check by eye');
+      t.ok(!/Dana Internal/.test(addressless.html), 'the addressless INTERNAL contact is left out — noise, not signal, for a canvass');
       t.ok(/no address on file/.test(addressless.html), 'the warning explains why the name is listed');
       await app.page.evaluate(() => { _syncCache.stakeholders = []; _syncCache.project_stakeholders = []; }); // reset before the shared scenarios below
 

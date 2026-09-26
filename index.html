@@ -19473,12 +19473,21 @@ function _mvHasStreetAddress(addr){
 // the parcel importer's and UGRC's own exact-match-only rules), hand the
 // reviewer a short, honest list of who to check the checklist against before
 // creating a new placeholder.
+// EXTERNAL only — an internal team member (agency PM, engineering staff) is
+// essentially never who you'd meet walking a construction route, so flagging
+// them here is pure noise on top of the genuine signal: a real 63-contact
+// project can carry dozens of internal rows with no address on file simply
+// because nobody ever puts one on a colleague's record. `stakeholderRole`
+// lives on the project LINK, not the stakeholder itself, and blank/unset
+// defaults to External — the same convention the contact list's own role
+// badge already uses (`(lk.stakeholderRole||'External')`).
 function _mvAddresslessContacts(projId){
-  var linkedIds = new Set((DB.get('project_stakeholders')||[])
+  var roleByStake = new Map((DB.get('project_stakeholders')||[])
     .filter(function(ps){ return String(ps.projectId)===String(projId); })
-    .map(function(ps){ return String(ps.stakeholderId); }));
+    .map(function(ps){ return [String(ps.stakeholderId), ps.stakeholderRole || 'External']; }));
   return (DB.get('stakeholders')||[]).filter(function(s){
-    return linkedIds.has(String(s.id)) && !String(s.address||'').trim();
+    var role = roleByStake.get(String(s.id));
+    return role && role !== 'Internal' && !String(s.address||'').trim();
   });
 }
 

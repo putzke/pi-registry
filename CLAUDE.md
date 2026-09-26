@@ -2716,7 +2716,7 @@ different things — acquisition status and notice dates have no meaning here.
   here, squarely inside that failure's risk window, not a hypothetical one.
   Mirrors the Bulk-add grid's own stakeholder-creation loop for exactly this
   reason.
-- Guarded by `test/tests/52-draw-area-contacts.test.js` (43 checks): both
+- Guarded by `test/tests/52-draw-area-contacts.test.js` (44 checks): both
   layer-gating guards (no project, parcels-only) make zero network calls; an
   address with an existing contact is excluded from the checklist; the
   10-per-capture cap trims the list and says so; the over-threshold and
@@ -2784,6 +2784,19 @@ real canvass:**
   an automated filter. If a duplicate slips through anyway, the fix is
   manual — copy the address onto the real contact, delete the placeholder —
   not worth building merge tooling for a 10-per-capture feature.
+  **EXTERNAL only, found live the same day.** On a real 63-contact project
+  the first version of this list came back 48 names — nearly the whole
+  roster — because internal team members (agency PMs, engineering staff)
+  almost never have an address on file either, for the ordinary reason that
+  nobody bothers to add one for a colleague. An internal contact is
+  essentially never who you'd meet walking a construction route, so
+  including them buried the genuinely useful signal in noise a reviewer
+  would just learn to skip past. `stakeholderRole` lives on the
+  `pi_project_stakeholders` LINK, not the stakeholder record itself (a person
+  can be Internal on one project and External on another), and blank/unset
+  defaults to External — the same convention the contact list's own role
+  badge already uses (`(lk.stakeholderRole||'External')`). `_mvAddresslessContacts`
+  now excludes `stakeholderRole==='Internal'` before checking the address.
 
 ---
 

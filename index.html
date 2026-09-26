@@ -19456,6 +19456,32 @@ function _mvContactCandidateDiff(features, projId){
   });
 }
 
+// A UGRC record with no PARCEL_ADD on file joins down to just "City, Zip" —
+// unwalkable, and creating a "contact" nobody can locate defeats the point of
+// this feature. Real US situs addresses start with a house number; anything
+// that doesn't is dropped before it ever reaches the checklist, the same
+// say-what-can't-be-placed instinct `_mvShowNoLoc` already applies to parcels
+// with no location at all.
+function _mvHasStreetAddress(addr){
+  return /^\d/.test(String(addr||'').trim());
+}
+
+// The OTHER half of the "I might already have this contact" gap an address
+// diff can never catch: a real contact with no address on file yet has
+// nothing for `_mvContactCandidateDiff` to match against. Rather than guess a
+// name match (this app never fuzzy-matches a compliance-adjacent link — see
+// the parcel importer's and UGRC's own exact-match-only rules), hand the
+// reviewer a short, honest list of who to check the checklist against before
+// creating a new placeholder.
+function _mvAddresslessContacts(projId){
+  var linkedIds = new Set((DB.get('project_stakeholders')||[])
+    .filter(function(ps){ return String(ps.projectId)===String(projId); })
+    .map(function(ps){ return String(ps.stakeholderId); }));
+  return (DB.get('stakeholders')||[]).filter(function(s){
+    return linkedIds.has(String(s.id)) && !String(s.address||'').trim();
+  });
+}
+
 // getAnonLabel() counts what is already STORED so a batch never restarts its
 // numbering at 1 — same rule here: several draws on the same project must not
 // both mint a "Property 1", which would be two different houses sharing one
@@ -19472,11 +19498,19 @@ function _mvNextPropertyNum(projId){
   return maxN + 1;
 }
 
-function _mvContactCandidatesHTML(list, capped){
+function _mvContactCandidatesHTML(list, capped, noStreetCount, addresslessNames){
   var esc = escHtml;
+  addresslessNames = addresslessNames || [];
+  var shownNames = addresslessNames.map(dispName).slice(0, 6);
+  var extraNames = addresslessNames.length - shownNames.length;
   return '<div style="font-size:12px;font-weight:600;margin-bottom:4px">New contacts — draw area (' + list.length + ')</div>'
     + '<div style="font-size:11px;color:var(--fog);margin-bottom:4px">Situs addresses inside this shape with no linked contact yet — up to ' + DRAW_AREA_CONTACT_MAX + ' per capture.</div>'
+    + (noStreetCount ? '<div style="font-size:10.5px;color:var(--fog);margin-bottom:4px">' + noStreetCount + ' more in this shape ' + (noStreetCount!==1?'have':'has') + ' no street address on county record and ' + (noStreetCount!==1?'were':'was') + ' left out — nothing to canvass there.</div>' : '')
     + (capped ? '<div style="font-size:10.5px;color:var(--amber);margin-bottom:4px">Showing the first ' + DRAW_AREA_CONTACT_MAX + ' — draw a smaller area to review the rest.</div>' : '')
+    + (addresslessNames.length ? '<div style="font-size:10.5px;color:var(--amber);background:rgba(217,164,65,.08);border:1px solid rgba(217,164,65,.25);border-radius:6px;padding:6px 8px;margin-bottom:6px;line-height:1.4">⚠ '
+        + addresslessNames.length + ' contact' + (addresslessNames.length!==1?'s':'') + ' already on this project ' + (addresslessNames.length!==1?'have':'has')
+        + ' no address on file — check the list below against ' + (addresslessNames.length!==1?'them':'this name') + ' first: '
+        + shownNames.map(esc).join(', ') + (extraNames>0?' +' + extraNames + ' more':'') + '</div>' : '')
     + '<div style="display:flex;gap:10px;margin-bottom:4px">'
       + '<span onclick="_mvSetAllContacts(true)" style="font-size:11px;color:var(--sky-lt);cursor:pointer">Check all</span>'
       + '<span onclick="_mvSetAllContacts(false)" style="font-size:11px;color:var(--sky-lt);cursor:pointer">Uncheck all</span>'
@@ -19540,14 +19574,28 @@ async function _mvDiscoverContacts(path){
   }
   if (!document.body.contains(section)) return;
 
-  var candidates = _mvContactCandidateDiff(result.features, projId);
+  var diffed = _mvContactCandidateDiff(result.features, projId);
+  var candidates = diffed.filter(function(f){ return _mvHasStreetAddress(f.address); });
+  var noStreetCount = diffed.length - candidates.length;
+  window._mvContactNoStreetCount = noStreetCount;
   if (!candidates.length) {
-    section.remove(); // every address in the shape already has a contact — nothing to review
+    // Every match already has a contact — quiet, matching Phase 2b's own
+    // "already tracked" removal. But if the ONLY reason nothing is offered is
+    // that every leftover record has no street address, that's worth saying —
+    // silently removing the section there would look identical to "nothing
+    // here" when the real story is "county GIS has nothing to canvass by".
+    if (noStreetCount) {
+      section.innerHTML = '<div style="font-size:11px;color:var(--fog)">' + noStreetCount + ' parcel' + (noStreetCount!==1?'s':'')
+        + ' in this shape ' + (noStreetCount!==1?'have':'has') + ' no street address on county record — nothing to canvass.</div>';
+    } else {
+      section.remove();
+    }
     return;
   }
   var capped = candidates.length > DRAW_AREA_CONTACT_MAX;
   window._mvContactCandidates = candidates.slice(0, DRAW_AREA_CONTACT_MAX);
-  section.innerHTML = _mvContactCandidatesHTML(window._mvContactCandidates, capped);
+  var addressless = _mvAddresslessContacts(projId);
+  section.innerHTML = _mvContactCandidatesHTML(window._mvContactCandidates, capped, noStreetCount, addressless);
 }
 
 async function _mvCreateContactCandidates(){
@@ -19619,8 +19667,11 @@ async function _mvCreateContactCandidates(){
 
   window._mvContactCandidates = list.filter(function(f){ return checked.indexOf(f)===-1; });
   if (section) {
+    // Addressless-contact list recomputed fresh rather than reused from
+    // before creation — the whole point of the note is to reflect the
+    // project's current state, not whatever it was a moment ago.
     section.innerHTML = window._mvContactCandidates.length
-      ? _mvContactCandidatesHTML(window._mvContactCandidates, false)
+      ? _mvContactCandidatesHTML(window._mvContactCandidates, false, window._mvContactNoStreetCount, _mvAddresslessContacts(projId))
       : '<div style="font-size:11px;color:var(--green)">' + created + ' placeholder contact' + (created!==1?'s':'') + ' created, tagged Needs review.</div>'
         + '<button class="btn btn-sm" style="margin-top:6px;width:100%" onclick="setView(\'stakeholders\')">Open project contacts</button>';
   }

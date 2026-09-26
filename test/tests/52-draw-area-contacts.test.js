@@ -94,6 +94,64 @@ module.exports = {
       t.ok(!/100 Testcase Ave/.test(found.html), 'the address with an existing contact is NOT listed');
       t.ok(/up to 10 per capture/.test(found.html), 'the panel states the per-capture cap');
 
+      // ── a UGRC record with no street address is filtered out, not offered ──
+      // A blank PARCEL_ADD joins down to just "City, Zip" — unwalkable, and
+      // creating a "contact" nobody can locate defeats the point of this
+      // feature. Mixed with one genuine candidate so the filter's effect is
+      // unambiguous rather than a coincidental empty result.
+      queryFeatures = [
+        { attributes: { PARCEL_ID: '400000001', OWN_TYPE: 'Private', PARCEL_ADD: '', PARCEL_CITY: 'Plain City', PARCEL_ZIP: '84404' }, geometry: null },
+        { attributes: { PARCEL_ID: '400000002', OWN_TYPE: 'Private', PARCEL_ADD: '900 Testcase Ave', PARCEL_CITY: 'Ogden', PARCEL_ZIP: '84404' }, geometry: null },
+      ];
+      countResponse = { count: 2 };
+      const noStreet = await app.page.evaluate(async (a) => {
+        _syncCache.stakeholders = [];
+        _syncCache.project_stakeholders = [];
+        document.getElementById('mv-poly-panel').remove();
+        document.body.insertAdjacentHTML('beforeend', '<div id="mv-poly-panel" style="display:block"></div>');
+        await _mvDiscoverContacts(a.pts);
+        return { html: document.getElementById('mv-poly-contacts').innerHTML, candidates: window._mvContactCandidates };
+      }, { pid: projId, pts: box });
+      t.eq(noStreet.candidates.length, 1, 'the streetless record was dropped, leaving only the genuine candidate');
+      t.ok(/900 Testcase Ave/.test(noStreet.html), 'the genuine candidate is still offered');
+      t.ok(!/Plain City/.test(noStreet.html), 'the "City, Zip only" record never appears as a checkbox row');
+      t.ok(/1 more in this shape/.test(noStreet.html), 'the panel says one record was left out for having no street address');
+
+      // ── when EVERY leftover record has no street address, say so — never silently empty ─
+      queryFeatures = [
+        { attributes: { PARCEL_ID: '400000003', OWN_TYPE: 'Private', PARCEL_ADD: '', PARCEL_CITY: 'Plain City', PARCEL_ZIP: '84404' }, geometry: null },
+      ];
+      countResponse = { count: 1 };
+      const allNoStreet = await app.page.evaluate(async (a) => {
+        document.getElementById('mv-poly-panel').remove();
+        document.body.insertAdjacentHTML('beforeend', '<div id="mv-poly-panel" style="display:block"></div>');
+        await _mvDiscoverContacts(a.pts);
+        return document.getElementById('mv-poly-contacts').innerHTML;
+      }, { pid: projId, pts: box });
+      t.ok(/nothing to canvass/.test(allNoStreet), 'a shape with only streetless records explains why, rather than showing nothing at all');
+
+      // ── an existing contact with NO address yet is flagged, not silently missed ─
+      // The address diff can never catch this case (there's no address to
+      // match against), so the panel hands the reviewer an honest list of who
+      // to check instead of guessing a name match.
+      queryFeatures = [
+        { attributes: { PARCEL_ID: '400000004', OWN_TYPE: 'Private', PARCEL_ADD: '950 Testcase Ave', PARCEL_CITY: 'Ogden', PARCEL_ZIP: '84404' }, geometry: null },
+      ];
+      countResponse = { count: 1 };
+      const addressless = await app.page.evaluate(async (a) => {
+        _syncCache.stakeholders = [{ id: 'fix2', firstName: 'Bob', lastName: 'Nobody', org: '', address: '', isMaster: false }];
+        _syncCache.project_stakeholders = [{ id: 'fixps2', projectId: a.pid, stakeholderId: 'fix2' }];
+        document.getElementById('mv-poly-panel').remove();
+        document.body.insertAdjacentHTML('beforeend', '<div id="mv-poly-panel" style="display:block"></div>');
+        await _mvDiscoverContacts(a.pts);
+        return { html: document.getElementById('mv-poly-contacts').innerHTML, candidates: window._mvContactCandidates };
+      }, { pid: projId, pts: box });
+      t.eq(addressless.candidates.length, 1, 'the addressless contact does NOT suppress the candidate — there is nothing to match it against');
+      t.ok(/950 Testcase Ave/.test(addressless.html), 'the candidate still appears');
+      t.ok(/Bob Nobody/.test(addressless.html), 'the addressless existing contact is named in a warning, so the reviewer can check by eye');
+      t.ok(/no address on file/.test(addressless.html), 'the warning explains why the name is listed');
+      await app.page.evaluate(() => { _syncCache.stakeholders = []; _syncCache.project_stakeholders = []; }); // reset before the shared scenarios below
+
       // ── check all / uncheck all ─────────────────────────────────────────
       const toggled = await app.page.evaluate(() => {
         _mvSetAllContacts(false);

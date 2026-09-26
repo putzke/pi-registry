@@ -2716,7 +2716,7 @@ different things — acquisition status and notice dates have no meaning here.
   here, squarely inside that failure's risk window, not a hypothetical one.
   Mirrors the Bulk-add grid's own stakeholder-creation loop for exactly this
   reason.
-- Guarded by `test/tests/52-draw-area-contacts.test.js` (34 checks): both
+- Guarded by `test/tests/52-draw-area-contacts.test.js` (43 checks): both
   layer-gating guards (no project, parcels-only) make zero network calls; an
   address with an existing contact is excluded from the checklist; the
   10-per-capture cap trims the list and says so; the over-threshold and
@@ -2726,6 +2726,64 @@ different things — acquisition status and notice dates have no meaning here.
   project rather than restarting; the "Needs review" badge and callout
   banner render on the created contact; and `_mvDrawFinish` actually wires
   discovery in.
+
+**Two gaps found live, both fixed the same day, before this ever shipped to a
+real canvass:**
+- **A UGRC record with no `PARCEL_ADD` on file joins down to just "City,
+  Zip"** (`_ugrcQueryPolygon`'s `[PARCEL_ADD, PARCEL_CITY, PARCEL_ZIP]
+  .filter(Boolean).join(', ')` — a blank street just drops out). Seen live: a
+  drawn shape offered several checklist rows reading only "Plain City,
+  84404" — real UGRC parcels (vacant land, an ag parcel, a common/HOA strip),
+  just none with a county-assigned street address. A placeholder contact for
+  an address nobody can walk up to defeats the point of the feature, so
+  `_mvHasStreetAddress(addr)` (`/^\d/.test(...)` — a real US situs address
+  starts with a house number) filters those out of `_mvDiscoverContacts`
+  before they ever reach the checklist, the same say-what-can't-be-placed
+  instinct `_mvShowNoLoc` already applies to parcels the map can't locate at
+  all. If EVERY leftover record in the shape fails this check, the section
+  says so explicitly ("N parcels … have no street address … nothing to
+  canvass") rather than silently disappearing, which would look identical to
+  "every address already has a contact."
+  **Deliberately scoped to contacts only — confirmed explicitly, not
+  guessed.** `_mvHasStreetAddress` is called from exactly one place,
+  `_mvDiscoverContacts`. `_mvDiscoverUntracked` (the untracked-PARCELS
+  section right next to it) is untouched and still offers a streetless UGRC
+  record for import — a vacant or unsubdivided parcel with no street address
+  is a completely normal, trackable ROW/easement record, coordinates-only,
+  which is the entire reason the Parcels module already treats coordinates
+  as first-class (`_parcHasLoc` = coordinates OR situs address — a street
+  address was never required for a PARCEL). The two sections read the same
+  UGRC data and answer differently on purpose: a house needs a street
+  address to be worth knocking on; a parcel does not need one to be worth
+  tracking.
+- **The candidate diff can never catch the OTHER half of the "might already
+  have this contact" problem.** Raised live, working through the feature:
+  what if the project already has a real contact — name, phone, email all
+  captured — for one of these houses, but their `address` field was simply
+  never filled in? `_mvContactCandidateDiff` only excludes a candidate when
+  an *existing* contact's address matches; a blank address has nothing to
+  match against, so a duplicate placeholder was a real, silent risk.
+  **Not solved by better matching** — deliberately: there is no reliable
+  signal to connect a bare situs address to a nameless-address contact
+  without guessing by name, and this app has repeatedly rejected fuzzy
+  matching for exactly this class of link (parcel-import owner attachment,
+  UGRC APN matching — both exact-match-only, a human resolves the rest).
+  A hard usage fence was considered and rejected too — gating the feature to
+  "before this project has any contacts" would only ever allow ONE capture
+  per project, contradicting `_mvNextPropertyNum`'s own design for repeat
+  visits, and a "before any interactions" version doesn't close the gap at
+  all (importing known contacts via Bulk-add first, then canvassing, is a
+  completely normal sequence with zero interactions logged).
+  `_mvAddresslessContacts(projId)` instead hands the reviewer a short, honest
+  list — every project contact with a blank `address` — rendered as an amber
+  warning inside the SAME checklist panel ("N contacts already on this
+  project have no address on file — check the list below against them
+  first: <names>"), so the one person who can actually make that judgment
+  call (do I recognize this name) sees it right where the decision is being
+  made. It does not suppress or alter any candidate; it is visibility, not
+  an automated filter. If a duplicate slips through anyway, the fix is
+  manual — copy the address onto the real contact, delete the placeholder —
+  not worth building merge tooling for a 10-per-capture feature.
 
 ---
 

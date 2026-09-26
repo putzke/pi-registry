@@ -2319,6 +2319,52 @@ A configurable acreage threshold prevents accidental queries of enormous areas
 
 ---
 
+### A project with nothing plottable yet showed no map at all (Sep 2026)
+Found live, right after building draw-area placeholder contacts: open the Map
+view for a project with zero geocoded contacts AND zero located parcels (a
+brand-new canvassing project, say) and the map area was a blank dark box —
+not a Google Map, just the empty `#mv-map` div with a "No parcels on this
+project yet." message floating over nothing. Worse, "Draw area" — the one
+control that lets you discover parcels or contacts from a drawn shape in the
+first place, i.e. exactly the workflow for a project with nothing tracked
+yet — refused outright with "Plot the map first," a dead end for its own
+primary use case.
+
+Three separate early returns, all before `window._mvMap` was ever
+constructed:
+1. `renderMapView` returned before calling `loadGoogleMaps()`/`_mvGeocode()`
+   at all, whenever `withAddr.length===0 && parcPlot.length===0`.
+2. `_mvGeocode`'s own "nothing could be located" guard returned before ever
+   calling `_mvRenderMarkers`, once geocoding (of nothing) finished.
+3. `_mvRenderMarkers` itself bailed with `if (!anchor) return` — no first
+   plotted point to center on, no map, full stop.
+
+Fixed by falling back to **`UTAH_MAP_CENTER`** (`{lat:39.3, lng:-111.6}`,
+zoom 7 — a statewide view) at all three points instead of returning. Every
+project in this app is UDOT/Utah county work, so a whole-US default (raised
+as the first idea) would only make the user zoom in from the wrong place
+every time; Utah-statewide is the genuinely useful default here. A real
+plotted point still zooms in close (zoom 11, unchanged) — the fallback only
+ever widens the view when there is truly nothing to anchor on. The "No
+parcels on this project yet" message stays visible over the live map
+(`#mv-loading` is `pointer-events:none`, so it doesn't block drawing) rather
+than being replaced by a generic geocode-failure wording — that wording is
+now reserved for when something real was actually attempted and failed to
+locate, which is a different, genuine finding.
+
+Guarded by `test/tests/53-map-empty-fallback.test.js` (14 checks). Google
+Maps cannot load in the harness at all (see the standing note above), so —
+same technique `test/tests/19-map-parcels.test.js` already uses — this stubs
+`window.google.maps` completely and verifies the CONTROL FLOW: `loadGoogleMaps()`
+is actually reached (fix 1), `_mvGeocode` with nothing to geocode still
+constructs a map and preserves the accurate empty-project message rather than
+overwriting it (fix 2), a genuine locate failure keeps ITS OWN accurate
+message, `_mvRenderMarkers` centers on Utah at zoom 7 with no anchor but
+still zooms to 11 on a real one (fix 3, both directions), and `window._mvMap`
+ends up truthy — the exact precondition `_mvDrawPoly` was failing on.
+
+---
+
 ### PHASE 1 — Internal polygon query — **BUILT (Aug 2026)**
 "Draw area" on the Map toolbar → `_mvDrawPoly()` → shape → `#mv-poly-panel` over
 the map. Covered by `test/tests/42-map-polygon.test.js` (58 checks).

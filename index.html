@@ -16427,16 +16427,18 @@ function renderMapView(m) {
     return;
   }
 
+  // Nothing plottable is NOT a reason to withhold the map itself — Draw area
+  // needs a live map object, and a project with zero tracked/located records
+  // is exactly the case that feature (and the UGRC "Untracked parcels"/"New
+  // contacts" discovery sections beside it) exists for: draw the shape
+  // first, populate the project second. The message still explains why the
+  // map is empty; it just no longer stops the map from loading underneath it.
   if (withAddr.length === 0 && parcPlot.length === 0) {
     var ld1 = document.getElementById('mv-loading');
-    ld1.textContent = showP && !showC
+    if (ld1) ld1.textContent = showP && !showC
       ? (parcScoped.length === 0 ? 'No parcels on this project yet.'
                                  : 'No parcels match the current filters, or none has a situs address or coordinates.')
       : 'Nothing matches the current filters, or nothing has an address.';
-    // Even with nothing plottable, name the parcels that cannot be placed —
-    // that is a finding, not an empty result.
-    _mvShowNoLoc(parcNoLoc);
-    return;
   }
 
   // Named before any geocoding, since "no location on record" is known from the
@@ -16636,7 +16638,16 @@ async function _mvGeocode(filtered, projId, parcels) {
   }).filter(Boolean);
 
   if (geocoded.length === 0 && parcGeo.length === 0) {
-    if (loading) { loading.style.display='flex'; loading.textContent='Nothing could be located.'; }
+    // Still initialize the map even with nothing to plot — see the comment
+    // in renderMapView. Only overwrite its message with a geocode-FAILURE
+    // wording when something was actually attempted and failed; an empty
+    // project isn't a locate failure, and renderMapView already set the
+    // accurate "No parcels on this project yet" text for that case.
+    _mvRenderMarkers([], []);
+    if (loading) {
+      loading.style.display = 'flex';
+      if (filtered.length > 0 || parcels.length > 0) loading.textContent = 'Nothing could be located.';
+    }
     _mvShowNoLoc(window._mvParcNoLoc);
     return;
   }
@@ -16842,6 +16853,12 @@ function _polyAreaAcres(path) {
 // state is nearly always a slip, and answering it with 200 contacts is not
 // useful. Configurable rather than hardcoded at the call site.
 var POLY_AREA_WARN_ACRES = 500;
+
+// Fallback map center for a project with nothing plottable yet (no geocoded
+// contacts, no located parcels). Every project in this app is UDOT/Utah
+// county work, so a statewide Utah view is a far more useful default than a
+// blank div or a whole-country view the user has to zoom in from every time.
+var UTAH_MAP_CENTER = { lat: 39.3, lng: -111.6 };
 
 // Query what is PLOTTED, not what is stored. Everything on the map has already
 // been geocoded and cached, so this costs no API call and can never bill —
@@ -17129,13 +17146,16 @@ function _mvRenderMarkers(geocoded, parcGeo) {
   if (!mapEl) return;
   var colorBy = S.mapColorBy || 'support';
   parcGeo = parcGeo || [];
+  // Nothing to plot yet falls back to a statewide Utah view rather than
+  // withholding the map object entirely — see the comment in renderMapView.
   var anchor = geocoded[0] || parcGeo[0];
-  if (!anchor) return;
+  var hasAnchor = !!anchor;
+  if (!anchor) anchor = UTAH_MAP_CENTER;
 
   // Init or reuse map instance
   if (!window._mvMap || !mapEl.contains(window._mvMap.getDiv())) {
     window._mvMap = new window.google.maps.Map(mapEl, {
-      zoom: 11,
+      zoom: hasAnchor ? 11 : 7,
       center: {lat: anchor.lat, lng: anchor.lng},
       mapTypeId: 'roadmap',
       styles: [

@@ -15579,7 +15579,7 @@ function showStakeholderMap(projectId) {
 async function _smapGeocodeAndRender(projectId, projectName, stakes, psLinks) {
   // Wait for Google Maps to be ready (max 5 seconds)
   let waited = 0;
-  while (!window.google || !window.google.maps) {
+  while (!window._googleMapsReady) {
     await new Promise(r => setTimeout(r, 200));
     waited += 200;
     if (waited > 5000) {
@@ -16530,9 +16530,16 @@ async function _mvGeocode(filtered, projId, parcels) {
   var mapEl   = document.getElementById('mv-map');
   if (!mapEl) return;
 
-  // Wait for Google Maps
+  // Wait for Google Maps. window.google.maps exists as a stub the instant the
+  // loader script starts executing (loading=async bootstrap) — well before
+  // Geocoder and the rest of the namespace are actually populated. Poll
+  // _googleMapsReady instead, which onGoogleMapsReady only sets once Google's
+  // own callback fires, guaranteeing the library is genuinely ready (Sep 2026:
+  // this exact race threw "Geocoder is not a constructor" on a project's
+  // first Map-view visit, and worked the second time because the script had
+  // finished loading in the background by then).
   var waited = 0;
-  while (!window.google || !window.google.maps) {
+  while (!window._googleMapsReady) {
     await new Promise(function(r){setTimeout(r,200);});
     waited += 200;
     if (waited > 6000) {
@@ -17380,7 +17387,7 @@ function generateMapReport() {
 // Variant of _smapGeocodeAndRender that targets a specific container id
 async function _smapGeocodeAndRenderInEl(containerId, loadingId, errorsId, projectId, stakes) {
   var waited = 0;
-  while (!window.google || !window.google.maps) {
+  while (!window._googleMapsReady) {
     await new Promise(function(r){ setTimeout(r, 200); });
     waited += 200;
     if (waited > 5000) {

@@ -21,6 +21,28 @@ module.exports = {
       await app.page.waitForTimeout(200);
       t.ok(await app.page.$('button[onclick="openParcelModal()"]'), 'the Parcels view renders');
 
+      // ── empty state offers the bulk/corridor path, not just "Add parcel" ──
+      // SR-154 has zero parcels at this point — the exact "brand-new project"
+      // case the CTA exists for (see the CLAUDE.md note on this feature).
+      const emptyState = await app.page.evaluate(() => ({
+        hasCta: !!document.querySelector('button[onclick="_parcGoToMapDraw()"]'),
+        text: document.querySelector('.tbl-wrap').textContent,
+      }));
+      t.ok(emptyState.hasCta, 'the empty state offers "Draw area on the map"');
+      t.ok(/Draw the area on the map/.test(emptyState.text), 'and explains why, for a corridor/block');
+
+      const wentToMap = await app.page.evaluate(() => {
+        _parcGoToMapDraw();
+        return { view: S.view, layer: S.mapLayer, project: S.projectFilter };
+      });
+      t.eq(wentToMap.view, 'map', 'the CTA navigates to the Map view');
+      t.eq(wentToMap.layer, 'parcels', 'with the Parcels layer already selected');
+      t.eq(String(wentToMap.project), projId, 'and the same project carried over');
+
+      // Back to the Parcels view for the rest of this test.
+      await app.page.evaluate(id => { S.projectFilter = id; setView('parcels'); }, projId);
+      await app.page.waitForTimeout(200);
+
       const addParcel = (num, extra) => app.page.evaluate(async a => {
         openParcelModal();
         document.getElementById('f-pcp').value = a.pid;

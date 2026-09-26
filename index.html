@@ -18707,6 +18707,19 @@ function _parcHasLoc(p){
   return !!((p.latitude && p.longitude) || (p.situsAddress||'').trim());
 }
 
+// The bulk/corridor way to populate a project's parcels: draw a shape on the
+// Map view and let the "Untracked parcels — UGRC" section (Phase 2b) find
+// every real county-record parcel inside it, rather than adding them one at
+// a time here. Offered from the Parcels view's own empty state, since a
+// brand-new project's Parcels list otherwise only points at "+ Add parcel" —
+// correct for a single known parcel, but the wrong tool for "capture
+// everything along this corridor."
+function _parcGoToMapDraw(){
+  S.mapLayer = 'parcels';
+  setView('map');
+  mapSelectProject(S.projectFilter);
+}
+
 function renderParcels(el){
   const projs=DB.get('projects')||[];
   const projF=S.projectFilter||'';
@@ -18779,7 +18792,11 @@ function renderParcels(el){
           <th style="width:100px">Notice sent</th>
           <th style="width:60px"></th>
         </tr></thead>
-        <tbody>${list.length===0?`<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--fog)">${scoped.length===0?(projF?'No parcels on this project yet. Add the first with the button above.':'No parcels tracked yet.'):'No parcels match your filters.'}</td></tr>`
+        <tbody>${list.length===0?`<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--fog)">
+          <div>${scoped.length===0?(projF?'No parcels on this project yet. Add the first with the button above.':'No parcels tracked yet.'):'No parcels match your filters.'}</div>
+          ${scoped.length===0&&projF?`<div style="font-size:11px;color:var(--slate);margin-top:8px">Tracking a corridor or a whole block? Draw the area on the map and pull every parcel county records have there.</div>
+          <button class="btn btn-sm" style="margin-top:10px" onclick="_parcGoToMapDraw()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 14s5-4.5 5-8a5 5 0 0 0-10 0c0 3.5 5 8 5 8z"/><circle cx="8" cy="6" r="1.5"/></svg> Draw area on the map</button>`:''}
+        </td></tr>`
         :list.map(p=>{
           const owners=_parcOwners(p.id);
           const loc=p.situsAddress||((p.latitude&&p.longitude)?`${p.latitude}, ${p.longitude}`:'');

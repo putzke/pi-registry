@@ -2363,6 +2363,18 @@ message, `_mvRenderMarkers` centers on Utah at zoom 7 with no anchor but
 still zooms to 11 on a real one (fix 3, both directions), and `window._mvMap`
 ends up truthy — the exact precondition `_mvDrawPoly` was failing on.
 
+**The Parcels view's own empty state now points at the fix (Sep 2026).**
+Before this, a brand-new project's Parcels list offered exactly one path —
+"+ Add parcel," correct for a single known parcel but the wrong tool for
+"capture everything along this corridor." `_parcGoToMapDraw()` — a "Draw
+area on the map" button shown only when the project has zero parcels —
+switches to the Parcels map layer, navigates to the Map view, and carries
+the same project over, landing the user directly on the now-always-live map
+from the fix above, ready to draw. Covered by the addition to
+`test/tests/13-parcels.test.js` (5 checks): the CTA renders on a genuinely
+empty project and actually sets `S.view`/`S.mapLayer`/`S.projectFilter`
+correctly when clicked.
+
 ---
 
 ### PHASE 1 — Internal polygon query — **BUILT (Aug 2026)**

@@ -156,6 +156,54 @@ pass. Verified against the actual bug by reverting the fix locally and
 confirming the test fails with exactly the reported symptom before
 re-applying it.
 
+### The deliverable +/- counter could set a status it never reverted (Sep 2026)
+Reported live on **SR-201; 4 Structures Preservation**, the "Final PI closeout
+report" row: 1 contracted, 0 delivered, progress bar correctly at 0% — and the
+status badge reading **Complete**.
+
+`renderDeliverables()`'s progress bar is never a stored field — it is
+recomputed fresh from `d.contractedQty`/`d.deliveredCount` on every render, so
+it always told the truth. `status`, on the other hand, IS stored, and `adjDel
+(id, delta)` (the `+`/`-` buttons) set it with a ternary that only covered two
+of three directions:
+```js
+const newStatus = pct>=100 ? 'Complete' : newCount>0 ? 'In progress' : all[i].status;
+```
+Click "+" on a qty-1 milestone: count goes to 1, `pct` hits 100, status is set
+to `'Complete'` — correct. Click "-" right after: count goes back to 0, but
+the third branch just **kept whatever status was already there** — it never
+had an "and revert" case. `deliveredCount:0` with `status:'Complete'` is
+exactly the screenshot: a live, and false, claim that a report had been
+delivered.
+
+**The fix cannot just always reset to `'Not started'` at count zero** — a
+deliverable can independently be `'On hold'` or `'Cancelled'` (set via the
+Edit modal's own status dropdown, nothing to do with the counter), and a
+delivered count of zero says nothing about whether either of those is wrong.
+Overwriting them on every stray `-` click would be a second, opposite bug.
+`adjDel` now only reverts to `'Not started'` when the count lands on zero
+**and** the existing status is one this same function could have set
+(`'Complete'` or `'In progress'`) — never `'On hold'`/`'Cancelled'`, which
+came from the modal and must survive a counter click untouched.
+
+**This app has no live path to fix the actual corrupted row** — the sandbox
+that builds this has no network route to `*.supabase.co` (see the UGRC and
+Storage RLS notes elsewhere in this file for the same constraint). The
+production "Final PI closeout report" row needs a manual correction — open
+it in the Edit modal and set Status back to "Not started" — once this fix is
+deployed; the fix only stops it happening again, it does not retroactively
+correct data already written wrong.
+
+Guarded by `test/tests/54-deliverable-status-revert.test.js` (19 checks): the
+exact reported shape (qty-1, `+` then `-`, Complete reverts to Not started);
+the same revert for a partial-then-emptied `'In progress'` count; `'On hold'`
+and `'Cancelled'` both surviving an `adjDel` call that leaves the count at
+zero; and a multi-step count-up/count-down sequence (`Complete` → `In
+progress` → `Not started`) landing on the correct status at every step, not
+just the two endpoints. `markDelDone`/`cycleDelStatus`, two adjacent-looking
+functions, are dead code — grepped and confirmed called from no `onclick`
+anywhere — and were left untouched; they were not implicated in this bug.
+
 ### Events do NOT create follow-ups (Aug 2026)
 The Edit-event modal's "Action items" textarea used to create a `pi_interactions`
 row per line. Removed — the field is now documentation on the event record only.

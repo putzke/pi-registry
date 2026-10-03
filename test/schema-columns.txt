@@ -1,5 +1,6 @@
 pi_client_access|id:bigint, user_id:uuid, project_id:bigint, org_id:bigint, created_at:timestamptz, email:text
 pi_client_summaries|id:bigint, project_id:bigint, content_recent:text, content_full:text, period_start:date, period_end:date, published_at:timestamptz, published_by:text
+pi_closeouts|id:bigint, project_id:bigint, report_type:text, label:text, intake:jsonb, created_at:timestamptz, created_by:text, updated_at:timestamptz, updated_by:text
 pi_comment_periods|id:text, project_id:text, title:text, description:text, start_date:date, end_date:date, status:text, created_at:timestamptz, period_type:text, venue:text, hearing_date:date, first_ad_date:date, second_ad_date:date, federal_register_date:date
 pi_commitments|id:bigint, project_id:bigint, stakeholder_id:bigint, commitment:text, made_to:text, made_by:text, date_made:date, due_date:date, category:text, status:text, fulfilled_date:date, fulfilled_notes:text, notes:text, created_at:timestamptz
 pi_deliverables|id:bigint, project_id:text, deliverable_type:text, scope_type:text, status:text, contracted_qty:integer, delivered_count:integer, freq:text, milestone_start:text, milestone_end:text, dist_list:text, notes:text, created_at:timestamptz, due_date:date, title:text, progress:integer

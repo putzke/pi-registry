@@ -881,6 +881,53 @@ the capped generic prompt reaches no report narrative.
 - **`'reports'`** — summary stats bar, distribution group checkboxes, 10 report-type cards
 - **`'pi-editor'`** — landing card with draft status + "Open editor" button (opens split-pane `openPIReport()`)
 - **`'archive'`** — `_buildArchiveHTML()` output with AI trend button
+- **`'closeout'`** — `_closeoutTabHTML()`, the PI Close-Out (below). While
+  `S.coId` is set, `renderReports` hands the whole view to
+  `renderCloseoutIntake()` (own topbar, like the report editor); `setView`
+  clears it.
+
+### PI Close-Out — step 1 of 6 BUILT: the intake (Oct 2026)
+The final deliverable to the client (for UDOT, the Region SCM), modelled on
+Jeff's `pi-closeout-report` skill and the 19739 / 17894 packages. Table
+`pi_closeouts` (`sql/2026-10-03_closeouts.sql`) — **one row per close-out, not
+per project**: a Final plus optional interims ("Year 1"), Final listed first.
+**Staff-only** (`not pi_is_portal_client()`, anon revoked): the intake holds
+internal narrative pointers and is a working draft, never client-facing.
+- **TYPE-DRIVEN.** `report_type` keys `CLOSEOUT_TYPES`; only
+  `'udot-construction'` (UDOT Construction-Phase PI Close-Out) exists. ROW,
+  water-use study and NEPA/EA close-outs are planned as further TYPES reusing the
+  same field kinds (`project`, `reline`, `compass`, `rows`, `deliverables`,
+  `newsletterCount`, `metrics`, plus plain inputs) — a new type is a config
+  entry, not a schema change. Do not bend the construction type to fit them.
+- **Counts are NEVER stored.** `_closeoutFacts(projId)` computes interactions,
+  inbound calls (Phone · Incoming), stakeholders, archived PI reports, events,
+  issues, commitments kept, deliverables live. The intake only holds what
+  COMPASS cannot know. A typed **override** is allowed per metric and is to be
+  footnoted in the report as the consultant's figure.
+- **Only recipient and signature are required.** An empty optional section reads
+  "Left out of the report" — it is omitted, never padded. `_coSectionState` is
+  the one rule; the tab card and the intake header both go through `_coOverall`
+  so they can't disagree.
+- **Newsletter edition count** comes from newsletter deliverables with a
+  contracted quantity (sum of `deliveredCount`); `null` when none is tracked,
+  and the intake then asks for a typed count and says why.
+- **Delivery-against-scope wording defaults from the deliverable's status**
+  (`_coDefaultWording`) so an untouched row can never claim "Delivered" for a
+  deliverable COMPASS has as Not started. Saved per deliverable id under
+  `intake.deliverables[id] = {wording, evidence}`.
+- New close-outs carry the **signature block** from this user's most recent
+  close-out (signature keys only), suggest the **UDOT region** from the
+  project's county (`UDOT_REGION_BY_COUNTY`; unknown county → no guess), and
+  date to today.
+- Autosave: `_coSet` → `_coSaveSoon` (700 ms) → `_coSave`, serialized; a failed
+  save stays dirty and retries on the next edit or on leaving.
+- Attachment stitching (weekly reports, logs, photos into one PDF) stays
+  OUTSIDE the app — `merge_package.py` via the skill.
+- **Remaining build order:** (2) report template / .docx shell, (3) Program at a
+  Glance scorecard + Delivery Against Scope table, (4) PI Highlights, (5)
+  Stakeholder Communications Log Summary, (6) charts (SVG rendered to PNG for
+  the .docx). Tribal stays parked.
+- Covered by `test/tests/55-closeout-intake.test.js` (50 checks).
 
 ### PI Report Editor (openPIReport)
 - Replaces full `#main` div (including topbar)

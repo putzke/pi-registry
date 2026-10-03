@@ -74,6 +74,20 @@ create table pi_client_summaries (
   published_by text
 );
 
+create table pi_closeouts (
+  id bigserial primary key,
+  project_id bigint,
+  report_type text,
+  label text,
+  intake jsonb,
+  created_at timestamptz default now(),
+  created_by text,
+  updated_at timestamptz default now(),
+  updated_by text
+);
+
+grant select, insert, update, delete on pi_closeouts to anon, authenticated;
+
 create table pi_comment_periods (
   id text primary key,
   project_id text,

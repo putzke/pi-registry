@@ -256,6 +256,24 @@ hr.div{border:none;border-top:1px solid var(--border);margin:14px 0}
 .fr select option{background:var(--navy-mid)}
 select option{background:var(--navy-mid);color:var(--white)}
 select optgroup{background:var(--navy-mid);color:var(--sky-lt);font-weight:700;font-style:normal;padding:6px 0 2px 0}
+/* PI close-out intake */
+.co-sec{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 18px;margin-bottom:14px}
+.co-sec>summary{cursor:pointer;list-style:none;display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+.co-sec>summary::-webkit-details-marker{display:none}
+.co-sec>summary::before{content:'\25B8';color:var(--fog);font-size:12px;width:10px}
+.co-sec[open]>summary::before{content:'\25BE'}
+.co-row{display:flex;flex-wrap:wrap;gap:0 14px}
+.co-tbl{width:100%;border-collapse:collapse;font-size:12px}
+.co-tbl th{text-align:left;color:var(--fog);font-size:11px;text-transform:uppercase;letter-spacing:.4px;font-weight:600;padding:6px 8px 6px 0}
+.co-tbl td{padding:3px 8px 3px 0;vertical-align:middle}
+.co-tbl input,.co-tbl select{width:100%;padding:5px 8px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:var(--radius);color:var(--white);font-family:var(--font);font-size:12px;outline:none}
+.co-tbl input:focus,.co-tbl select:focus{border-color:var(--sky)}
+.co-tbl select option{background:var(--navy-mid)}
+.co-pill{font-size:11px;font-weight:600;padding:2px 9px;border-radius:10px;white-space:nowrap}
+.co-chip{font-size:10px;font-weight:700;letter-spacing:.4px;padding:1px 7px;border-radius:10px;white-space:nowrap}
+.co-lock{padding:7px 10px;background:rgba(29,158,117,.08);border:1px solid rgba(29,158,117,.3);border-radius:var(--radius);font-size:13px}
+.co-nav{display:flex;justify-content:space-between;gap:8px;width:100%;padding:7px 8px;border:none;background:transparent;border-radius:var(--radius);color:var(--mist);font-family:var(--font);font-size:12px;text-align:left;cursor:pointer}
+.co-nav:hover{background:rgba(255,255,255,.06)}
 .fgrid{display:grid;gap:0 14px}
 .fg2f{grid-template-columns:1fr 1fr}.fg3f{grid-template-columns:1fr 1fr 1fr}
 .fsec{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--slate);margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--border)}
@@ -694,7 +712,8 @@ const SB_TABLES = {
   report_archive:       'pi_report_archive',
   client_summaries:     'pi_client_summaries',
   parcels:              'pi_parcels',
-  parcel_owners:        'pi_parcel_owners'
+  parcel_owners:        'pi_parcel_owners',
+  closeouts:            'pi_closeouts'
 };
 
 // Map our internal field names to Supabase column names
@@ -845,6 +864,14 @@ const SB_TO_INT = {
     id:'id', projectId:'project_id', contentRecent:'content_recent',
     contentFull:'content_full', periodStart:'period_start', periodEnd:'period_end',
     publishedAt:'published_at', publishedBy:'published_by'
+  },
+  // PI close-outs (sql/2026-10-03_closeouts.sql). Written only by the close-out
+  // code with explicit field lists — never by passing a cached record back —
+  // so createdAt is read here but never echoed into a write.
+  pi_closeouts: {
+    id:'id', projectId:'project_id', reportType:'report_type', label:'label',
+    intake:'intake', createdAt:'created_at', createdBy:'created_by',
+    updatedAt:'updated_at', updatedBy:'updated_by'
   }
 };
 
@@ -1209,7 +1236,7 @@ function cacheClear(k) { delete _cache[k]; delete _cacheTime[k]; }
 const _syncCache = {};
 
 async function loadAllData() {
-  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments','comment_periods','tribal_consultations','reports','report_archive','client_summaries','parcels','parcel_owners'];
+  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments','comment_periods','tribal_consultations','reports','report_archive','client_summaries','parcels','parcel_owners','closeouts'];
   // Boot stays tolerant — one unreachable table should not lock the app — but a
   // table that FAILED must not be presented as an empty one. An empty Master
   // List that is really a 401 is worse than an error message.
@@ -1864,7 +1891,7 @@ function initDashRows(){
     }
   });
 }
-function setView(v){if(v==='tribal'){showToast('Tribal consultation module is not available yet.','info',2500);return;}S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.showBulkAdd=false;S.showQuickLog=false;S.showEmailPanel=false;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;S.cmtSearch='';S.cmtStatus='';S.cmtPeriod='';S.cmtPeriodId='';S.cmtTab='comments';S.parcSearch='';S.parcStatus='';S.commStatus=COMM_FILTER_DEFAULT;S.commCat='';
+function setView(v){if(v==='tribal'){showToast('Tribal consultation module is not available yet.','info',2500);return;}S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.showBulkAdd=false;S.showQuickLog=false;S.showEmailPanel=false;S.coId=null;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;S.cmtSearch='';S.cmtStatus='';S.cmtPeriod='';S.cmtPeriodId='';S.cmtTab='comments';S.parcSearch='';S.parcStatus='';S.commStatus=COMM_FILTER_DEFAULT;S.commCat='';
   S.view=v;S.mapPicked=undefined;S.selStakeholder=null;S.selInteraction=null;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const navId=v==='commitments'?'nav-commitments':v==='comments'?'nav-comments':v==='tribal'?'nav-tribal':('nav-'+v);
@@ -8637,6 +8664,14 @@ function renderReports(el){
   var openFUs=projInts.filter(function(i){return i.followUp&&!i.followUpDone}).length;
   var doneDels=projDels.filter(function(d){return d.status==='Complete'}).length;
 
+  // An open close-out intake replaces the whole view (own topbar), like the
+  // report editor. Dropped if the project scope changed underneath it.
+  if(S.coId){
+    var _co=(_syncCache.closeouts||[]).find(function(c){return String(c.id)===String(S.coId);});
+    if(_co&&String(_co.projectId)===String(projF)){ renderCloseoutIntake(el,_co); return; }
+    S.coId=null;
+  }
+
   // Build project selector options
   var projOpts='<option value="">— Select project —</option>';
   projs.filter(function(p){return p.status==='Active'||p.status==='On hold'}).forEach(function(p){
@@ -8889,7 +8924,7 @@ el.innerHTML=topbar
   // tab strip
   var rptTab=S.rptTab||'reports';
   // Client Summary tab was removed (folded into Report Archive); normalize stale state.
-  if(rptTab!=='reports'&&rptTab!=='pi-editor'&&rptTab!=='archive'){rptTab='reports';S.rptTab='reports';}
+  if(rptTab!=='reports'&&rptTab!=='pi-editor'&&rptTab!=='archive'&&rptTab!=='closeout'){rptTab='reports';S.rptTab='reports';}
   function tabBtn(id,label,badge){
     var active=rptTab===id;
     var badgeHtml=badge?' <span style="font-size:10px;font-weight:700;background:'+(active?'rgba(255,255,255,.2)':'rgba(255,255,255,.1)')+';border-radius:10px;padding:1px 7px;margin-left:4px">'+badge+'</span>':'';
@@ -8900,6 +8935,7 @@ el.innerHTML=topbar
     +tabBtn('reports','Quick Reports')
     +tabBtn('pi-editor','PI Report Editor')
     +tabBtn('archive','Report Archive',archiveCt||'')
+    +tabBtn('closeout','Close-Out',_coList(projF).length||'')
     +'</div>';
 
   // tab content
@@ -8936,6 +8972,8 @@ el.innerHTML=topbar
       +'<div style="font-size:12px;color:var(--slate);margin-top:2px">Snapshots you checkpoint with <strong>Save to archive</strong> in the report editor. Limit: '+ARCHIVE_LIMIT+' per project.</div></div>'
       +'</div>'
       +'<div id="rpt-archive-panel">'+archiveHtml+'</div>';
+  } else if(rptTab==='closeout'){
+    tabContent=_closeoutTabHTML(projF);
   }
 
   el.innerHTML=topbar
@@ -8943,6 +8981,759 @@ el.innerHTML=topbar
     +tabStrip
     +tabContent
     +'</div></div>';
+}
+
+// ── PI CLOSE-OUT (step 1: the intake) ─────────────────────────────────────
+// The final deliverable to the client — for UDOT, the Region SCM: one narrative
+// of the whole project. A close-out's TYPE decides which intake sections apply;
+// 'udot-construction' is the only type so far. A ROW, NEPA/EA or study
+// close-out is a new entry in CLOSEOUT_TYPES, reusing the same field kinds.
+//
+// Counts are NEVER stored in the intake. _closeoutFacts() computes them live
+// from the project's own tables, so the report cannot disagree with the data
+// and the AI never counts anything. The intake holds only what COMPASS cannot
+// know: recipient, links, external metrics (website visits, subscribers) and
+// the narrative pointers only the consultant has.
+//
+// Only the recipient and signature are required. An optional section left
+// empty is simply left out of the report; nothing is invented to fill it.
+// Table: pi_closeouts (sql/2026-10-03_closeouts.sql), staff-only.
+
+const CLOSEOUT_NEWSLETTER_TYPES = ['Digital newsletter', 'Hard-copy newsletter'];
+const CLOSEOUT_WORDINGS = ['Delivered', 'Partially delivered', 'Not delivered', 'Not required (per PI Assumptions)'];
+
+// A suggestion only (the field stays editable). Counties not listed get no
+// suggestion rather than a guess.
+const UDOT_REGION_BY_COUNTY = {
+  'box elder':'Region One', 'cache':'Region One', 'davis':'Region One',
+  'morgan':'Region One', 'rich':'Region One', 'weber':'Region One',
+  'salt lake':'Region Two', 'summit':'Region Two', 'tooele':'Region Two',
+  'utah':'Region Three', 'wasatch':'Region Three',
+  'beaver':'Region Four', 'emery':'Region Four', 'garfield':'Region Four',
+  'grand':'Region Four', 'iron':'Region Four', 'kane':'Region Four',
+  'millard':'Region Four', 'piute':'Region Four', 'san juan':'Region Four',
+  'sanpete':'Region Four', 'sevier':'Region Four', 'washington':'Region Four',
+  'wayne':'Region Four'
+};
+function _coRegionFor(county) {
+  const k = String(county || '').toLowerCase().replace(/\s+county\s*$/, '').trim();
+  return UDOT_REGION_BY_COUNTY[k] || '';
+}
+
+const CLOSEOUT_TYPES = {
+  'udot-construction': {
+    label: 'UDOT Construction-Phase PI Close-Out',
+    sections: [
+      { id: 'recipient', title: 'Project & recipient', required: true,
+        feeds: 'cover letter address block, Re: line, salutation',
+        fields: [
+          { kind: 'project' },
+          { key: 'route', label: 'Route', w: 2, ph: 'e.g. US-89 (Main Street)',
+            hint: 'Leave blank if the project name already starts with the route.' },
+          { key: 'startMp', label: 'Start MP', w: 1 },
+          { key: 'endMp', label: 'End MP', w: 1 },
+          { key: 'region', label: 'UDOT region', kind: 'select', w: 1,
+            options: ['', 'Region One', 'Region Two', 'Region Three', 'Region Four'] },
+          { key: 'scmName', label: 'Recipient name & title', w: 2, required: true, br: true,
+            ph: 'e.g. Mitch Shaw, Senior Communication Manager' },
+          { key: 'salutation', label: 'Salutation', w: 1, ph: 'e.g. Dear Mr. Shaw,' },
+          { key: 'office', label: 'Region office address', kind: 'textarea', rows: 3, w: 2, required: true, br: true,
+            ph: 'UDOT Region One\n66 W Southwell St\nOgden, UT 84404' },
+          { key: 'reportDate', label: 'Report date', kind: 'date', w: 1 },
+          { kind: 'reline' }
+        ] },
+      { id: 'scope', title: 'Scope document & deliverables',
+        feeds: 'Delivery Against Scope of Work',
+        fields: [
+          { key: 'scopeTitle', label: 'PI scope document title', w: 2, ph: 'e.g. 19739 US-89 / 600 S Undercrossing PI Scope' },
+          { key: 'scopeDate', label: 'Dated', kind: 'date', w: 1 },
+          { key: 'assumptions', label: 'What the scope assumed', kind: 'textarea', rows: 2, w: 3, br: true,
+            ph: 'Closure windows, months of effort from NTP, when the hotline expires. An assumption that didn’t hold is good Lessons Learned material.' },
+          { kind: 'deliverables' }
+        ],
+        warn: function (it) {
+          return _coVal(it.scopeTitle) && !_coVal(it.scopeDate)
+            ? ['Scope date is missing. It is printed in the Delivery Against Scope footnote.'] : [];
+        } },
+      { id: 'website', title: 'Website & hotline',
+        feeds: 'PI Highlights › website & hotline, Program at a Glance, visits chart',
+        fields: [
+          { key: 'websiteUrl', label: 'Project website', kind: 'url', w: 2, ph: 'https://udotinput.utah.gov/…' },
+          { key: 'projectEmail', label: 'Project email', kind: 'email', w: 1 },
+          { key: 'hotline', label: 'Hotline', kind: 'tel', w: 1 },
+          { kind: 'compass', fact: 'inboundCalls', label: 'Inbound calls', ovr: 'ovrInboundCalls',
+            note: 'counted from Phone · Incoming interactions' },
+          { kind: 'rows', key: 'visits', label: 'Website visits over time',
+            hint: 'From your weekly PI reports. Two or more readings draw the visits chart; the last one is the total.',
+            cols: [ { k: 'when', l: 'Reading', ph: 'e.g. Oct 2025' },
+                    { k: 'visits', l: 'Cumulative unique visits', ph: 'e.g. 769', mono: true } ],
+            add: '+ Add a reading' }
+        ] },
+      { id: 'news', title: 'News coverage',
+        feeds: 'PI Highlights › early outreach & advertising',
+        fields: [
+          { kind: 'rows', key: 'news',
+            hint: 'Each prints as a clickable label, (Outlet – what it covered), never a bare URL.',
+            cols: [ { k: 'outlet', l: 'Outlet', ph: 'e.g. Cache Valley Daily', w: 170 },
+                    { k: 'topic', l: 'What it covered', ph: 'e.g. nighttime closures announced', w: 240 },
+                    { k: 'url', l: 'Link', ph: 'https://…' } ],
+            add: '+ Add article' }
+        ] },
+      { id: 'social', title: 'Social media',
+        feeds: 'PI Highlights › UDOT & external social media',
+        fields: [
+          { kind: 'rows', key: 'social',
+            hint: 'Engagement counts and a comment sample are optional, but the section reads stronger with them.',
+            cols: [ { k: 'account', l: 'Account & platform', ph: 'e.g. Logan City – Facebook', w: 190 },
+                    { k: 'url', l: 'Link', ph: 'https://…' },
+                    { k: 'engagement', l: 'Engagement', ph: 'e.g. 4,111 likes', w: 130 },
+                    { k: 'comment', l: 'Comment sample', ph: '@user: what they said', w: 220 } ],
+            add: '+ Add post' }
+        ] },
+      { id: 'newsletters', title: 'Newsletters',
+        feeds: 'PI Highlights › email updates, Program at a Glance',
+        fields: [
+          { kind: 'newsletterCount', key: 'nlCount' },
+          { key: 'subsStart', label: 'Subscribers at first send', w: 1, br: true },
+          { key: 'subsEnd', label: 'Subscribers at completion', w: 1 },
+          { kind: 'rows', key: 'editions', label: 'Edition links',
+            hint: 'Only editions with a link are listed in the report.',
+            cols: [ { k: 'sent', l: 'Sent', ph: 'e.g. Dec 19, 2025', w: 130 },
+                    { k: 'title', l: 'Title', ph: 'e.g. Winter Suspension', w: 280 },
+                    { k: 'url', l: 'Link', ph: 'https://…' } ],
+            add: '+ Add edition' }
+        ],
+        warn: function (it, f) {
+          const any = (it.editions || []).some(_coRowHas) || _coVal(it.subsStart) || _coVal(it.subsEnd);
+          return any && f.newsletterEditions === null && !_coVal(it.nlCount)
+            ? ['Edition count is missing. Set a contracted quantity on the newsletter deliverable, or type the count above.'] : [];
+        } },
+      { id: 'metrics', title: 'Program metrics', auto: true,
+        feeds: 'PI Program at a Glance',
+        fields: [
+          { kind: 'metrics' },
+          { kind: 'rows', key: 'customMetrics', label: 'Your own metrics',
+            hint: 'Anything COMPASS doesn’t track: text-message subscribers, flyers handed out, drone flights.',
+            cols: [ { k: 'label', l: 'Metric', ph: 'e.g. Text-message subscribers' },
+                    { k: 'value', l: 'Value', ph: 'e.g. 120+', w: 160, mono: true } ],
+            add: '+ Add a metric' }
+        ] },
+      { id: 'narrative', title: 'Narrative pointers',
+        feeds: 'cover letter, inbound concerns, Lessons Learned',
+        hint: 'Only you know these. One thought per line. The AI writes around them and never invents a quote or a count.',
+        fields: [
+          { key: 'praise', label: 'Notable outcomes & praise', kind: 'textarea', rows: 5, w: 3 },
+          { key: 'concerns', label: 'Concerns or complaints of note', kind: 'textarea', rows: 4, w: 3, br: true },
+          { key: 'lessons', label: 'Lessons learned & recommendations', kind: 'textarea', rows: 4, w: 3, br: true }
+        ] },
+      { id: 'signature', title: 'Signature', required: true,
+        feeds: 'cover letter sign-off',
+        fields: [
+          { key: 'sigName', label: 'Name', w: 1, required: true },
+          { key: 'sigTitle', label: 'Title', w: 2, ph: 'e.g. Communications / Public Information Manager' },
+          { key: 'sigRole', label: 'Role line', w: 2, br: true, ph: 'e.g. UDOT Public Involvement Consultant' },
+          { key: 'sigEmail', label: 'Email', kind: 'email', w: 2 },
+          { key: 'sigPhone', label: 'Phone', kind: 'tel', w: 1, br: true },
+          { key: 'sigCell', label: 'Cell', kind: 'tel', w: 1 }
+        ] }
+    ],
+    // What each report section is built from — shown on the Close-Out tab.
+    outline: [
+      ['Cover letter', 'project, PIN', 'recipient, route & mileposts, signature'],
+      ['PI Program at a Glance', 'interactions, stakeholders, PI reports, issues', 'website visits, subscribers, your metrics'],
+      ['PI Highlights', 'interactions, events, PI reports', 'news, social & newsletter links'],
+      ['Stakeholder Communications Log Summary', 'every interaction, the whole project', ''],
+      ['Commitments to the Public (if any)', 'commitments and whether each was kept', ''],
+      ['Lessons Learned & Recommendations', 'resolved issues, as context', 'your pointers'],
+      ['Delivery Against Scope of Work', 'deliverables', 'evidence wording, scope document'],
+      ['Photo gallery', '', 'added in Word after export']
+    ]
+  }
+};
+const CLOSEOUT_SIG_KEYS = ['sigName', 'sigTitle', 'sigRole', 'sigEmail', 'sigPhone', 'sigCell'];
+
+function _coVal(v) { return v !== undefined && v !== null && String(v).trim() !== ''; }
+function _coRowHas(r) { return !!r && Object.keys(r).some(function (k) { return _coVal(r[k]); }); }
+function _coType(co) { return CLOSEOUT_TYPES[co && co.reportType] || CLOSEOUT_TYPES['udot-construction']; }
+function _coMonthYear(d) {
+  if (!d) return '';
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+function _coList(projF) {
+  return (_syncCache.closeouts || [])
+    .filter(function (c) { return String(c.projectId) === String(projF); })
+    .sort(function (a, b) {
+      if ((a.label === 'Final') !== (b.label === 'Final')) return a.label === 'Final' ? -1 : 1;
+      return String(a.createdAt || '').localeCompare(String(b.createdAt || ''));
+    });
+}
+
+// Everything the report counts, computed live. Every id is compared as a
+// String: project_id is bigint on some tables and text on others.
+function _closeoutFacts(projId) {
+  const pid = String(projId);
+  const mine = function (k) { return (DB.get(k) || []).filter(function (x) { return String(x.projectId) === pid; }); };
+  const ints = mine('interactions');
+  const dates = ints.map(function (i) { return i.date; }).filter(Boolean).sort();
+  const issues = mine('issues'), comms = mine('commitments'), dels = mine('deliverables');
+  const nl = dels.filter(function (d) { return CLOSEOUT_NEWSLETTER_TYPES.indexOf(d.type) > -1; });
+  const nlTracked = nl.filter(function (d) { return Number(d.contractedQty) > 0; });
+  const proj = (DB.get('projects') || []).find(function (p) { return String(p.id) === pid; }) || {};
+  const span = function (a, b) { return a && b ? _coMonthYear(a) + ' – ' + _coMonthYear(b) : ''; };
+  return {
+    interactions: ints.length,
+    intSpan: span(dates[0], dates[dates.length - 1]),
+    inboundCalls: ints.filter(function (i) { return i.channel === 'Phone' && i.direction === 'Incoming'; }).length,
+    stakeholders: mine('project_stakeholders').length,
+    piReports: (_syncCache.report_archive || []).filter(function (r) { return String(r.projectId) === pid; }).length,
+    events: mine('meetings').length,
+    issues: issues.length,
+    issuesResolved: issues.filter(function (i) { return i.status === 'Resolved'; }).length,
+    commitments: comms.length,
+    commitmentsKept: comms.filter(function (c) { return c.status === 'Fulfilled'; }).length,
+    deliverables: dels,
+    deliverablesComplete: dels.filter(function (d) { return d.status === 'Complete'; }).length,
+    // null = COMPASS can't count editions (no newsletter deliverable with a
+    // contracted quantity); the intake's typed count stands in.
+    newsletterEditions: nlTracked.length
+      ? nlTracked.reduce(function (s, d) { return s + (Number(d.deliveredCount) || 0); }, 0) : null,
+    newsletterUntracked: nl.filter(function (d) { return !(Number(d.contractedQty) > 0); }),
+    duration: span(proj.startDate, proj.endDate) || span(dates[0], dates[dates.length - 1])
+  };
+}
+
+// ── The Close-Out tab ─────────────────────────────────────────────────────
+function _closeoutTabHTML(projF) {
+  const list = _coList(projF), f = _closeoutFacts(projF);
+  const type = CLOSEOUT_TYPES['udot-construction'];
+  const hasFinal = list.some(function (c) { return c.label === 'Final'; });
+  const chip = function (txt, kind) {
+    return '<span class="co-chip" style="' + (kind === 'c'
+      ? 'background:rgba(29,158,117,.16);color:#5BD3A9'
+      : 'background:rgba(232,160,32,.14);color:#F2B650') + '">' + txt + '</span>';
+  };
+
+  let h = '<div style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:16px">'
+    + '<div style="max-width:720px"><div style="font-size:15px;font-weight:600;color:var(--white)">PI Close-Out</div>'
+    + '<div style="font-size:12px;color:var(--slate);margin-top:2px">The final deliverable to the client: one narrative of the whole project, built from what COMPASS has tracked all along plus a short intake for what only you know.</div></div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    + (hasFinal ? '' : '<button class="btn btn-primary" onclick="coStart(\'final\')">Start final close-out</button>')
+    + '<button class="btn" onclick="coStart(\'interim\')">+ Interim close-out</button>'
+    + '</div></div>';
+
+  if (!list.length) {
+    h += '<div style="background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.18);border-radius:10px;padding:18px 20px;margin-bottom:18px;font-size:13px;color:var(--slate)">'
+      + 'No close-out started for this project yet. Start one near the end of the project: most of it is filled in from what you have already logged.</div>';
+  }
+  list.forEach(function (co) {
+    const it = co.intake || {}, t = _coType(co);
+    const st = _coOverall(co, f);
+    h += '<div style="background:#13284A;border:1px solid rgba(45,125,210,.32);border-radius:12px;padding:18px 20px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:16px;align-items:center">'
+      + '<div style="flex:999 1 380px;min-width:0">'
+      + '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:4px">'
+      + '<span style="font-size:15px;font-weight:700;color:var(--white)">' + escHtml(co.label) + ' close-out</span>'
+      + '<span class="co-chip" style="background:rgba(255,255,255,.08);color:var(--mist)">' + escHtml(t.label) + '</span></div>'
+      + '<div style="font-size:12px;color:var(--slate)">' + (_coVal(it.scmName) ? 'To: ' + escHtml(it.scmName) : 'Recipient not entered yet')
+      + (co.updatedAt ? ' · last edited ' + escHtml(fmt(String(co.updatedAt).slice(0, 10))) : '') + '</div>'
+      + '<div style="font-size:12px;margin-top:6px;color:' + (st.missing ? 'var(--amber)' : 'var(--teal)') + '">'
+      + (st.missing ? 'Required fields missing' : 'Required fields complete') + ' · '
+      + st.filled + ' of ' + st.total + ' sections filled in'
+      + (st.gaps ? ' · ' + st.gaps + ' gap' + (st.gaps === 1 ? '' : 's') : '') + '</div>'
+      + '<div style="font-size:11px;color:var(--fog);margin-top:4px">Drafting the report from this intake is the next step being built; everything typed here is saved for it.</div>'
+      + '</div>'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+      + '<button class="btn btn-primary" onclick="openCloseoutIntake(\'' + co.id + '\')">Open intake</button>'
+      + '<button class="btn btn-sm" style="color:#e07a7a" onclick="coDelete(\'' + co.id + '\')">Delete</button>'
+      + '</div></div>';
+  });
+
+  const tile = function (label, val, sub, feeds) {
+    return '<div style="background:#112236;border:1px solid rgba(255,255,255,.10);border-radius:8px;padding:12px">'
+      + '<div style="font-size:12px;color:var(--slate)">' + label + '</div>'
+      + '<div style="font-size:24px;font-weight:600;font-family:var(--mono);color:var(--white)">' + val + '</div>'
+      + '<div style="font-size:11px;color:var(--fog)">' + sub + '</div>'
+      + '<div style="font-size:11px;color:#5BD3A9;margin-top:6px">→ ' + feeds + '</div></div>';
+  };
+  const openComm = f.commitments - f.commitmentsKept;
+  h += '<div style="display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start;margin:6px 0 18px">'
+    + '<div style="flex:3 1 520px;min-width:0;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.10);border-radius:10px;padding:14px 16px">'
+    + '<div style="font-size:12px;font-weight:700;color:var(--fog);text-transform:uppercase;letter-spacing:.5px">Already in COMPASS — nothing to type</div>'
+    + '<div style="font-size:12px;color:var(--slate);margin:2px 0 12px">Counted live from this project when the report is drafted.</div>'
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px">'
+    + tile('Logged interactions', f.interactions, f.intSpan || 'none yet', 'Communications Log Summary')
+    + tile('Inbound calls', f.inboundCalls, 'Phone · Incoming', 'Website & hotline')
+    + tile('Stakeholders', f.stakeholders, 'linked to this project', 'Program at a Glance')
+    + tile('PI reports issued', f.piReports, 'in the Report Archive', 'PI Coordination')
+    + tile('Events', f.events, 'logged in Events', 'Early outreach, PI Coordination')
+    + tile('Issues', f.issues, f.issuesResolved + ' resolved', 'Inbound concerns')
+    + tile('Commitments', f.commitments, f.commitmentsKept + ' kept · ' + openComm + ' open', 'Commitments to the Public')
+    + tile('Deliverables', f.deliverables.length, f.deliverablesComplete + ' complete', 'Delivery Against Scope')
+    + '</div></div>';
+
+  const gaps = [];
+  f.newsletterUntracked.forEach(function (d) {
+    gaps.push(['Newsletter count can’t come from Deliverables yet',
+      '“' + escHtml(d.title || d.type) + '” has no contracted quantity. Set one and the edition count fills itself in; until then it is typed in the intake.',
+      'Open Deliverables', "setView('deliverables')"]);
+  });
+  if (openComm > 0) {
+    gaps.push([openComm + ' commitment' + (openComm === 1 ? ' is' : 's are') + ' still open',
+      'The commitments section will list ' + (openComm === 1 ? 'it' : 'them') + ' as outstanding, not kept. Close any that were done first.',
+      'Review commitments', "setView('commitments')"]);
+  }
+  if (gaps.length) {
+    h += '<div style="flex:2 1 300px;min-width:0;display:flex;flex-direction:column;gap:10px">'
+      + '<div style="font-size:12px;font-weight:700;color:var(--fog);text-transform:uppercase;letter-spacing:.5px">Before you draft</div>'
+      + gaps.map(function (g) {
+        return '<div style="background:rgba(232,160,32,.08);border:1px solid rgba(232,160,32,.3);border-radius:8px;padding:12px 14px">'
+          + '<div style="font-size:13px;font-weight:600;color:#F2B650">' + g[0] + '</div>'
+          + '<div style="font-size:12px;color:var(--mist);margin:4px 0 8px">' + g[1] + '</div>'
+          + '<button class="btn btn-sm" onclick="' + g[3] + '">' + g[2] + '</button></div>';
+      }).join('') + '</div>';
+  }
+  h += '</div>';
+
+  h += '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.10);border-radius:10px;padding:14px 16px;margin-bottom:16px">'
+    + '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;margin-bottom:8px">'
+    + '<div style="font-size:12px;font-weight:700;color:var(--fog);text-transform:uppercase;letter-spacing:.5px">What goes into the report</div>'
+    + '<div style="font-size:11px;color:var(--slate)">' + chip('COMPASS', 'c') + ' counted from the project &nbsp; ' + chip('INTAKE', 'i') + ' typed once by you</div></div>'
+    + '<div style="overflow-x:auto"><table class="co-tbl" style="min-width:640px;font-size:13px"><tbody>'
+    + type.outline.map(function (r) {
+      return '<tr style="border-top:1px solid rgba(255,255,255,.07)"><td style="padding:8px 10px 8px 0;font-weight:600;color:var(--white)">' + r[0] + '</td>'
+        + '<td style="padding:8px 0;color:var(--mist)">'
+        + (r[1] ? chip('COMPASS', 'c') + ' ' + r[1] : '') + (r[1] && r[2] ? ' &nbsp;·&nbsp; ' : '')
+        + (r[2] ? (r[1] || r[0] !== 'Photo gallery' ? chip('INTAKE', 'i') + ' ' : '') + r[2] : '') + '</td></tr>';
+    }).join('')
+    + '</tbody></table></div></div>';
+  return h;
+}
+
+// Required/filled/gap counts for a close-out, used by the tab card and the
+// intake header alike so the two never disagree.
+function _coOverall(co, facts) {
+  const t = _coType(co), it = co.intake || {};
+  let missing = 0, filled = 0, gaps = 0;
+  t.sections.forEach(function (s) {
+    const r = _coSectionState(s, it, facts);
+    if (r.state === 'missing') missing++;
+    if (r.state === 'done') filled++;
+    gaps += r.warns.length;
+  });
+  return { missing: missing, filled: filled, gaps: gaps, total: t.sections.length };
+}
+
+function _coSectionState(s, it, facts) {
+  let has = false;
+  const missing = [];
+  s.fields.forEach(function (fd) {
+    if (fd.kind === 'rows') { if ((it[fd.key] || []).some(_coRowHas)) has = true; }
+    else if (fd.kind === 'compass') { if (_coVal(it[fd.ovr])) has = true; }
+    else if (fd.kind === 'deliverables') {
+      const d = it.deliverables || {};
+      if (Object.keys(d).some(function (k) { return _coRowHas(d[k]); })) has = true;
+    } else if (fd.key) {
+      if (_coVal(it[fd.key])) has = true;
+      if (fd.required && !_coVal(it[fd.key])) missing.push(fd.label);
+    }
+  });
+  const warns = s.warn ? s.warn(it, facts) : [];
+  return { state: missing.length ? 'missing' : (has || s.auto ? 'done' : 'empty'), missing: missing, warns: warns };
+}
+
+// ── Start / open / close / delete ─────────────────────────────────────────
+async function coStart(kind) {
+  const projF = S.projectFilter;
+  if (!projF) return;
+  let label = 'Final';
+  if (kind === 'interim') {
+    label = (prompt('Name this interim close-out (for example "Year 1"):', 'Year 1') || '').trim();
+    if (!label) return;
+  } else {
+    const fin = _coList(projF).find(function (c) { return c.label === 'Final'; });
+    if (fin) { openCloseoutIntake(fin.id); return; }
+  }
+  const me = _occMyEmail();
+  const rec = { projectId: projF, reportType: 'udot-construction', label: label,
+                intake: _coSeedIntake(projF, me), createdBy: me || undefined, updatedBy: me || undefined };
+  const id = await sbAdd('closeouts', rec);
+  if (!id) {
+    showToast('Couldn’t start the close-out. If this is the first one, the database may not have the close-out table yet (sql/2026-10-03_closeouts.sql).', 'error', 8000);
+    return;
+  }
+  rec.id = id;
+  rec.createdAt = rec.updatedAt = new Date().toISOString();
+  (_syncCache.closeouts = _syncCache.closeouts || []).push(rec);
+  openCloseoutIntake(id);
+}
+
+// A new close-out starts with the signature from the last close-out this user
+// wrote (any project), the region suggested from the county, and today's date.
+function _coSeedIntake(projF, me) {
+  const it = {};
+  const prev = (_syncCache.closeouts || [])
+    .filter(function (c) { return me && c.createdBy === me && c.intake && _coVal(c.intake.sigName); })
+    .sort(function (a, b) { return String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')); })[0];
+  if (prev) CLOSEOUT_SIG_KEYS.forEach(function (k) { if (_coVal(prev.intake[k])) it[k] = prev.intake[k]; });
+  else if (me) it.sigEmail = me;
+  const proj = (DB.get('projects') || []).find(function (p) { return String(p.id) === String(projF); });
+  const reg = _coRegionFor(proj && proj.county);
+  if (reg) it.region = reg;
+  it.reportDate = localToday();
+  return it;
+}
+
+let _coWork = null;   // { id, intake } — the copy being edited
+let _coTimer = null, _coSaving = null, _coDirty = false;
+
+function openCloseoutIntake(id) {
+  const co = (_syncCache.closeouts || []).find(function (c) { return c.id === String(id); });
+  if (!co) return;
+  if (!_coWork || _coWork.id !== co.id) _coWork = { id: co.id, intake: JSON.parse(JSON.stringify(co.intake || {})) };
+  S.coId = co.id;
+  S.coOpen = {};
+  renderReports(document.getElementById('main'));
+}
+
+async function coCloseIntake() {
+  await _coSave();
+  S.coId = null;
+  S.rptTab = 'closeout';
+  renderReports(document.getElementById('main'));
+}
+
+async function coDelete(id) {
+  const co = (_syncCache.closeouts || []).find(function (c) { return c.id === String(id); });
+  if (!co) return;
+  if (!confirm('Delete the ' + co.label + ' close-out and everything typed into its intake?\n\nThis can’t be undone.')) return;
+  const ok = await sbDelete('closeouts', co.id);
+  if (!ok) { showToast('Couldn’t delete the close-out. Check your connection and try again.', 'error', 6000); return; }
+  _syncCache.closeouts = (_syncCache.closeouts || []).filter(function (c) { return c.id !== co.id; });
+  if (_coWork && _coWork.id === co.id) { _coWork = null; _coDirty = false; }
+  renderReports(document.getElementById('main'));
+}
+
+// ── Saving: debounced, serialized, never drops an edit ────────────────────
+function _coSaveSoon() {
+  _coDirty = true;
+  _coSaveState('Unsaved changes');
+  clearTimeout(_coTimer);
+  _coTimer = setTimeout(function () { _coSave(); }, 700);
+}
+
+async function _coSave() {
+  clearTimeout(_coTimer); _coTimer = null;
+  while (_coSaving) await _coSaving;
+  if (!_coWork || !_coDirty) return true;
+  _coDirty = false;
+  const id = _coWork.id, intake = JSON.parse(JSON.stringify(_coWork.intake));
+  const now = new Date().toISOString(), by = _occMyEmail() || undefined;
+  _coSaveState('Saving…');
+  let ok = false;
+  _coSaving = sbUpdate('closeouts', id, { intake: intake, updatedAt: now, updatedBy: by })
+    .then(function (r) { ok = r; });
+  await _coSaving;
+  _coSaving = null;
+  if (ok) {
+    const rec = (_syncCache.closeouts || []).find(function (c) { return c.id === id; });
+    if (rec) { rec.intake = intake; rec.updatedAt = now; if (by) rec.updatedBy = by; }
+    if (!_coDirty) _coSaveState('Saved');
+  } else {
+    _coDirty = true;   // keep it pending so the next edit (or leaving) retries
+    _coSaveState('Not saved — check your connection', true);
+  }
+  return ok;
+}
+
+function _coSaveState(txt, bad) {
+  const el = document.getElementById('co-save');
+  if (el) { el.textContent = txt; el.style.color = bad ? 'var(--amber)' : 'var(--fog)'; }
+}
+
+// ── The intake form ───────────────────────────────────────────────────────
+function renderCloseoutIntake(el, co) {
+  if (!_coWork || _coWork.id !== co.id) _coWork = { id: co.id, intake: JSON.parse(JSON.stringify(co.intake || {})) };
+  const t = _coType(co), it = _coWork.intake;
+  const proj = (DB.get('projects') || []).find(function (p) { return String(p.id) === String(co.projectId); }) || {};
+  const facts = _closeoutFacts(co.projectId);
+  _coWork.facts = facts;
+  _coWork.proj = proj;
+  const nav = t.sections.map(function (s, i) {
+    return '<button type="button" class="co-nav" onclick="_coJump(\'' + s.id + '\')">'
+      + '<span>' + (i + 1) + '. ' + s.title + '</span><span id="co-nav-' + s.id + '"></span></button>';
+  }).join('');
+  const secs = t.sections.map(function (s, i) { return _coSectionHTML(s, i, it, facts, proj); }).join('');
+  el.innerHTML = '<div class="topbar">'
+    + '<button class="btn btn-sm" onclick="coCloseIntake()">← Close-Out</button>'
+    + '<div><div class="topbar-title">Close-out intake · ' + escHtml(co.label) + '</div>'
+    + '<div class="topbar-sub">' + escHtml(t.label) + ' · ' + escHtml(_projHeaderLabel(proj.name || '', proj.pid || '')) + '</div></div>'
+    + '<div class="topbar-sp"></div>'
+    + '<span id="co-save" style="font-size:12px;color:var(--fog)">' + (_coDirty ? 'Unsaved changes' : 'Saved') + '</span>'
+    + '</div>'
+    + '<div class="content" style="overflow-y:auto"><div style="padding:24px;display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start;width:100%;max-width:1320px">'
+    + '<nav aria-label="Intake sections" style="flex:1 1 220px;max-width:100%;position:sticky;top:0;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:var(--radius-lg);padding:10px">'
+    + '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--fog);padding:0 8px 6px">Sections</div>'
+    + nav
+    + '<div id="co-progress" style="margin-top:8px;padding:10px 8px 2px;border-top:1px solid rgba(255,255,255,.08);font-size:11px;color:var(--fog)"></div>'
+    + '<div style="padding:6px 8px 2px;font-size:11px;color:var(--fog)">Only the recipient and signature are required. An empty section is left out of the report.</div>'
+    + '</nav>'
+    + '<div style="flex:999 1 560px;min-width:0">' + secs + '</div>'
+    + '</div></div>';
+  _coRefreshStatus();
+}
+
+function _coSectionHTML(s, idx, it, facts, proj) {
+  const st = _coSectionState(s, it, facts);
+  const open = S.coOpen && S.coOpen[s.id] !== undefined ? S.coOpen[s.id] : (s.required || st.state !== 'empty' || st.warns.length > 0);
+  let body = s.hint ? '<div style="font-size:12px;color:var(--slate);margin-bottom:12px">' + s.hint + '</div>' : '';
+  let row = [];
+  const flush = function () { if (row.length) { body += '<div class="co-row">' + row.join('') + '</div>'; row = []; } };
+  s.fields.forEach(function (fd) {
+    if (!fd.kind || ['text', 'url', 'email', 'tel', 'date', 'select', 'textarea'].indexOf(fd.kind) > -1) {
+      if (fd.br) flush();
+      row.push(_coSimpleField(fd, it));
+    } else {
+      flush();
+      body += _coBlockField(fd, it, facts, proj);
+    }
+  });
+  flush();
+  body += '<div id="co-warn-' + s.id + '"></div>';
+  return '<details class="co-sec" id="co-sec-' + s.id + '"' + (open ? ' open' : '') + ' ontoggle="_coToggle(\'' + s.id + '\',this.open)">'
+    + '<summary>'
+    + '<span style="width:24px;height:24px;border-radius:50%;background:rgba(74,155,232,.16);color:#8CC2F5;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">' + (idx + 1) + '</span>'
+    + '<span style="font-size:14px;font-weight:600;color:var(--white)">' + s.title + '</span>'
+    + (s.required ? '<span class="co-chip" style="background:rgba(255,255,255,.08);color:var(--mist)">REQUIRED</span>' : '')
+    + '<span id="co-st-' + s.id + '"></span>'
+    + '<span style="font-size:12px;color:var(--fog)">Feeds: ' + s.feeds + '</span>'
+    + '</summary><div style="padding-top:14px">' + body + '</div></details>';
+}
+
+function _coSimpleField(fd, it) {
+  const id = 'co-f-' + fd.key, v = it[fd.key];
+  const grow = fd.w === 3 ? '1 1 100%' : fd.w === 2 ? '2 1 280px' : '1 1 150px';
+  const ph = fd.ph ? ' placeholder="' + escHtml(fd.ph) + '"' : '';
+  const attrs = ' id="' + id + '" data-k="' + fd.key + '" oninput="_coSet(this)"';
+  let ctl;
+  if (fd.kind === 'textarea') {
+    ctl = '<textarea' + attrs + ph + ' rows="' + (fd.rows || 3) + '">' + escHtml(v) + '</textarea>';
+  } else if (fd.kind === 'select') {
+    ctl = '<select' + attrs + '>' + fd.options.map(function (o) {
+      return '<option value="' + escHtml(o) + '"' + (String(v || '') === o ? ' selected' : '') + '>' + (o || '—') + '</option>';
+    }).join('') + '</select>';
+  } else {
+    ctl = '<input type="' + (fd.kind || 'text') + '"' + attrs + ph + ' value="' + escHtml(v) + '">';
+  }
+  return '<div class="fr" style="flex:' + grow + ';min-width:0"><label for="' + id + '">' + fd.label
+    + (fd.required ? ' <span style="color:var(--amber)">*</span>' : '') + '</label>' + ctl
+    + (fd.hint ? '<div style="font-size:11px;color:var(--fog);margin-top:3px">' + fd.hint + '</div>' : '') + '</div>';
+}
+
+function _coBlockField(fd, it, f, proj) {
+  const lbl = function (txt) { return '<div style="font-size:12px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">' + txt + '</div>'; };
+  const cchip = '<span class="co-chip" style="background:rgba(29,158,117,.16);color:#5BD3A9;margin-left:6px">COMPASS</span>';
+  if (fd.kind === 'project') {
+    return '<div class="co-row" style="margin-bottom:12px">'
+      + '<div style="flex:3 1 320px;min-width:0">' + lbl('Project name' + cchip) + '<div class="co-lock">' + escHtml(proj.name || '—') + '</div></div>'
+      + '<div style="flex:1 1 140px;min-width:0">' + lbl('PIN' + cchip) + '<div class="co-lock" style="font-family:var(--mono)">' + escHtml(proj.pid || '—') + '</div></div>'
+      + '</div>';
+  }
+  if (fd.kind === 'reline') {
+    return '<div style="padding:10px 12px;background:#0E1E30;border:1px dashed rgba(255,255,255,.18);border-radius:var(--radius);margin-bottom:12px">'
+      + '<div style="font-size:11px;color:var(--fog);margin-bottom:4px">Re: line, as it will print</div>'
+      + '<div id="co-reline" style="font-family:var(--mono);font-size:12px;color:var(--mist)"></div></div>';
+  }
+  if (fd.kind === 'compass') {
+    return '<div style="margin-bottom:12px">' + lbl(fd.label + cchip)
+      + '<div class="co-row" style="align-items:center;gap:10px">'
+      + '<div class="co-lock" style="flex:1 1 260px"><span style="font-family:var(--mono)">' + f[fd.fact] + '</span> <span style="color:var(--slate)">' + fd.note + '</span></div>'
+      + '<div class="fr" style="flex:1 1 220px;margin:0"><input aria-label="Override ' + escHtml(fd.label) + '" data-k="' + fd.ovr + '" oninput="_coSet(this)" placeholder="Override (optional)" value="' + escHtml(it[fd.ovr]) + '"></div>'
+      + '</div></div>';
+  }
+  if (fd.kind === 'rows') return _coRowsHTML(fd, it);
+  if (fd.kind === 'deliverables') return _coDeliverablesHTML(it, f);
+  if (fd.kind === 'newsletterCount') {
+    if (f.newsletterEditions !== null) {
+      return '<div style="margin-bottom:12px">' + lbl('Editions sent' + cchip)
+        + '<div class="co-lock"><span style="font-family:var(--mono)">' + f.newsletterEditions + '</span> <span style="color:var(--slate)">counted from your newsletter deliverables</span></div></div>';
+    }
+    const why = f.newsletterUntracked.length
+      ? '“' + escHtml(f.newsletterUntracked[0].title || f.newsletterUntracked[0].type) + '” has no contracted quantity in Deliverables, so COMPASS can’t count editions. Set one there and this fills itself in; until then, type the count.'
+      : 'There is no newsletter deliverable on this project. If newsletters went out, type the count.';
+    return '<div style="background:rgba(232,160,32,.08);border:1px solid rgba(232,160,32,.3);border-radius:8px;padding:12px 14px;margin-bottom:12px">'
+      + '<div style="font-size:12px;color:var(--mist);margin-bottom:8px">' + why + '</div>'
+      + '<div class="fr" style="max-width:220px;margin:0"><label for="co-f-nlCount">Editions sent (typed)</label>'
+      + '<input id="co-f-nlCount" data-k="nlCount" oninput="_coSet(this)" value="' + escHtml(it.nlCount) + '"></div></div>';
+  }
+  if (fd.kind === 'metrics') {
+    const rows = [
+      ['Program duration', f.duration || '—', 'project start & end dates', 'ovrDuration'],
+      ['PI reports issued', f.piReports, 'Report Archive', 'ovrPiReports'],
+      ['Stakeholders in registry', f.stakeholders, 'linked to this project', 'ovrStakeholders'],
+      ['Logged interactions', f.interactions, f.intSpan || 'none yet', 'ovrInteractions'],
+      ['Issues escalated', f.issues, f.issuesResolved + ' resolved', 'ovrIssues']
+    ];
+    return '<div style="overflow-x:auto;margin-bottom:6px"><table class="co-tbl" style="min-width:600px"><thead><tr>'
+      + '<th>Metric</th><th>Counted by COMPASS</th><th style="width:200px">Override</th></tr></thead><tbody>'
+      + rows.map(function (r) {
+        return '<tr style="border-top:1px solid rgba(255,255,255,.07)"><td style="color:var(--mist)">' + r[0] + '</td>'
+          + '<td><span style="font-family:var(--mono);color:var(--white)">' + r[1] + '</span> <span style="color:var(--fog)">· ' + r[2] + '</span></td>'
+          + '<td><input aria-label="Override ' + r[0] + '" data-k="' + r[3] + '" oninput="_coSet(this)" placeholder="—" value="' + escHtml(it[r[3]]) + '"></td></tr>';
+      }).join('')
+      + '</tbody></table></div>'
+      + '<div style="font-size:12px;color:var(--fog);margin-bottom:14px">An override is footnoted in the report as your figure, so the table stays honest about where each number came from.</div>';
+  }
+  return '';
+}
+
+function _coRowsHTML(fd, it) {
+  const rows = it[fd.key] || [];
+  let h = '<div style="margin-bottom:14px">';
+  if (fd.label) h += '<div style="font-size:12px;font-weight:600;color:var(--slate);text-transform:uppercase;letter-spacing:.4px">' + fd.label + '</div>';
+  if (fd.hint) h += '<div style="font-size:12px;color:var(--fog);margin:2px 0 8px">' + fd.hint + '</div>';
+  if (rows.length) {
+    h += '<div style="overflow-x:auto"><table class="co-tbl" style="min-width:' + (fd.cols.length > 2 ? 720 : 420) + 'px"><thead><tr>'
+      + fd.cols.map(function (c) { return '<th' + (c.w ? ' style="width:' + c.w + 'px"' : '') + '>' + c.l + '</th>'; }).join('')
+      + '<th style="width:40px"><span style="position:absolute;left:-9999px">Remove</span></th></tr></thead><tbody>'
+      + rows.map(function (r, i) {
+        return '<tr>' + fd.cols.map(function (c) {
+          return '<td><input aria-label="' + escHtml(c.l + ' ' + (i + 1)) + '" data-r="' + fd.key + '" data-i="' + i + '" data-c="' + c.k + '"'
+            + ' oninput="_coSet(this)" placeholder="' + escHtml(c.ph || '') + '" value="' + escHtml((r || {})[c.k]) + '"'
+            + (c.mono ? ' style="font-family:var(--mono)"' : '') + '></td>';
+        }).join('')
+          + '<td><button type="button" class="btn btn-sm" aria-label="Remove row ' + (i + 1) + '" onclick="_coDelRow(\'' + fd.key + '\',' + i + ')">×</button></td></tr>';
+      }).join('')
+      + '</tbody></table></div>';
+  } else {
+    h += '<div style="font-size:12px;color:var(--fog);margin-bottom:6px">None yet.</div>';
+  }
+  h += '<button type="button" class="btn btn-sm" style="margin-top:6px;border-style:dashed" onclick="_coAddRow(\'' + fd.key + '\')">' + fd.add + '</button></div>';
+  return h;
+}
+
+// Default wording follows the deliverable's own status, so an untouched row
+// can never claim more than COMPASS recorded.
+function _coDefaultWording(d) {
+  if (d.status === 'Complete') return 'Delivered';
+  if (d.status === 'Cancelled') return 'Not required (per PI Assumptions)';
+  if (d.status === 'In progress') return 'Partially delivered';
+  return 'Not delivered';
+}
+
+function _coDeliverablesHTML(it, f) {
+  const dels = f.deliverables;
+  if (!dels.length) {
+    return '<div style="font-size:12px;color:var(--fog);margin-bottom:12px">No deliverables on this project yet. Add them in Deliverables & Scope Tracking and they will appear here.</div>';
+  }
+  const saved = it.deliverables || {};
+  return '<div style="font-size:12px;color:var(--slate);margin-bottom:8px">Rows come from Deliverables & Scope Tracking. You choose the wording and name the evidence.</div>'
+    + '<div style="overflow-x:auto;margin-bottom:12px"><table class="co-tbl" style="min-width:820px"><thead><tr>'
+    + '<th>Committed deliverable</th><th style="width:110px">In COMPASS</th><th style="width:230px">Wording in the report</th><th>Evidence in this package</th></tr></thead><tbody>'
+    + dels.map(function (d) {
+      const s = saved[d.id] || {}, w = s.wording || _coDefaultWording(d);
+      const qty = Number(d.contractedQty) > 0 ? ' <span style="color:var(--fog)">(' + (Number(d.deliveredCount) || 0) + ' of ' + d.contractedQty + ')</span>' : '';
+      return '<tr style="border-top:1px solid rgba(255,255,255,.07)">'
+        + '<td style="color:var(--mist)">' + escHtml(d.title || d.type) + qty + '</td>'
+        + '<td style="color:' + (d.status === 'Complete' ? 'var(--teal)' : 'var(--fog)') + '">' + escHtml(d.status || '—') + '</td>'
+        + '<td><select aria-label="Wording for ' + escHtml(d.title || d.type) + '" data-d="' + d.id + '" data-c="wording" oninput="_coSet(this)">'
+        + CLOSEOUT_WORDINGS.map(function (o) { return '<option' + (o === w ? ' selected' : '') + '>' + o + '</option>'; }).join('')
+        + '</select></td>'
+        + '<td><input aria-label="Evidence for ' + escHtml(d.title || d.type) + '" data-d="' + d.id + '" data-c="evidence" oninput="_coSet(this)"'
+        + ' placeholder="e.g. Stakeholder Registry; Interactions Log" value="' + escHtml(s.evidence) + '"></td></tr>';
+    }).join('')
+    + '</tbody></table></div>';
+}
+
+// Every field writes straight into the working copy, then saves soon.
+function _coSet(el) {
+  if (!_coWork) return;
+  const it = _coWork.intake, v = el.value;
+  if (el.dataset.k) {
+    it[el.dataset.k] = v;
+  } else if (el.dataset.r) {
+    const rows = it[el.dataset.r] || (it[el.dataset.r] = []);
+    const i = Number(el.dataset.i);
+    rows[i] = rows[i] || {};
+    rows[i][el.dataset.c] = v;
+  } else if (el.dataset.d) {
+    const d = it.deliverables || (it.deliverables = {});
+    d[el.dataset.d] = d[el.dataset.d] || {};
+    d[el.dataset.d][el.dataset.c] = v;
+  }
+  _coRefreshStatus();
+  _coSaveSoon();
+}
+
+function _coAddRow(key) {
+  if (!_coWork) return;
+  const rows = _coWork.intake[key] || (_coWork.intake[key] = []);
+  rows.push({});
+  _coRerender();
+  const first = document.querySelector('[data-r="' + key + '"][data-i="' + (rows.length - 1) + '"]');
+  if (first) first.focus();
+}
+
+function _coDelRow(key, i) {
+  if (!_coWork) return;
+  const rows = _coWork.intake[key] || [];
+  rows.splice(i, 1);
+  _coSaveSoon();
+  _coRerender();
+}
+
+// Re-render in place, keeping the scroll position and which sections are open.
+function _coRerender() {
+  const co = (_syncCache.closeouts || []).find(function (c) { return _coWork && c.id === _coWork.id; });
+  if (!co) return;
+  const sc = document.querySelector('#main .content');
+  const top = sc ? sc.scrollTop : 0;
+  renderCloseoutIntake(document.getElementById('main'), co);
+  const sc2 = document.querySelector('#main .content');
+  if (sc2) sc2.scrollTop = top;
+}
+
+function _coToggle(id, open) { S.coOpen = S.coOpen || {}; S.coOpen[id] = open; }
+
+function _coJump(id) {
+  const sec = document.getElementById('co-sec-' + id);
+  if (!sec) return;
+  sec.open = true;
+  sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function _coReline(it, proj) {
+  const mp = _coVal(it.startMp) || _coVal(it.endMp)
+    ? ' | Start MP: ' + (it.startMp || '?') + ' - End MP: ' + (it.endMp || '?') : '';
+  return 'Re:  PIN # ' + (proj.pid || '?') + mp + ' | ' + (_coVal(it.route) ? it.route + '; ' : '') + (proj.name || '');
+}
+
+// Cheap, in-place refresh of every status indicator after an edit.
+function _coRefreshStatus() {
+  if (!_coWork) return;
+  const co = (_syncCache.closeouts || []).find(function (c) { return c.id === _coWork.id; });
+  if (!co) return;
+  const t = _coType(co), it = _coWork.intake, f = _coWork.facts || _closeoutFacts(co.projectId);
+  t.sections.forEach(function (s) {
+    const r = _coSectionState(s, it, f);
+    let pill;
+    if (r.state === 'missing') pill = '<span class="co-pill" style="background:rgba(232,160,32,.14);color:#F2B650">Needs ' + r.missing.join(', ') + '</span>';
+    else if (r.warns.length) pill = '<span class="co-pill" style="background:rgba(232,160,32,.14);color:#F2B650">' + r.warns.length + ' gap' + (r.warns.length === 1 ? '' : 's') + '</span>';
+    else if (r.state === 'done') pill = '<span class="co-pill" style="background:rgba(29,158,117,.16);color:#5BD3A9">' + (s.auto ? 'Counted by COMPASS' : 'Complete') + '</span>';
+    else pill = '<span class="co-pill" style="background:rgba(255,255,255,.06);color:var(--fog)">Left out of the report</span>';
+    const p = document.getElementById('co-st-' + s.id); if (p) p.innerHTML = pill;
+    const n = document.getElementById('co-nav-' + s.id);
+    if (n) n.innerHTML = r.state === 'missing' || r.warns.length
+      ? '<span style="color:var(--amber)">!</span>'
+      : r.state === 'done' ? '<span style="color:var(--teal)">✓</span>' : '<span style="color:var(--fog)">—</span>';
+    const w = document.getElementById('co-warn-' + s.id);
+    if (w) w.innerHTML = r.warns.map(function (x) { return '<div style="font-size:12px;color:#F2B650;margin-top:4px">' + escHtml(x) + '</div>'; }).join('');
+  });
+  const o = _coOverall({ reportType: co.reportType, intake: it }, f);
+  const pg = document.getElementById('co-progress');
+  if (pg) pg.innerHTML = '<span style="color:' + (o.missing ? 'var(--amber)' : 'var(--teal)') + '">'
+    + (o.missing ? 'Required fields missing' : 'Required fields complete') + '</span><br>'
+    + o.filled + ' of ' + o.total + ' sections filled in' + (o.gaps ? ' · ' + o.gaps + ' gap' + (o.gaps === 1 ? '' : 's') : '');
+  const rl = document.getElementById('co-reline');
+  if (rl) rl.textContent = _coReline(it, _coWork.proj || {});
 }
 
 // ── Report branding (letterhead on printable/quick reports) ──────────────

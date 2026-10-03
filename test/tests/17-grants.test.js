@@ -76,6 +76,11 @@ const ALLOWED = {
   pi_parcels: { anon: ['SELECT'] },
   pi_parcel_owners: { anon: ['SELECT'] },
   pi_client_summaries: { anon: ['SELECT'] },
+  // PI close-out intake (sql/2026-10-03_closeouts.sql): staff-only, same
+  // posture as pi_tribal_consultations. The intake holds internal narrative
+  // pointers and is a working draft, never a client record — client-portal.html
+  // (the only anon app) has nothing to read here, so anon is granted nothing.
+  pi_closeouts: { anon: [], authenticated: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'] },
 };
 
 // `grant a, b on t1, t2 to r1, r2;` — possibly across lines.
@@ -143,8 +148,8 @@ module.exports = {
     }
 
     const tables = Object.keys(granted).filter(x => created.has(x)).sort();
-    t.eq(tables, ['pi_client_access','pi_client_summaries','pi_parcel_owners',
-                  'pi_parcels','pi_portal_links'],
+    t.eq(tables, ['pi_client_access','pi_client_summaries','pi_closeouts',
+                  'pi_parcel_owners','pi_parcels','pi_portal_links'],
          'every table a migration creates also grants it — none was missed entirely');
 
     for (const tbl of tables) {

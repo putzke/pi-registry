@@ -883,8 +883,8 @@ the capped generic prompt reaches no report narrative.
 - **`'archive'`** — `_buildArchiveHTML()` output with AI trend button
 - **`'closeout'`** — `_closeoutTabHTML()`, the PI Close-Out (below). While
   `S.coId` is set, `renderReports` hands the whole view to
-  `renderCloseoutIntake()` (own topbar, like the report editor); `setView`
-  clears it.
+  `renderCloseoutIntake()` or `renderCloseoutReport()` (by `S.coView`; own
+  topbar, like the report editor); `setView` clears `S.coId`.
 
 ### PI Close-Out — step 1 of 6 BUILT: the intake (Oct 2026)
 The final deliverable to the client (for UDOT, the Region SCM), modelled on
@@ -923,11 +923,64 @@ internal narrative pointers and is a working draft, never client-facing.
   save stays dirty and retries on the next edit or on leaving.
 - Attachment stitching (weekly reports, logs, photos into one PDF) stays
   OUTSIDE the app — `merge_package.py` via the skill.
-- **Remaining build order:** (2) report template / .docx shell, (3) Program at a
-  Glance scorecard + Delivery Against Scope table, (4) PI Highlights, (5)
-  Stakeholder Communications Log Summary, (6) charts (SVG rendered to PNG for
+- **Remaining build order:** (3) Program at a Glance scorecard + Commitments +
+  Delivery Against Scope table, (4) PI Highlights AI drafting, (5) Stakeholder
+  Communications Log Summary AI drafting, (6) charts (SVG rendered to PNG for
   the .docx). Tribal stays parked.
 - Covered by `test/tests/55-closeout-intake.test.js` (50 checks).
+
+### PI Close-Out — step 2 BUILT: the report document (Oct 2026)
+"Report" (on the tab card, and "Report →" in the intake topbar) opens
+`renderCloseoutReport()`: narrative slots on the left, a live page preview on the
+right, letterhead select and **Export .docx** in the topbar. `S.coView`
+(`'intake'`|`'report'`) picks which screen `renderReports` hands the view to.
+- **ONE document model, two renderers.** `_coReportDoc(co)` builds the report
+  as a list of blocks (`p` with runs, `section`, `title`, `break`, `todo`);
+  `_coBlocksHTML` renders the preview and `_coBlocksDocx` the WordprocessingML.
+  Nothing builds report content anywhere else — that is what keeps the preview
+  and the client's file identical. Add a section by adding blocks in
+  `_coReportDoc`, never by writing XML or HTML for it separately.
+- **Prose lives in `intake.draft[slot]`**, one paragraph per line: `letter`,
+  `hl-<id>` (seven PI Highlights, `CLOSEOUT_REPORTS[type].highlights`),
+  `commlog`, `lessons` (a line `Heading: text` prints as a bold run-in heading).
+  Steps 4–5 draft INTO these same slots, so the consultant always edits one
+  place. `_coSet` handles `data-dr`.
+- **Everything else is assembled from the intake**: address block, date
+  (mm/dd/yyyy), Re: line, salutation (derived "Dear <name>," when none typed),
+  signature, and the link lists under highlights — news, website + project
+  email (mailto), newsletter editions WITH a link, social posts with an indented
+  `comment sample:` line (`@user: text` → bold user). Links print as their
+  label and are real hyperlinks (External relationships `rIdCoL<n>`, added to
+  `document.xml.rels` at export); the raw URL never prints. `_coSafeUrl` only
+  makes http(s)/mailto live — a `javascript:` or blank URL prints its label
+  with a `[link missing]` flag rather than vanishing.
+- The region select stores "Region One"; the letter prints "UDOT Region One",
+  and an office address whose first line is the same region (either spelling)
+  doesn't repeat it.
+- **Placeholders are yellow highlights in both renderings** (`hl` runs):
+  missing recipient, address, letter body, a highlight heading that has links
+  but no text, the photo-gallery spot. Export counts them (photo spot excluded)
+  and `confirm()`s before writing — finishing in Word is allowed, shipping one
+  unnoticed is not.
+- **Inclusion rule:** a highlight heading prints only with text or links; the
+  highlights, comm-log and lessons sections only when they have content.
+  Commitments to the Public only when the project has commitments. Each section
+  shows an "In the report / Left out / Next step" pill with the reason.
+- `todo` blocks mark what step 3 builds (Program at a Glance, Commitments,
+  Delivery Against Scope): visible in the preview, **never exported**.
+- **Letterhead**: the skill's `SCM_CloseOut_Template.docx` is the SAME Sunrise
+  letterhead as the embedded `_piDocxTemplate` (header/footer images byte-identical),
+  so it is reused, not embedded again. Per close-out choice in
+  `intake.letterhead` (default Sunrise; Sunrise Alt / UDOT / off). Off strips
+  the header but keeps every hyperlink relationship. `_firstPageHeaderOnly`
+  applies as everywhere else.
+- File name `<PIN> <Route> PI Close-Out Report.docx` (interim: label instead of
+  route). Ends with a page break, the photo placeholder and `<REPORT END>`, as
+  the skill does. Attachment stitching stays in `merge_package.py`.
+- Covered by `test/tests/56-closeout-report.test.js` (55 checks: preview AND
+  unzipped .docx, every hyperlink resolving to an External relationship, three
+  letterheads). Verified independently with **python-docx**: opens cleanly,
+  first-page header only, 5 external hyperlinks, paragraphs in letter order.
 
 ### PI Report Editor (openPIReport)
 - Replaces full `#main` div (including topbar)

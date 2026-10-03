@@ -263,6 +263,12 @@ select optgroup{background:var(--navy-mid);color:var(--sky-lt);font-weight:700;f
 .co-sec>summary::before{content:'\25B8';color:var(--fog);font-size:12px;width:10px}
 .co-sec[open]>summary::before{content:'\25BE'}
 .co-row{display:flex;flex-wrap:wrap;gap:0 14px}
+.co-page{background:#fff;color:#222;font-family:Calibri,Carlito,Arial,sans-serif;font-size:14.5px;line-height:1.35;max-width:816px;margin:0 auto;padding:48px 56px 64px;box-shadow:0 2px 14px rgba(0,0,0,.35);border-radius:2px}
+.co-page p{margin:0;white-space:pre-wrap}
+.co-pgbreak{border-top:2px dashed #b9c2cc;margin:22px -56px;position:relative}
+.co-pgbreak::after{content:'page break';position:absolute;right:8px;top:-9px;background:#fff;color:#8a96a3;font-size:10px;padding:0 4px}
+.co-todo{border:1.5px dashed #8CC2F5;background:#EEF5FD;color:#2D5E8F;border-radius:6px;padding:10px 12px;margin:12px 0;font-size:12.5px}
+.co-todo-ed{font-size:12px;color:#8CC2F5;background:rgba(74,155,232,.08);border:1px dashed rgba(74,155,232,.35);border-radius:6px;padding:8px 10px}
 .co-tbl{width:100%;border-collapse:collapse;font-size:12px}
 .co-tbl th{text-align:left;color:var(--fog);font-size:11px;text-transform:uppercase;letter-spacing:.4px;font-weight:600;padding:6px 8px 6px 0}
 .co-tbl td{padding:3px 8px 3px 0;vertical-align:middle}
@@ -8668,7 +8674,10 @@ function renderReports(el){
   // report editor. Dropped if the project scope changed underneath it.
   if(S.coId){
     var _co=(_syncCache.closeouts||[]).find(function(c){return String(c.id)===String(S.coId);});
-    if(_co&&String(_co.projectId)===String(projF)){ renderCloseoutIntake(el,_co); return; }
+    if(_co&&String(_co.projectId)===String(projF)){
+      if(S.coView==='report') renderCloseoutReport(el,_co); else renderCloseoutIntake(el,_co);
+      return;
+    }
     S.coId=null;
   }
 
@@ -9239,10 +9248,11 @@ function _closeoutTabHTML(projF) {
       + (st.missing ? 'Required fields missing' : 'Required fields complete') + ' · '
       + st.filled + ' of ' + st.total + ' sections filled in'
       + (st.gaps ? ' · ' + st.gaps + ' gap' + (st.gaps === 1 ? '' : 's') : '') + '</div>'
-      + '<div style="font-size:11px;color:var(--fog);margin-top:4px">Drafting the report from this intake is the next step being built; everything typed here is saved for it.</div>'
+      + '<div style="font-size:11px;color:var(--fog);margin-top:4px">Write and preview the report under <strong>Report</strong>; export it as a Word document from there.</div>'
       + '</div>'
       + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
       + '<button class="btn btn-primary" onclick="openCloseoutIntake(\'' + co.id + '\')">Open intake</button>'
+      + '<button class="btn" onclick="openCloseoutReport(\'' + co.id + '\')">Report</button>'
       + '<button class="btn btn-sm" style="color:#e07a7a" onclick="coDelete(\'' + co.id + '\')">Delete</button>'
       + '</div></div>';
   });
@@ -9390,6 +9400,7 @@ function openCloseoutIntake(id) {
   if (!co) return;
   if (!_coWork || _coWork.id !== co.id) _coWork = { id: co.id, intake: JSON.parse(JSON.stringify(co.intake || {})) };
   S.coId = co.id;
+  S.coView = 'intake';
   S.coOpen = {};
   renderReports(document.getElementById('main'));
 }
@@ -9468,6 +9479,7 @@ function renderCloseoutIntake(el, co) {
     + '<div class="topbar-sub">' + escHtml(t.label) + ' · ' + escHtml(_projHeaderLabel(proj.name || '', proj.pid || '')) + '</div></div>'
     + '<div class="topbar-sp"></div>'
     + '<span id="co-save" style="font-size:12px;color:var(--fog)">' + (_coDirty ? 'Unsaved changes' : 'Saved') + '</span>'
+    + '<button class="btn btn-primary btn-sm" style="margin-left:12px" onclick="openCloseoutReport(\'' + co.id + '\')">Report →</button>'
     + '</div>'
     + '<div class="content" style="overflow-y:auto"><div style="padding:24px;display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start;width:100%;max-width:1320px">'
     + '<nav aria-label="Intake sections" style="flex:1 1 220px;max-width:100%;position:sticky;top:0;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:var(--radius-lg);padding:10px">'
@@ -9658,8 +9670,12 @@ function _coSet(el) {
     const d = it.deliverables || (it.deliverables = {});
     d[el.dataset.d] = d[el.dataset.d] || {};
     d[el.dataset.d][el.dataset.c] = v;
+  } else if (el.dataset.dr) {
+    const d = it.draft || (it.draft = {});
+    d[el.dataset.dr] = v;
   }
   _coRefreshStatus();
+  _coPreviewSoon();
   _coSaveSoon();
 }
 
@@ -9734,6 +9750,429 @@ function _coRefreshStatus() {
     + o.filled + ' of ' + o.total + ' sections filled in' + (o.gaps ? ' · ' + o.gaps + ' gap' + (o.gaps === 1 ? '' : 's') : '');
   const rl = document.getElementById('co-reline');
   if (rl) rl.textContent = _coReline(it, _coWork.proj || {});
+}
+
+// ── PI CLOSE-OUT (step 2: the report document) ────────────────────────────
+// The report is built ONCE, as a list of blocks, by _coReportDoc(). The live
+// preview (_coBlocksHTML) and the Word export (_coBlocksDocx) both render that
+// same list, so what is on screen is what the client receives. Keep it that
+// way: the PI report has four hand-kept copies of its prose styling, and
+// keeping them in step is a standing chore (see RPT_PROSE_CSS).
+//
+// Block:  { t:'p', runs, align, indent, left, before, after }   paragraph
+//         { t:'section', text }  bold underlined section title
+//         { t:'title', text }    centred report title
+//         { t:'break' }          page break
+//         { t:'todo', text }     a section a later build step fills; preview
+//                                only, never exported
+// Run:    { text, b, i, link, hl }  hl = a placeholder. It prints highlighted
+//         yellow in the .docx and preview, so an unfinished part can never
+//         pass for finished text.
+//
+// The prose lives in intake.draft[slot], one paragraph per line. Later steps
+// draft into the same slots (AI where it is useful), so the consultant always
+// edits one place. An empty optional slot leaves its section out.
+
+const CLOSEOUT_REPORTS = {
+  'udot-construction': {
+    letterhead: 'sunrise',
+    // Order and wording follow the reference reports (19739, 17894, 22108).
+    highlights: [
+      { id: 'outreach', h: 'Early public outreach & project advertising summary', links: 'news' },
+      { id: 'website', h: 'Project Dedicated Website | Dedicated Project Phone Hotline/Email', links: 'website' },
+      { id: 'email', h: 'Email Construction Updates to Public Subscribers', links: 'editions' },
+      { id: 'concerns', h: 'Inbound public complaints/concerns' },
+      { id: 'traffic', h: 'Traffic control notifications to public' },
+      { id: 'social', h: 'UDOT and External Social Media Broadcasting', links: 'social' },
+      { id: 'coord', h: 'PI Coordination' }
+    ],
+    slotHints: {
+      letter: 'Three short paragraphs: thanks and what the PI scope covered; the outcome and how the public responded; what the following pages and attachments contain.',
+      commlog: 'A synthesis of the whole interaction log, not a table: how many contacts over what span, the channels, the main themes, notable interactions and how they were resolved, and the overall tone.',
+      lessons: 'Two to four lessons. Start a line with a short heading and a colon to print it as a bold run-in heading, e.g. "Pre-plan business access: …"'
+    }
+  }
+};
+function _coReportType(co) { return CLOSEOUT_REPORTS[co && co.reportType] || CLOSEOUT_REPORTS['udot-construction']; }
+
+// One paragraph per non-empty line.
+function _coLines(v) {
+  return String(v || '').split(/\r?\n/).map(function (s) { return s.trim(); }).filter(Boolean);
+}
+function _coSafeUrl(u) {
+  u = String(u || '').trim();
+  if (!u) return '';
+  if (/^mailto:/i.test(u) || /^https?:\/\//i.test(u)) return u;
+  if (/^[\w.+-]+@[\w-]+\.[\w.-]+$/.test(u)) return 'mailto:' + u;
+  if (/^[\w-]+(\.[\w-]+)+(\/|$)/.test(u)) return 'https://' + u;   // "udot.utah.gov/x"
+  return '';
+}
+function _coHole(label) { return { text: '[' + label + ']', hl: true }; }
+
+// The links printed under a highlight heading, from the intake. A row with a
+// label but no usable link still prints, flagged, rather than vanishing.
+function _coHighlightLinks(kind, it) {
+  const out = [];
+  const link = function (url, label) {
+    const u = _coSafeUrl(url);
+    return u ? { t: 'p', after: 2, runs: [{ text: label, link: u }] }
+             : { t: 'p', after: 2, runs: [{ text: label + ' ' }, _coHole('link missing')] };
+  };
+  if (kind === 'news') {
+    (it.news || []).filter(_coRowHas).forEach(function (r) {
+      const label = '(' + [r.outlet, r.topic].filter(_coVal).join(' – ') + ')';
+      out.push(link(r.url, label === '()' ? '(News article)' : label));
+    });
+  } else if (kind === 'editions') {
+    // Only editions with a link are listed (the intake says so).
+    (it.editions || []).filter(function (r) { return _coVal(r && r.url); }).forEach(function (r) {
+      const label = '(' + [r.sent, r.title].filter(_coVal).join(' – ') + ')';
+      out.push(link(r.url, label === '()' ? '(Email update)' : label));
+    });
+  } else if (kind === 'website') {
+    if (_coVal(it.websiteUrl)) out.push(link(it.websiteUrl, '(Project website)'));
+    if (_coVal(it.projectEmail)) out.push(link(it.projectEmail, '(' + String(it.projectEmail).trim() + ')'));
+  } else if (kind === 'social') {
+    (it.social || []).filter(_coRowHas).forEach(function (r) {
+      const label = '(' + [r.account || 'Social post', r.engagement].filter(_coVal).join(' – ') + ')';
+      out.push(link(r.url, label));
+      if (_coVal(r.comment)) {
+        const m = String(r.comment).trim().match(/^@?([^:\s][^:]{0,40}):\s*([\s\S]+)$/);
+        out.push({ t: 'p', left: 720, after: 2, runs: m
+          ? [{ text: 'comment sample:  ' }, { text: m[1].trim(), b: true }, { text: '  ' + m[2].trim() }]
+          : [{ text: 'comment sample:  ' }, { text: String(r.comment).trim() }] });
+      }
+    });
+  }
+  return out;
+}
+
+// A run-in heading paragraph: "**Heading:** first paragraph", then the rest.
+function _coRunIn(heading, paras, placeholder) {
+  const first = paras.length ? { text: paras[0] } : _coHole(placeholder || 'not written yet');
+  const out = [{ t: 'p', before: 12, after: 6, runs: [{ text: heading + ': ', b: true }, first] }];
+  paras.slice(1).forEach(function (x) { out.push({ t: 'p', runs: [{ text: x }] }); });
+  return out;
+}
+
+// Builds the whole report. Returns the blocks plus, per section, whether it is
+// in the report and why — the report screen shows that beside each section so
+// "left out" is always a visible decision, never a silent one.
+function _coReportDoc(co) {
+  const it = (_coWork && _coWork.id === co.id) ? _coWork.intake : (co.intake || {});
+  const dr = it.draft || {};
+  const rt = _coReportType(co);
+  const proj = (DB.get('projects') || []).find(function (p) { return String(p.id) === String(co.projectId); }) || {};
+  const facts = _closeoutFacts(co.projectId);
+  const B = [], sections = [];
+  const P = function (runs, o) { B.push(Object.assign({ t: 'p', runs: Array.isArray(runs) ? runs : [{ text: runs }] }, o || {})); };
+  const txt = function (v, ph) { return _coVal(v) ? { text: String(v).trim() } : _coHole(ph); };
+
+  // ── Cover letter ──
+  // The region select stores "Region One"; the letter's first line is the
+  // agency's, "UDOT Region One". An office address that already starts with
+  // the region (either spelling) doesn't repeat it.
+  const region = _coVal(it.region) ? (/^udot\b/i.test(String(it.region).trim()) ? '' : 'UDOT ') + String(it.region).trim() : '';
+  const office = _coLines(it.office);
+  const sameRegion = function (a, b) { const n = function (x) { return x.toLowerCase().replace(/^udot\s+/, '').replace(/\s+/g, ' '); }; return n(a) === n(b); };
+  if (region) P(region, { after: 0 });
+  P([{ text: 'Attn:  ' }, txt(it.scmName, 'Recipient name & title')], { after: 0 });
+  const addr = office.length && region && sameRegion(office[0], region) ? office.slice(1) : office;
+  if (addr.length) addr.forEach(function (l) { P(l, { after: 0 }); });
+  else P([_coHole('Region office address')], { after: 0 });
+  P('', { after: 0 });
+  P([_coVal(it.reportDate) ? { text: _fmtMDY(it.reportDate) } : _coHole('Date')]);
+  P('', { after: 0 });
+  P(_coReline(it, proj));
+  P('', { after: 0 });
+  const sal = _coVal(it.salutation) ? String(it.salutation).trim()
+    : _coVal(it.scmName) ? 'Dear ' + String(it.scmName).split(',')[0].trim() + ',' : '';
+  P([sal ? { text: sal } : _coHole('Salutation')]);
+  const letter = _coLines(dr.letter);
+  if (letter.length) letter.forEach(function (x) { P(x, { indent: 720 }); });
+  else P([_coHole('Cover letter: ' + rt.slotHints.letter)], { indent: 720 });
+  P('', { after: 0 });
+  P('Best regards,');
+  P('', { after: 18 });
+  P([txt(it.sigName, 'Your name')], { after: 0 });
+  if (_coVal(it.sigTitle)) P(String(it.sigTitle).trim(), { after: 0 });
+  if (_coVal(it.sigRole)) P(String(it.sigRole).trim(), { after: 0 });
+  if (_coVal(it.sigEmail)) P('Email:  ' + String(it.sigEmail).trim(), { after: 0 });
+  if (_coVal(it.sigPhone)) P('Phone:  ' + String(it.sigPhone).trim(), { after: 0 });
+  if (_coVal(it.sigCell)) P('Cell:  ' + String(it.sigCell).trim(), { after: 0 });
+  sections.push({ id: 'letter', title: 'Cover letter', state: 'in',
+    why: letter.length ? '' : 'Body not written yet: it prints as a highlighted placeholder.' });
+  B.push({ t: 'break' });
+
+  // ── Title ──
+  const lbl = co.label && co.label !== 'Final' ? co.label + ' ' : '';
+  B.push({ t: 'title', text: 'PIN #' + (proj.pid || '?') + ' ' + lbl + 'Public Involvement Close-Out Report' });
+  if (_coVal(it.reportDate)) B.push({ t: 'title', text: _fmtMDY(it.reportDate), after: 10 });
+
+  // ── PI Program at a Glance (step 3) ──
+  B.push({ t: 'todo', text: 'PI Program at a Glance — the scorecard of counts from COMPASS and your metrics. Built in the next step.' });
+  sections.push({ id: 'glance', title: 'PI Program at a Glance', state: 'todo', why: 'Built in the next step.' });
+
+  // ── PI Highlights ──
+  const hl = [];
+  rt.highlights.forEach(function (h) {
+    const paras = _coLines(dr['hl-' + h.id]);
+    const links = h.links ? _coHighlightLinks(h.links, it) : [];
+    if (!paras.length && !links.length) return;
+    hl.push.apply(hl, _coRunIn(h.h, paras, 'narrative not written yet'));
+    hl.push.apply(hl, links);
+  });
+  if (hl.length) { B.push({ t: 'section', text: 'PI Highlights:' }); B.push.apply(B, hl); }
+  sections.push({ id: 'highlights', title: 'PI Highlights', state: hl.length ? 'in' : 'out',
+    why: hl.length ? '' : 'Nothing written and no links in the intake yet.' });
+
+  // ── Stakeholder Communications Log Summary ──
+  const cl = _coLines(dr.commlog);
+  if (cl.length) {
+    B.push({ t: 'section', text: 'Stakeholder Communications Log Summary:' });
+    cl.forEach(function (x) { P(x); });
+  }
+  sections.push({ id: 'commlog', title: 'Stakeholder Communications Log Summary', state: cl.length ? 'in' : 'out',
+    why: cl.length ? '' : 'Not written yet.' });
+
+  // ── Commitments to the Public (step 3) — only when the project has any ──
+  if (facts.commitments > 0) {
+    B.push({ t: 'todo', text: 'Commitments to the Public — ' + facts.commitments + ' commitment' + (facts.commitments === 1 ? '' : 's') + ' and whether each was kept. Built in the next step.' });
+    sections.push({ id: 'commitments', title: 'Commitments to the Public', state: 'todo', why: 'Built in the next step.' });
+  } else {
+    sections.push({ id: 'commitments', title: 'Commitments to the Public', state: 'out', why: 'No commitments on this project.' });
+  }
+
+  // ── Lessons Learned ──
+  const ls = _coLines(dr.lessons);
+  if (ls.length) {
+    B.push({ t: 'section', text: 'Lessons Learned and Recommendations on PI Approach:' });
+    ls.forEach(function (x) {
+      const m = x.match(/^([^:]{3,80}):\s+([\s\S]+)$/);
+      if (m) B.push.apply(B, _coRunIn(m[1].trim(), [m[2].trim()]));
+      else P(x);
+    });
+  }
+  sections.push({ id: 'lessons', title: 'Lessons Learned & Recommendations', state: ls.length ? 'in' : 'out',
+    why: ls.length ? '' : 'Not written yet.' });
+
+  // ── Delivery Against Scope (step 3) ──
+  B.push({ t: 'todo', text: 'Delivery Against Scope of Work — one row per deliverable, with your wording and evidence. Built in the next step.' });
+  sections.push({ id: 'scope', title: 'Delivery Against Scope of Work', state: 'todo', why: 'Built in the next step.' });
+
+  // ── Photo gallery: added in Word ──
+  B.push({ t: 'break' });
+  P([_coHole('Photo gallery: insert project photos here, two per row')]);
+  P('<REPORT END>', { before: 8 });
+  sections.push({ id: 'photos', title: 'Photo gallery', state: 'in', why: 'Added in Word after export.' });
+
+  return { blocks: B, sections: sections, proj: proj, intake: it };
+}
+
+// ── Renderers ─────────────────────────────────────────────────────────────
+function _coBlocksHTML(blocks) {
+  const run = function (r) {
+    let h = escHtml(r.text);
+    if (r.b) h = '<strong>' + h + '</strong>';
+    if (r.i) h = '<em>' + h + '</em>';
+    if (r.link) h = '<a href="' + escHtml(r.link) + '" target="_blank" rel="noopener" style="color:#0563C1;text-decoration:underline">' + h + '</a>';
+    if (r.hl) h = '<mark style="background:#FFF200;color:#222">' + h + '</mark>';
+    return h;
+  };
+  return blocks.map(function (b) {
+    if (b.t === 'break') return '<div class="co-pgbreak" aria-hidden="true"></div>';
+    if (b.t === 'title') return '<div style="text-align:center;font-weight:700;font-size:18px;margin:0 0 ' + (b.after || 0) + 'px">' + escHtml(b.text) + '</div>';
+    if (b.t === 'section') return '<div style="font-weight:700;font-size:17px;text-decoration:underline;margin:14px 0 10px">' + escHtml(b.text) + '</div>';
+    if (b.t === 'todo') return '<div class="co-todo">' + escHtml(b.text) + '</div>';
+    const st = 'margin:' + (b.before || 0) * 1.33 + 'px 0 ' + (b.after === undefined ? 6 : b.after) * 1.33 + 'px;'
+      + (b.indent ? 'text-indent:' + b.indent / 15 + 'px;' : '') + (b.left ? 'margin-left:' + b.left / 15 + 'px;' : '')
+      + (b.align === 'center' ? 'text-align:center;' : '');
+    const inner = (b.runs || []).map(run).join('');
+    return '<p style="' + st + '">' + (inner || '&nbsp;') + '</p>';
+  }).join('');
+}
+
+// WordprocessingML for the blocks, plus the external hyperlinks they need
+// (each becomes a relationship in word/_rels/document.xml.rels).
+function _coBlocksDocx(blocks) {
+  const links = [];
+  const run = function (r) {
+    let rpr = (r.link ? '<w:rStyle w:val="Hyperlink"/>' : '') + (r.b ? '<w:b/>' : '') + (r.i ? '<w:i/>' : '')
+      + (r.link ? '<w:color w:val="0563C1"/>' : '') + (r.size ? '<w:sz w:val="' + r.size + '"/><w:szCs w:val="' + r.size + '"/>' : '')
+      + (r.hl ? '<w:highlight w:val="yellow"/>' : '') + (r.link ? '<w:u w:val="single"/>' : '');
+    const x = '<w:r>' + (rpr ? '<w:rPr>' + rpr + '</w:rPr>' : '') + '<w:t xml:space="preserve">' + escXml(r.text) + '</w:t></w:r>';
+    if (!r.link) return x;
+    links.push(r.link);
+    return '<w:hyperlink r:id="rIdCoL' + links.length + '" w:history="1">' + x + '</w:hyperlink>';
+  };
+  const ppr = function (b) {
+    return '<w:pPr><w:spacing w:before="' + Math.round((b.before || 0) * 20) + '" w:after="' + Math.round((b.after === undefined ? 6 : b.after) * 20) + '"/>'
+      + (b.indent || b.left ? '<w:ind' + (b.left ? ' w:left="' + b.left + '"' : '') + (b.indent ? ' w:firstLine="' + b.indent + '"' : '') + '/>' : '')
+      + (b.align === 'center' ? '<w:jc w:val="center"/>' : '') + '</w:pPr>';
+  };
+  const xml = blocks.map(function (b) {
+    if (b.t === 'todo') return '';
+    if (b.t === 'break') return '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+    if (b.t === 'title') return '<w:p>' + ppr({ align: 'center', after: b.after || 0 }) + run({ text: b.text, b: true, size: 28 }) + '</w:p>';
+    if (b.t === 'section') {
+      return '<w:p>' + ppr({ before: 10, after: 8 }) + '<w:r><w:rPr><w:b/><w:sz w:val="26"/><w:szCs w:val="26"/><w:u w:val="single"/></w:rPr>'
+        + '<w:t xml:space="preserve">' + escXml(b.text) + '</w:t></w:r></w:p>';
+    }
+    return '<w:p>' + ppr(b) + (b.runs || []).filter(function (r) { return r.text !== ''; }).map(run).join('') + '</w:p>';
+  }).join('');
+  return { xml: xml, links: links };
+}
+
+// ── Export ────────────────────────────────────────────────────────────────
+function _coFileName(co, proj, it) {
+  const route = co.label && co.label !== 'Final' ? co.label : String(it.route || '').trim();
+  return [proj.pid, route, 'PI Close-Out Report'].filter(_coVal).join(' ').replace(/[\\/:*?"<>|]+/g, '-') + '.docx';
+}
+
+async function exportCloseoutDocx() {
+  const co = (_syncCache.closeouts || []).find(function (c) { return _coWork && c.id === _coWork.id; });
+  if (!co) return null;
+  await _coSave();
+  const doc = _coReportDoc(co);
+  const holes = doc.blocks.reduce(function (n, b) {
+    return n + (b.runs || []).filter(function (r) { return r.hl && !/^\[Photo gallery/.test(r.text); }).length;
+  }, 0);
+  if (holes && !confirm(holes + ' placeholder' + (holes === 1 ? ' is' : 's are') + ' still in the report. They print highlighted in yellow so they can be finished in Word.\n\nExport anyway?')) return null;
+
+  const brand = doc.intake.letterhead || _coReportType(co).letterhead;
+  const b64 = brand === 'udot' ? window._piDocxTemplateUdot
+    : brand === 'sunrisealt' ? window._piDocxTemplateSunriseAlt : window._piDocxTemplate;
+  if (!b64) { showToast('Letterhead template not loaded. Reload the page and try again.', 'error'); return null; }
+  try {
+    const bin = atob(b64), arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    const zip = await JSZip.loadAsync(arr);
+    const body = _coBlocksDocx(doc.blocks);
+    const docXml = await zip.file('word/document.xml').async('string');
+    const sectIdx = docXml.indexOf('<w:sectPr'), bodyIdx = docXml.indexOf('<w:body>');
+    if (sectIdx < 0 || bodyIdx < 0) throw new Error('template structure not recognised');
+    let finalXml = _firstPageHeaderOnly(docXml.substring(0, bodyIdx + 8) + body.xml + docXml.substring(sectIdx));
+    if (finalXml.indexOf('xmlns:r=') < 0) finalXml = finalXml.replace('<w:document ', '<w:document xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ');
+
+    let rels = await zip.file('word/_rels/document.xml.rels').async('string');
+    rels = rels.replace('</Relationships>', body.links.map(function (u, i) {
+      return '<Relationship Id="rIdCoL' + (i + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="' + escXml(u) + '" TargetMode="External"/>';
+    }).join('') + '</Relationships>');
+    if (brand === 'off') {
+      // Written here, synchronously, so the archive below can't race it.
+      rels = rels.replace(/<Relationship[^>]*relationships\/(header|footer)"[^>]*\/>/g, '');
+    }
+    zip.file('word/_rels/document.xml.rels', rels);
+    if (brand === 'off') _stripLetterheadFromZip(zip, finalXml);
+    else zip.file('word/document.xml', finalXml);
+
+    const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    const url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = _coFileName(co, doc.proj, doc.intake);
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+    showToast('Close-out report exported as .docx');
+    return blob;
+  } catch (e) {
+    console.error('Close-out DOCX export error:', e);
+    showToast('Export failed. Check the browser console for details.', 'error', 6000);
+    return null;
+  }
+}
+
+// ── The report screen ─────────────────────────────────────────────────────
+function openCloseoutReport(id) {
+  const co = (_syncCache.closeouts || []).find(function (c) { return c.id === String(id); });
+  if (!co) return;
+  if (!_coWork || _coWork.id !== co.id) _coWork = { id: co.id, intake: JSON.parse(JSON.stringify(co.intake || {})) };
+  S.coId = co.id;
+  S.coView = 'report';
+  renderReports(document.getElementById('main'));
+}
+
+const CO_LETTERHEADS = [['sunrise', 'Sunrise'], ['sunrisealt', 'Sunrise Alt'], ['udot', 'UDOT'], ['off', 'No letterhead']];
+
+function renderCloseoutReport(el, co) {
+  if (!_coWork || _coWork.id !== co.id) _coWork = { id: co.id, intake: JSON.parse(JSON.stringify(co.intake || {})) };
+  const t = _coType(co), rt = _coReportType(co), it = _coWork.intake, dr = it.draft || {};
+  const proj = (DB.get('projects') || []).find(function (p) { return String(p.id) === String(co.projectId); }) || {};
+  _coWork.proj = proj;
+  _coWork.facts = _closeoutFacts(co.projectId);
+  const lh = it.letterhead || rt.letterhead;
+  const slot = function (key, label, hint, rows, extra) {
+    return '<div class="fr" style="margin-bottom:14px"><label for="co-dr-' + key + '">' + label + '</label>'
+      + (hint ? '<div style="font-size:11px;color:var(--fog);margin:-1px 0 5px">' + hint + '</div>' : '')
+      + '<textarea id="co-dr-' + key + '" data-dr="' + key + '" oninput="_coSet(this)" rows="' + (rows || 4) + '">' + escHtml(dr[key]) + '</textarea>'
+      + (extra || '') + '</div>';
+  };
+  const ref = function (label, v) {
+    return _coVal(v) ? '<div style="font-size:11px;color:var(--slate);background:rgba(255,255,255,.04);border-radius:6px;padding:7px 9px;margin-top:6px;white-space:pre-wrap"><strong style="color:var(--mist)">' + label + ' (from the intake):</strong> ' + escHtml(v) + '</div>' : '';
+  };
+  const box = function (id, title, body) {
+    return '<div class="co-sec" style="padding:12px 14px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">'
+      + '<span style="font-size:14px;font-weight:600;color:var(--white)">' + title + '</span><span id="co-rs-' + id + '"></span></div>' + body + '</div>';
+  };
+  const linkNote = function (kind) {
+    const n = _coHighlightLinks(kind, it).filter(function (b) { return b.runs.some(function (r) { return r.link || r.hl; }); }).length;
+    return n ? '<div style="font-size:11px;color:#5BD3A9;margin-top:4px">+ ' + n + ' link' + (n === 1 ? '' : 's') + ' from the intake print under this heading</div>' : '';
+  };
+  const hlSlots = rt.highlights.map(function (h) {
+    return slot('hl-' + h.id, h.h, '', 3, h.links ? linkNote(h.links) : '');
+  }).join('');
+  const editor = box('letter', 'Cover letter', slot('letter', 'Letter body', rt.slotHints.letter, 7)
+      + '<div style="font-size:11px;color:var(--fog)">Address block, date, Re: line, salutation and signature come from the intake.</div>')
+    + box('glance', 'PI Program at a Glance', '<div class="co-todo-ed">Built in the next step, from the counts COMPASS already has.</div>')
+    + box('highlights', 'PI Highlights', '<div style="font-size:11px;color:var(--fog);margin-bottom:10px">A heading prints only when it has text or links.</div>' + hlSlots
+      + ref('Concerns of note', it.concerns) + ref('Notable outcomes & praise', it.praise))
+    + box('commlog', 'Stakeholder Communications Log Summary', slot('commlog', 'Summary', rt.slotHints.commlog, 6))
+    + box('commitments', 'Commitments to the Public', '<div class="co-todo-ed">Built in the next step, from the project’s commitments.</div>')
+    + box('lessons', 'Lessons Learned & Recommendations', slot('lessons', 'Lessons', rt.slotHints.lessons, 6) + ref('Your pointers', it.lessons))
+    + box('scope', 'Delivery Against Scope of Work', '<div class="co-todo-ed">Built in the next step, from Deliverables and your wording in the intake.</div>')
+    + box('photos', 'Photo gallery', '<div style="font-size:12px;color:var(--slate)">Insert photos in Word after export; a highlighted placeholder marks the spot.</div>');
+
+  el.innerHTML = '<div class="topbar">'
+    + '<button class="btn btn-sm" onclick="openCloseoutIntake(\'' + co.id + '\')">← Intake</button>'
+    + '<div><div class="topbar-title">Close-out report · ' + escHtml(co.label) + '</div>'
+    + '<div class="topbar-sub">' + escHtml(t.label) + ' · ' + escHtml(_projHeaderLabel(proj.name || '', proj.pid || '')) + '</div></div>'
+    + '<div class="topbar-sp"></div>'
+    + '<span id="co-save" style="font-size:12px;color:var(--fog);margin-right:12px">' + (_coDirty ? 'Unsaved changes' : 'Saved') + '</span>'
+    + '<label style="font-size:12px;color:var(--slate);display:flex;align-items:center;gap:6px;margin-right:10px">Letterhead '
+    + '<select data-k="letterhead" onchange="_coSet(this)" style="padding:5px 8px;background:var(--navy-mid);border:1px solid rgba(255,255,255,.15);border-radius:var(--radius);color:var(--white);font-size:12px">'
+    + CO_LETTERHEADS.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === lh ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('')
+    + '</select></label>'
+    + '<button class="btn btn-primary btn-sm" onclick="exportCloseoutDocx()">Export .docx</button>'
+    + '</div>'
+    + '<div class="content" style="display:flex;min-height:0;overflow:hidden">'
+    + '<div id="co-rpt-editor" style="flex:1 1 50%;min-width:0;overflow-y:auto;padding:20px">' + editor + '</div>'
+    + '<div style="flex:1 1 50%;min-width:0;overflow-y:auto;background:#5b6b7c;padding:20px">'
+    + '<div id="co-preview" class="co-page"></div></div>'
+    + '</div>';
+  _coRenderPreview();
+}
+
+let _coPreviewTimer = null;
+function _coPreviewSoon() {
+  if (!document.getElementById('co-preview')) return;
+  clearTimeout(_coPreviewTimer);
+  _coPreviewTimer = setTimeout(_coRenderPreview, 250);
+}
+function _coRenderPreview() {
+  const pv = document.getElementById('co-preview');
+  if (!pv || !_coWork) return;
+  const co = (_syncCache.closeouts || []).find(function (c) { return c.id === _coWork.id; });
+  if (!co) return;
+  const doc = _coReportDoc(co);
+  const lh = doc.intake.letterhead || _coReportType(co).letterhead;
+  pv.innerHTML = (lh === 'off' ? '' : _rptBrandHeader(lh)) + _coBlocksHTML(doc.blocks);
+  doc.sections.forEach(function (s) {
+    const e = document.getElementById('co-rs-' + s.id);
+    if (!e) return;
+    const style = s.state === 'in' ? 'background:rgba(29,158,117,.16);color:#5BD3A9'
+      : s.state === 'todo' ? 'background:rgba(74,155,232,.16);color:#8CC2F5' : 'background:rgba(255,255,255,.06);color:var(--fog)';
+    const label = s.state === 'in' ? 'In the report' : s.state === 'todo' ? 'Next step' : 'Left out';
+    e.innerHTML = '<span class="co-pill" style="' + style + '">' + label + '</span>'
+      + (s.why ? ' <span style="font-size:11px;color:var(--fog)">' + escHtml(s.why) + '</span>' : '');
+  });
 }
 
 // ── Report branding (letterhead on printable/quick reports) ──────────────

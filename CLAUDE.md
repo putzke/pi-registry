@@ -1232,12 +1232,11 @@ ROW agents read that before negotiating.
     shape as every table there: staff / OTP client / token-link anon) ARE the
     access control. A report with no `docx_path` (grandfathered) keeps View +
     Print/PDF exactly as before.
-  - **Same residual gap as the rest of the portal, not a new one.** The anon
-    (token-link) Storage policy scopes by "this project has SOME active portal
-    link," identical to every other `anon_portal_read` policy's documented
-    incompleteness (see the isolation migration's own note on the
-    `request.headers` GUC) — not attempted here for the same reason: it needs
-    live verification against the real Supabase project first.
+  - **The anon Storage policy now scopes to the visitor's own link** — it calls
+    `pi_portal_project_ids()`, which reads `x-portal-token` since Oct 2026 (see
+    "Portal token links scoped to the token actually held"). Storage also needs
+    `Authorization: Bearer <anon key>`; without it every token-link download
+    failed with a 400 until that same change.
   - What could and could not be verified from this sandbox: `storage.objects`
     RLS is a documented, stable Supabase primitive (not a guessed third-party
     endpoint like the UGRC story below) — the policy logic was verified for
@@ -2064,8 +2063,8 @@ RLS via the `request.headers` GUC — a real, documented PostgREST mechanism).
 Supabase project from the sandbox that built this — this codebase already
 shipped one integration wrong from search-result confidence instead of a live
 check (see the UGRC endpoint story below) and this would be the same mistake
-shape. **Now built and staged** — see "Portal token links scoped to the token
-actually held" below; it waits only on the live header probe. Project ids are small sequential integers, so this residual
+shape. **CLOSED Oct 2026** — see "Portal token links scoped to the token actually
+held" below (live and verified). Project ids are small sequential integers, so this residual
 gap is closeable by guessing, not just by holding a leaked token.
 
 **Column-level exposure is also unchanged and out of scope here**: RLS gates
@@ -2142,7 +2141,7 @@ that step is what caught this, and it would not have been caught any other
 way, including by everything in this session that came before actually
 running it.
 
-### Portal token links scoped to the token actually held — probe PASSED, rolling out (Oct 2026)
+### Portal token links scoped to the token actually held — LIVE, verified (Oct 2026)
 Closes the residual gap above. `sql/2026-10-05_portal_token_scoping.sql`
 redefines **`pi_portal_project_ids()`** — the one function every anon policy
 funnels through (all `anon_portal_read` policies plus the report-files Storage
@@ -2159,7 +2158,14 @@ worked:** Storage rejects (400) a request with only `apikey` and no
 supabase-js does (PostgREST still runs it as anon, so reads are unchanged).
 Probe results, live: REST with header → the token, without → null; Storage
 with header + Bearer → 200, without the header → 400. Staff and OTP clients are untouched (authenticated).
-- **Rollout order matters, and it is waiting on a live check.** Hosted
+- **Verified live 2026-10-05:** in the SQL Editor (no header) anon sees 0
+  projects; in a real token link's own tab, `pi_projects?select=id,name`
+  returns exactly one row, that link's project (42, Logan City 400 North).
+  Not yet exercised live: the .docx DOWNLOAD path, because the shared report
+  used had no `docx_path` (grandfathered; it offers Print/PDF instead). Attach
+  a final .docx to a shared report and download it via a token link to close
+  that. The probe objects should be dropped (cleanup block in the probe file).
+- **Rollout order mattered and was followed** (kept for the next such change). Hosted
   Supabase must (a) allow the header through CORS from putzke.github.io and
   (b) pass it to the database for BOTH PostgREST and Storage — none of which
   the sandbox can reach. `sql/probes/2026-10-05_portal_header_probe.sql`
@@ -2288,7 +2294,9 @@ Built for the UDOT conference demo.
   artifacts; a commented-out block at the bottom of the file converts it to a
   full EIS (and to the 45-day DEIS comment period) in one paste.
 
-**Security note — UPDATED Aug 2026, see the "Client portal data isolation"
+**Security note — the residual token gap described here was CLOSED in Oct
+2026** (see "Portal token links scoped to the token actually held"). Original
+note kept for history: **UPDATED Aug 2026, see the "Client portal data isolation"
 section below.** This used to say token isolation was client-side and RLS was
 blanket-permissive. That is now real, server-side, per-table RLS for both
 portal access paths — see `sql/2026-08-31_portal_client_isolation.sql`. One

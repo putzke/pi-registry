@@ -10857,9 +10857,19 @@ function _coWriteSlot(key, text) {
   _coSaveSoon();
 }
 
+// Every close-out AI button checks for a key FIRST, before its cost confirm:
+// otherwise a missing key meant a confirm, then (for Compare models) a window
+// of two empty "No draft returned" boxes, and only then the real reason.
+function _coHasKey() {
+  if (_getClaudeKey()) return true;
+  showToast('No Claude API key saved — add one under Settings → Claude AI Narrative Generation.', 'warn', 6000);
+  return false;
+}
+
 async function coDraftHighlight(hid, btn) {
   const co = (_syncCache.closeouts || []).find(function (c) { return _coWork && c.id === _coWork.id; });
   if (!co) return;
+  if (!_coHasKey()) return;
   const fx = _coHighlightFacts(co, hid);
   if (!fx.lines.length && !fx.notes.length) {
     showToast('Nothing is recorded for this heading yet. Type a few notes in the box and draft from them.', 'warn', 6000);
@@ -10881,6 +10891,7 @@ async function coDraftHighlight(hid, btn) {
 async function coDraftAllHighlights(btn) {
   const co = (_syncCache.closeouts || []).find(function (c) { return _coWork && c.id === _coWork.id; });
   if (!co) return;
+  if (!_coHasKey()) return;
   const dr = _coWork.intake.draft || {};
   const jobs = _coReportType(co).highlights.filter(function (h) {
     return !_coLines(dr['hl-' + h.id]).length && _coHighlightFacts(co, h.id).lines.length;
@@ -11043,6 +11054,7 @@ function _coWords(t) { return String(t || '').split(/\s+/).filter(Boolean).lengt
 async function coDraftCommlog(btn) {
   const co = (_syncCache.closeouts || []).find(function (c) { return _coWork && c.id === _coWork.id; });
   if (!co) return;
+  if (!_coHasKey()) return;
   const req = _coCommlogRequest(co);
   if (!req) { showToast('No interactions are logged on this project yet, so there is no log to summarize.', 'warn', 6000); return; }
   const est = _coCommlogCost(req, CLAUDE_COMMLOG_MODEL);
@@ -11068,6 +11080,7 @@ let _coCompareResults = null;
 async function coCompareCommlog(btn) {
   const co = (_syncCache.closeouts || []).find(function (c) { return _coWork && c.id === _coWork.id; });
   if (!co) return;
+  if (!_coHasKey()) return;
   const req = _coCommlogRequest(co);
   if (!req) { showToast('No interactions are logged on this project yet, so there is no log to summarize.', 'warn', 6000); return; }
   const a = _coCommlogCost(req, CLAUDE_TEXT_MODEL), b = _coCommlogCost(req, CLAUDE_STRONG_MODEL);

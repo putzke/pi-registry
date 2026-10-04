@@ -103,6 +103,24 @@ module.exports = {
       await page.waitForTimeout(1200);
       t.eq((await t.sql(`select intake->'draft'->>'commlog' c from pi_closeouts where id=${id}`))[0].c, 'Opus paragraph one.\nOpus paragraph two.', 'and it autosaves');
 
+      // ── no API key → one clear message, before any confirm or window ────
+      // (Seen live: the compare window opened with two empty "No draft
+      // returned" boxes, and the reason only showed up as a toast after.)
+      sent.length = 0;
+      const nokey = await page.evaluate(async () => {
+        if (typeof closeM === 'function') closeM();
+        _setClaudeKey('');
+        const t = []; const keep = window.showToast; window.showToast = m => t.push(m);
+        let asked = 0; window.confirm = () => { asked++; return true; };
+        await coCompareCommlog(); await coDraftCommlog(); await coDraftHighlight('outreach'); await coDraftAllHighlights();
+        window.showToast = keep; _setClaudeKey('sk-ant-test');
+        return { t, asked, open: document.getElementById('modal-ov').classList.contains('open') };
+      });
+      t.eq(sent.length, 0, 'no API key: no call is made');
+      t.eq(nokey.asked, 0, 'no API key: no cost confirmation is asked first');
+      t.eq(nokey.open, false, 'no API key: the compare window does not open');
+      t.ok(nokey.t.length === 4 && nokey.t.every(m => /Settings → Claude AI Narrative Generation/.test(m)), 'each button says where to add the key: ' + JSON.stringify(nokey.t[0]));
+
       // ── nothing logged → refused ────────────────────────────────────────
       sent.length = 0;
       await page.evaluate(async ([pid, cid]) => {

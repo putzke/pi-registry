@@ -39,6 +39,7 @@ module.exports = {
       const page = app.page;
       await page.evaluate(([pid, cid]) => {
         window.__calls = []; window.__reply = 'ok';
+        _setClaudeKey('sk-ant-test');   // the buttons now refuse before anything else without one
         window._claudeNarrative = async (system, user, maxTokens, model) => {
           window.__calls.push({ system, user, maxTokens, model });
           if (window.__reply === null) return null;

@@ -1086,6 +1086,12 @@ cadence and tone — but still never counts it.
   / `coPickCommlog` / `_coCompareResults` (and `CLAUDE_STRONG_MODEL` if unused).
   Opus 5.5 is never used anywhere else.
 - Refusal: a project with no interactions makes no call and says why.
+- **No API key → one message, first.** All four close-out AI buttons (two
+  highlight buttons, AI Draft, Compare models) call `_coHasKey()` before
+  anything else. Seen live: without a key, Compare models asked the cost
+  confirm and then opened a window of two empty "No draft returned" boxes,
+  with the real reason only in a toast. The message names the Settings card
+  ("Claude AI Narrative Generation"). Asserted in test 60.
 - Covered by `test/tests/60-closeout-commlog.test.js` (33 checks, Messages API
   intercepted at the network layer: model, effort, max_tokens, identical
   compare requests, nothing changing until a pick).

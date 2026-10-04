@@ -94,6 +94,8 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .b-red{background:#FDE8E6;color:#8B1A1A}
 .b-gray{background:var(--surface2);color:var(--text2)}
 .b-navy{background:var(--navy);color:#fff}
+.b-review{background:#FBF0D9;color:#8A5A00;border:1px solid #E8C77A}
+.review-note{margin:12px 16px 0;padding:12px 14px;background:#FFF8E8;border:1px solid #E8C77A;border-left:4px solid #D9A441;border-radius:var(--radius-sm);font-size:13px;line-height:1.5;color:#5C4200}
 
 /* ── FORM FIELDS ── */
 .form-group{display:flex;flex-direction:column;gap:6px}
@@ -772,6 +774,18 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
               <div class="toggle-thumb"></div>
             </label>
           </div>
+          <!-- Only shown when editing a contact that is still flagged. -->
+          <div class="toggle-row" id="add-needs-wrap" style="padding:0;margin-top:12px;display:none">
+            <div>
+              <div class="toggle-label">Needs review</div>
+              <div style="font-size:12px;color:var(--text3);margin-top:2px">Untick once you've confirmed who this is and their mailing address</div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="add-needs">
+              <div class="toggle-track"></div>
+              <div class="toggle-thumb"></div>
+            </label>
+          </div>
         </div>
             </div>
       <div class="sheet-footer">
@@ -989,7 +1003,7 @@ const SB_TO_INT = {
     parcelId:'parcel_id', type:'stakeholder_type', influenceTier:'influence_tier',
     prefContact:'pref_contact', isMaster:'is_master',
     isArchived:'is_archived', lep:'lep', underserved:'underserved',
-    notes:'notes'
+    needsReview:'needs_review', notes:'notes'
   },
   pi_project_stakeholders: {
     id:'id', projectId:'project_id', stakeholderId:'stakeholder_id',
@@ -1097,14 +1111,19 @@ function fromSB(table, row) {
     result[intKey] = row[sbCol] !== undefined ? row[sbCol] : (intKey.startsWith('is') ? false : '');
   }
   // Normalize booleans
-  ['isMaster','followUp','followUpDone','isArchived','equityFormSubmitted','lep','underserved'].forEach(f => {
+  ['isMaster','followUp','followUpDone','isArchived','equityFormSubmitted','lep','underserved','needsReview'].forEach(f => {
     if (result[f] !== undefined) result[f] = result[f] === true || result[f] === 1;
   });
   return result;
 }
 
 // ── SUPABASE REST HELPERS ──────────────────────────────────────────
-async function sbGet(table) {
+// opts.strict: a failed read THROWS instead of returning []. An empty array
+// for a 401 or a 500 is indistinguishable from a table with no rows, so the
+// phone would show "No contacts found" for an expired sign-in (index.html fixed
+// the same thing, Aug 2026). A 404 is still empty: the table isn't created yet.
+async function sbGet(table, opts) {
+  const strict = !!(opts && opts.strict);
   const cached = cacheGet(table);
   if (cached) return cached;
   const sbTable = SB_TABLES[table];
@@ -1114,7 +1133,11 @@ async function sbGet(table) {
   const r = await fetch(SUPA_REST + '/' + sbTable + '?select=*&order=id.asc&limit=5000', {
     headers: getAuthHeaders()
   });
-  if (!r.ok) { console.error('SB GET error:', r.status, table); return []; }
+  if (!r.ok) {
+    console.error('SB GET error:', r.status, table);
+    if (strict && r.status !== 404) throw new Error('HTTP ' + r.status);
+    return [];
+  }
   const rows = await r.json();
   const items = rows.map(row => fromSB(table, row));
   cacheSet(table, items);
@@ -1170,8 +1193,27 @@ async function loadAllData() {
   // /rest/v1/undefined — a wasted round trip on cellular plus a console error
   // that masked real ones.
   const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','dismissed_pairs','parcels','parcel_owners'];
-  await Promise.all(tables.map(async t => { _syncCache[t] = await sbGet(t); }));
+  // One unreachable table must not lock the app, so each is loaded on its own;
+  // but a failure is NAMED, and a reload keeps the last good copy rather than
+  // emptying a list that was already on screen.
+  const failed = [];
+  await Promise.all(tables.map(async t => {
+    try { _syncCache[t] = await sbGet(t, { strict: true }); }
+    catch (e) {
+      console.error('Load failed:', t, e.message);
+      failed.push(t);
+      if (!_syncCache[t]) _syncCache[t] = [];
+    }
+  }));
+  if (failed.length) {
+    const names = [...new Set(failed.map(t => _LOAD_LABELS[t] || t))].join(', ');
+    showToast("Couldn't load " + names + ". What you see may be incomplete — check your connection, or sign out and back in.", 'error', 9000);
+  }
+  return failed;
 }
+const _LOAD_LABELS = { projects:'projects', stakeholders:'contacts', project_stakeholders:'contacts',
+  interactions:'interactions', deliverables:'deliverables', meetings:'events', issues:'issues',
+  issue_interactions:'issues', dismissed_pairs:'duplicate settings', parcels:'parcels', parcel_owners:'parcels' };
 
 // ── DB SHIM ────────────────────────────────────────────────────────
 const DB = {
@@ -1549,7 +1591,7 @@ function renderContacts(){
       <div class="item-avatar" style="background:${col}18;color:${col}">${ini(s.firstName,s.lastName)}</div>
       <div class="item-body">
         <div class="item-name">${dispName(s)}</div>
-        <div class="item-sub">${s.org||s.title||'—'}</div>
+        <div class="item-sub">${s.needsReview?'<span class="badge b-review">Needs review</span> '+(s.address||''):(s.org||s.title||'—')}</div>
       </div>
       <div class="item-right">
         <span style="font-size:11px;color:var(--text3)">${intCount} log${intCount!==1?'s':''}</span>
@@ -1580,12 +1622,17 @@ function showContactDetail(id){
       <div class="detail-name">${dispName(s)}${isOrgContact(s)?'<span style="font-size:12px;font-weight:400;opacity:.7;margin-left:8px">Org contact</span>':''}</div>
       ${s.org?`<div class="detail-org">${s.org}${s.title?' · '+s.title:''}</div>`:''}
       <div class="detail-pills">
+        ${s.needsReview?'<span class="badge b-review">Needs review</span>':''}
         ${s.type?`<span class="badge b-navy">${s.type}</span>`:''}
         ${s.lep?'<span class="badge" style="background:rgba(232,160,32,.25);color:#e8a020;border:1px solid rgba(232,160,32,.4)">LEP</span>':''}
         ${s.underserved?'<span class="badge" style="background:rgba(124,92,191,.25);color:#b39ddb;border:1px solid rgba(124,92,191,.4)">EJ</span>':''}
         ${s.isMaster?'<span class="badge" style="background:rgba(255,255,255,.15);color:#fff">Master list</span>':'<span class="badge" style="background:rgba(255,255,255,.08);color:rgba(255,255,255,.6)">Project only</span>'}
       </div>
     </div>
+    ${s.needsReview?`<div class="review-note">
+      <div>Created from a drawn map area. The address is the property's address, not a confirmed mailing address. Once you've spoken with the owner or resident, add their real name and contact details and untick <b>Needs review</b>.</div>
+      <button class="btn-secondary" style="margin-top:8px" onclick="openEditStakeholder('${s.id}')">Edit contact</button>
+    </div>`:''}
     <!-- Contact actions -->
     <div class="contact-actions">
       ${s.phone?`<a href="tel:${s.phone}" class="contact-action">
@@ -2108,6 +2155,7 @@ async function saveInteraction(){
   };
 
   const ints=DB.get('interactions');
+  window._lastLogWasEdit=!!window._editIntId;
   if(window._editIntId){
     const idx=ints.findIndex(x=>x.id===window._editIntId);
     if(idx>-1){data.id=window._editIntId;ints[idx]=data;}
@@ -2116,7 +2164,11 @@ async function saveInteraction(){
   } else {
     ints.push(data);
   }
-  DB.set('interactions',ints);
+  // A new row sits in the cache under a temporary id until its insert
+  // returns. Redrawing before then bakes that id into the list, and tapping the
+  // row just logged finds nothing (same race as index.html's saveInt). The
+  // sheet still closes at once; only the redraw waits for the real id.
+  const saving=DB.set('interactions',ints);
 
   // Reset form
   document.getElementById('log-summary').value='';
@@ -2133,7 +2185,8 @@ async function saveInteraction(){
   window._detailStakeId=null;
 
   closeSheet('sheet-log');
-  showToast('Interactionsged ✓');
+  await saving;
+  showToast(window._lastLogWasEdit?'Interaction updated ✓':'Interaction logged ✓');
   refreshHome();
   updateFUBadges();
   updateIssBadges();
@@ -2149,6 +2202,8 @@ function prepAddStakeholderSheet(){
   document.getElementById('add-email').value='';
   document.getElementById('add-phone').value='';
   document.getElementById('add-master').checked=true;
+  document.getElementById('add-needs-wrap').style.display='none';
+  document.getElementById('add-needs').checked=false;
   if(document.getElementById('add-lep'))document.getElementById('add-lep').checked=false;
   if(document.getElementById('add-underserved'))document.getElementById('add-underserved').checked=false;
   document.getElementById('name-fields').style.opacity='1';
@@ -2246,6 +2301,8 @@ function openEditStakeholder(id){
   if(document.getElementById('add-lep'))document.getElementById('add-lep').checked=!!s.lep;
   if(document.getElementById('add-underserved'))document.getElementById('add-underserved').checked=!!s.underserved;
   document.getElementById('add-master').checked=s.isMaster!==false;
+  document.getElementById('add-needs-wrap').style.display=s.needsReview?'flex':'none';
+  document.getElementById('add-needs').checked=!!s.needsReview;
   document.getElementById('name-fields').style.opacity='1';
   document.getElementById('add-fn').disabled=false;
   document.getElementById('add-ln').disabled=false;
@@ -2295,7 +2352,10 @@ async function updateStakeholder(){
     type:document.getElementById('add-type').value,
     lep:document.getElementById('add-lep')?.checked||false,
     underserved:document.getElementById('add-underserved')?.checked||false,
-    isMaster:document.getElementById('add-master').checked
+    isMaster:document.getElementById('add-master').checked,
+    // The toggle is only visible for a flagged contact; hidden, it was set
+    // false on open, so an unflagged contact stays unflagged.
+    needsReview:!!(stakes[idx].needsReview&&document.getElementById('add-needs').checked)
   };
   // Push to Supabase
   try{
@@ -2310,7 +2370,8 @@ async function updateStakeholder(){
       stakeholder_type:stakes[idx].type||null,
       is_master:stakes[idx].isMaster,
       lep:stakes[idx].lep||false,
-      underserved:stakes[idx].underserved||false
+      underserved:stakes[idx].underserved||false,
+      needs_review:!!stakes[idx].needsReview
     };
     const resp=await fetch(SUPA_URL+'/rest/v1/pi_stakeholders?id=eq.'+id,{
       method:'PATCH',

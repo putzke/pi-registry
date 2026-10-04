@@ -1491,7 +1491,22 @@ Field companion for logging interactions, managing contacts, follow-ups, and iss
   worker mid-log). Keep `OCC_TABLES` in sync with `index.html`. If symmetric
   conflict *detection* on mobile is ever wanted, mirror index.html's conditional
   PATCH + `_occResolveConflict` (mobile's `DB._sync` has the same `oldMap` baseline).
-- No known bugs as of this session
+- **Catch-up, Oct 2026** (`test/tests/63-mobile-review-and-load.test.js`, 21 checks):
+  - **Needs review** — mobile maps `needsReview`, badges a placeholder contact in
+    the list (with its address, the thing to knock on) and on the contact screen
+    with a short note, and its edit sheet shows a "Needs review" toggle **only
+    for a flagged contact**; unticking clears the column. Both apps clear it the
+    same way — see the draw-area section.
+  - **A failed read is named, never shown as empty** — `sbGet(table,{strict:true})`
+    throws on a non-404, `loadAllData()` loads each table on its own, keeps the
+    last good copy on a reload (the import BroadcastChannel reloads), toasts
+    which lists failed, and returns the failed table names. A 404 is still empty.
+    Same rule as index.html's `_refreshData` fix.
+  - **`saveInteraction` awaits `DB.set` before redrawing** (the sheet still
+    closes at once) — otherwise the row just logged carried a `tmp_` id and
+    tapping it did nothing. Same race as desktop's Quick Log fix.
+  - The log toast read "Interactionsged ✓"; now "Interaction logged ✓" /
+    "Interaction updated ✓".
 
 ## Importer app (`importer.html`)
 Bulk CSV import wizard for stakeholders and interactions. ~2,420 lines.
@@ -3191,6 +3206,16 @@ different things — acquisition status and notice dates have no meaning here.
   here, squarely inside that failure's risk window, not a hypothetical one.
   Mirrors the Bulk-add grid's own stakeholder-creation loop for exactly this
   reason.
+- **Clearing the flag — added Oct 2026; until then NOTHING could.** Desktop
+  `saveStake()` rebuilds the record from the form and never carried
+  `needsReview`, so `toSB` dropped the key, the PATCH never touched the column,
+  and the badge came back on every reload however complete the contact became.
+  Now a flagged contact's edit form (desktop `#f-sneeds`, mobile `#add-needs`)
+  shows a ticked **Needs review** toggle — rendered ONLY for a flagged contact,
+  so nobody can flag an ordinary one by accident — and `saveStake()` always
+  writes an explicit boolean (absent box = `false`), since `undefined` would be
+  dropped again. Untick it once the name and mailing address are confirmed.
+  Mobile is where this is mostly done: the canvass happens on the phone.
 - Guarded by `test/tests/52-draw-area-contacts.test.js` (44 checks): both
   layer-gating guards (no project, parcels-only) make zero network calls; an
   address with an existing contact is excluded from the checklist; the

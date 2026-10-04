@@ -8,11 +8,11 @@
 //     organization and type, anonymous contacts as "Member of the public";
 //   - long summaries are trimmed so a big project's log stays affordable;
 //   - the section's own AI Draft runs at medium effort with room to think;
-//   - "Compare models" sends the identical request to Sonnet 5.5 and Opus 5.5,
-//     shows both, and nothing changes until one is picked;
+//   - the temporary "Compare models" tool is gone (Sonnet 5.5 was chosen);
+//   - with no API key, nothing is asked or sent and the message says where to add one;
 //   - a project with nothing logged is refused, never drafted from empty.
 module.exports = {
-  name: 'close-out comm log summary — computed counts, no personal names, compare models',
+  name: 'close-out comm log summary — computed counts, no personal names, Sonnet 5.5',
   async run({ t }) {
     t.seed();
     const proj = (await t.sql(`select id from pi_projects where pid='25-LC-400N'`))[0];
@@ -39,7 +39,7 @@ module.exports = {
       await page.route('**/api.anthropic.com/**', async route => {
         const body = JSON.parse(route.request().postData() || '{}');
         sent.push(body);
-        const who = body.model === 'claude-opus-5-5' ? 'Opus' : 'Sonnet';
+        const who = 'Sonnet';
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
           stop_reason: 'end_turn',
           content: [{ type: 'text', text: 'Stakeholder Communications Log Summary: ' + who + ' paragraph one.\n\n' + who + ' paragraph two.' }] }) });
@@ -88,38 +88,30 @@ module.exports = {
         'the heading is stripped and paragraphs become lines in the box');
       t.ok(await page.evaluate(() => document.getElementById('co-preview').innerText.includes('Sonnet paragraph two.')), 'and the preview shows it');
 
-      // ── Compare models ──────────────────────────────────────────────────
-      sent.length = 0;
-      await page.evaluate(() => { window.confirm = () => true; return coCompareCommlog(); });
-      t.eq(sent.map(x => x.model).sort(), ['claude-opus-5-5', 'claude-sonnet-5-5'], 'one call to each model');
-      t.eq(sent[0].messages[0].content, sent[1].messages[0].content, 'with the identical request');
-      t.ok(sent.every(x => x.output_config.effort === 'medium' && x.fallbacks === 'default'), 'both at medium effort, both with fallback');
-      const modal = await page.evaluate(() => ({ cols: document.querySelectorAll('.co-cmp-text').length, text: document.getElementById('modal-ov').innerText }));
-      t.eq(modal.cols, 2, 'both drafts shown side by side');
-      t.ok(/Claude Sonnet 5\.5/.test(modal.text) && /Claude Opus 5\.5/.test(modal.text) && /\d+ words/.test(modal.text), 'labelled by model, with word counts');
-      t.eq(await page.evaluate(() => document.getElementById('co-dr-commlog').value), 'Sonnet paragraph one.\nSonnet paragraph two.', 'nothing changes until one is picked');
-      await page.evaluate(() => { const i = _coCompareResults.findIndex(x => /^Opus/.test(x)); coPickCommlog(i); });
-      t.eq(await page.evaluate(() => document.getElementById('co-dr-commlog').value), 'Opus paragraph one.\nOpus paragraph two.', 'picking a draft puts it in the box');
-      await page.waitForTimeout(1200);
-      t.eq((await t.sql(`select intake->'draft'->>'commlog' c from pi_closeouts where id=${id}`))[0].c, 'Opus paragraph one.\nOpus paragraph two.', 'and it autosaves');
+      // ── the comparison tool is gone; the choice lives in one constant ──
+      const gone = await page.evaluate(() => ({ fn: typeof window.coCompareCommlog, btn: /Compare models/.test(document.getElementById('co-rpt-editor').innerText), model: CLAUDE_COMMLOG_MODEL }));
+      t.eq(gone, { fn: 'undefined', btn: false, model: 'claude-sonnet-5-5' }, 'Compare models is removed and the section is set to Sonnet 5.5');
+      // Switching back to Opus is a one-line change to CLAUDE_COMMLOG_MODEL: the
+      // request layer tunes whatever that constant names, not a hard-coded id.
+      const src = require('fs').readFileSync(require('path').join(__dirname, '..', '..', 'index.html'), 'utf8');
+      t.ok(/var tunable = body\.model === CLAUDE_TEXT_MODEL \|\| body\.model === CLAUDE_COMMLOG_MODEL;/.test(src)
+        && /const rates = \/opus\/\.test\(model\)/.test(src), 'effort, thinking room, fallback and cost follow CLAUDE_COMMLOG_MODEL');
 
       // ── no API key → one clear message, before any confirm or window ────
       // (Seen live: the compare window opened with two empty "No draft
       // returned" boxes, and the reason only showed up as a toast after.)
       sent.length = 0;
       const nokey = await page.evaluate(async () => {
-        if (typeof closeM === 'function') closeM();
         _setClaudeKey('');
         const t = []; const keep = window.showToast; window.showToast = m => t.push(m);
         let asked = 0; window.confirm = () => { asked++; return true; };
-        await coCompareCommlog(); await coDraftCommlog(); await coDraftHighlight('outreach'); await coDraftAllHighlights();
+        await coDraftCommlog(); await coDraftHighlight('outreach'); await coDraftAllHighlights();
         window.showToast = keep; _setClaudeKey('sk-ant-test');
-        return { t, asked, open: document.getElementById('modal-ov').classList.contains('open') };
+        return { t, asked };
       });
       t.eq(sent.length, 0, 'no API key: no call is made');
       t.eq(nokey.asked, 0, 'no API key: no cost confirmation is asked first');
-      t.eq(nokey.open, false, 'no API key: the compare window does not open');
-      t.ok(nokey.t.length === 4 && nokey.t.every(m => /Settings → Claude AI Narrative Generation/.test(m)), 'each button says where to add the key: ' + JSON.stringify(nokey.t[0]));
+            t.ok(nokey.t.length === 3 && nokey.t.every(m => /Settings → Claude AI Narrative Generation/.test(m)), 'each button says where to add the key: ' + JSON.stringify(nokey.t[0]));
 
       // ── nothing logged → refused ────────────────────────────────────────
       sent.length = 0;
@@ -128,7 +120,7 @@ module.exports = {
         S.projectFilter = pid; openCloseoutReport(cid);
         window.__t = []; window.showToast = m => window.__t.push(m);
         window.confirm = () => true;
-        await coDraftCommlog(); await coCompareCommlog();
+        await coDraftCommlog();
       }, [empty, emptyCo]);
       t.eq(sent.length, 0, 'a project with nothing logged makes no call');
       t.ok((await page.evaluate(() => window.__t)).every(m => /No interactions are logged/.test(m)), 'and says why');

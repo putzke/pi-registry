@@ -923,8 +923,8 @@ internal narrative pointers and is a working draft, never client-facing.
   save stays dirty and retries on the next edit or on leaving.
 - Attachment stitching (weekly reports, logs, photos into one PDF) stays
   OUTSIDE the app — `merge_package.py` via the skill.
-- **All six build steps are done** (step 6, charts, below). Outstanding: choose
-  the comm-log model from the comparison (step 5). Tribal stays parked. A separate ROW close-out TYPE is planned for
+- **All six build steps are done** (step 6, charts, below), and the comm-log
+  model is chosen (Sonnet 5.5, step 5). Tribal stays parked. A separate ROW close-out TYPE is planned for
   projects where ROW outreach is the whole engagement.
 - Covered by `test/tests/55-closeout-intake.test.js` (50 checks).
 
@@ -1050,8 +1050,7 @@ the model narrates, never counts.
   typed. The Communications Log Summary is step 5 (below).
 
 ### PI Close-Out — step 5 BUILT: the Communications Log Summary (Oct 2026)
-**✦ AI Draft** and **Compare models** on the Stakeholder Communications Log
-Summary box. The one long synthesis in the app: the model READS the whole
+**✦ AI Draft** on the Stakeholder Communications Log Summary box. The one long synthesis in the app: the model READS the whole
 interaction log for themes, notable exchanges and resolutions, outreach
 cadence and tone — but still never counts it.
 - `_coCommlogFacts(co)` → `{counts, issues, log, notes}`. **COUNTS are computed
@@ -1076,18 +1075,18 @@ cadence and tone — but still never counts it.
   `_claudeRequest` let a caller's effort win, with thinking room by effort
   (`CLAUDE_HEADROOM_BY_EFFORT`: low 1500 / medium 4000 / high 8000). Length is
   ~350 words, ceiling 450, 3–5 paragraphs (each becomes a line in the slot).
-- **Model:** `CLAUDE_COMMLOG_MODEL` (= `CLAUDE_TEXT_MODEL`, Sonnet 5.5).
-  **Compare models** (`coCompareCommlog`) sends the IDENTICAL request to Sonnet
-  5.5 and `CLAUDE_STRONG_MODEL` (Opus 5.5) concurrently, shows both side by
-  side with word counts and time, and changes nothing until one is picked
-  (`coPickCommlog`). It is a TEMPORARY evaluation aid: the sandbox has no API
-  key, so the choice has to be made by Jeff on a real project's log. Once
-  settled, set `CLAUDE_COMMLOG_MODEL` and remove the button, `coCompareCommlog`
-  / `coPickCommlog` / `_coCompareResults` (and `CLAUDE_STRONG_MODEL` if unused).
-  Opus 5.5 is never used anywhere else.
+- **Model: Sonnet 5.5, chosen Oct 2026.** A temporary "Compare models" tool
+  drafted the same request on Sonnet 5.5 and Opus 5.5 side by side on a real
+  project's log; Jeff picked Sonnet, and the tool (`coCompareCommlog`,
+  `coPickCommlog`, `CLAUDE_STRONG_MODEL`) was removed. **To switch this one
+  section back to Opus:** set `CLAUDE_COMMLOG_MODEL` to `claude-opus-5-5` — one
+  line. `_claudeRequest` tunes whatever that constant names (effort, thinking
+  room, fallback) and `_coCommlogCost` prices Opus by id, so nothing else
+  changes; test 59's model-id list would need Opus added back. Opus is used
+  nowhere else, so the reports keep one prose voice.
 - Refusal: a project with no interactions makes no call and says why.
-- **No API key → one message, first.** All four close-out AI buttons (two
-  highlight buttons, AI Draft, Compare models) call `_coHasKey()` before
+- **No API key → one message, first.** All three close-out AI buttons (the two
+  highlight buttons and the log summary's AI Draft) call `_coHasKey()` before
   anything else. Seen live: without a key, Compare models asked the cost
   confirm and then opened a window of two empty "No draft returned" boxes,
   with the real reason only in a toast. The message names the Settings card
@@ -1378,8 +1377,8 @@ ROW agents read that before negotiating.
   'claude-sonnet-5-5'` (every narrative — PI report sections, overall and
   executive summaries, the Project Status Report, close-out highlights — plus
   the contact importer's image/PDF path) and `CLAUDE_FAST_MODEL =
-  'claude-haiku-4-5'` (pasted-text contact import), plus `CLAUDE_STRONG_MODEL`
-  (Opus 5.5) used ONLY by the close-out comm-log model comparison (step 5).
+  'claude-haiku-4-5'` (pasted-text contact import), plus `CLAUDE_COMMLOG_MODEL`
+  (= the text model) for the close-out log summary — no Opus anywhere since the close-out comm-log comparison chose Sonnet (step 5).
   Upgraded from Sonnet 5 /
   `claude-haiku-4-5-20251001`, same price. All narratives on one model keeps
   the report's one prose voice — never switch a single call.

@@ -19,7 +19,7 @@ module.exports = {
     const html = fs.readFileSync(path.join(__dirname, '..', '..', 'index.html'), 'utf8');
     t.eq((html.match(/api\.anthropic\.com\/v1\/messages/g) || []).length, 1, 'one place in the app calls the Messages API');
     t.eq([...new Set(html.match(/'claude-(?:sonnet|opus|haiku|fable)-[0-9a-z-]+'/g) || [])].sort(),
-      ["'claude-haiku-4-5'", "'claude-opus-5-5'", "'claude-sonnet-5-5'"], 'model ids appear only in their constants (Opus only for the comm-log comparison)');
+      ["'claude-haiku-4-5'", "'claude-sonnet-5-5'"], 'model ids appear only in their constants');
 
     t.seed();
     const app = await t.open('index.html', { email: 'putzke@demo.test' });

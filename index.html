@@ -10664,9 +10664,7 @@ function renderCloseoutReport(el, co) {
       + ref('Concerns of note', it.concerns) + ref('Notable outcomes & praise', it.praise))
     + box('commlog', 'Stakeholder Communications Log Summary', slot('commlog', 'Summary', rt.slotHints.commlog, 6,
         '<div style="font-size:11px;color:var(--fog);margin-top:-4px">AI Draft reads the whole interaction log; counts are computed by COMPASS, and people are named only by organization or role. Anything in the box is kept as notes.</div>',
-        '<span style="display:flex;gap:6px;flex-shrink:0;margin-bottom:4px">'
-        + '<button type="button" class="btn btn-sm" onclick="coDraftCommlog(this)">✦ AI Draft</button>'
-        + '<button type="button" class="btn btn-sm" title="Draft on Sonnet 5.5 and Opus 5.5 side by side, then pick one" onclick="coCompareCommlog(this)">Compare models</button></span>'))
+        '<button type="button" class="btn btn-sm" style="flex-shrink:0;margin-bottom:4px" onclick="coDraftCommlog(this)">✦ AI Draft</button>'))
     + box('figures', 'Stakeholder Engagement in Figures', '<div style="font-size:12px;color:var(--slate)">Charts and count tables drawn from the interaction log, issues and the intake’s website readings: contacts per month (outbound and inbound), contacts by channel, inbound contacts by subject, contacts by type of stakeholder, website visits and issues escalated. Nothing to write; a chart is left out when there isn’t enough data for it.</div>')
     + box('commitments', 'Commitments to the Public', '<div style="font-size:12px;color:var(--slate)">Listed from Commitments, with whether each was kept. Close any that were done before exporting.</div>')
     + box('row', 'Right-of-Way & Property Owner Outreach', slot('row', 'Narrative (optional)', 'What the outreach involved: tracing each parcel to the party who can sign, sharing legal descriptions and design exhibits, how owners received it. Counts are added below it from the Parcels view.', 4)
@@ -10858,8 +10856,8 @@ function _coWriteSlot(key, text) {
 }
 
 // Every close-out AI button checks for a key FIRST, before its cost confirm:
-// otherwise a missing key meant a confirm, then (for Compare models) a window
-// of two empty "No draft returned" boxes, and only then the real reason.
+// otherwise a missing key meant a cost confirm first and only then the real
+// reason (the old Compare models window opened two empty boxes this way).
 function _coHasKey() {
   if (_getClaudeKey()) return true;
   showToast('No Claude API key saved — add one under Settings → Claude AI Narrative Generation.', 'warn', 6000);
@@ -11035,7 +11033,7 @@ function _coCommlogRequest(co) {
 // Rough cost of one draft, for the confirm dialogs. ~4 characters per token.
 function _coCommlogCost(req, model) {
   const inTok = Math.round((req.system.length + req.user.length) / 4);
-  const rates = model === CLAUDE_STRONG_MODEL ? [4, 20] : [2, 10];   // $ per million tokens, in / out
+  const rates = /opus/.test(model) ? [4, 20] : [2, 10];   // $ per million tokens, in / out (Opus if ever switched back)
   const outTok = req.maxTokens + (CLAUDE_HEADROOM_BY_EFFORT[req.effort] || 0) / 2;
   return { inTok: inTok, usd: (inTok * rates[0] + outTok * rates[1]) / 1e6 };
 }
@@ -11071,55 +11069,6 @@ async function coDraftCommlog(btn) {
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = label; }
   }
-}
-
-// Side-by-side: the same request on Sonnet 5.5 and Opus 5.5, so the model for
-// this section can be chosen on a real project's log. Pick one to keep it.
-// Temporary evaluation aid — remove once CLAUDE_COMMLOG_MODEL is settled.
-let _coCompareResults = null;
-async function coCompareCommlog(btn) {
-  const co = (_syncCache.closeouts || []).find(function (c) { return _coWork && c.id === _coWork.id; });
-  if (!co) return;
-  if (!_coHasKey()) return;
-  const req = _coCommlogRequest(co);
-  if (!req) { showToast('No interactions are logged on this project yet, so there is no log to summarize.', 'warn', 6000); return; }
-  const a = _coCommlogCost(req, CLAUDE_TEXT_MODEL), b = _coCommlogCost(req, CLAUDE_STRONG_MODEL);
-  if (!confirm('Draft the Communications Log Summary twice — on Sonnet 5.5 and on Opus 5.5 — from the same ' + req.n + ' interactions, and show them side by side?\n\n'
-    + 'Two Claude calls. Estimated cost: about $' + (a.usd + b.usd).toFixed(2) + ' (Sonnet ~$' + a.usd.toFixed(2) + ', Opus ~$' + b.usd.toFixed(2) + ').\n'
-    + 'Nothing in the report changes until you pick one.\n\nProceed?')) return;
-  const label = btn ? btn.textContent : '';
-  if (btn) { btn.disabled = true; btn.textContent = 'Drafting both…'; }
-  try {
-    const models = [CLAUDE_TEXT_MODEL, CLAUDE_STRONG_MODEL];
-    const t0 = Date.now(), times = [];
-    const texts = await Promise.all(models.map(function (m, k) {
-      return _coCommlogDraftCall(co, m).then(function (t) { times[k] = Math.round((Date.now() - t0) / 1000); return t; });
-    }));
-    _coCompareResults = texts;
-    const col = function (k, name) {
-      const t = texts[k];
-      return '<div style="flex:1 1 0;min-width:0;display:flex;flex-direction:column">'
-        + '<div style="font-size:13px;font-weight:700;color:var(--white);margin-bottom:2px">' + name + '</div>'
-        + '<div style="font-size:11px;color:var(--fog);margin-bottom:8px">' + (t ? _coWords(t) + ' words · ' + times[k] + 's' : 'No draft returned') + '</div>'
-        + '<div class="co-cmp-text" style="flex:1;background:#fff;color:#222;border-radius:6px;padding:12px 14px;font-size:13px;line-height:1.5;max-height:52vh;overflow:auto;white-space:pre-wrap">'
-        + escHtml(t || '') + '</div>'
-        + (t ? '<button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="coPickCommlog(' + k + ')">Use this draft</button>' : '')
-        + '</div>';
-    };
-    openM('Communications Log Summary — compare models',
-      '<div style="font-size:12px;color:var(--slate);margin-bottom:12px">Same facts and instructions, two models. Read them against what you know of the project — accuracy first, then tone and length.</div>'
-      + '<div style="display:flex;gap:16px">' + col(0, 'Claude Sonnet 5.5') + col(1, 'Claude Opus 5.5') + '</div>',
-      '<button class="btn" onclick="closeM()">Keep neither</button>', true);
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = label; }
-  }
-}
-function coPickCommlog(k) {
-  const t = _coCompareResults && _coCompareResults[k];
-  if (!t) return;
-  closeM();
-  _coWriteSlot('commlog', t);
-  showToast('Draft placed in the summary box. Read and edit before export.', 'info', 4000);
 }
 
 let _coPreviewTimer = null;
@@ -12709,11 +12658,11 @@ function _setClaudeKey(key) {
 // the fast model.
 const CLAUDE_TEXT_MODEL = 'claude-sonnet-5-5';
 const CLAUDE_FAST_MODEL = 'claude-haiku-4-5';
-// Opus 5.5 is offered ONLY in the close-out's side-by-side model comparison for
-// the Communications Log Summary (coCompareCommlog) — the one long synthesis in
-// the app. Nothing drafts on it by default. CLAUDE_COMMLOG_MODEL is what that
-// section's own AI Draft uses; change it here if the comparison favours Opus.
-const CLAUDE_STRONG_MODEL = 'claude-opus-5-5';
+// The close-out's Communications Log Summary — the one long synthesis in the
+// app — has its own setting. Sonnet 5.5 was chosen over Opus 5.5 in a side-by-
+// side on a real project's log (Oct 2026). To go back to Opus for this one
+// section, set this line to the Opus 5.5 id, claude-opus-5-5; effort, thinking room,
+// fallback and the cost estimate all follow it.
 const CLAUDE_COMMLOG_MODEL = CLAUDE_TEXT_MODEL;
 // Sonnet 5.5 always thinks (it can't be switched off with `disabled`), and
 // thinking tokens count against max_tokens. These are short, fact-bound
@@ -12737,7 +12686,7 @@ let _claudeNoFallback = false;
 // an HTTP error, and throws an Error with .refusal=true when Claude declines
 // (stop_reason "refusal", a normal 200 whose content is empty or partial).
 async function _claudeRequest(key, body) {
-  var tunable = body.model === CLAUDE_TEXT_MODEL || body.model === CLAUDE_STRONG_MODEL;
+  var tunable = body.model === CLAUDE_TEXT_MODEL || body.model === CLAUDE_COMMLOG_MODEL;
   async function send(withFallback) {
     var b = Object.assign({}, body), headers = {
       'x-api-key': key,

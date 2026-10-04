@@ -3605,27 +3605,13 @@ async function _aiParseContacts(content, model) {
     + 'digits you find. For type, pick the single best match from the allowed list, or an empty string if '
     + 'unclear. Do not include header rows, notes, or duplicates. When reading images, transcribe exactly '
     + 'what you see — if handwriting or print is illegible, leave that field blank rather than guessing.';
-  var resp = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model: model || 'claude-haiku-4-5-20251001',
-      max_tokens: 4096,
-      system: sys,
-      output_config: { format: { type: 'json_schema', schema: schema } },
-      messages: [{ role: 'user', content: content }]
-    })
+  var data = await _claudeRequest(key, {
+    model: model || CLAUDE_FAST_MODEL,
+    max_tokens: 4096,
+    system: sys,
+    output_config: { format: { type: 'json_schema', schema: schema } },
+    messages: [{ role: 'user', content: content }]
   });
-  if (!resp.ok) {
-    var err = await resp.json().catch(function(){ return {}; });
-    throw new Error((err.error && err.error.message) || ('API error ' + resp.status));
-  }
-  var data = await resp.json();
   var txt = (data.content || []).filter(function(b){ return b.type === 'text'; }).map(function(b){ return b.text; }).join('');
   var parsed;
   try {
@@ -3670,11 +3656,11 @@ async function aiExtractContacts() {
       }
       blocks.push({ type: 'text', text: text || 'Extract every contact you can find in the attached image(s) and document(s). Return one contact per person.' });
       content = blocks;
-      model = 'claude-sonnet-5';
+      model = CLAUDE_TEXT_MODEL;
       if (status) { status.textContent = 'Sending to Claude (vision)…'; }
     } else {
       content = text;
-      model = 'claude-haiku-4-5-20251001';
+      model = CLAUDE_FAST_MODEL;
       if (status) { status.textContent = 'Sending to Claude…'; status.style.color = 'var(--fog)'; }
     }
 
@@ -11843,7 +11829,7 @@ async function genPackageExecSummary(btn){
     +'Synthesize the following current project facts into a cohesive narrative for a client/agency audience, '
     +'highlighting engagement level, stakeholder sentiment, the main themes stakeholders have raised, and any '
     +'open items. Base it strictly on these facts: '+facts;
-  var narrative=await _claudeNarrative(_claudeSystemPrompt(),userContent,600,'claude-sonnet-5');
+  var narrative=await _claudeNarrative(_claudeSystemPrompt(),userContent,600);
   if(btn){btn.disabled=false;btn.innerHTML=orig;}
   if(narrative&&ta){ta.value=narrative;showToast('Executive summary drafted — review before printing','info',2500);}
   else if(!narrative){showToast('AI draft failed — check the console','error',4000);}
@@ -12138,6 +12124,73 @@ function _setClaudeKey(key) {
   localStorage.removeItem('compass_claude_api_key'); // remove any legacy plain-text copy
 }
 
+// ── Claude models (Oct 2026: Sonnet 5 → Sonnet 5.5, same price) ───────────
+// ONE place for model ids. Every narrative in the app — PI report sections, the
+// overall and executive summaries, the Project Status Report, close-out
+// highlights — and the contact importer's image/PDF reading use the text model,
+// so the report keeps one prose voice. The pasted-text contact importer uses
+// the fast model.
+const CLAUDE_TEXT_MODEL = 'claude-sonnet-5-5';
+const CLAUDE_FAST_MODEL = 'claude-haiku-4-5';
+// Sonnet 5.5 always thinks (it can't be switched off with `disabled`), and
+// thinking tokens count against max_tokens. These are short, fact-bound
+// narratives, so effort is LOW (the model then skips thinking on most simple
+// requests), and every call gets this much extra room on top of the length the
+// caller asked for, so thinking can never eat the reply. Length is held by the
+// word limits in each prompt, not by max_tokens.
+const CLAUDE_EFFORT = 'low';
+const CLAUDE_THINKING_HEADROOM = 1500;
+// Server-side fallback: on a policy decline the API retries on another model in
+// the same round trip. Opt-in, Claude API only. If the API ever rejects the
+// option itself, _claudeRequest retries once without it and stops sending it
+// for the rest of the session — an AI draft must never fail over a setting.
+const CLAUDE_FALLBACK_BETA = 'server-side-fallback-2026-07-01';
+let _claudeNoFallback = false;
+
+// The one HTTP call to the Messages API. Returns the parsed response; throws on
+// an HTTP error, and throws an Error with .refusal=true when Claude declines
+// (stop_reason "refusal", a normal 200 whose content is empty or partial).
+async function _claudeRequest(key, body) {
+  var tunable = body.model === CLAUDE_TEXT_MODEL;
+  async function send(withFallback) {
+    var b = Object.assign({}, body), headers = {
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    };
+    if (tunable) {
+      b.output_config = Object.assign({}, body.output_config || {}, { effort: CLAUDE_EFFORT });
+      b.max_tokens = (body.max_tokens || 400) + CLAUDE_THINKING_HEADROOM;
+      if (withFallback) { b.fallbacks = 'default'; headers['anthropic-beta'] = CLAUDE_FALLBACK_BETA; }
+    }
+    return fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: headers, body: JSON.stringify(b) });
+  }
+  var resp = await send(tunable && !_claudeNoFallback);
+  if (!resp.ok && resp.status === 400 && tunable && !_claudeNoFallback) {
+    var e0 = await resp.clone().json().catch(function(){ return {}; });
+    var m0 = (e0.error && e0.error.message) || '';
+    if (/fallback|beta/i.test(m0)) {
+      console.warn('Claude: the fallback option was rejected; retrying without it for this session:', m0);
+      _claudeNoFallback = true;
+      resp = await send(false);
+    }
+  }
+  if (!resp.ok) {
+    var err = await resp.json().catch(function(){ return {}; });
+    throw new Error((err.error && err.error.message) || ('API error ' + resp.status));
+  }
+  var data = await resp.json();
+  if (data && data.stop_reason === 'refusal') {
+    var cat = data.stop_details && data.stop_details.category;
+    console.warn('Claude declined the request.', data.stop_details || '');
+    var re = new Error('Claude declined this request' + (cat ? ' (' + cat + ')' : '') + '. Reword the input, or do this part by hand.');
+    re.refusal = true; re.category = cat || '';
+    throw re;
+  }
+  return data;
+}
+
 async function _claudeNarrative(systemPrompt, userContent, maxTokens, model) {
   var key = _getClaudeKey();
   if (!key) {
@@ -12148,26 +12201,12 @@ async function _claudeNarrative(systemPrompt, userContent, maxTokens, model) {
     return null;
   }
   try {
-    var resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: model || 'claude-sonnet-5',
-        max_tokens: maxTokens || 400,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userContent }]
-      })
+    var data = await _claudeRequest(key, {
+      model: model || CLAUDE_TEXT_MODEL,
+      max_tokens: maxTokens || 400,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userContent }]
     });
-    if (!resp.ok) {
-      var err = await resp.json().catch(function(){return {};});
-      throw new Error((err.error && err.error.message) || ('API error ' + resp.status));
-    }
-    var data = await resp.json();
     // Collect EVERY text block, not just content[0]. If the first block is a
     // non-text block (e.g. a thinking block), content[0].text is undefined and the
     // old code returned null on a perfectly good response — a silent failure that
@@ -12189,6 +12228,7 @@ async function _claudeNarrative(systemPrompt, userContent, maxTokens, model) {
     }
     return text;
   } catch(e) {
+    if (e && e.refusal) { showToast(e.message, 'warn', 7000); return null; }
     console.error('Claude API error:', e);
     showToast('Claude API error: ' + e.message, 'error', 5000);
     return null;
@@ -15135,26 +15175,12 @@ async function generateTrendSummary() {
   }
 
   try {
-    var resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-5',
-        max_tokens: 1200,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userContent }]
-      })
+    var data = await _claudeRequest(key, {
+      model: CLAUDE_TEXT_MODEL,
+      max_tokens: 1200,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userContent }]
     });
-    if (!resp.ok) {
-      var err = await resp.json().catch(function(){return {};});
-      throw new Error((err.error && err.error.message) || ('API error '+resp.status));
-    }
-    var data = await resp.json();
     // Collect every text block — reading only content[0] returns nothing when the
     // first block isn't text (the same silent failure that broke draft-all).
     var text = ((data && data.content) || [])
@@ -15176,7 +15202,7 @@ async function generateTrendSummary() {
       resultEl.innerHTML = _trendEditorHTML(cleanText, total, dateSpan, _lastTrendResult.scorecard);
     }
   } catch(e) {
-    showToast('Claude API error: '+e.message, 'error', 5000);
+    showToast(e && e.refusal ? e.message : 'Claude API error: '+e.message, e && e.refusal ? 'warn' : 'error', 6000);
   }
 
   if (btn) { btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px"><path d="M2 12 L5 8 L8 10 L11 5 L14 3"/></svg> ✦ AI: Regenerate status report'; }
@@ -22314,7 +22340,7 @@ function renderSettings(m) {
           if(confirm('Remove saved Claude API key?')){_setClaudeKey('');renderSettings(document.getElementById('main'));showToast('Key removed','info',2000);}
         ">Remove</button>
       </div>
-      <div style="margin-top:12px;font-size:11px;color:var(--fog)">Model: <span style="color:var(--slate)">claude-sonnet-5</span> · Max tokens per call: <span style="color:var(--slate)">400–600</span> · Typical cost: ~$0.005–0.02 per narrative</div>
+      <div style="margin-top:12px;font-size:11px;color:var(--fog)">Model: <span style="color:var(--slate)">${CLAUDE_TEXT_MODEL}</span> (effort ${CLAUDE_EFFORT}) · Reply length per call: <span style="color:var(--slate)">400–600 tokens</span> · Typical cost: ~$0.005–0.02 per narrative</div>
     </div>
 
     <!-- Client Portal Access -->

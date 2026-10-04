@@ -687,7 +687,7 @@ guarantee — the overall summary sits on the same page as Sonnet-drafted
 section narratives, and a different model is a real way for the voice to
 drift between them even with an identical prompt. `_overallDraftCall()`
 still calls `_claudeNarrative()` with no explicit model argument, i.e. its
-default (`claude-sonnet-5`).
+default (`CLAUDE_TEXT_MODEL`, Sonnet 5.5 since Oct 2026).
 
 Guarded by `test/tests/51-overall-summary-tone.test.js` (16 checks): asserts
 `getDefaultSections()` excludes `auto-del` while `getAvailableSections()`
@@ -1288,10 +1288,38 @@ ROW agents read that before negotiating.
 ### Claude AI integration
 - API key stored obfuscated (XOR+base64) in localStorage key `compass_claude_api_key_v2`
 - `_getClaudeKey()` / `_setClaudeKey(key)` — read/write helpers
-- `_claudeNarrative(systemPrompt, userContent, maxTokens, model)` — shared fetch
-  wrapper. Defaults: model `claude-sonnet-5`, `max_tokens` 400. (This line said
-  Haiku long after the default became Sonnet — check the function, not this
-  line, before quoting a cost.)
+- `_claudeNarrative(systemPrompt, userContent, maxTokens, model)` — shared
+  narrative wrapper; default model `CLAUDE_TEXT_MODEL`, length 400.
+- **Models live in TWO constants only (Oct 2026):** `CLAUDE_TEXT_MODEL =
+  'claude-sonnet-5-5'` (every narrative — PI report sections, overall and
+  executive summaries, the Project Status Report, close-out highlights — plus
+  the contact importer's image/PDF path) and `CLAUDE_FAST_MODEL =
+  'claude-haiku-4-5'` (pasted-text contact import). Upgraded from Sonnet 5 /
+  `claude-haiku-4-5-20251001`, same price. All narratives on one model keeps
+  the report's one prose voice — never switch a single call.
+- **`_claudeRequest(key, body)` is the ONLY fetch to the Messages API.** For the
+  text model it adds `output_config.effort = CLAUDE_EFFORT` ('low') and
+  `CLAUDE_THINKING_HEADROOM` (1500) on top of the caller's `max_tokens`:
+  Sonnet 5.5 always thinks (`thinking: {type:"disabled"}` is a 400 — never send
+  it), and thinking counts against `max_tokens`, so without headroom a 400-token
+  narrative could come back cut off or empty. Caller lengths are therefore the
+  REPLY length; the prompts' word limits hold length, not max_tokens. No
+  `temperature`/`top_p` (non-default values 400 on this model).
+  It also opts into server-side fallback (`fallbacks: "default"`, header
+  `anthropic-beta: server-side-fallback-2026-07-01`; CORS allows the header —
+  checked against the live preflight). If the API rejects that option with a
+  400, the call retries once without it and `_claudeNoFallback` stops sending
+  it for the session. **A refusal** (HTTP 200, `stop_reason: "refusal"`) throws
+  an Error with `.refusal` — narratives show it as a "declined (category)"
+  warning, never as an API error, and write nothing. Fallback only retries
+  `cyber` / `frontier_llm` declines; a `general_harms` false positive on PI
+  text would surface as that warning. The fast (Haiku) path gets no effort and
+  no fallback — Haiku rejects `effort`.
+- Not verifiable from the sandbox (no API key): the PROSE on Sonnet 5.5. The
+  request shapes and every failure path are covered by
+  `test/tests/59-claude-model-requests.test.js` (32 checks, the Messages API
+  intercepted at the network layer), which also asserts the model ids and the
+  API URL appear nowhere else.
 - CSP `connect-src` includes `https://api.anthropic.com`
 - Confirmation dialog required before bulk AI calls (cost estimate shown)
 
@@ -1477,7 +1505,7 @@ shipped. Grep the actual functions before planning work off this list.
   `'auto-nepa-compliance'` in Add Section; auto-populates checklist progress +
   comment-period compliance; AI-draft path; also a standalone quick report
   (`generateNepaComplianceReport()`).
-- ✅ **AI contact importer Phase 2 (vision)** — image/PDF → Sonnet 5, in the
+- ✅ **AI contact importer Phase 2 (vision)** — image/PDF → Sonnet (now 5.5), in the
   Bulk-add grid (see the AI contact importer section above).
 
 **Live / open:**
@@ -1594,14 +1622,14 @@ without review.
 **Phase 2 SHIPPED** — vision path for the SAME desktop grid. `_bulkAIPanelHTML()`
 has a "📎 Add image / PDF" file input (`accept="image/*,application/pdf"`, multi);
 `_bulkFilesChanged()` shows attachments. `aiExtractContacts()` routes by input:
-text-only paste → Haiku; any image/PDF attached → **Sonnet 5** (`claude-sonnet-5`)
+text-only paste → Haiku; any image/PDF attached → **Sonnet 5.5** (`CLAUDE_TEXT_MODEL`)
 vision. `_aiParseContacts(content, model)` takes either a string (text) or an
 array of content blocks — images as `{type:'image',source:{type:'base64',…}}`,
 PDFs as `{type:'document',source:{type:'base64',media_type:'application/pdf',…}}`
 (helper reads files as raw base64). Still lands in the review grid; PII/API
-notice covers uploaded images. Model-string note: the code uses
-`claude-haiku-4-5-20251001` for the text path — the current unsuffixed id is
-`claude-haiku-4-5` (see claude-api skill); leave as-is unless doing a model pass.
+notice covers uploaded images. Models come from `CLAUDE_FAST_MODEL` (text,
+`claude-haiku-4-5`) and `CLAUDE_TEXT_MODEL` (vision, Sonnet 5.5) — see the
+Claude AI integration section.
 
 **LOCKED SCOPE BOUNDARIES (do not cross without Jeff's explicit say-so):**
 1. **Image/scan AI import → CONTACTS ONLY, DESKTOP ONLY.** The Bulk-add review

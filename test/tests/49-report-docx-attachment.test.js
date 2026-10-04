@@ -92,6 +92,8 @@ module.exports = {
       await client.query('reset request.jwt.claims');
 
       await client.query('set role anon');
+      // A token visitor carries its own link (sql/2026-10-05_portal_token_scoping.sql).
+      await client.query(`select set_config('request.headers', '{"x-portal-token":"22222222-2222-2222-2222-222222222222"}', true)`);
       r = await client.query(`select name from storage.objects where bucket_id='report-files' order by name`);
       t.eq(r.rows.map(x => x.name), ['5001/' + sharedId + '.docx'],
            'a token-link visitor sees only the shared report\'s file too');

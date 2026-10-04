@@ -2064,9 +2064,8 @@ RLS via the `request.headers` GUC — a real, documented PostgREST mechanism).
 Supabase project from the sandbox that built this — this codebase already
 shipped one integration wrong from search-result confidence instead of a live
 check (see the UGRC endpoint story below) and this would be the same mistake
-shape. Verify the header GUC live against the real project first, then extend
-every `anon_portal_read` policy — this is the next task on this project, not
-a someday item. Project ids are small sequential integers, so this residual
+shape. **Now built and staged** — see "Portal token links scoped to the token
+actually held" below; it waits only on the live header probe. Project ids are small sequential integers, so this residual
 gap is closeable by guessing, not just by holding a leaked token.
 
 **Column-level exposure is also unchanged and out of scope here**: RLS gates
@@ -2142,6 +2141,37 @@ name; the file's own verify query confirms zero policies anywhere still name
 that step is what caught this, and it would not have been caught any other
 way, including by everything in this session that came before actually
 running it.
+
+### Portal token links scoped to the token actually held — STAGED (Oct 2026)
+Closes the residual gap above. `sql/2026-10-05_portal_token_scoping.sql`
+redefines **`pi_portal_project_ids()`** — the one function every anon policy
+funnels through (all `anon_portal_read` policies plus the report-files Storage
+policy) — to return only the project whose token arrives in the request's
+**`x-portal-token`** header, read from `current_setting('request.headers')`.
+No header, an unknown, malformed (compared as text, never cast) or revoked
+token → no rows. Before: the anon key alone read any linked project by id.
+`client-portal.html` keeps the link in `_portalToken` and `anonHdrs()` adds
+the header, so every token-mode REST and Storage request carries it; login
+mode never sends one. Staff and OTP clients are untouched (authenticated).
+- **Rollout order matters, and it is waiting on a live check.** Hosted
+  Supabase must (a) allow the header through CORS from putzke.github.io and
+  (b) pass it to the database for BOTH PostgREST and Storage — none of which
+  the sandbox can reach. `sql/probes/2026-10-05_portal_header_probe.sql`
+  (a subfolder, so the harness never applies it) creates a temporary echo
+  function, an empty private bucket and a policy matching only that bucket,
+  plus a browser-console snippet run on the live portal page; then cleanup.
+  Order: probe passes → push `client-portal.html` to `main` (an extra header
+  is harmless to the old database) → run the migration (before the page is
+  live it would blank every token link). Rollback SQL is in the migration.
+  **Do not push the portal change to `main` before the probe passes** — a
+  CORS rejection of the header would break every token link immediately.
+- Covered by `test/tests/62-portal-token-scoping.test.js` (16 checks,
+  role-switched on a raw connection like test 47): the right token sees its
+  project across the portal tables and its report file; none, someone
+  else's, a malformed or revoked token, or no `request.headers` at all sees
+  nothing; staff unchanged; the page sends the token on every REST and Storage
+  request. Verified to fail against the old function and against a portal
+  that omits the header. Tests 47 and 49 now set the header as a visitor would.
 
 ### Client Portal Access — staff can save directly now (Sep 2026)
 `sql/2026-09-06_client_access_self_serve.sql`. The Settings → Client Portal

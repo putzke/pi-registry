@@ -63,6 +63,12 @@ module.exports = {
 
       // ── anon: cannot list the token table itself ──────────────────────────
       await client.query('set role anon');
+      // The portal sends the link it holds as x-portal-token on every request,
+      // and the database scopes token-link reads to that link's project
+      // (sql/2026-10-05_portal_token_scoping.sql). What a visitor with NO
+      // token, someone else's token, or a garbage one sees is covered by
+      // 62-portal-token-scoping.test.js.
+      await client.query(`select set_config('request.headers', '{"x-portal-token":"11111111-1111-1111-1111-111111111111"}', true)`);
       t.ok(await expectDenied('select * from pi_portal_links'),
            'anon: SELECT on pi_portal_links itself is refused outright, not just filtered to zero rows');
 

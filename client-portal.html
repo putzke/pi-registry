@@ -418,6 +418,11 @@ let _trendChart = null;
 let _actFrom = dfltFrom();
 let _actTo   = dfltTo();
 let _tokenMode = false;
+// The token-link visitor's own link, sent as x-portal-token on every request:
+// the database only shows rows for the project this exact token belongs to
+// (sql/2026-10-05_portal_token_scoping.sql). Without it a token visitor could
+// read any linked project just by asking for its id.
+let _portalToken = null;
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 function isoDate(d) {
@@ -497,7 +502,7 @@ async function ensureSession() {
 window.addEventListener('DOMContentLoaded', async () => {
   const params = new URLSearchParams(window.location.search);
   const token = params.get('token');
-  if (token) { _tokenMode = true; bootFromToken(token); return; }
+  if (token) { _tokenMode = true; _portalToken = token; bootFromToken(token); return; }
 
   const hash = window.location.hash;
   if (hash && hash.includes('access_token=')) {
@@ -592,7 +597,9 @@ function authHdrs() {
   return { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${s.access_token}`, 'Accept': 'application/json' };
 }
 function anonHdrs() {
-  return { 'apikey': SUPA_KEY, 'Accept': 'application/json' };
+  const h = { 'apikey': SUPA_KEY, 'Accept': 'application/json' };
+  if (_portalToken) h['x-portal-token'] = _portalToken;
+  return h;
 }
 async function sbFetch(path) {
   const headers = _tokenMode ? anonHdrs() : authHdrs();

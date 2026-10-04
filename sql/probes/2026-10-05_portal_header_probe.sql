@@ -85,10 +85,11 @@ notify pgrst, 'reload schema';
 --
 -- drop policy if exists pi_header_probe on storage.buckets;
 -- drop function if exists public.pi_header_probe();
--- delete from storage.buckets where id = 'pi-header-probe';
 -- notify pgrst, 'reload schema';
 --
--- If the delete is refused ("direct deletion from storage tables is not
--- allowed"), delete the empty "pi-header-probe" bucket from the dashboard's
--- Storage page instead, or leave it: it is private, empty, and with the
--- policy dropped nobody but staff can see it.
+-- Do NOT add `delete from storage.buckets ...` to that block: Supabase refuses
+-- direct deletes from storage tables (42501, storage.protect_delete), and the
+-- SQL Editor runs the block as one transaction, so the refusal also undoes the
+-- two drops above it. Delete the empty "pi-header-probe" bucket from the
+-- dashboard's Storage page instead, or leave it: it is private, empty, and
+-- with the policy dropped nobody but staff can see it.

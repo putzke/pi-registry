@@ -2164,7 +2164,9 @@ with header + Bearer → 200, without the header → 400. Staff and OTP clients 
   Not yet exercised live: the .docx DOWNLOAD path, because the shared report
   used had no `docx_path` (grandfathered; it offers Print/PDF instead). Attach
   a final .docx to a shared report and download it via a token link to close
-  that. The probe objects should be dropped (cleanup block in the probe file).
+  that. Probe policy and function dropped 2026-10-05; the empty private
+  `pi-header-probe` bucket may remain (Supabase refuses direct deletes from
+  storage tables — remove it from the Storage page if wanted).
 - **Rollout order mattered and was followed** (kept for the next such change). Hosted
   Supabase must (a) allow the header through CORS from putzke.github.io and
   (b) pass it to the database for BOTH PostgREST and Storage — none of which

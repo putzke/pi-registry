@@ -81,6 +81,10 @@ const ALLOWED = {
   // pointers and is a working draft, never a client record — client-portal.html
   // (the only anon app) has nothing to read here, so anon is granted nothing.
   pi_closeouts: { anon: [], authenticated: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'] },
+  // ROW outreach notes (sql/2026-10-04_row_outreach.sql): owner sentiment and
+  // concerns about private individuals. Staff-only for the same reason, and a
+  // separate table precisely so a portal session can't select these columns.
+  pi_parcel_outreach: { anon: [], authenticated: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'] },
 };
 
 // `grant a, b on t1, t2 to r1, r2;` — possibly across lines.
@@ -149,7 +153,7 @@ module.exports = {
 
     const tables = Object.keys(granted).filter(x => created.has(x)).sort();
     t.eq(tables, ['pi_client_access','pi_client_summaries','pi_closeouts',
-                  'pi_parcel_owners','pi_parcels','pi_portal_links'],
+                  'pi_parcel_outreach','pi_parcel_owners','pi_parcels','pi_portal_links'],
          'every table a migration creates also grants it — none was missed entirely');
 
     for (const tbl of tables) {

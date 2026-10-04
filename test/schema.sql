@@ -259,6 +259,20 @@ create table pi_meetings (
 
 grant select, insert, update, delete on pi_meetings to anon, authenticated;
 
+create table pi_parcel_outreach (
+  id bigserial primary key,
+  parcel_id text,
+  stakeholder_id text,
+  authorized_signer boolean,
+  sentiment text,
+  concerns text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  updated_by text
+);
+
+grant select, insert, update, delete on pi_parcel_outreach to anon, authenticated;
+
 create table pi_parcel_owners (
   id bigint generated always as identity primary key,
   parcel_id text,
@@ -284,7 +298,9 @@ create table pi_parcels (
   ugrc_own_type text,
   ugrc_address text,
   ugrc_matched boolean,
-  ugrc_checked_at timestamptz
+  ugrc_checked_at timestamptz,
+  legal_desc_shared date,
+  exhibit_shared date
 );
 
 create table pi_portal_links (

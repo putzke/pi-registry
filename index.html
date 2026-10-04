@@ -267,6 +267,10 @@ select optgroup{background:var(--navy-mid);color:var(--sky-lt);font-weight:700;f
 .co-page p{margin:0;white-space:pre-wrap}
 .co-pgbreak{border-top:2px dashed #b9c2cc;margin:22px -56px;position:relative}
 .co-pgbreak::after{content:'page break';position:absolute;right:8px;top:-9px;background:#fff;color:#8a96a3;font-size:10px;padding:0 4px}
+.co-doc-tbl{width:100%;border-collapse:collapse;table-layout:fixed;font-size:12.6px;margin:2px 0 6px}
+.co-doc-tbl th{background:#1F3955;color:#fff;text-align:left;font-weight:700;padding:4px 7px;border:1px solid #B9C2CC;font-size:13.3px}
+.co-doc-tbl td{padding:4px 7px;border:1px solid #B9C2CC;vertical-align:top;white-space:pre-wrap}
+.co-doc-tbl tbody tr:nth-child(even) td{background:#EEF2F6}
 .co-todo{border:1.5px dashed #8CC2F5;background:#EEF5FD;color:#2D5E8F;border-radius:6px;padding:10px 12px;margin:12px 0;font-size:12.5px}
 .co-todo-ed{font-size:12px;color:#8CC2F5;background:rgba(74,155,232,.08);border:1px dashed rgba(74,155,232,.35);border-radius:6px;padding:8px 10px}
 .co-tbl{width:100%;border-collapse:collapse;font-size:12px}
@@ -719,7 +723,8 @@ const SB_TABLES = {
   client_summaries:     'pi_client_summaries',
   parcels:              'pi_parcels',
   parcel_owners:        'pi_parcel_owners',
-  closeouts:            'pi_closeouts'
+  closeouts:            'pi_closeouts',
+  parcel_outreach:      'pi_parcel_outreach'
 };
 
 // Map our internal field names to Supabase column names
@@ -860,7 +865,17 @@ const SB_TO_INT = {
     // UGRC reconciliation (Phase 2a) — see sql/2026-08-30_ugrc_reconciliation.sql
     // for why each is nullable/tri-state rather than a plain flag.
     ugrcOwnType:'ugrc_own_type', ugrcAddress:'ugrc_address',
-    ugrcMatched:'ugrc_matched', ugrcCheckedAt:'ugrc_checked_at'
+    ugrcMatched:'ugrc_matched', ugrcCheckedAt:'ugrc_checked_at',
+    // ROW outreach — sql/2026-10-04_row_outreach.sql
+    legalDescShared:'legal_desc_shared', exhibitShared:'exhibit_shared'
+  },
+  // Staff-only: sentiment and concerns about a private owner never reach the
+  // portal. A separate table, not columns on pi_parcel_owners — see the
+  // migration for why RLS can't hide a column from a signed-in portal client.
+  pi_parcel_outreach: {
+    id:'id', parcelId:'parcel_id', stakeholderId:'stakeholder_id',
+    authorizedSigner:'authorized_signer', sentiment:'sentiment', concerns:'concerns',
+    updatedAt:'updated_at', updatedBy:'updated_by'
   },
   pi_parcel_owners: {
     id:'id', parcelId:'parcel_id', stakeholderId:'stakeholder_id',
@@ -910,7 +925,7 @@ function localToday(){
   return y+'-'+m+'-'+day;
 }
 
-const DATE_FIELDS = new Set(['interaction_date','follow_up_due','follow_up_resolved','due_date','start_date','end_date','precon_date','added_date','meeting_date','date_raised','date_resolved','date_made','fulfilled_date','last_exported','comment_date','response_date','notification_date','response_deadline','ura_notice_date','follow_up_date','period_start','period_end','hearing_date','first_ad_date','second_ad_date','federal_register_date','notice_date']);
+const DATE_FIELDS = new Set(['legal_desc_shared','exhibit_shared','interaction_date','follow_up_due','follow_up_resolved','due_date','start_date','end_date','precon_date','added_date','meeting_date','date_raised','date_resolved','date_made','fulfilled_date','last_exported','comment_date','response_date','notification_date','response_deadline','ura_notice_date','follow_up_date','period_start','period_end','hearing_date','first_ad_date','second_ad_date','federal_register_date','notice_date']);
 
 // Integer FK columns that Supabase expects as numbers
 const SB_INT_FIELDS = new Set(['project_id','stakeholder_id','issue_id','interaction_id','meeting_id']);
@@ -973,7 +988,7 @@ function fromSB(table, row) {
     result[intKey] = row[sbCol] !== undefined ? row[sbCol] : (intKey.startsWith('is') ? false : '');
   }
   // Normalize booleans
-  ['isMaster','isAnonymous','followUp','followUpDone','isArchived','equityFormSubmitted','lep','underserved','needsReview'].forEach(f => {
+  ['isMaster','isAnonymous','followUp','followUpDone','isArchived','equityFormSubmitted','lep','underserved','needsReview','authorizedSigner'].forEach(f => {
     if (result[f] !== undefined) result[f] = result[f] === true || result[f] === 1;
   });
   // OCC baseline: carry updated_at/updated_by into the cache record so the next
@@ -1242,7 +1257,7 @@ function cacheClear(k) { delete _cache[k]; delete _cacheTime[k]; }
 const _syncCache = {};
 
 async function loadAllData() {
-  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments','comment_periods','tribal_consultations','reports','report_archive','client_summaries','parcels','parcel_owners','closeouts'];
+  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments','comment_periods','tribal_consultations','reports','report_archive','client_summaries','parcels','parcel_owners','parcel_outreach','closeouts'];
   // Boot stays tolerant — one unreachable table should not lock the app — but a
   // table that FAILED must not be presented as an empty one. An empty Master
   // List that is really a 401 is worse than an error message.
@@ -9153,6 +9168,7 @@ const CLOSEOUT_TYPES = {
       ['PI Highlights', 'interactions, events, PI reports', 'news, social & newsletter links'],
       ['Stakeholder Communications Log Summary', 'every interaction, the whole project', ''],
       ['Commitments to the Public (if any)', 'commitments and whether each was kept', ''],
+      ['Right-of-Way & Property Owner Outreach (if any parcels)', 'parcels, owners reached, who can sign, sentiment', 'optional narrative'],
       ['Lessons Learned & Recommendations', 'resolved issues, as context', 'your pointers'],
       ['Delivery Against Scope of Work', 'deliverables', 'evidence wording, scope document'],
       ['Photo gallery', '', 'added in Word after export']
@@ -9189,6 +9205,7 @@ function _closeoutFacts(projId) {
   const nlTracked = nl.filter(function (d) { return Number(d.contractedQty) > 0; });
   const proj = (DB.get('projects') || []).find(function (p) { return String(p.id) === pid; }) || {};
   const span = function (a, b) { return a && b ? _coMonthYear(a) + ' – ' + _coMonthYear(b) : ''; };
+  const rowF = _closeoutRowFacts(pid);
   return {
     interactions: ints.length,
     intSpan: span(dates[0], dates[dates.length - 1]),
@@ -9207,7 +9224,47 @@ function _closeoutFacts(projId) {
     newsletterEditions: nlTracked.length
       ? nlTracked.reduce(function (s, d) { return s + (Number(d.deliveredCount) || 0); }, 0) : null,
     newsletterUntracked: nl.filter(function (d) { return !(Number(d.contractedQty) > 0); }),
-    duration: span(proj.startDate, proj.endDate) || span(dates[0], dates[dates.length - 1])
+    duration: span(proj.startDate, proj.endDate) || span(dates[0], dates[dates.length - 1]),
+    commitmentList: comms.slice().sort(function (a, b) {
+      return String(a.dateMade || a.dueDate || '').localeCompare(String(b.dateMade || b.dueDate || ''));
+    }),
+    parcels: (DB.get('parcels') || []).filter(function (p) { return String(p.projectId) === pid; }).length,
+    parcelOwners: rowF.owners,
+    row: rowF
+  };
+}
+
+// Right-of-way outreach, counted. _parcelStats is the same source the parcel
+// quick report and the report-editor section read, so the three agree.
+function _closeoutRowFacts(pid) {
+  const st = _parcelStats(pid);
+  const outreach = DB.get('parcel_outreach') || [];
+  const parcels = st.rows.map(function (r) { return r.parcel; });
+  const ids = {}, sentiment = {};
+  let signer = 0, graded = 0, ungraded = 0;
+  st.rows.forEach(function (r) {
+    let parcelSigns = false;
+    r.owners.forEach(function (o) {
+      ids[String(o.stake.id)] = true;
+      const rec = outreach.find(function (x) { return String(x.parcelId) === String(r.parcel.id) && String(x.stakeholderId) === String(o.stake.id); });
+      if (rec && rec.authorizedSigner) parcelSigns = true;
+      if (rec && rec.sentiment) { graded++; sentiment[rec.sentiment] = (sentiment[rec.sentiment] || 0) + 1; } else ungraded++;
+    });
+    if (parcelSigns) signer++;
+  });
+  // Distinct interactions, so one call to someone holding two parcels counts once.
+  const contacts = (DB.get('interactions') || []).filter(function (i) {
+    return String(i.projectId) === String(pid) && ids[String(i.stakeholderId)];
+  }).length;
+  const acqSummary = Object.keys(st.byAcq).filter(function (k) { return k !== 'Not specified'; })
+    .map(function (k) { return st.byAcq[k] + ' ' + k.toLowerCase(); }).join(', ');
+  return {
+    total: st.total, owned: st.total - st.unownedCt, owners: st.ownerCt, signer: signer, noticed: st.noticedCt,
+    legal: parcels.filter(function (p) { return !!p.legalDescShared; }).length,
+    exhibit: parcels.filter(function (p) { return !!p.exhibitShared; }).length,
+    contacts: contacts, graded: graded, acqSummary: acqSummary,
+    sentimentSummary: ROW_SENTIMENTS.filter(function (k) { return sentiment[k]; })
+      .map(function (k) { return k + ' ' + sentiment[k]; }).concat(ungraded ? ['not graded ' + ungraded] : []).join(' · ')
   };
 }
 
@@ -9909,9 +9966,41 @@ function _coReportDoc(co) {
   B.push({ t: 'title', text: 'PIN #' + (proj.pid || '?') + ' ' + lbl + 'Public Involvement Close-Out Report' });
   if (_coVal(it.reportDate)) B.push({ t: 'title', text: _fmtMDY(it.reportDate), after: 10 });
 
-  // ── PI Program at a Glance (step 3) ──
-  B.push({ t: 'todo', text: 'PI Program at a Glance — the scorecard of counts from COMPASS and your metrics. Built in the next step.' });
-  sections.push({ id: 'glance', title: 'PI Program at a Glance', state: 'todo', why: 'Built in the next step.' });
+  // ── PI Program at a Glance ──
+  // Counted by COMPASS unless the consultant overrode it. Anything that did
+  // NOT come from COMPASS (an override, a website reading, a typed count) is
+  // marked † and footnoted, so the table says where each number came from.
+  const gl = [];
+  let dag = false;
+  const g = function (label, counted, ovrKey, show) {
+    if (_coVal(it[ovrKey])) { dag = true; gl.push([label, String(it[ovrKey]).trim() + ' †']); }
+    else if (show) gl.push([label, String(counted)]);
+  };
+  const gu = function (label, v) { if (_coVal(v)) { dag = true; gl.push([label, String(v).trim() + ' †']); } };
+  g('Program duration', facts.duration, 'ovrDuration', !!facts.duration);
+  g('PI reports issued', facts.piReports, 'ovrPiReports', facts.piReports > 0);
+  g('Stakeholders in registry', facts.stakeholders, 'ovrStakeholders', true);
+  g('Logged stakeholder interactions', facts.interactions + (facts.intSpan ? ' (' + facts.intSpan + ')' : ''), 'ovrInteractions', true);
+  g('Inbound hotline calls', facts.inboundCalls, 'ovrInboundCalls', facts.inboundCalls > 0);
+  g('Issues escalated', facts.issues + (facts.issues ? ', ' + facts.issuesResolved + ' resolved' : ''), 'ovrIssues', true);
+  if (facts.events > 0) gl.push(['Events held', String(facts.events)]);
+  if (facts.commitments > 0) gl.push(['Commitments to the public kept', facts.commitmentsKept + ' of ' + facts.commitments]);
+  const visits = (it.visits || []).filter(function (r) { return r && _coVal(r.visits); });
+  if (visits.length) gu('Unique website visits', visits[visits.length - 1].visits + (_coVal(visits[visits.length - 1].when) ? ' (as of ' + String(visits[visits.length - 1].when).trim() + ')' : ''));
+  if (_coVal(it.subsStart) || _coVal(it.subsEnd)) {
+    gu('Email subscribers', _coVal(it.subsStart) && _coVal(it.subsEnd)
+      ? String(it.subsStart).trim() + ' at first send → ' + String(it.subsEnd).trim() + ' at completion'
+      : String(it.subsEnd || it.subsStart).trim());
+  }
+  if (facts.newsletterEditions !== null) gl.push(['Email updates sent', String(facts.newsletterEditions)]);
+  else gu('Email updates sent', it.nlCount);
+  if (facts.parcels > 0) gl.push(['Right-of-way parcels', facts.parcels + ' (' + facts.parcelOwners + ' owner' + (facts.parcelOwners === 1 ? '' : 's') + ' identified)']);
+  (it.customMetrics || []).filter(function (r) { return r && _coVal(r.label) && _coVal(r.value); })
+    .forEach(function (r) { gu(String(r.label).trim(), r.value); });
+  B.push({ t: 'section', text: 'PI Program at a Glance:' });
+  B.push({ t: 'table', cols: [{ h: 'Metric', w: 5200 }, { h: 'Result', w: 4400 }], rows: gl, boldCol: 0 });
+  if (dag) P([{ text: '† Figure from the PI team’s own records (website analytics, email platform, field counts), not counted in COMPASS.', i: true, size: 16 }], { before: 4 });
+  sections.push({ id: 'glance', title: 'PI Program at a Glance', state: 'in', why: '' });
 
   // ── PI Highlights ──
   const hl = [];
@@ -9935,12 +10024,48 @@ function _coReportDoc(co) {
   sections.push({ id: 'commlog', title: 'Stakeholder Communications Log Summary', state: cl.length ? 'in' : 'out',
     why: cl.length ? '' : 'Not written yet.' });
 
-  // ── Commitments to the Public (step 3) — only when the project has any ──
+  // ── Commitments to the Public — only when the project has any ──
   if (facts.commitments > 0) {
-    B.push({ t: 'todo', text: 'Commitments to the Public — ' + facts.commitments + ' commitment' + (facts.commitments === 1 ? '' : 's') + ' and whether each was kept. Built in the next step.' });
-    sections.push({ id: 'commitments', title: 'Commitments to the Public', state: 'todo', why: 'Built in the next step.' });
+    B.push({ t: 'section', text: 'Commitments to the Public:' });
+    P(facts.commitments + ' commitment' + (facts.commitments === 1 ? ' was' : 's were') + ' made to the public during the project; '
+      + facts.commitmentsKept + (facts.commitmentsKept === 1 ? ' was' : ' were') + ' kept'
+      + (facts.commitments > facts.commitmentsKept ? ' and ' + (facts.commitments - facts.commitmentsKept) + ' remain' + (facts.commitments - facts.commitmentsKept === 1 ? 's' : '') + ' outstanding.' : '.'));
+    B.push({ t: 'table', cols: [{ h: 'Commitment', w: 5000 }, { h: 'Made to', w: 2300 }, { h: 'Outcome', w: 2300 }],
+      rows: facts.commitmentList.map(function (c) {
+        const kept = c.status === 'Fulfilled';
+        return [c.commitment || '—', c.madeTo || '—',
+          kept ? 'Kept' + (c.fulfilledDate ? ' ' + _fmtMDY(c.fulfilledDate) : '')
+               : 'Outstanding' + (c.dueDate ? ' — due ' + _fmtMDY(c.dueDate) : '')];
+      }), boldCol: 2 });
+    sections.push({ id: 'commitments', title: 'Commitments to the Public', state: 'in', why: '' });
   } else {
     sections.push({ id: 'commitments', title: 'Commitments to the Public', state: 'out', why: 'No commitments on this project.' });
+  }
+
+  // ── Right-of-Way & Property Owner Outreach — only when the project has parcels ──
+  // Aggregates only. Owner names and individual concerns go to the ROW agents
+  // in the Parcels view's Agent briefing, not into a report sent to the client.
+  if (facts.parcels > 0) {
+    const rw = facts.row;
+    B.push({ t: 'section', text: 'Right-of-Way & Property Owner Outreach:' });
+    const rp = _coLines(dr.row);
+    if (rp.length) rp.forEach(function (x) { P(x); });
+    const of = function (n) { return n + ' of ' + rw.total; };
+    const rrows = [
+      ['Parcels in the acquisition / easement area', rw.total + (rw.acqSummary ? ' (' + rw.acqSummary + ')' : '')],
+      ['Owner identified', of(rw.owned)],
+      ['Party with authority to sign identified', of(rw.signer)],
+      ['Logged contacts with owners and their representatives', String(rw.contacts)],
+      ['Notice sent', of(rw.noticed)],
+      ['Legal description shared', of(rw.legal)],
+      ['Design exhibit shared', of(rw.exhibit)]
+    ];
+    if (rw.graded) rrows.push(['Owner sentiment (' + rw.graded + ' graded)', rw.sentimentSummary]);
+    B.push({ t: 'table', cols: [{ h: 'Measure', w: 5200 }, { h: 'Result', w: 4400 }], rows: rrows, boldCol: 0 });
+    P([{ text: 'Owner names and individual concerns were provided to the right-of-way agents separately and are not reproduced here.', i: true, size: 16 }], { before: 4 });
+    sections.push({ id: 'row', title: 'Right-of-Way & Property Owner Outreach', state: 'in', why: '' });
+  } else {
+    sections.push({ id: 'row', title: 'Right-of-Way & Property Owner Outreach', state: 'out', why: 'No parcels on this project.' });
   }
 
   // ── Lessons Learned ──
@@ -9956,9 +10081,29 @@ function _coReportDoc(co) {
   sections.push({ id: 'lessons', title: 'Lessons Learned & Recommendations', state: ls.length ? 'in' : 'out',
     why: ls.length ? '' : 'Not written yet.' });
 
-  // ── Delivery Against Scope (step 3) ──
-  B.push({ t: 'todo', text: 'Delivery Against Scope of Work — one row per deliverable, with your wording and evidence. Built in the next step.' });
-  sections.push({ id: 'scope', title: 'Delivery Against Scope of Work', state: 'todo', why: 'Built in the next step.' });
+  // ── Delivery Against Scope of Work ──
+  // Wording defaults from the deliverable's own status (_coDefaultWording), so
+  // an untouched row never claims more than COMPASS recorded. Quantities are
+  // stated as delivered, never framed as over or under the commitment.
+  if (facts.deliverables.length) {
+    const saved = it.deliverables || {};
+    B.push({ t: 'section', text: 'Delivery Against Scope of Work:' });
+    B.push({ t: 'table', cols: [{ h: 'Committed Deliverable', w: 4100 }, { h: 'Status', w: 2200 }, { h: 'Evidence in this Package', w: 3300 }],
+      rows: facts.deliverables.map(function (d) {
+        const sv = saved[d.id] || {};
+        const qty = Number(d.contractedQty) > 1 ? ' (' + (Number(d.deliveredCount) || 0) + ' delivered)' : '';
+        return [(d.title || d.type || 'Deliverable') + qty, sv.wording || _coDefaultWording(d),
+          _coVal(sv.evidence) ? String(sv.evidence).trim() : [_coHole('evidence not named')]];
+      }), boldCol: 1 });
+    if (_coVal(it.scopeTitle)) {
+      P([{ text: 'Reconciled against the ' + String(it.scopeTitle).trim() + (_coVal(it.scopeDate) ? ', dated ' + fmt(it.scopeDate) : '') + '.', i: true, size: 16 }], { before: 4 });
+    }
+    const missing = facts.deliverables.filter(function (d) { return !_coVal((saved[d.id] || {}).evidence); }).length;
+    sections.push({ id: 'scope', title: 'Delivery Against Scope of Work', state: 'in',
+      why: missing ? missing + ' deliverable' + (missing === 1 ? ' has' : 's have') + ' no evidence named yet (highlighted).' : '' });
+  } else {
+    sections.push({ id: 'scope', title: 'Delivery Against Scope of Work', state: 'out', why: 'No deliverables on this project.' });
+  }
 
   // ── Photo gallery: added in Word ──
   B.push({ t: 'break' });
@@ -9977,13 +10122,25 @@ function _coBlocksHTML(blocks) {
     if (r.i) h = '<em>' + h + '</em>';
     if (r.link) h = '<a href="' + escHtml(r.link) + '" target="_blank" rel="noopener" style="color:#0563C1;text-decoration:underline">' + h + '</a>';
     if (r.hl) h = '<mark style="background:#FFF200;color:#222">' + h + '</mark>';
+    if (r.size) h = '<span style="font-size:' + (r.size * 0.665).toFixed(1) + 'px">' + h + '</span>';
     return h;
+  };
+  const cellRuns = function (c, bold) {
+    const runs = Array.isArray(c) ? c : [{ text: c == null ? '' : String(c) }];
+    return runs.map(function (r) { return run(bold ? Object.assign({}, r, { b: true }) : r); }).join('');
   };
   return blocks.map(function (b) {
     if (b.t === 'break') return '<div class="co-pgbreak" aria-hidden="true"></div>';
     if (b.t === 'title') return '<div style="text-align:center;font-weight:700;font-size:18px;margin:0 0 ' + (b.after || 0) + 'px">' + escHtml(b.text) + '</div>';
     if (b.t === 'section') return '<div style="font-weight:700;font-size:17px;text-decoration:underline;margin:14px 0 10px">' + escHtml(b.text) + '</div>';
     if (b.t === 'todo') return '<div class="co-todo">' + escHtml(b.text) + '</div>';
+    if (b.t === 'table') {
+      const tw = b.cols.reduce(function (n, c) { return n + c.w; }, 0);
+      return '<table class="co-doc-tbl"><colgroup>' + b.cols.map(function (c) { return '<col style="width:' + (c.w / tw * 100).toFixed(1) + '%">'; }).join('')
+        + '</colgroup><thead><tr>' + b.cols.map(function (c) { return '<th>' + escHtml(c.h) + '</th>'; }).join('') + '</tr></thead><tbody>'
+        + b.rows.map(function (row) { return '<tr>' + row.map(function (c, ci) { return '<td>' + cellRuns(c, ci === b.boldCol) + '</td>'; }).join('') + '</tr>'; }).join('')
+        + '</tbody></table>';
+    }
     const st = 'margin:' + (b.before || 0) * 1.33 + 'px 0 ' + (b.after === undefined ? 6 : b.after) * 1.33 + 'px;'
       + (b.indent ? 'text-indent:' + b.indent / 15 + 'px;' : '') + (b.left ? 'margin-left:' + b.left / 15 + 'px;' : '')
       + (b.align === 'center' ? 'text-align:center;' : '');
@@ -10010,8 +10167,32 @@ function _coBlocksDocx(blocks) {
       + (b.indent || b.left ? '<w:ind' + (b.left ? ' w:left="' + b.left + '"' : '') + (b.indent ? ' w:firstLine="' + b.indent + '"' : '') + '/>' : '')
       + (b.align === 'center' ? '<w:jc w:val="center"/>' : '') + '</w:pPr>';
   };
+  const bdr = '<w:tblBorders>' + ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(function (e) {
+    return '<w:' + e + ' w:val="single" w:sz="6" w:space="0" w:color="B9C2CC"/>';
+  }).join('') + '</w:tblBorders>';
+  const cell = function (w, fill, inner) {
+    return '<w:tc><w:tcPr><w:tcW w:w="' + w + '" w:type="dxa"/><w:shd w:val="clear" w:color="auto" w:fill="' + fill + '"/></w:tcPr>'
+      + '<w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr>' + inner + '</w:p></w:tc>';
+  };
+  const table = function (b) {
+    const tw = b.cols.reduce(function (n, c) { return n + c.w; }, 0);
+    return '<w:tbl><w:tblPr><w:tblW w:w="' + tw + '" w:type="dxa"/>' + bdr + '<w:tblLayout w:type="fixed"/>'
+      + '<w:tblCellMar><w:top w:w="50" w:type="dxa"/><w:left w:w="100" w:type="dxa"/><w:bottom w:w="50" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr>'
+      + '<w:tblGrid>' + b.cols.map(function (c) { return '<w:gridCol w:w="' + c.w + '"/>'; }).join('') + '</w:tblGrid>'
+      + '<w:tr><w:trPr><w:tblHeader/></w:trPr>' + b.cols.map(function (c) {
+        return cell(c.w, '1F3955', '<w:r><w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t xml:space="preserve">' + escXml(c.h) + '</w:t></w:r>');
+      }).join('') + '</w:tr>'
+      + b.rows.map(function (row, ri) {
+        return '<w:tr><w:trPr><w:cantSplit/></w:trPr>' + row.map(function (c, ci) {
+          const runs = Array.isArray(c) ? c : [{ text: c == null ? '' : String(c) }];
+          return cell(b.cols[ci].w, ri % 2 ? 'EEF2F6' : 'FFFFFF', runs.filter(function (r) { return r.text !== ''; })
+            .map(function (r) { return run(Object.assign({ size: 19 }, r, ci === b.boldCol ? { b: true } : {})); }).join(''));
+        }).join('') + '</w:tr>';
+      }).join('') + '</w:tbl>';
+  };
   const xml = blocks.map(function (b) {
     if (b.t === 'todo') return '';
+    if (b.t === 'table') return table(b);
     if (b.t === 'break') return '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
     if (b.t === 'title') return '<w:p>' + ppr({ align: 'center', after: b.after || 0 }) + run({ text: b.text, b: true, size: 28 }) + '</w:p>';
     if (b.t === 'section') {
@@ -10029,14 +10210,22 @@ function _coFileName(co, proj, it) {
   return [proj.pid, route, 'PI Close-Out Report'].filter(_coVal).join(' ').replace(/[\\/:*?"<>|]+/g, '-') + '.docx';
 }
 
+// Placeholders still in the report, table cells included. The photo-gallery
+// marker is excluded: it is finished in Word by design.
+function _coHoleCount(blocks) {
+  const hl = function (runs) { return (runs || []).filter(function (r) { return r && r.hl && !/^\[Photo gallery/.test(r.text); }).length; };
+  return blocks.reduce(function (n, b) {
+    if (b.t === 'table') return n + b.rows.reduce(function (m, row) { return m + row.reduce(function (k, c) { return k + (Array.isArray(c) ? hl(c) : 0); }, 0); }, 0);
+    return n + hl(b.runs);
+  }, 0);
+}
+
 async function exportCloseoutDocx() {
   const co = (_syncCache.closeouts || []).find(function (c) { return _coWork && c.id === _coWork.id; });
   if (!co) return null;
   await _coSave();
   const doc = _coReportDoc(co);
-  const holes = doc.blocks.reduce(function (n, b) {
-    return n + (b.runs || []).filter(function (r) { return r.hl && !/^\[Photo gallery/.test(r.text); }).length;
-  }, 0);
+  const holes = _coHoleCount(doc.blocks);
   if (holes && !confirm(holes + ' placeholder' + (holes === 1 ? ' is' : 's are') + ' still in the report. They print highlighted in yellow so they can be finished in Word.\n\nExport anyway?')) return null;
 
   const brand = doc.intake.letterhead || _coReportType(co).letterhead;
@@ -10121,13 +10310,15 @@ function renderCloseoutReport(el, co) {
   }).join('');
   const editor = box('letter', 'Cover letter', slot('letter', 'Letter body', rt.slotHints.letter, 7)
       + '<div style="font-size:11px;color:var(--fog)">Address block, date, Re: line, salutation and signature come from the intake.</div>')
-    + box('glance', 'PI Program at a Glance', '<div class="co-todo-ed">Built in the next step, from the counts COMPASS already has.</div>')
+    + box('glance', 'PI Program at a Glance', '<div style="font-size:12px;color:var(--slate)">Counted from the project. Overrides, website visits, subscribers and your own metrics come from the intake’s <a href="#" onclick="openCloseoutIntake(\'' + co.id + '\');return false" style="color:var(--sky-lt)">Program metrics</a> and are marked † in the report.</div>')
     + box('highlights', 'PI Highlights', '<div style="font-size:11px;color:var(--fog);margin-bottom:10px">A heading prints only when it has text or links.</div>' + hlSlots
       + ref('Concerns of note', it.concerns) + ref('Notable outcomes & praise', it.praise))
     + box('commlog', 'Stakeholder Communications Log Summary', slot('commlog', 'Summary', rt.slotHints.commlog, 6))
-    + box('commitments', 'Commitments to the Public', '<div class="co-todo-ed">Built in the next step, from the project’s commitments.</div>')
+    + box('commitments', 'Commitments to the Public', '<div style="font-size:12px;color:var(--slate)">Listed from Commitments, with whether each was kept. Close any that were done before exporting.</div>')
+    + box('row', 'Right-of-Way & Property Owner Outreach', slot('row', 'Narrative (optional)', 'What the outreach involved: tracing each parcel to the party who can sign, sharing legal descriptions and design exhibits, how owners received it. Counts are added below it from the Parcels view.', 4)
+      + '<div style="font-size:11px;color:var(--fog)">Counts only. Owner names and concerns stay in the Parcels view’s Agent briefing for the ROW agents.</div>')
     + box('lessons', 'Lessons Learned & Recommendations', slot('lessons', 'Lessons', rt.slotHints.lessons, 6) + ref('Your pointers', it.lessons))
-    + box('scope', 'Delivery Against Scope of Work', '<div class="co-todo-ed">Built in the next step, from Deliverables and your wording in the intake.</div>')
+    + box('scope', 'Delivery Against Scope of Work', '<div style="font-size:12px;color:var(--slate)">One row per deliverable. Wording and evidence are set in the intake’s <a href="#" onclick="openCloseoutIntake(\'' + co.id + '\');return false" style="color:var(--sky-lt)">Scope</a> section; a row with no evidence named prints highlighted.</div>')
     + box('photos', 'Photo gallery', '<div style="font-size:12px;color:var(--slate)">Insert photos in Word after export; a highlighted placeholder marks the spot.</div>');
 
   el.innerHTML = '<div class="topbar">'
@@ -19907,7 +20098,63 @@ function delComment(id){
 // still displays, exports and imports. pi_parcels is the record.
 const PARCEL_STATUSES = ['Not started','Notice sent','Contacted','Negotiating','Acquired','Declined'];
 const PARCEL_ACQ = ['','Full take','Partial take','Temporary construction easement','Permanent easement','Access only','None'];
-const OWNER_ROLES = ['Owner','Co-owner','Tenant','Agent','Heir','Unknown'];
+const OWNER_ROLES = ['Owner','Co-owner','Tenant','Agent','Property manager','Heir','Unknown'];
+
+// ── ROW outreach (Oct 2026) ───────────────────────────────────────────────
+// What PI staff learn before the ROW agents negotiate: who can actually sign
+// for the parcel (often reached through a property manager or several other
+// numbers first), how the owner received the early conversation, and what
+// they are worried about. Stored per (parcel, contact) in pi_parcel_outreach,
+// which is STAFF-ONLY — see sql/2026-10-04_row_outreach.sql for why this could
+// not be columns on pi_parcel_owners. No dollar figures: appraisal and offer
+// amounts belong to the ROW agents and the negotiation, not to PI notes.
+const ROW_SENTIMENTS = ['Willing','Has questions','Resistant',"Won't engage"];
+function _parcOutreach(parcelId, sid){
+  return (DB.get('parcel_outreach')||[]).find(o=>String(o.parcelId)===String(parcelId)&&String(o.stakeholderId)===String(sid))||null;
+}
+// Writes are chained so a sentiment pick and a concerns edit made in quick
+// succession can't both try to create the same row before the first insert
+// has its real id.
+let _poChain=Promise.resolve();
+function setOutreach(parcelId, sid, field, value){
+  _poChain=_poChain.then(async function(){
+    const all=DB.get('parcel_outreach')||[];
+    const now=new Date().toISOString(), by=_occMyEmail()||'';
+    const i=all.findIndex(o=>String(o.parcelId)===String(parcelId)&&String(o.stakeholderId)===String(sid));
+    if(i>-1) all[i]=Object.assign({},all[i],{[field]:value,updatedAt:now,updatedBy:by});
+    else all.push({id:DB.uid(),parcelId:String(parcelId),stakeholderId:String(sid),
+                   authorizedSigner:false,sentiment:'',concerns:'',[field]:value,updatedAt:now,updatedBy:by});
+    await DB.set('parcel_outreach',all);
+    const trail=document.getElementById('f-pc-trail');
+    if(trail) trail.innerHTML=_parcTrailHTML(parcelId);
+  }).catch(function(e){ console.error('ROW outreach save failed:',e); });
+  return _poChain;
+}
+// The contact trail: interactions logged on this parcel's project with each
+// contact attached to it, property managers and other go-betweens included —
+// that trail is how the authorised party gets found. Derived, never stored.
+// An interaction with someone who holds two parcels counts toward both.
+function _parcContactLog(parcel, sid){
+  const ints=(DB.get('interactions')||[]).filter(i=>String(i.projectId)===String(parcel.projectId)&&String(i.stakeholderId)===String(sid));
+  const last=ints.map(i=>i.date).filter(Boolean).sort().pop()||'';
+  return {n:ints.length,last:last};
+}
+function _parcTrail(parcelId){
+  const parcel=(DB.get('parcels')||[]).find(x=>String(x.id)===String(parcelId))||{};
+  const owners=_parcOwners(parcelId);
+  let n=0,last='';
+  owners.forEach(o=>{ const c=_parcContactLog(parcel,o.stake.id); n+=c.n; if(c.last>last) last=c.last; });
+  const signers=owners.filter(o=>{ const r=_parcOutreach(parcelId,o.stake.id); return r&&r.authorizedSigner; });
+  return {n:n,last:last,signers:signers,owners:owners};
+}
+function _parcTrailHTML(parcelId){
+  const t=_parcTrail(parcelId);
+  if(!t.owners.length) return '';
+  return '<span style="color:var(--slate)">'+t.n+' logged contact'+(t.n===1?'':'s')+' with people on this parcel'
+    +(t.last?' · last '+escHtml(_rowDateUS(t.last)):'')+'</span>'
+    +(t.signers.length?' · <span style="color:var(--teal)">Can sign: '+escHtml(t.signers.map(o=>dispName(o.stake)).join(', '))+'</span>'
+      :' · <span style="color:var(--amber)">⚠ Nobody marked as able to sign yet</span>');
+}
 
 function _parcOwners(parcelId){
   const links=(DB.get('parcel_owners')||[]).filter(l=>String(l.parcelId)===String(parcelId));
@@ -20043,7 +20290,7 @@ function renderParcels(el){
             <td class="td-mono" style="white-space:nowrap"><div class="td-link" onclick="openParcelModal('${p.id}')">${escHtml(p.parcelNumber||'—')}</div></td>
             <td style="font-size:12px;color:var(--mist)">${loc?escHtml(loc):'<span style="color:var(--fog);font-style:italic">Not located</span>'}${(!p.situsAddress&&p.latitude&&p.longitude)?'<div style="font-size:10px;color:var(--fog)">coordinates</div>':''}${_ugrcBadge(p)}</td>
             <td>${owners.length===0?'<span style="color:var(--red);font-size:12px">⚠ No owner attached</span>'
-              :owners.map(o=>`<span class="badge b-dark" style="margin:1px 3px 1px 0;cursor:pointer" onclick="openContact('${o.stake.id}','${p.projectId||''}')">${escHtml(dispName(o.stake))}${o.link.ownershipRole&&o.link.ownershipRole!=='Owner'?' · '+escHtml(o.link.ownershipRole):''}</span>`).join('')}</td>
+              :owners.map(o=>`<span class="badge b-dark" style="margin:1px 3px 1px 0;cursor:pointer" onclick="openContact('${o.stake.id}','${p.projectId||''}')">${escHtml(dispName(o.stake))}${o.link.ownershipRole&&o.link.ownershipRole!=='Owner'?' · '+escHtml(o.link.ownershipRole):''}${(r=>r?(r.authorizedSigner?' · <span title="Can sign" style="color:#5BD3A9">signs</span>':'')+(r.sentiment?' · '+escHtml(r.sentiment):''):'')(_parcOutreach(p.id,o.stake.id))}</span>`).join('')}</td>
             <td style="font-size:12px;color:var(--mist)">${escHtml(p.acquisitionType||'—')}</td>
             <td><span class="badge ${_parcStatusColor(p.status||'Not started')}">${escHtml(p.status||'Not started')}</span></td>
             <td class="td-mono" style="font-size:12px;color:${p.noticeDate?'var(--mist)':'var(--fog)'}">${p.noticeDate?fmt(p.noticeDate):'—'}</td>
@@ -20083,8 +20330,13 @@ function openParcelModal(id){
     <div class="fr"><label>Status</label><select id="f-pcst">${PARCEL_STATUSES.map(x=>`<option${(p.status||'Not started')===x?' selected':''}>${x}</option>`).join('')}</select></div>
     <div class="fr"><label>Notice sent</label><input type="date" id="f-pcnd" value="${p.noticeDate||''}"></div>
   </div>
+  <div class="fgrid fg2f">
+    <div class="fr"><label>Legal description shared</label><input type="date" id="f-pcld" value="${p.legalDescShared||''}"></div>
+    <div class="fr"><label>Design exhibit shared</label><input type="date" id="f-pcex" value="${p.exhibitShared||''}"></div>
+  </div>
   <div class="fr"><label>Notes</label><textarea id="f-pcno" style="height:56px">${escHtml(p.notes||'')}</textarea></div>
-  <div class="fsec">Property owners</div>
+  <div class="fsec">Property owners &amp; contacts</div>
+  <div style="font-size:11px;color:var(--fog);margin:-4px 0 6px">Attach everyone you trace through (property managers too), tick who can sign, and grade how the owner received the conversation — the ROW agents read this before they engage.</div>
   <div id="f-pc-owners">${id?_parcelOwnerRowsHTML(id):'<div style="font-size:12px;color:var(--fog);padding:4px 0">Save the parcel first, then attach its owners.</div>'}</div>`,
   `${id?`<button class="btn btn-danger btn-sm" onclick="delParcel('${id}')">Delete</button>`:''}
   <button class="btn" onclick="closeM()">Cancel</button>
@@ -20108,14 +20360,32 @@ function openParcelModal(id){
 // three co-owners doesn't cost three modal round-trips.
 function _parcelOwnerRowsHTML(parcelId){
   const owners=_parcOwners(parcelId);
-  let html=owners.map(o=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)">
-    <span style="flex:1;font-size:13px;color:var(--mist)">${escHtml(dispName(o.stake))}${o.stake.org?` <span style="color:var(--fog)">· ${escHtml(o.stake.org)}</span>`:''}</span>
-    <select style="font-size:11px;padding:3px 6px;background:var(--navy-mid);border:1px solid var(--border);border-radius:4px;color:var(--white)" onchange="setOwnerRole('${o.link.id}',this.value)">
-      ${OWNER_ROLES.map(r=>`<option${(o.link.ownershipRole||'Owner')===r?' selected':''}>${r}</option>`).join('')}
-    </select>
-    <span onclick="detachOwner('${o.link.id}','${parcelId}')" title="Remove from this parcel" style="cursor:pointer;color:var(--fog);font-size:16px">×</span>
-  </div>`).join('');
+  const parcelRec=(DB.get('parcels')||[]).find(x=>String(x.id)===String(parcelId))||{};
+  const ctl='font-size:11px;padding:3px 6px;background:var(--navy-mid);border:1px solid var(--border);border-radius:4px;color:var(--white)';
+  let html=owners.map(o=>{
+    const r=_parcOutreach(parcelId,o.stake.id)||{};
+    const log=_parcContactLog(parcelRec,o.stake.id);
+    const sid=o.stake.id;
+    return `<div class="po-row" style="padding:7px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="flex:1;font-size:13px;color:var(--mist)">${escHtml(dispName(o.stake))}${o.stake.org?` <span style="color:var(--fog)">· ${escHtml(o.stake.org)}</span>`:''}</span>
+      <select aria-label="Role" style="${ctl}" onchange="setOwnerRole('${o.link.id}',this.value)">
+        ${OWNER_ROLES.map(x=>`<option${(o.link.ownershipRole||'Owner')===x?' selected':''}>${x}</option>`).join('')}
+      </select>
+      <label style="font-size:11px;color:var(--slate);display:flex;align-items:center;gap:4px;white-space:nowrap" title="Has authority to speak and sign for this parcel"><input type="checkbox" data-po-sign="${sid}"${r.authorizedSigner?' checked':''} onchange="setOutreach('${parcelId}','${sid}','authorizedSigner',this.checked)"> Can sign</label>
+      <span onclick="detachOwner('${o.link.id}','${parcelId}')" title="Remove from this parcel" style="cursor:pointer;color:var(--fog);font-size:16px">×</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:5px;flex-wrap:wrap">
+      <select aria-label="Sentiment toward the acquisition" data-po-sent="${sid}" style="${ctl}" onchange="setOutreach('${parcelId}','${sid}','sentiment',this.value)">
+        <option value="">— Not graded —</option>
+        ${ROW_SENTIMENTS.map(x=>`<option value="${escHtml(x)}"${r.sentiment===x?' selected':''}>${escHtml(x)}</option>`).join('')}
+      </select>
+      <input aria-label="Concerns for the ROW agent" data-po-conc="${sid}" style="${ctl};flex:1;min-width:180px;padding:4px 7px" placeholder="Concerns for the ROW agent" value="${escHtml(r.concerns||'')}" onchange="setOutreach('${parcelId}','${sid}','concerns',this.value)">
+      <span style="font-size:11px;color:var(--fog);white-space:nowrap">${log.n} logged${log.last?' · last '+escHtml(_rowDateUS(log.last)):''}</span>
+    </div>
+  </div>`;}).join('');
   if(!owners.length) html='<div style="font-size:12px;color:var(--red);padding:4px 0">⚠ No owner attached yet.</div>';
+  else html='<div id="f-pc-trail" style="font-size:11px;margin-bottom:4px">'+_parcTrailHTML(parcelId)+'</div>'+html;
   const parcel=(DB.get('parcels')||[]).find(x=>String(x.id)===String(parcelId))||{};
   const linked=(DB.get('project_stakeholders')||[]).filter(l=>String(l.projectId)===String(parcel.projectId))
     .map(l=>String(l.stakeholderId));
@@ -20179,10 +20449,13 @@ async function saveParcel(){
     id:S.editId||DB.uid(), projectId:projId, parcelNumber:num,
     situsAddress:v('f-pca').trim(), latitude:v('f-pclat').trim(), longitude:v('f-pclng').trim(),
     acquisitionType:v('f-pcacq'), status:v('f-pcst')||'Not started',
-    noticeDate:v('f-pcnd')||null, notes:v('f-pcno')
+    noticeDate:v('f-pcnd')||null, notes:v('f-pcno'),
+    legalDescShared:v('f-pcld')||null, exhibitShared:v('f-pcex')||null
   };
   const all=DB.get('parcels')||[];
-  if(S.editId){ const i=all.findIndex(x=>String(x.id)===String(S.editId)); if(i>-1)all[i]=data; else all.push(data); }
+  // Merge over the stored record so fields this form doesn't show (the UGRC
+  // reconciliation columns) stay in the cache instead of vanishing until reload.
+  if(S.editId){ const i=all.findIndex(x=>String(x.id)===String(S.editId)); if(i>-1)all[i]=Object.assign({},all[i],data); else all.push(data); }
   else all.push(data);
   await DB.set('parcels',all);
   closeM(); S.editId=null; refreshBadges(); renderParcels(document.getElementById('main'));
@@ -20191,6 +20464,7 @@ async function saveParcel(){
 async function delParcel(id){
   if(!confirm('Delete this parcel? Its owner links go too. The contacts themselves are not affected.')) return;
   await DB.set('parcel_owners',(DB.get('parcel_owners')||[]).filter(l=>String(l.parcelId)!==String(id)));
+  await DB.set('parcel_outreach',(DB.get('parcel_outreach')||[]).filter(o=>String(o.parcelId)!==String(id)));
   await DB.set('parcels',(DB.get('parcels')||[]).filter(p=>String(p.id)!==String(id)));
   closeM(); S.editId=null; refreshBadges(); renderParcels(document.getElementById('main'));
 }
@@ -21080,6 +21354,51 @@ function _rowNotice(d, forPrint){
   return _rowDateUS(iso) + (iso > localToday() ? ' (scheduled)' : '');
 }
 
+// The agent briefing: one row per parcel × contact, everything PI staff learned
+// for the ROW agent to read before first contact. Its own sheet rather than
+// more columns on the register — the register is already as wide as a printed
+// page allows, and this is a different reader's question ("who do I call, can
+// they sign, how will it go?").
+function _rowBriefCols(withProj){
+  return (withProj?[{h:'Project', w:14}]:[]).concat([
+    {h:'Parcel #',         w:16},
+    {h:'Acquisition',      w:22},
+    {h:'Contact',          w:26},
+    {h:'Role',             w:15},
+    {h:'Can sign',         w:16},
+    {h:'Sentiment',        w:15},
+    {h:'Concerns',         w:46, wrap:true},
+    {h:'Contacts logged',  w:10},
+    {h:'Last contact',     w:13, date:true},
+    {h:'Legal desc. shared', w:13, date:true},
+    {h:'Exhibit shared',   w:13, date:true},
+  ]);
+}
+function _rowBriefRows(forPrint){
+  const {projF,projs,parcels}=_rowExportScope();
+  const d=x=>forPrint?_rowDateUS(_rowDate(x)):_rowDate(x);
+  const out=[];
+  parcels.forEach(p=>{
+    const owners=_parcOwners(p.id);
+    const head=(projF?[]:[_rowProjLabel(p,projs)]).concat([p.parcelNumber||'', p.acquisitionType||'']);
+    const docs=[d(p.legalDescShared), d(p.exhibitShared)];
+    if(!owners.length){
+      out.push(head.concat(['\u26a0 No contact identified','','','','','0',''], docs));
+      return;
+    }
+    const anySigner=owners.some(o=>{ const r=_parcOutreach(p.id,o.stake.id); return r&&r.authorizedSigner; });
+    owners.forEach(o=>{
+      const r=_parcOutreach(p.id,o.stake.id)||{}, log=_parcContactLog(p,o.stake.id);
+      out.push(head.concat([
+        dispName(o.stake)+(o.stake.org?' — '+o.stake.org:''), o.link.ownershipRole||'Owner',
+        r.authorizedSigner?'Yes':(anySigner?'':'\u26a0 No signer yet'),
+        r.sentiment||'Not graded', r.concerns||'', String(log.n), d(log.last)
+      ], docs));
+    });
+  });
+  return out;
+}
+
 function _rowRegisterRows(forPrint){
   const {projF,projs,parcels}=_rowExportScope();
   return parcels.map(p=>{
@@ -21237,7 +21556,8 @@ function exportRowRegisterXlsx(){
   const withProj=!S.projectFilter;
   _xlsxBuild([
     {name:'Parcel register', cols:_rowRegCols(withProj),  rows:_rowRegisterRows()},
-    {name:'Mailing list',    cols:_rowMailCols(withProj), rows:_rowMailingRows()}
+    {name:'Mailing list',    cols:_rowMailCols(withProj), rows:_rowMailingRows()},
+    {name:'Agent briefing',  cols:_rowBriefCols(withProj), rows:_rowBriefRows()}
   ]).then(function(blob){
     const a=document.createElement('a');
     a.href=URL.createObjectURL(blob);
@@ -21292,6 +21612,9 @@ function printRowRegister(){
     +'<h3>Mailing list — one row per owner</h3>'+tbl(_rowMailCols(withProj,true),_rowMailingRows(true))
     +'<p class="note">Mailing addresses are the owner&rsquo;s address of record and may differ from the situs address. '
     +'Parcels with no owner identified are listed so the gap is visible.</p>'
+    +'<h3>Agent briefing — what PI outreach learned, per contact</h3>'+tbl(_rowBriefCols(withProj),_rowBriefRows(true))
+    +'<p class="note">&ldquo;Can sign&rdquo; marks the party with authority to speak and sign for the parcel. Contacts logged counts every '
+    +'interaction recorded with that person on this project, including calls that led to the right party.</p>'
     +'</body></html>';
   showInlineReport(html, title);
 }

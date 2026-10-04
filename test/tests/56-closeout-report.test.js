@@ -103,8 +103,8 @@ module.exports = {
         'its comment sample, with the user in bold');
       t.ok(pv.bold.includes('Pre-plan business access: '), 'a lesson written "Heading: text" prints as a run-in heading');
       t.ok(pv.text.includes('A plain closing thought.'), 'a lesson without a heading prints as a plain paragraph');
-      t.eq(pv.todos, 3, 'three later-step sections show as placeholders in the preview (glance, commitments, scope)');
-      t.ok(/In the report/.test(pills.letter) && /Next step/.test(pills.glance) && /Left out/.test(pills.commlog),
+      t.eq(pv.todos, 0, 'no "next step" placeholders are left now that step 3 is built');
+      t.ok(/In the report/.test(pills.letter) && /In the report/.test(pills.glance) && /Left out/.test(pills.commlog),
         'each section says whether it is in the report');
 
       // ── typing a draft autosaves and updates the preview ────────────────

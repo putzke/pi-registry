@@ -923,10 +923,10 @@ internal narrative pointers and is a working draft, never client-facing.
   save stays dirty and retries on the next edit or on leaving.
 - Attachment stitching (weekly reports, logs, photos into one PDF) stays
   OUTSIDE the app — `merge_package.py` via the skill.
-- **Remaining build order:** (3) Program at a Glance scorecard + Commitments +
-  Delivery Against Scope table, (4) PI Highlights AI drafting, (5) Stakeholder
+- **Remaining build order:** (4) PI Highlights AI drafting, (5) Stakeholder
   Communications Log Summary AI drafting, (6) charts (SVG rendered to PNG for
-  the .docx). Tribal stays parked.
+  the .docx). Tribal stays parked. A separate ROW close-out TYPE is planned for
+  projects where ROW outreach is the whole engagement.
 - Covered by `test/tests/55-closeout-intake.test.js` (50 checks).
 
 ### PI Close-Out — step 2 BUILT: the report document (Oct 2026)
@@ -966,8 +966,8 @@ right, letterhead select and **Export .docx** in the topbar. `S.coView`
   highlights, comm-log and lessons sections only when they have content.
   Commitments to the Public only when the project has commitments. Each section
   shows an "In the report / Left out / Next step" pill with the reason.
-- `todo` blocks mark what step 3 builds (Program at a Glance, Commitments,
-  Delivery Against Scope): visible in the preview, **never exported**.
+- `todo` blocks marked what step 3 would build; step 3 replaced them all (the
+  renderers still skip `todo` on export if one is ever used again).
 - **Letterhead**: the skill's `SCM_CloseOut_Template.docx` is the SAME Sunrise
   letterhead as the embedded `_piDocxTemplate` (header/footer images byte-identical),
   so it is reused, not embedded again. Per close-out choice in
@@ -981,6 +981,79 @@ right, letterhead select and **Export .docx** in the topbar. `S.coView`
   unzipped .docx, every hyperlink resolving to an External relationship, three
   letterheads). Verified independently with **python-docx**: opens cleanly,
   first-page header only, 5 external hyperlinks, paragraphs in letter order.
+
+### PI Close-Out — step 3 BUILT: the counted sections (Oct 2026)
+`_coReportDoc` now builds four data sections as real tables (block type
+`table`: `cols[{h,w twips}]`, `rows[[cell]]`, `boldCol`; a cell is a string or a
+run array, so a placeholder can sit in a cell). `_coBlocksHTML` renders
+`.co-doc-tbl`; `_coBlocksDocx` renders `<w:tbl>` with a repeating navy header
+row (`tblHeader`), fixed layout, zebra rows, `cantSplit`. The `todo` block type
+is no longer used.
+- **PI Program at a Glance** (always): duration, PI reports, stakeholders,
+  interactions + span, inbound calls, issues + resolved, events, commitments
+  kept, website visits (last intake reading), subscribers, email updates,
+  ROW parcels, custom metrics. **Every figure not counted by COMPASS** (an
+  override, an intake reading, a typed count, a custom metric) is marked **†**
+  with a footnote, so the table says where each number came from.
+- **Commitments to the Public** (only if any): counted intro sentence + table
+  Commitment | Made to | Outcome ("Kept mm/dd/yyyy" / "Outstanding — due …").
+- **Right-of-Way & Property Owner Outreach** (only if the project has parcels):
+  optional narrative slot `draft.row` + a COUNTS-ONLY table from
+  `_closeoutRowFacts()` (built on `_parcelStats`): parcels by take type, owner
+  identified, party with authority to sign identified, distinct logged contacts
+  with owners and their representatives, notice / legal description / design
+  exhibit shared, sentiment counts. **No owner names or concerns, ever** — the
+  report goes to the client; a closing line says the detail went to the ROW
+  agents separately. Guarded by asserting no owner surname reaches the preview
+  or the .docx.
+- **Delivery Against Scope of Work** (only if deliverables): Committed
+  Deliverable | Status | Evidence. Quantities read "(7 delivered)" — never
+  framed as over/under. Missing evidence is a `[evidence not named]` placeholder
+  IN the cell; `_coHoleCount()` counts table cells too, so export's
+  placeholder warning includes them. Footnote cites the scope document + date.
+- Verified independently with **python-docx**: four tables, correct headers
+  and row counts. Covered by `test/tests/57-row-outreach-closeout.test.js`.
+
+### ROW outreach — for the ROW agents (Oct 2026)
+`sql/2026-10-04_row_outreach.sql`. On ROW / easement work (including updating
+or acknowledging PRE-EXISTING easements, e.g. sewer), PI staff trace each parcel
+— often through property managers and several other numbers — to the party
+with **authority to speak and sign**, share the legal (survey) description and
+the design exhibit showing the take, and grade how the owner received it. The
+ROW agents read that before negotiating.
+- **`pi_parcel_outreach`** — one row per (parcel_id, stakeholder_id):
+  `authorized_signer`, `sentiment` (`ROW_SENTIMENTS`: Willing / Has questions /
+  Resistant / Won't engage; blank = not graded), `concerns`. **STAFF-ONLY**
+  (same policy as `pi_closeouts`, anon revoked). It is a separate table, NOT
+  columns on `pi_parcel_owners`, because a portal client signs in under the
+  same `authenticated` role as staff and RLS gates rows, not columns — the
+  portal reads owner links, so any column there is reachable by raw REST.
+  Keyed by parcel+contact (not link id) so detach/re-attach keeps what was
+  learned; `delParcel` removes them. Writes go through `setOutreach()`, chained
+  on `_poChain` so quick successive edits create one row, not several.
+- `pi_parcels.legal_desc_shared` / `exhibit_shared` (dates, in `DATE_FIELDS`).
+- `OWNER_ROLES` gained **Property manager** (index.html only; no other app
+  offers this list).
+- Parcel modal: per contact — role, **Can sign**, sentiment, concerns, and
+  "N logged · last date" (`_parcContactLog`: interactions on the project with
+  that contact; derived, never stored). A trail line above names who can sign
+  or flags "⚠ Nobody marked as able to sign yet". Parcels list badges show
+  "signs" and the grade.
+- **Agent briefing** — a third sheet in "Export .xlsx" and a third table in
+  "Print register" (`_rowBriefCols` / `_rowBriefRows`): one row per parcel ×
+  contact with Can sign (Yes / blank when another contact signs / "⚠ No signer
+  yet"), sentiment ("Not graded" when blank), concerns, contacts logged, last
+  contact, document dates. A parcel with nobody attached gets a "⚠ No contact
+  identified" row. Separate sheet because the register is already as wide as a
+  printed page allows.
+- **No dollar figures** in PI notes: appraisal / offer amounts belong to the
+  ROW agents and the negotiation (Uniform Act), not to PI records.
+- Mobile shows parcels read-only and does not show outreach notes (desktop
+  manages, as with the rest of the parcels module). The portal never reads
+  `pi_parcel_outreach` (asserted).
+- Covered by `test/tests/57-row-outreach-closeout.test.js` (58 checks),
+  including a role-switched check that anon is refused and a granted portal
+  client on that very project sees zero outreach rows.
 
 ### PI Report Editor (openPIReport)
 - Replaces full `#main` div (including topbar)

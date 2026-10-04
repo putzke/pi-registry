@@ -923,9 +923,8 @@ internal narrative pointers and is a working draft, never client-facing.
   save stays dirty and retries on the next edit or on leaving.
 - Attachment stitching (weekly reports, logs, photos into one PDF) stays
   OUTSIDE the app — `merge_package.py` via the skill.
-- **Remaining build order:** (5) Stakeholder Communications Log Summary AI
-  drafting, (6) charts (SVG rendered to PNG for
-  the .docx). Tribal stays parked. A separate ROW close-out TYPE is planned for
+- **Remaining build order:** (6) charts (SVG rendered to PNG for the .docx).
+  Then choose the comm-log model from the comparison (step 5). Tribal stays parked. A separate ROW close-out TYPE is planned for
   projects where ROW outreach is the whole engagement.
 - Covered by `test/tests/55-closeout-intake.test.js` (50 checks).
 
@@ -1048,7 +1047,48 @@ the model narrates, never counts.
 - Covered by `test/tests/58-closeout-ai-highlights.test.js` (32 checks,
   `_claudeNarrative` stubbed).
 - Not AI-drafted (yet): the cover letter, lessons and the ROW narrative stay
-  typed. Step 5 drafts the Communications Log Summary.
+  typed. The Communications Log Summary is step 5 (below).
+
+### PI Close-Out — step 5 BUILT: the Communications Log Summary (Oct 2026)
+**✦ AI Draft** and **Compare models** on the Stakeholder Communications Log
+Summary box. The one long synthesis in the app: the model READS the whole
+interaction log for themes, notable exchanges and resolutions, outreach
+cadence and tone — but still never counts it.
+- `_coCommlogFacts(co)` → `{counts, issues, log, notes}`. **COUNTS are computed
+  here** (total, span in words + months, outbound vs inbound, outbound/month,
+  by channel / subject / nature / stakeholder type, distinct named
+  stakeholders and organizations, unnamed public contacts) and sent as
+  "authoritative; use exactly". The log follows, oldest first, labelled "Do
+  not count from it". Issues go as their own authoritative block with status
+  and resolution summary — that is where "how each was resolved" comes from.
+- **Privacy by construction:** `_coWho()` names who a contact was by TYPE and
+  ORGANIZATION only ("Business: Logan Auto Body", "Resident", "Member of the
+  public") — a stakeholder's personal name is never put in the facts. Summaries
+  are staff text and can still contain a typed name, so the task also says to
+  refer to private individuals by role, never by name, phone or email. Guarded
+  by asserting no linked stakeholder's name appears in any `who`; verified to
+  FAIL when `_coWho` is made to return names.
+- Summaries are trimmed to `CO_COMMLOG_SUMMARY_CHARS` (300) per line, so a big
+  project's log stays affordable; the confirm shows the interaction count, the
+  approximate tokens and an estimated cost before any call.
+- **Effort `medium` for this section only** (`CO_COMMLOG_EFFORT`); every other
+  narrative stays `low`. `_claudeNarrative(..., model, {effort})` and
+  `_claudeRequest` let a caller's effort win, with thinking room by effort
+  (`CLAUDE_HEADROOM_BY_EFFORT`: low 1500 / medium 4000 / high 8000). Length is
+  ~350 words, ceiling 450, 3–5 paragraphs (each becomes a line in the slot).
+- **Model:** `CLAUDE_COMMLOG_MODEL` (= `CLAUDE_TEXT_MODEL`, Sonnet 5.5).
+  **Compare models** (`coCompareCommlog`) sends the IDENTICAL request to Sonnet
+  5.5 and `CLAUDE_STRONG_MODEL` (Opus 5.5) concurrently, shows both side by
+  side with word counts and time, and changes nothing until one is picked
+  (`coPickCommlog`). It is a TEMPORARY evaluation aid: the sandbox has no API
+  key, so the choice has to be made by Jeff on a real project's log. Once
+  settled, set `CLAUDE_COMMLOG_MODEL` and remove the button, `coCompareCommlog`
+  / `coPickCommlog` / `_coCompareResults` (and `CLAUDE_STRONG_MODEL` if unused).
+  Opus 5.5 is never used anywhere else.
+- Refusal: a project with no interactions makes no call and says why.
+- Covered by `test/tests/60-closeout-commlog.test.js` (33 checks, Messages API
+  intercepted at the network layer: model, effort, max_tokens, identical
+  compare requests, nothing changing until a pick).
 
 ### ROW outreach — for the ROW agents (Oct 2026)
 `sql/2026-10-04_row_outreach.sql`. On ROW / easement work (including updating
@@ -1294,7 +1334,9 @@ ROW agents read that before negotiating.
   'claude-sonnet-5-5'` (every narrative — PI report sections, overall and
   executive summaries, the Project Status Report, close-out highlights — plus
   the contact importer's image/PDF path) and `CLAUDE_FAST_MODEL =
-  'claude-haiku-4-5'` (pasted-text contact import). Upgraded from Sonnet 5 /
+  'claude-haiku-4-5'` (pasted-text contact import), plus `CLAUDE_STRONG_MODEL`
+  (Opus 5.5) used ONLY by the close-out comm-log model comparison (step 5).
+  Upgraded from Sonnet 5 /
   `claude-haiku-4-5-20251001`, same price. All narratives on one model keeps
   the report's one prose voice — never switch a single call.
 - **`_claudeRequest(key, body)` is the ONLY fetch to the Messages API.** For the

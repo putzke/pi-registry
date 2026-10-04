@@ -10304,7 +10304,11 @@ function renderCloseoutReport(el, co) {
       + '<div style="font-size:11px;color:var(--fog)">A heading prints only when it has text or links. <strong style="color:var(--mist)">AI Draft</strong> writes from what COMPASS recorded plus anything you type in the box — type a few notes for things COMPASS doesn’t track (a traffic-app alert, a press release) and draft from them.</div>'
       + '<button type="button" class="btn btn-sm" style="flex-shrink:0" onclick="coDraftAllHighlights(this)">✦ Draft all highlights</button></div>' + hlSlots
       + ref('Concerns of note', it.concerns) + ref('Notable outcomes & praise', it.praise))
-    + box('commlog', 'Stakeholder Communications Log Summary', slot('commlog', 'Summary', rt.slotHints.commlog, 6))
+    + box('commlog', 'Stakeholder Communications Log Summary', slot('commlog', 'Summary', rt.slotHints.commlog, 6,
+        '<div style="font-size:11px;color:var(--fog);margin-top:-4px">AI Draft reads the whole interaction log; counts are computed by COMPASS, and people are named only by organization or role. Anything in the box is kept as notes.</div>',
+        '<span style="display:flex;gap:6px;flex-shrink:0;margin-bottom:4px">'
+        + '<button type="button" class="btn btn-sm" onclick="coDraftCommlog(this)">✦ AI Draft</button>'
+        + '<button type="button" class="btn btn-sm" title="Draft on Sonnet 5.5 and Opus 5.5 side by side, then pick one" onclick="coCompareCommlog(this)">Compare models</button></span>'))
     + box('commitments', 'Commitments to the Public', '<div style="font-size:12px;color:var(--slate)">Listed from Commitments, with whether each was kept. Close any that were done before exporting.</div>')
     + box('row', 'Right-of-Way & Property Owner Outreach', slot('row', 'Narrative (optional)', 'What the outreach involved: tracing each parcel to the party who can sign, sharing legal descriptions and design exhibits, how owners received it. Counts are added below it from the Parcels view.', 4)
       + '<div style="font-size:11px;color:var(--fog)">Counts only. Owner names and concerns stay in the Parcels view’s Agent briefing for the ROW agents.</div>')
@@ -10543,6 +10547,207 @@ async function coDraftAllHighlights(btn) {
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = label; }
   }
+}
+
+// ── PI CLOSE-OUT (step 5: the Stakeholder Communications Log Summary) ─────
+// The hardest synthesis in the report: the whole interaction log, read for
+// themes, notable exchanges and how they were resolved, the outreach cadence
+// and the overall tone. Unlike a highlight, the model has to READ the log —
+// but it still never counts it: every number is computed here and handed over
+// as authoritative, and the log itself is labelled "read, do not count".
+//
+// Privacy by construction: each log line names WHO by organization and type
+// ("Business: Logan Auto Body", "Resident", "Member of the public"), never by a
+// person's name — the report goes to the client. Summaries are the team's own
+// words and can still contain a name someone typed; the prompt says to refer to
+// private individuals by role, never by name, phone or email.
+//
+// _coCommlogDraftCall() is the one place this section is requested; the AI
+// Draft button and the model comparison both go through it.
+
+const CO_COMMLOG_TASK = 'Write the Stakeholder Communications Log Summary: a synthesis of the project\'s whole interaction log, '
+  + 'NOT a table or a list. In 3 to 5 paragraphs, cover: (1) how many contacts were logged, over what span, and through which channels; '
+  + '(2) the dominant themes, most frequent first; (3) notable interactions and how each was resolved — name businesses, agencies '
+  + 'and organizations, but refer to private individuals only by their role (a resident, a property owner, a caller), never by name, '
+  + 'and never give a phone number or email address; (4) the team\'s proactive outreach and its cadence; (5) the overall tone, '
+  + 'saying plainly whether anything had to be escalated. Use every number exactly as given in COUNTS; never count the log yourself.';
+const CO_COMMLOG_WORDS = 350, CO_COMMLOG_MAX = 450, CO_COMMLOG_EFFORT = 'medium';
+const CO_COMMLOG_SUMMARY_CHARS = 300;   // per log line — keeps a long project's log affordable
+
+function _coWho(i, stakes) {
+  if (!i.stakeholderId) return 'Member of the public';
+  const s = stakes.find(function (x) { return String(x.id) === String(i.stakeholderId); });
+  if (!s) return 'Member of the public';
+  const type = s.type || 'Individual';
+  return _coVal(s.org) ? type + ': ' + String(s.org).trim() : type;
+}
+
+// { counts:[lines], issues:[lines], log:[{date, line, who}], notes:[lines], chars } or null when nothing is logged.
+function _coCommlogFacts(co) {
+  const it = (_coWork && _coWork.id === co.id) ? _coWork.intake : (co.intake || {});
+  const pid = String(co.projectId);
+  const stakes = DB.get('stakeholders') || [];
+  const ints = (DB.get('interactions') || []).filter(function (i) { return String(i.projectId) === pid; })
+    .slice().sort(function (a, b) { return String(a.date || '').localeCompare(String(b.date || '')); });
+  if (!ints.length) return null;
+  const tally = function (arr, fn) {
+    const t = {};
+    arr.forEach(function (x) { const k = fn(x); if (k) t[k] = (t[k] || 0) + 1; });
+    return Object.keys(t).sort(function (a, b) { return t[b] - t[a]; }).map(function (k) { return k + ' ' + t[k]; }).join(', ');
+  };
+  const dates = ints.map(function (i) { return i.date; }).filter(Boolean);
+  const first = dates[0], last = dates[dates.length - 1];
+  const out = ints.filter(function (i) { return i.direction === 'Outgoing'; });
+  const inn = ints.filter(function (i) { return i.direction !== 'Outgoing'; });
+  const months = first && last ? Math.max(1, Math.round((new Date(last) - new Date(first)) / (1000 * 60 * 60 * 24 * 30.44)) + 1) : 1;
+  const people = {}, orgs = {};
+  ints.forEach(function (i) {
+    if (i.stakeholderId) people[String(i.stakeholderId)] = true;
+    const s = i.stakeholderId && stakes.find(function (x) { return String(x.id) === String(i.stakeholderId); });
+    if (s && _coVal(s.org)) orgs[String(s.org).trim().toLowerCase()] = true;
+  });
+  const anon = ints.filter(function (i) { return !i.stakeholderId; }).length;
+  const counts = [
+    'Total logged contacts: ' + ints.length + '.',
+    first && last ? 'Span: ' + _fmtDateRange(first, last) + ' (about ' + months + ' month' + (months === 1 ? '' : 's') + ').' : '',
+    'Outbound (the team reaching out): ' + out.length + '; inbound or in-person: ' + inn.length + '.',
+    out.length ? 'Average outbound contacts per month: ' + Math.round(out.length / months * 10) / 10 + '.' : '',
+    'By channel: ' + tally(ints, function (i) { return i.channel; }) + '.',
+    'By subject: ' + tally(ints, function (i) { return i.subject; }) + '.',
+    'By nature: ' + tally(ints, function (i) { return i.nature; }) + '.',
+    'Distinct named stakeholders contacted: ' + Object.keys(people).length + '; distinct organizations: ' + Object.keys(orgs).length
+      + (anon ? '; contacts with members of the public who were not named: ' + anon : '') + '.',
+    'By type of stakeholder: ' + tally(ints, function (i) { return _coWho(i, stakes).split(':')[0]; }) + '.'
+  ].filter(Boolean);
+  const issues = (DB.get('issues') || []).filter(function (x) { return String(x.projectId) === pid; });
+  const il = issues.length
+    ? ['Issues escalated to the project team: ' + issues.length + ' (' + issues.filter(function (x) { return x.status === 'Resolved'; }).length + ' resolved).']
+        .concat(issues.map(function (x) {
+          return (x.title || 'Untitled') + ' — ' + (x.status || 'Open') + (_coVal(x.category) ? ', ' + x.category : '')
+            + (_coVal(x.resolutionSummary) ? '. Resolution: ' + String(x.resolutionSummary).trim().slice(0, 240) : '');
+        }))
+    : ['No issues were escalated to the project team.'];
+  let chars = 0;
+  const log = ints.map(function (i) {
+    let sum = String(i.summary || '').replace(/\s+/g, ' ').trim();
+    if (sum.length > CO_COMMLOG_SUMMARY_CHARS) sum = sum.slice(0, CO_COMMLOG_SUMMARY_CHARS - 1) + '…';
+    const who = _coWho(i, stakes);
+    const line = [i.date || '?', i.direction || '', i.channel || '', i.subject || '', i.nature || '', who].join(' | ')
+      + (sum ? ' — ' + sum : '') + (i.followUp ? (i.followUpDone ? ' [follow-up done]' : ' [follow-up open]') : '');
+    chars += line.length;
+    return { date: i.date || '', who: who, line: line };
+  });
+  const dr = it.draft || {};
+  const notes = _coLines(dr.commlog)
+    .concat(_coLines(it.concerns).map(function (x) { return 'Concern of note: ' + x; }))
+    .concat(_coLines(it.praise).map(function (x) { return 'Outcome or praise: ' + x; }));
+  return { counts: counts, issues: il, log: log, notes: notes, chars: chars, n: ints.length };
+}
+
+function _coCommlogRequest(co) {
+  const fx = _coCommlogFacts(co);
+  if (!fx) return null;
+  const proj = (DB.get('projects') || []).find(function (p) { return String(p.id) === String(co.projectId); }) || {};
+  const user = 'Section heading (printed separately, do not repeat it): Stakeholder Communications Log Summary\n'
+    + 'Project: ' + (proj.name || '') + '\n'
+    + 'Task: ' + CO_COMMLOG_TASK + '\n'
+    + 'Length: about ' + CO_COMMLOG_WORDS + ' words; never more than ' + CO_COMMLOG_MAX + ' words.\n\n'
+    + 'COUNTS (authoritative; use exactly):\n- ' + fx.counts.join('\n- ') + '\n\n'
+    + 'ISSUES ESCALATED (authoritative):\n- ' + fx.issues.join('\n- ') + '\n\n'
+    + (fx.notes.length ? 'NOTES FROM THE PI TEAM (authoritative; include every point):\n- ' + fx.notes.join('\n- ') + '\n\n' : '')
+    + 'INTERACTION LOG — oldest first, one per line: date | direction | channel | subject | nature | who — summary. '
+    + 'Read it for themes, notable exchanges and resolutions. Do not count from it; the counts above are the record.\n'
+    + fx.log.map(function (l) { return l.line; }).join('\n') + '\n\n'
+    + 'Write the summary now.';
+  return { system: _coCloseoutSystemPrompt(), user: user, maxTokens: Math.round(CO_COMMLOG_MAX * 1.6) + 100, effort: CO_COMMLOG_EFFORT, n: fx.n };
+}
+
+// Rough cost of one draft, for the confirm dialogs. ~4 characters per token.
+function _coCommlogCost(req, model) {
+  const inTok = Math.round((req.system.length + req.user.length) / 4);
+  const rates = model === CLAUDE_STRONG_MODEL ? [4, 20] : [2, 10];   // $ per million tokens, in / out
+  const outTok = req.maxTokens + (CLAUDE_HEADROOM_BY_EFFORT[req.effort] || 0) / 2;
+  return { inTok: inTok, usd: (inTok * rates[0] + outTok * rates[1]) / 1e6 };
+}
+
+async function _coCommlogDraftCall(co, model) {
+  const req = _coCommlogRequest(co);
+  if (!req) return null;
+  const text = await _claudeNarrative(req.system, req.user, req.maxTokens, model || CLAUDE_COMMLOG_MODEL, { effort: req.effort });
+  if (!text) return null;
+  return text.replace(/^\s*[*#_]*\s*/, '').replace(/^Stakeholder Communications Log Summary\s*:?\s*/i, '')
+    .split(/\n\s*\n/).map(function (p) { return p.replace(/\s*\n\s*/g, ' ').trim(); }).filter(Boolean).join('\n');
+}
+
+function _coWords(t) { return String(t || '').split(/\s+/).filter(Boolean).length; }
+
+async function coDraftCommlog(btn) {
+  const co = (_syncCache.closeouts || []).find(function (c) { return _coWork && c.id === _coWork.id; });
+  if (!co) return;
+  const req = _coCommlogRequest(co);
+  if (!req) { showToast('No interactions are logged on this project yet, so there is no log to summarize.', 'warn', 6000); return; }
+  const est = _coCommlogCost(req, CLAUDE_COMMLOG_MODEL);
+  const had = _coLines((_coWork.intake.draft || {}).commlog).length;
+  if (!confirm('Draft the Communications Log Summary from all ' + req.n + ' logged interactions?\n\n'
+    + (had ? 'What is in the box now is kept as notes, so every point in it stays.\n\n' : '')
+    + 'One Claude call, about ' + Math.round(est.inTok / 1000) + 'K tokens of log. Estimated cost: about $' + est.usd.toFixed(2) + '.\n'
+    + 'It can take up to a minute.\n\nProceed?')) return;
+  const label = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Drafting…'; }
+  try {
+    const text = await _coCommlogDraftCall(co);
+    if (text) _coWriteSlot('commlog', text);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  }
+}
+
+// Side-by-side: the same request on Sonnet 5.5 and Opus 5.5, so the model for
+// this section can be chosen on a real project's log. Pick one to keep it.
+// Temporary evaluation aid — remove once CLAUDE_COMMLOG_MODEL is settled.
+let _coCompareResults = null;
+async function coCompareCommlog(btn) {
+  const co = (_syncCache.closeouts || []).find(function (c) { return _coWork && c.id === _coWork.id; });
+  if (!co) return;
+  const req = _coCommlogRequest(co);
+  if (!req) { showToast('No interactions are logged on this project yet, so there is no log to summarize.', 'warn', 6000); return; }
+  const a = _coCommlogCost(req, CLAUDE_TEXT_MODEL), b = _coCommlogCost(req, CLAUDE_STRONG_MODEL);
+  if (!confirm('Draft the Communications Log Summary twice — on Sonnet 5.5 and on Opus 5.5 — from the same ' + req.n + ' interactions, and show them side by side?\n\n'
+    + 'Two Claude calls. Estimated cost: about $' + (a.usd + b.usd).toFixed(2) + ' (Sonnet ~$' + a.usd.toFixed(2) + ', Opus ~$' + b.usd.toFixed(2) + ').\n'
+    + 'Nothing in the report changes until you pick one.\n\nProceed?')) return;
+  const label = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Drafting both…'; }
+  try {
+    const models = [CLAUDE_TEXT_MODEL, CLAUDE_STRONG_MODEL];
+    const t0 = Date.now(), times = [];
+    const texts = await Promise.all(models.map(function (m, k) {
+      return _coCommlogDraftCall(co, m).then(function (t) { times[k] = Math.round((Date.now() - t0) / 1000); return t; });
+    }));
+    _coCompareResults = texts;
+    const col = function (k, name) {
+      const t = texts[k];
+      return '<div style="flex:1 1 0;min-width:0;display:flex;flex-direction:column">'
+        + '<div style="font-size:13px;font-weight:700;color:var(--white);margin-bottom:2px">' + name + '</div>'
+        + '<div style="font-size:11px;color:var(--fog);margin-bottom:8px">' + (t ? _coWords(t) + ' words · ' + times[k] + 's' : 'No draft returned') + '</div>'
+        + '<div class="co-cmp-text" style="flex:1;background:#fff;color:#222;border-radius:6px;padding:12px 14px;font-size:13px;line-height:1.5;max-height:52vh;overflow:auto;white-space:pre-wrap">'
+        + escHtml(t || '') + '</div>'
+        + (t ? '<button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="coPickCommlog(' + k + ')">Use this draft</button>' : '')
+        + '</div>';
+    };
+    openM('Communications Log Summary — compare models',
+      '<div style="font-size:12px;color:var(--slate);margin-bottom:12px">Same facts and instructions, two models. Read them against what you know of the project — accuracy first, then tone and length.</div>'
+      + '<div style="display:flex;gap:16px">' + col(0, 'Claude Sonnet 5.5') + col(1, 'Claude Opus 5.5') + '</div>',
+      '<button class="btn" onclick="closeM()">Keep neither</button>', true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  }
+}
+function coPickCommlog(k) {
+  const t = _coCompareResults && _coCompareResults[k];
+  if (!t) return;
+  closeM();
+  _coWriteSlot('commlog', t);
+  showToast('Draft placed in the summary box. Read and edit before export.', 'info', 4000);
 }
 
 let _coPreviewTimer = null;
@@ -12132,6 +12337,12 @@ function _setClaudeKey(key) {
 // the fast model.
 const CLAUDE_TEXT_MODEL = 'claude-sonnet-5-5';
 const CLAUDE_FAST_MODEL = 'claude-haiku-4-5';
+// Opus 5.5 is offered ONLY in the close-out's side-by-side model comparison for
+// the Communications Log Summary (coCompareCommlog) — the one long synthesis in
+// the app. Nothing drafts on it by default. CLAUDE_COMMLOG_MODEL is what that
+// section's own AI Draft uses; change it here if the comparison favours Opus.
+const CLAUDE_STRONG_MODEL = 'claude-opus-5-5';
+const CLAUDE_COMMLOG_MODEL = CLAUDE_TEXT_MODEL;
 // Sonnet 5.5 always thinks (it can't be switched off with `disabled`), and
 // thinking tokens count against max_tokens. These are short, fact-bound
 // narratives, so effort is LOW (the model then skips thinking on most simple
@@ -12140,6 +12351,9 @@ const CLAUDE_FAST_MODEL = 'claude-haiku-4-5';
 // word limits in each prompt, not by max_tokens.
 const CLAUDE_EFFORT = 'low';
 const CLAUDE_THINKING_HEADROOM = 1500;
+// A caller may ask for more effort (the communications-log synthesis does);
+// more effort means more thinking, so it gets more room.
+const CLAUDE_HEADROOM_BY_EFFORT = { low: 1500, medium: 4000, high: 8000 };
 // Server-side fallback: on a policy decline the API retries on another model in
 // the same round trip. Opt-in, Claude API only. If the API ever rejects the
 // option itself, _claudeRequest retries once without it and stops sending it
@@ -12151,7 +12365,7 @@ let _claudeNoFallback = false;
 // an HTTP error, and throws an Error with .refusal=true when Claude declines
 // (stop_reason "refusal", a normal 200 whose content is empty or partial).
 async function _claudeRequest(key, body) {
-  var tunable = body.model === CLAUDE_TEXT_MODEL;
+  var tunable = body.model === CLAUDE_TEXT_MODEL || body.model === CLAUDE_STRONG_MODEL;
   async function send(withFallback) {
     var b = Object.assign({}, body), headers = {
       'x-api-key': key,
@@ -12160,8 +12374,9 @@ async function _claudeRequest(key, body) {
       'anthropic-dangerous-direct-browser-access': 'true'
     };
     if (tunable) {
-      b.output_config = Object.assign({}, body.output_config || {}, { effort: CLAUDE_EFFORT });
-      b.max_tokens = (body.max_tokens || 400) + CLAUDE_THINKING_HEADROOM;
+      // A caller's own effort wins; otherwise the app default.
+      b.output_config = Object.assign({ effort: CLAUDE_EFFORT }, body.output_config || {});
+      b.max_tokens = (body.max_tokens || 400) + (CLAUDE_HEADROOM_BY_EFFORT[b.output_config.effort] || CLAUDE_THINKING_HEADROOM);
       if (withFallback) { b.fallbacks = 'default'; headers['anthropic-beta'] = CLAUDE_FALLBACK_BETA; }
     }
     return fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: headers, body: JSON.stringify(b) });
@@ -12191,7 +12406,7 @@ async function _claudeRequest(key, body) {
   return data;
 }
 
-async function _claudeNarrative(systemPrompt, userContent, maxTokens, model) {
+async function _claudeNarrative(systemPrompt, userContent, maxTokens, model, opts) {
   var key = _getClaudeKey();
   if (!key) {
     // Was a silent null — indistinguishable from a failed call, and the caller
@@ -12201,12 +12416,14 @@ async function _claudeNarrative(systemPrompt, userContent, maxTokens, model) {
     return null;
   }
   try {
-    var data = await _claudeRequest(key, {
+    var body = {
       model: model || CLAUDE_TEXT_MODEL,
       max_tokens: maxTokens || 400,
       system: systemPrompt,
       messages: [{ role: 'user', content: userContent }]
-    });
+    };
+    if (opts && opts.effort) body.output_config = { effort: opts.effort };
+    var data = await _claudeRequest(key, body);
     // Collect EVERY text block, not just content[0]. If the first block is a
     // non-text block (e.g. a thinking block), content[0].text is undefined and the
     // old code returned null on a perfectly good response — a silent failure that

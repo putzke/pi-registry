@@ -923,8 +923,8 @@ internal narrative pointers and is a working draft, never client-facing.
   save stays dirty and retries on the next edit or on leaving.
 - Attachment stitching (weekly reports, logs, photos into one PDF) stays
   OUTSIDE the app — `merge_package.py` via the skill.
-- **Remaining build order:** (4) PI Highlights AI drafting, (5) Stakeholder
-  Communications Log Summary AI drafting, (6) charts (SVG rendered to PNG for
+- **Remaining build order:** (5) Stakeholder Communications Log Summary AI
+  drafting, (6) charts (SVG rendered to PNG for
   the .docx). Tribal stays parked. A separate ROW close-out TYPE is planned for
   projects where ROW outreach is the whole engagement.
 - Covered by `test/tests/55-closeout-intake.test.js` (50 checks).
@@ -1013,6 +1013,42 @@ is no longer used.
   placeholder warning includes them. Footnote cites the scope document + date.
 - Verified independently with **python-docx**: four tables, correct headers
   and row counts. Covered by `test/tests/57-row-outreach-closeout.test.js`.
+
+### PI Close-Out — step 4 BUILT: AI drafting for the PI Highlights (Oct 2026)
+Each highlight box has **✦ AI Draft**; the PI Highlights box has **✦ Draft all
+highlights**. Same discipline as the PI report editor — facts computed in code,
+the model narrates, never counts.
+- `_coHighlightFacts(co, hid)` → `{lines, notes}`. `lines` come from COMPASS +
+  the intake, per heading (`CO_HL_TASKS` holds each heading's task and word
+  budget, taken from the reference reports: outreach ~180, website ~120,
+  concerns ~120, coord ~70, email ~60, traffic ~60, social ~50). `notes` = what
+  is already typed in that box, sent as AUTHORITATIVE ("include every point").
+  That is how facts COMPASS has no record of (a traffic-app alert, a
+  press-release template) reach the paragraph: type two lines, then draft.
+  Re-drafting a box therefore rewrites the current text, keeping its points.
+- **Web and email addresses are never in the facts** — they print as links
+  under the paragraph, and a model that has them repeats them. The hotline
+  number IS a fact, since it prints nowhere else.
+- Concerns facts: inbound count + by nature + by subject, issues escalated (or
+  "No issues were escalated"), issue titles/status, and the intake's concerns
+  and praise pointers. Inbound = `direction !== 'Outgoing'`, the same split the
+  overall summary uses.
+- **Refusal:** no facts and no notes → no call, a toast says to type notes.
+- `_coCloseoutSystemPrompt()` — the Sunrise close-out voice from the skill:
+  first-person plural ("our team"), past tense, warm, not boastful, 9th–10th
+  grade, one paragraph, no invented numbers/names/quotes, no addresses, don't
+  repeat the heading. Default model (`_claudeNarrative`'s Sonnet), like every
+  other report narrative.
+- `_coHighlightDraftCall()` is the ONE place a highlight is requested; both
+  buttons go through it (parity by construction). Draft all drafts only EMPTY
+  headings that have facts — never overwrites typed text in bulk — runs 4 at a
+  time via `_mapLimit`, and confirms count + cost first.
+- Output: a repeated heading is stripped, paragraphs become lines (the slot's
+  one-paragraph-per-line format). A failed call leaves the box untouched.
+- Covered by `test/tests/58-closeout-ai-highlights.test.js` (32 checks,
+  `_claudeNarrative` stubbed).
+- Not AI-drafted (yet): the cover letter, lessons and the ROW narrative stay
+  typed. Step 5 drafts the Communications Log Summary.
 
 ### ROW outreach — for the ROW agents (Oct 2026)
 `sql/2026-10-04_row_outreach.sql`. On ROW / easement work (including updating

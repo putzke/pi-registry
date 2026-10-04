@@ -10288,8 +10288,10 @@ function renderCloseoutReport(el, co) {
   _coWork.proj = proj;
   _coWork.facts = _closeoutFacts(co.projectId);
   const lh = it.letterhead || rt.letterhead;
-  const slot = function (key, label, hint, rows, extra) {
-    return '<div class="fr" style="margin-bottom:14px"><label for="co-dr-' + key + '">' + label + '</label>'
+  const slot = function (key, label, hint, rows, extra, btn) {
+    return '<div class="fr" style="margin-bottom:14px">'
+      + (btn ? '<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:10px"><label for="co-dr-' + key + '">' + label + '</label>' + btn + '</div>'
+             : '<label for="co-dr-' + key + '">' + label + '</label>')
       + (hint ? '<div style="font-size:11px;color:var(--fog);margin:-1px 0 5px">' + hint + '</div>' : '')
       + '<textarea id="co-dr-' + key + '" data-dr="' + key + '" oninput="_coSet(this)" rows="' + (rows || 4) + '">' + escHtml(dr[key]) + '</textarea>'
       + (extra || '') + '</div>';
@@ -10306,12 +10308,15 @@ function renderCloseoutReport(el, co) {
     return n ? '<div style="font-size:11px;color:#5BD3A9;margin-top:4px">+ ' + n + ' link' + (n === 1 ? '' : 's') + ' from the intake print under this heading</div>' : '';
   };
   const hlSlots = rt.highlights.map(function (h) {
-    return slot('hl-' + h.id, h.h, '', 3, h.links ? linkNote(h.links) : '');
+    return slot('hl-' + h.id, h.h, '', 3, h.links ? linkNote(h.links) : '',
+      '<button type="button" class="btn btn-sm" style="flex-shrink:0;margin-bottom:4px" onclick="coDraftHighlight(\'' + h.id + '\',this)">✦ AI Draft</button>');
   }).join('');
   const editor = box('letter', 'Cover letter', slot('letter', 'Letter body', rt.slotHints.letter, 7)
       + '<div style="font-size:11px;color:var(--fog)">Address block, date, Re: line, salutation and signature come from the intake.</div>')
     + box('glance', 'PI Program at a Glance', '<div style="font-size:12px;color:var(--slate)">Counted from the project. Overrides, website visits, subscribers and your own metrics come from the intake’s <a href="#" onclick="openCloseoutIntake(\'' + co.id + '\');return false" style="color:var(--sky-lt)">Program metrics</a> and are marked † in the report.</div>')
-    + box('highlights', 'PI Highlights', '<div style="font-size:11px;color:var(--fog);margin-bottom:10px">A heading prints only when it has text or links.</div>' + hlSlots
+    + box('highlights', 'PI Highlights', '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px">'
+      + '<div style="font-size:11px;color:var(--fog)">A heading prints only when it has text or links. <strong style="color:var(--mist)">AI Draft</strong> writes from what COMPASS recorded plus anything you type in the box — type a few notes for things COMPASS doesn’t track (a traffic-app alert, a press release) and draft from them.</div>'
+      + '<button type="button" class="btn btn-sm" style="flex-shrink:0" onclick="coDraftAllHighlights(this)">✦ Draft all highlights</button></div>' + hlSlots
       + ref('Concerns of note', it.concerns) + ref('Notable outcomes & praise', it.praise))
     + box('commlog', 'Stakeholder Communications Log Summary', slot('commlog', 'Summary', rt.slotHints.commlog, 6))
     + box('commitments', 'Commitments to the Public', '<div style="font-size:12px;color:var(--slate)">Listed from Commitments, with whether each was kept. Close any that were done before exporting.</div>')
@@ -10339,6 +10344,219 @@ function renderCloseoutReport(el, co) {
     + '<div id="co-preview" class="co-page"></div></div>'
     + '</div>';
   _coRenderPreview();
+}
+
+// ── PI CLOSE-OUT (step 4: AI drafting for the PI Highlights) ─────────────
+// Same discipline as the PI report editor: the FACTS are computed here, in
+// code, and handed to the model as authoritative; the model only narrates.
+// It never counts, and a heading with nothing recorded is refused rather than
+// drafted from an empty facts block (which invites invented engagement).
+//
+// Whatever the consultant already typed in a heading's box is passed along as
+// NOTES and treated as fact too. That is how things COMPASS has no record of
+// (a traffic-app alert, a press-release template) get into the paragraph:
+// type two lines, press AI Draft, get a paragraph in the house voice.
+//
+// _coHighlightDraftCall() is the ONE place a highlight is requested. The
+// per-heading button and "Draft all highlights" both go through it, so the
+// prompt, budget and model are identical by construction (the lesson of
+// test/tests/34-draft-all-parity.test.js).
+
+const CO_HL_TASKS = {
+  outreach: { words: 180, max: 220, task: 'Summarize the early public outreach and project advertising: when outreach began, who was engaged and how, and, if news coverage is listed, that the media picked the project up.' },
+  website:  { words: 120, max: 150, task: 'Describe the project website, project email and hotline: what they were for, how much the website was visited, and how many inbound calls and emails came in.' },
+  email:    { words: 60,  max: 90,  task: 'Describe the email construction updates sent to public subscribers: how many subscribers and how many editions went out.' },
+  concerns: { words: 120, max: 150, task: 'Summarize inbound public complaints and concerns honestly and in measured terms: what kinds of things were raised, whether anything had to be escalated, and any praise received.' },
+  traffic:  { words: 60,  max: 80,  task: 'Describe how the public was notified about traffic control, closures and detours.' },
+  social:   { words: 50,  max: 80,  task: 'Describe the social media broadcasting: which accounts posted about the project and the engagement those posts received.' },
+  coord:    { words: 70,  max: 100, task: 'Describe PI coordination with the project team: partnering and progress meetings, the PI reports issued to the team, and site visits.' }
+};
+
+function _coCloseoutSystemPrompt() {
+  return 'You write one section of a public involvement (PI) close-out report that a PI consulting firm '
+    + 'delivers to its agency client at the end of a transportation construction project. '
+    + 'Voice: warm, professional, first-person plural ("our team", "we"), confident but never boastful, past tense. '
+    + 'Write at about a 9th-10th grade reading level: short sentences, everyday words, no jargon beyond standard PI terms. '
+    + 'Write plain prose only: no headings, no bullet points, no markdown. '
+    + 'Use ONLY the facts and notes provided. Never invent a number, date, name, outlet, quote, event or outcome; '
+    + 'if something is not in the facts, leave it out rather than guess. Use each number exactly as given. '
+    + 'Do not write web addresses or email addresses; the report lists those links under your paragraph. '
+    + 'Do not begin by repeating the section heading. Stay within the requested length.';
+}
+
+// Facts for one heading. Returns { lines, notes } — lines computed from COMPASS
+// and the intake, notes = what the consultant typed in that heading's box.
+function _coHighlightFacts(co, hid) {
+  const it = (_coWork && _coWork.id === co.id) ? _coWork.intake : (co.intake || {});
+  const pid = String(co.projectId);
+  const mine = function (k) { return (DB.get(k) || []).filter(function (x) { return String(x.projectId) === pid; }); };
+  const proj = (DB.get('projects') || []).find(function (p) { return String(p.id) === pid; }) || {};
+  const f = _closeoutFacts(co.projectId);
+  const ints = mine('interactions');
+  const inbound = ints.filter(function (i) { return i.direction !== 'Outgoing'; });
+  const outbound = ints.filter(function (i) { return i.direction === 'Outgoing'; });
+  const events = mine('meetings').slice().sort(function (a, b) { return String(a.date || '').localeCompare(String(b.date || '')); });
+  const tally = function (arr, key) {
+    const t = {};
+    arr.forEach(function (x) { const k = x[key]; if (k) t[k] = (t[k] || 0) + 1; });
+    return Object.keys(t).sort(function (a, b) { return t[b] - t[a]; }).map(function (k) { return k + ' ' + t[k]; }).join(', ');
+  };
+  const evLine = function (e) {
+    return (e.date ? fmt(e.date) + ': ' : '') + (e.title || e.type || 'Event')
+      + (e.type && e.title ? ' (' + e.type + ')' : '') + (Number(e.attendanceCount) > 0 ? ', ' + e.attendanceCount + ' attended' : '');
+  };
+  const L = [];
+  if (hid === 'outreach') {
+    const first = ints.map(function (i) { return i.date; }).filter(Boolean).sort()[0];
+    if (first) L.push('First logged outreach: ' + fmt(first) + '.');
+    if (proj.preconDate) L.push('Pre-construction date: ' + fmt(proj.preconDate) + '.');
+    if (outbound.length) L.push('Outbound contacts logged by the PI team: ' + outbound.length + ' (by channel: ' + tally(outbound, 'channel') + ').');
+    const notif = outbound.filter(function (i) { return i.nature === 'Notification'; }).length;
+    if (notif) L.push('Of those, project notifications: ' + notif + '.');
+    const types = tally((DB.get('project_stakeholders') || []).filter(function (l) { return String(l.projectId) === pid && (l.stakeholderRole || 'External') === 'External'; })
+      .map(function (l) { return (DB.get('stakeholders') || []).find(function (s) { return String(s.id) === String(l.stakeholderId); }) || {}; }), 'type');
+    if (types) L.push('External stakeholders in the registry, by type: ' + types + '.');
+    const early = events.filter(function (e) { return !/partnering|progress meeting|pre-construction/i.test(e.type || ''); }).slice(0, 8);
+    early.forEach(function (e) { L.push('Event — ' + evLine(e) + '.'); });
+    (it.news || []).filter(_coRowHas).forEach(function (r) {
+      L.push('News coverage — ' + [r.outlet, r.topic].filter(_coVal).join(': ') + '.');
+    });
+  } else if (hid === 'website') {
+    if (_coVal(it.websiteUrl)) L.push('A dedicated project website was used (its link is printed under the paragraph).');
+    if (_coVal(it.projectEmail)) L.push('A dedicated project email address was used (printed under the paragraph).');
+    if (_coVal(it.hotline)) L.push('Project hotline: ' + String(it.hotline).trim() + '.');
+    const v = (it.visits || []).filter(function (r) { return r && _coVal(r.visits); });
+    if (v.length) L.push('Cumulative unique website visits: ' + v.map(function (r) { return String(r.visits).trim() + (_coVal(r.when) ? ' (' + String(r.when).trim() + ')' : ''); }).join(', then ') + '.');
+    const calls = _coVal(it.ovrInboundCalls) ? String(it.ovrInboundCalls).trim() : String(f.inboundCalls);
+    if (Number(calls) > 0 || _coVal(it.ovrInboundCalls)) L.push('Inbound phone calls logged: ' + calls + '.');
+    const mails = ints.filter(function (i) { return i.channel === 'Email' && i.direction === 'Incoming'; }).length;
+    if (mails) L.push('Inbound emails logged: ' + mails + '.');
+  } else if (hid === 'email') {
+    if (_coVal(it.subsStart)) L.push('Subscribers at the first send: ' + String(it.subsStart).trim() + '.');
+    if (_coVal(it.subsEnd)) L.push('Subscribers at completion: ' + String(it.subsEnd).trim() + '.');
+    const n = f.newsletterEditions !== null ? f.newsletterEditions : (_coVal(it.nlCount) ? String(it.nlCount).trim() : '');
+    if (n !== '' && n !== null) L.push('Email update editions sent: ' + n + '.');
+    (it.editions || []).filter(_coRowHas).forEach(function (r) {
+      if (_coVal(r.title) || _coVal(r.sent)) L.push('Edition — ' + [r.sent, r.title].filter(_coVal).join(': ') + '.');
+    });
+  } else if (hid === 'concerns') {
+    if (inbound.length) {
+      L.push('Inbound and in-person contacts logged: ' + inbound.length + '.');
+      const nat = tally(inbound, 'nature'); if (nat) L.push('By nature: ' + nat + '.');
+      const sub = tally(inbound, 'subject'); if (sub) L.push('By subject: ' + sub + '.');
+    }
+    const issues = mine('issues');
+    L.push(issues.length
+      ? 'Issues escalated to the project team: ' + issues.length + ' (' + f.issuesResolved + ' resolved).'
+      : 'No issues were escalated to the project team.');
+    issues.slice(0, 8).forEach(function (i) { L.push('Issue — ' + (i.title || 'Untitled') + ' (' + (i.status || 'Open') + ').'); });
+    _coLines(it.concerns).forEach(function (x) { L.push('Concern of note (from the PI team): ' + x); });
+    _coLines(it.praise).forEach(function (x) { L.push('Outcome or praise (from the PI team): ' + x); });
+  } else if (hid === 'traffic') {
+    const tr = ints.filter(function (i) { return i.subject === 'Traffic'; });
+    const trOut = tr.filter(function (i) { return i.direction === 'Outgoing'; }).length;
+    if (trOut) L.push('Outbound traffic-related notifications logged: ' + trOut + '.');
+    if (tr.length - trOut) L.push('Inbound traffic-related contacts logged: ' + (tr.length - trOut) + '.');
+  } else if (hid === 'social') {
+    (it.social || []).filter(_coRowHas).forEach(function (r) {
+      L.push('Social post — ' + [r.account || 'an account', r.engagement].filter(_coVal).join(', ')
+        + (_coVal(r.comment) ? ' (a sample comment is quoted under the paragraph)' : '') + '.');
+    });
+  } else if (hid === 'coord') {
+    if (f.piReports) L.push('PI reports issued to the project team: ' + (_coVal(it.ovrPiReports) ? String(it.ovrPiReports).trim() : f.piReports) + '.');
+    events.filter(function (e) { return /partnering|progress meeting|pre-construction|site visit|agency coordination/i.test(e.type || ''); })
+      .slice(0, 10).forEach(function (e) { L.push('Meeting — ' + evLine(e) + '.'); });
+  }
+  const dr = it.draft || {};
+  return { lines: L, notes: _coLines(dr['hl-' + hid]) };
+}
+
+function _coHighlightRequest(co, hid) {
+  const h = (_coReportType(co).highlights || []).find(function (x) { return x.id === hid; });
+  const t = CO_HL_TASKS[hid];
+  const fx = _coHighlightFacts(co, hid);
+  if (!h || !t || (!fx.lines.length && !fx.notes.length)) return null;
+  const proj = (DB.get('projects') || []).find(function (p) { return String(p.id) === String(co.projectId); }) || {};
+  const it = (_coWork && _coWork.id === co.id) ? _coWork.intake : (co.intake || {});
+  const user = 'Section heading (printed separately, do not repeat it): ' + h.h + '\n'
+    + 'Project: ' + (proj.name || '') + (_coVal(it.route) ? ' (' + String(it.route).trim() + ')' : '') + '\n'
+    + 'Task: ' + t.task + '\n'
+    + 'Length: about ' + t.words + ' words in a single paragraph; never more than ' + t.max + ' words.\n\n'
+    + (fx.lines.length ? 'FACTS FROM THE PROJECT RECORD (authoritative):\n- ' + fx.lines.join('\n- ') + '\n\n' : '')
+    + (fx.notes.length ? 'NOTES FROM THE PI TEAM (authoritative; include every point):\n- ' + fx.notes.join('\n- ') + '\n\n' : '')
+    + 'Write the paragraph now.';
+  return { system: _coCloseoutSystemPrompt(), user: user, maxTokens: Math.round(t.max * 2.2) + 60 };
+}
+
+// The one call. Returns the cleaned text, or null (no facts, no key, API error).
+async function _coHighlightDraftCall(co, hid) {
+  const req = _coHighlightRequest(co, hid);
+  if (!req) return null;
+  const text = await _claudeNarrative(req.system, req.user, req.maxTokens);
+  if (!text) return null;
+  const h = (_coReportType(co).highlights || []).find(function (x) { return x.id === hid; });
+  // If the model repeated the heading anyway, take it off — the report prints it.
+  return text.replace(/^\s*[*#_]*\s*/, '').replace(new RegExp('^' + h.h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*:?\\s*', 'i'), '')
+    .split(/\n\s*\n/).map(function (p) { return p.replace(/\s*\n\s*/g, ' ').trim(); }).filter(Boolean).join('\n');
+}
+
+function _coWriteSlot(key, text) {
+  const ta = document.getElementById('co-dr-' + key);
+  if (ta) { ta.value = text; _coSet(ta); return; }
+  if (!_coWork) return;
+  (_coWork.intake.draft = _coWork.intake.draft || {})[key] = text;
+  _coSaveSoon();
+}
+
+async function coDraftHighlight(hid, btn) {
+  const co = (_syncCache.closeouts || []).find(function (c) { return _coWork && c.id === _coWork.id; });
+  if (!co) return;
+  const fx = _coHighlightFacts(co, hid);
+  if (!fx.lines.length && !fx.notes.length) {
+    showToast('Nothing is recorded for this heading yet. Type a few notes in the box and draft from them.', 'warn', 6000);
+    return;
+  }
+  if (fx.notes.length && !confirm('Rewrite what is in this box as a drafted paragraph?\n\nYour text is used as notes, so every point in it is kept.')) return;
+  const label = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Drafting…'; }
+  try {
+    const text = await _coHighlightDraftCall(co, hid);
+    if (text) _coWriteSlot('hl-' + hid, text);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  }
+}
+
+// Drafts every EMPTY heading that has facts. Filled headings are left alone —
+// the consultant's own text is never overwritten in bulk.
+async function coDraftAllHighlights(btn) {
+  const co = (_syncCache.closeouts || []).find(function (c) { return _coWork && c.id === _coWork.id; });
+  if (!co) return;
+  const dr = _coWork.intake.draft || {};
+  const jobs = _coReportType(co).highlights.filter(function (h) {
+    return !_coLines(dr['hl-' + h.id]).length && _coHighlightFacts(co, h.id).lines.length;
+  });
+  if (!jobs.length) {
+    showToast('Every heading with something recorded already has text. Use a heading’s own AI Draft to redo one.', 'info', 6000);
+    return;
+  }
+  if (!confirm('Draft ' + jobs.length + ' empty heading' + (jobs.length === 1 ? '' : 's') + ' with ' + jobs.length
+    + ' Claude (Anthropic) API call' + (jobs.length === 1 ? '' : 's') + ', one per heading — the same as pressing each heading’s own AI Draft.\n\n'
+    + 'Headings that already have text are left alone. Headings with nothing recorded are skipped.\n\n'
+    + 'Estimated cost: a few cents at current Claude Sonnet pricing.\n\nProceed?')) return;
+  const label = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Drafting…'; }
+  let done = 0;
+  try {
+    await _mapLimit(jobs, 4, async function (h) {
+      const text = await _coHighlightDraftCall(co, h.id);
+      if (text) { _coWriteSlot('hl-' + h.id, text); done++; }
+      if (btn) btn.textContent = 'Drafting… ' + done + '/' + jobs.length;
+    });
+    showToast(done + ' of ' + jobs.length + ' heading' + (jobs.length === 1 ? '' : 's') + ' drafted. Read and edit before export.', done === jobs.length ? 'info' : 'warn', 5000);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  }
 }
 
 let _coPreviewTimer = null;

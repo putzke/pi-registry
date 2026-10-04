@@ -856,10 +856,18 @@ function fromSB(table, row) {
   return result;
 }
 
-async function sbGet(table) {
+// opts.strict: a failed read THROWS instead of returning []. The importer
+// reads existing records to find duplicates and matches; an empty list for a
+// 401 or a 500 makes every row look new, and the import then writes a second
+// copy of everything already there. A 404 is still empty (table not created).
+async function sbGet(table, opts) {
   const sbTable = SB_TABLES[table];
   const r = await fetch(SUPA_REST + '/' + sbTable + '?select=*&order=id.asc&limit=5000', { headers: getAuthHeaders() });
-  if (!r.ok) { console.error('SB GET error:', r.status, table); return []; }
+  if (!r.ok) {
+    console.error('SB GET error:', r.status, table);
+    if (opts && opts.strict && r.status !== 404) throw new Error('HTTP ' + r.status + ' reading ' + table);
+    return [];
+  }
   const rows = await r.json();
   return rows.map(row => fromSB(table, row));
 }
@@ -916,6 +924,22 @@ async function cacheLoad(table) {
   return _cache[table].slice();
 }
 function cacheClear(table) { delete _cache[table]; }
+// For every read a duplicate check or a match depends on. Throws on failure
+// (never caches a failure), so the caller stops before anything is written.
+async function cacheLoadStrict(table) {
+  if (!_cache[table]) _cache[table] = await sbGet(table, { strict: true });
+  return _cache[table].slice();
+}
+function _impReadFailed(err) {
+  console.error('Import blocked — could not read existing records:', err);
+  alert("Couldn't check what is already in the database (" + (err && err.message || err) + ").\n\n"
+    + "Nothing was imported. Check your connection, or sign in again in the main app, then try this step again.");
+}
+// Parcel numbers are compared without separators, so "12-047-0001" and the
+// county's "120470001" (how a UGRC draw-area import stores it) are the same
+// parcel. Letters are kept: "A-12" and "B-12" stay different. Same rule as
+// index.html's _parcNumKey — keep the two identical.
+function _parcNumKey(v) { return String(v || '').toLowerCase().replace(/[\s\-.\/_]/g, ''); }
 
 // ── DB SHIM ────────────────────────────────────────────────────
 const DB = {
@@ -1261,14 +1285,16 @@ function onFileParsed() {
 
 // ── STEP NAVIGATION ───────────────────────────────────────────
 async function goToStep(n) {
+  if (n === 3) {
+    // Read first: the review matches every row against existing contacts.
+    try { state.existingStakeholders = await cacheLoadStrict('stakeholders'); }
+    catch (e) { _impReadFailed(e); return; }
+  }
   syncNavBar(n);
   if (n === 2 && state.rawRows.length === 0) return;
   if (n === 3) {
     buildParsed();
-    // Show loading state while fetching stakeholders from Supabase
     document.getElementById('pane-3').classList.remove('hidden');
-    document.getElementById('review-tbody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--fog)">Loading stakeholder data…</td></tr>';
-    state.existingStakeholders = await cacheLoad('stakeholders');
     buildReview();
   }
   state.step = n;
@@ -1594,7 +1620,7 @@ async function runImport() {
   try {
 
   // Load current project_stakeholders to check for existing links
-  const existingLinks = await cacheLoad('project_stakeholders');
+  const existingLinks = await cacheLoadStrict('project_stakeholders');
 
   for (const r of state.reviewed) {
     const { row, matchType, matchId, action } = r;
@@ -1731,6 +1757,7 @@ const PARCEL_FIELDS = [
   {key:'notes',           label:'Notes'},
   {key:'ownerEmail',      label:'Owner email (matches more reliably)'},
   {key:'ownerName',       label:'Owner name'},
+  {key:'ownerRole',       label:'Owner role (blank = Owner)'},
 ];
 const PARC_AUTO_MAP = {
   'parcel':'parcelNumber', 'apn':'parcelNumber', 'pin':'parcelNumber',
@@ -1740,10 +1767,14 @@ const PARC_AUTO_MAP = {
   'acquisition':'acquisitionType', 'take':'acquisitionType',
   'status':'status', 'notice':'noticeDate',
   'note':'notes', 'comment':'notes',
+  // Before 'owner', which would otherwise claim an "Owner role" header.
+  'owner role':'ownerRole', 'ownership':'ownerRole', 'role':'ownerRole',
   'owner email':'ownerEmail', 'owneremail':'ownerEmail',
   'owner':'ownerName', 'grantee':'ownerName', 'grantor':'ownerName',
 };
 const PARCEL_STATUSES_IMP = ['Not started','Notice sent','Contacted','Negotiating','Acquired','Declined'];
+// Mirrors index.html's OWNER_ROLES (asserted in test 06).
+const OWNER_ROLES_IMP = ['Owner','Co-owner','Tenant','Agent','Property manager','Heir','Unknown'];
 const PARCEL_ACQ_IMP = ['Full take','Partial take','Temporary construction easement','Permanent easement','Access only','None'];
 
 const parcState = { step:1, rawHeaders:[], rawRows:[], columnMap:[], parsed:[],
@@ -1848,9 +1879,12 @@ function parcOnFileParsed(){
 
 async function parcGoToStep(n){
   if(n===3){
-    parcState.existingParcels=await cacheLoad('parcels');
-    const links=await cacheLoad('project_stakeholders');
-    const stakes=await cacheLoad('stakeholders');
+    let links, stakes;
+    try {
+      parcState.existingParcels=await cacheLoadStrict('parcels');
+      links=await cacheLoadStrict('project_stakeholders');
+      stakes=await cacheLoadStrict('stakeholders');
+    } catch(e){ _impReadFailed(e); return; }
     const ids=links.filter(l=>String(l.projectId)===String(parcState.projectId))
                    .map(l=>String(l.stakeholderId));
     parcState.projectContacts=stakes.filter(s=>ids.indexOf(String(s.id))>-1);
@@ -1908,11 +1942,11 @@ function parcBuildParsed(){
   const existing={};
   parcState.existingParcels
     .filter(p=>String(p.projectId)===String(parcState.projectId))
-    .forEach(p=>{ existing[(p.parcelNumber||'').trim().toLowerCase()]=true; });
+    .forEach(p=>{ existing[_parcNumKey(p.parcelNumber)]=true; });
 
   parcState.parsed=parcState.rawRows.map((row,n)=>{
     const num=get(row,'parcelNumber');
-    const key=num.toLowerCase();
+    const key=_parcNumKey(num);
     const rec={
       rowNum:n+1, parcelNumber:num,
       situsAddress:get(row,'situsAddress'),
@@ -1922,6 +1956,8 @@ function parcBuildParsed(){
       noticeDate:parcNormalizeDate(get(row,'noticeDate')),
       notes:get(row,'notes'),
       ownerEmail:get(row,'ownerEmail'), ownerName:get(row,'ownerName'),
+      // A role the app doesn't offer falls back to Owner, same as status does.
+      ownerRole:parcNormalizePick(get(row,'ownerRole'),OWNER_ROLES_IMP,'Owner'),
       owner:null, skip:false, reason:''
     };
     if(!num){ rec.skip=true; rec.reason='No parcel number'; }
@@ -1969,6 +2005,7 @@ function parcRenderReview(){
         +'<td>'+sanitizeHTML(r.status)+'</td>'
         +'<td>'+sanitizeHTML(r.noticeDate||'—')+'</td>'
         +'<td>'+(r.owner?sanitizeHTML(((r.owner.firstName||'')+' '+(r.owner.lastName||'')).trim()||r.owner.org||'')
+                  +(r.ownerRole!=='Owner'?' <span style="opacity:.7">('+sanitizeHTML(r.ownerRole)+')</span>':'')
                 :(r.ownerWarn?'no match':'—'))+'</td>'
         +'<td>'+(r.skip?sanitizeHTML(r.reason):'Import')+'</td></tr>';
     }).join('')+'</tbody>';
@@ -1992,7 +2029,7 @@ async function runParcImport(){
       created++;
       if(r.owner){
         const link=await sbAdd('parcel_owners',{
-          parcelId:String(newId), stakeholderId:String(r.owner.id), ownershipRole:'Owner'
+          parcelId:String(newId), stakeholderId:String(r.owner.id), ownershipRole:r.ownerRole||'Owner'
         });
         if(link) owners++;
       }
@@ -2232,14 +2269,17 @@ function intOnFileParsed() {
 
 // ── STEP NAVIGATION ───────────────────────────────────────────
 async function intGoToStep(n) {
+  if (n === 3) {
+    // Read first: every row is matched to an existing contact by this list.
+    try { intState.existingStakeholders = await cacheLoadStrict('stakeholders'); }
+    catch (e) { _impReadFailed(e); return; }
+  }
   syncIntNavBar(n);
   intState.step = n;
   if (n === 2 && intState.rawRows.length === 0) return;
   if (n === 3) {
     intBuildParsed();
     document.getElementById('int-pane-3').classList.remove('hidden');
-    document.getElementById('int-review-tbody').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--fog)">Loading stakeholder data…</td></tr>';
-    intState.existingStakeholders = await cacheLoad('stakeholders');
     intBuildReview();
   }
   intState.step = n;

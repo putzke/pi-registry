@@ -317,6 +317,30 @@ there was nothing to count.
     silently wrong link.
   - Several owners on one parcel: import the parcel once, attach co-owners in the
     Parcels view. A second row with the same number is a duplicate by design.
+  - **Hardened Oct 2026** (`test/tests/64-importer-safety.test.js`, 21 checks):
+    - **A failed read stops the import, on all three tabs.** `sbGet` turned a
+      401/500 into `[]`, so the duplicate and match checks saw nothing and every
+      row looked new — an expired sign-in would re-import a second copy of
+      everything already there. Reads a check depends on go through
+      `cacheLoadStrict()` (throws, never caches a failure); the step-3
+      transitions and the stakeholder import's link read catch it, alert
+      "Nothing was imported", and stay put. Project dropdowns stay tolerant.
+    - **Parcel numbers compare without separators** — `_parcNumKey()` drops
+      spaces, dashes, dots, slashes and underscores but KEEPS letters, so the
+      county's `120470001` (how a UGRC draw-area import stores it) and a
+      spreadsheet's `12-047-0001` are one parcel, while `A-12`/`B-12` stay two.
+      Used by the importer (existing + in-file) and desktop `saveParcel()`;
+      the two copies are asserted identical. **The database unique index still
+      compares `lower(trim())`** — normalising it is a migration over existing
+      rows and has not been decided; the app-side checks cover the common path.
+    - **Optional "Owner role" column** (`ownerRole`, matched exactly against
+      `OWNER_ROLES_IMP`, a mirror of index.html's `OWNER_ROLES`, asserted equal);
+      blank or unknown → `Owner`, which is what every link used to get. Not on
+      the `.xlsx` template, deliberately — it is optional.
+    - **Deliberately NOT importable:** outreach grading (can sign / sentiment /
+      concerns — staff judgment in a staff-only table), UGRC results and
+      `needs_review` (the app sets them), and no merging into "Property N"
+      placeholders by address (a guess: owner or renter?).
 - **Reporting (Aug 2026), two surfaces, one source of truth.** `_parcelStats(projId)`
   computes everything; the quick report and the report-editor section both read
   it, so they cannot disagree about coverage.

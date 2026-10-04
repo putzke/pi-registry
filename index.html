@@ -21223,7 +21223,7 @@ async function saveParcel(){
   // The whole point of the table is that one parcel is one row. Catch the
   // duplicate here so a typo'd second entry never splits the parcel in two.
   const dupe=(DB.get('parcels')||[]).find(p=>String(p.projectId)===String(projId)
-    && (p.parcelNumber||'').trim().toLowerCase()===num.toLowerCase()
+    && _parcNumKey(p.parcelNumber)===_parcNumKey(num)
     && String(p.id)!==String(S.editId||''));
   if(dupe){ alert('Parcel '+num+' already exists on this project. Open that record instead of creating a second one.'); return; }
 
@@ -21306,6 +21306,11 @@ async function delParcel(id){
 // perform (egress to *.arcgis.com is blocked here — see the note this
 // replaced). Confirmed live, from the browser, before merging this fix.
 const UGRC_PARCELS_URL = 'https://services1.arcgis.com/99lidPhWCzftIe9K/ArcGIS/rest/services/UtahStatewideParcels/FeatureServer/0/query';
+
+// Duplicate-check key for a parcel number: separators dropped, letters kept, so
+// "12-047-0001" and UGRC's "120470001" are one parcel while "A-12" and "B-12"
+// stay two. importer.html has an identical copy — keep them the same.
+function _parcNumKey(v){ return String(v||'').toLowerCase().replace(/[\s\-.\/_]/g,''); }
 
 function _ugrcNormalizeApn(raw){
   return String(raw||'').replace(/[^0-9]/g,'');

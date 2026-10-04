@@ -114,6 +114,13 @@ begin
    where group_id::text in (select id::text from pi_groups
                              where project_id::text = any(ids));
   delete from pi_groups              where project_id::text = any(ids);
+  -- pi_parcel_outreach and pi_closeouts came later (Oct 2026) and carry no
+  -- foreign key, so nothing cascades to them: without these two lines a re-run
+  -- leaves them pointing at project / parcel ids that no longer exist.
+  delete from pi_parcel_outreach
+   where parcel_id::text in (select id::text from pi_parcels
+                              where project_id::text = any(ids));
+  delete from pi_closeouts           where project_id::text = any(ids);
   delete from pi_parcel_owners
    where parcel_id::text in (select id::text from pi_parcels
                               where project_id::text = any(ids));

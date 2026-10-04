@@ -32,8 +32,20 @@ module.exports = {
     t.eq(Number(a.trends), 3, 'three published trends');
 
     // Idempotency — the purge must leave no duplicates behind.
+    // A close-out and an outreach note have no foreign key, so nothing
+    // cascades to them: plant one of each so the purge has to remove them.
+    await t.sql(`insert into pi_closeouts (project_id) select id from pi_projects where pid='25-LC-400N'`);
+    await t.sql(`insert into pi_parcel_outreach (parcel_id, stakeholder_id)
+                 select o.parcel_id::text, o.stakeholder_id::text from pi_parcel_owners o
+                   join pi_parcels p on p.id::text = o.parcel_id::text
+                   join pi_projects j on j.id::text = p.project_id::text
+                  where j.pid='25-3W-DESIGN' limit 1`);
     const out2 = t.seed();
     t.ok(/Purged 3 previous demo project\(s\)/.test(out2), 'second run purges the first');
+    const [orph] = await t.sql(`select
+      (select count(*) from pi_closeouts c where not exists (select 1 from pi_projects p where p.id = c.project_id)) as closeouts,
+      (select count(*) from pi_parcel_outreach r where not exists (select 1 from pi_parcels p where p.id::text = r.parcel_id)) as outreach`);
+    t.eq([Number(orph.closeouts), Number(orph.outreach)], [0, 0], 'a re-run leaves no close-out or outreach note pointing at a purged project/parcel');
 
     // A TEXT-PK row that has lost its project link must not block a re-run.
     // pi_comment_periods ids are fixed literals, so an orphan survives the

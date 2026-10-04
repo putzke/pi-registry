@@ -923,8 +923,8 @@ internal narrative pointers and is a working draft, never client-facing.
   save stays dirty and retries on the next edit or on leaving.
 - Attachment stitching (weekly reports, logs, photos into one PDF) stays
   OUTSIDE the app — `merge_package.py` via the skill.
-- **Remaining build order:** (6) charts (SVG rendered to PNG for the .docx).
-  Then choose the comm-log model from the comparison (step 5). Tribal stays parked. A separate ROW close-out TYPE is planned for
+- **All six build steps are done** (step 6, charts, below). Outstanding: choose
+  the comm-log model from the comparison (step 5). Tribal stays parked. A separate ROW close-out TYPE is planned for
   projects where ROW outreach is the whole engagement.
 - Covered by `test/tests/55-closeout-intake.test.js` (50 checks).
 
@@ -1089,6 +1089,45 @@ cadence and tone — but still never counts it.
 - Covered by `test/tests/60-closeout-commlog.test.js` (33 checks, Messages API
   intercepted at the network layer: model, effort, max_tokens, identical
   compare requests, nothing changing until a pick).
+
+### PI Close-Out — step 6 BUILT: Stakeholder Engagement in Figures (Oct 2026)
+A computed section after the Communications Log Summary (`_coFigures(co, it)`,
+next to `_coReportDoc`). Nothing to write; it prints whenever the project has
+interactions or the intake has 2+ website readings. Contents, each omitted
+(with the reason on the section pill) when there isn't enough data:
+- **Figure: contacts per month**, outbound (blue) stacked under inbound
+  (orange, 45° hatch) — `_coMonthly` fills empty months, switches to quarters
+  past 36 months, and an undated-contacts note says how many were left out.
+  Outbound = `direction === 'Outgoing'`, the same split everywhere else.
+- **Table: contacts by channel** — Outbound / Inbound & in-person / Total, with
+  a total row.
+- **Figure: inbound and in-person contacts by subject** — inbound only (the
+  team's own outreach topics are not what the public raised). Top 8 bars; the
+  long tail is a "Plus N contacts across M other subjects" note, NOT an
+  "other" bar (on the demo seed's free-text subjects it dwarfed every real bar).
+- **Figure: contacts by type of stakeholder** — via `_coWho(...).split(':')[0]`,
+  so types only, never a name (asserted).
+- **Figure: cumulative website visits** — line from the intake's readings.
+  `_coWhen()` reads only typed forms ("Oct 2025", "2025-10", "10/2025"…) —
+  `Date.parse` alone accepts "Week 3" — and falls back to even spacing in the
+  order entered, with a note saying so.
+- **Table: issues escalated** — title, category, raised, outcome. Descriptions
+  and resolution notes stay internal (titles are already in the portal).
+
+**One drawing, two renderings.** Each chart is an SVG string in a `chart`
+block: `_coBlocksHTML` inlines it; `_coBlocksDocx` emits an inline picture and
+`exportCloseoutDocx` rasterizes the SAME string with `_coSvgToPng` (canvas,
+3× → ~290 dpi), adds `word/media/coChart<n>.png`, `rIdCoImg<n>` relationships
+and a png content type (the Sunrise template had none). `<wp:extent>` and
+`<a:ext>` are written from one value — the letterhead-logo stretching bug was
+those two disagreeing. Captions are `keepNext` so a figure never strands its
+caption. Chart specs follow the dataviz rules: one y-axis, fixed series order,
+4px rounded bar ends, 2px gap between stacked segments, one direct label (the
+peak / the last reading), palette validated (blue `#2a78d6` / orange
+`#eb6834`), hatch so the two series survive a black-and-white printer.
+Verified with python-docx (4 inline shapes at 6.5"). Covered by
+`test/tests/61-closeout-charts.test.js` (29 checks; verified to fail when the
+subject chart counts outbound contacts or the two extents disagree).
 
 ### ROW outreach — for the ROW agents (Oct 2026)
 `sql/2026-10-04_row_outreach.sql`. On ROW / easement work (including updating

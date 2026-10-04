@@ -265,6 +265,7 @@ select optgroup{background:var(--navy-mid);color:var(--sky-lt);font-weight:700;f
 .co-row{display:flex;flex-wrap:wrap;gap:0 14px}
 .co-page{background:#fff;color:#222;font-family:Calibri,Carlito,Arial,sans-serif;font-size:14.5px;line-height:1.35;max-width:816px;margin:0 auto;padding:48px 56px 64px;box-shadow:0 2px 14px rgba(0,0,0,.35);border-radius:2px}
 .co-page p{margin:0;white-space:pre-wrap}
+.co-fig{margin:0 0 6px}.co-fig svg{display:block;width:100%;height:auto}
 .co-pgbreak{border-top:2px dashed #b9c2cc;margin:22px -56px;position:relative}
 .co-pgbreak::after{content:'page break';position:absolute;right:8px;top:-9px;background:#fff;color:#8a96a3;font-size:10px;padding:0 4px}
 .co-doc-tbl{width:100%;border-collapse:collapse;table-layout:fixed;font-size:12.6px;margin:2px 0 6px}
@@ -10010,6 +10011,15 @@ function _coReportDoc(co) {
   sections.push({ id: 'commlog', title: 'Stakeholder Communications Log Summary', state: cl.length ? 'in' : 'out',
     why: cl.length ? '' : 'Not written yet.' });
 
+  // ── Engagement in Figures — charts and count tables, all computed ──
+  const figs = _coFigures(co, it);
+  if (figs.blocks.length) {
+    B.push({ t: 'section', text: 'Stakeholder Engagement in Figures:' });
+    B.push.apply(B, figs.blocks);
+  }
+  sections.push({ id: 'figures', title: 'Stakeholder Engagement in Figures', state: figs.blocks.length ? 'in' : 'out',
+    why: figs.out.join(' ') });
+
   // ── Commitments to the Public — only when the project has any ──
   if (facts.commitments > 0) {
     B.push({ t: 'section', text: 'Commitments to the Public:' });
@@ -10100,6 +10110,324 @@ function _coReportDoc(co) {
   return { blocks: B, sections: sections, proj: proj, intake: it };
 }
 
+// ── Charts (close-out step 6) ─────────────────────────────────────────────
+// Each figure is drawn ONCE, as an SVG string: the preview shows it inline,
+// and the .docx export rasterizes the same string to a PNG (_coSvgToPng), so
+// the two can't disagree. Rules: light surface, one y-axis, series in a fixed
+// order (outbound blue, inbound orange), thin marks, a legend for two series,
+// values labelled sparingly. The inbound series carries a 45° hatch so the two
+// stay apart on a black-and-white printer, which is where a client report ends up.
+const CO_CHART = {
+  w: 624, font: 'Arial, Helvetica, sans-serif',
+  ink: '#0b0b0b', ink2: '#52514e', grid: '#e1e0d9', base: '#9c9a92',
+  s1: '#2a78d6', s2: '#eb6834', s2hatch: '#a8411a'
+};
+const CO_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function _coNum(v) { return Number(String(v == null ? '' : v).replace(/[,\s]/g, '')); }
+function _coFmtN(n) { return Number(n).toLocaleString('en-US'); }
+
+// Clean ticks from 0. Counts never get a fractional step.
+function _coTicks(max, want) {
+  if (!(max > 0)) return [0, 1];
+  const raw = max / (want || 4), mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = Math.max(1, [1, 2, 5, 10].map(function (m) { return m * mag; }).find(function (s) { return s >= raw; }));
+  const out = [];
+  for (let v = 0; v < max + step; v += step) { out.push(v); if (v >= max) break; }
+  return out;
+}
+
+// A bar with a 4px rounded data end and a square baseline end ('flat' = the
+// square-topped lower segment of a stack).
+function _coBarPath(x, y, w, h, dir) {
+  const r = Math.max(0, Math.min(4, w / 2, h / 2));
+  const f = function (n) { return Math.round(n * 100) / 100; };
+  if (dir === 'flat') return 'M' + f(x) + ',' + f(y + h) + 'V' + f(y) + 'H' + f(x + w) + 'V' + f(y + h) + 'Z';
+  if (dir === 'right') {
+    return 'M' + f(x) + ',' + f(y) + 'H' + f(x + w - r) + 'A' + r + ',' + r + ' 0 0 1 ' + f(x + w) + ',' + f(y + r)
+      + 'V' + f(y + h - r) + 'A' + r + ',' + r + ' 0 0 1 ' + f(x + w - r) + ',' + f(y + h) + 'H' + f(x) + 'Z';
+  }
+  return 'M' + f(x) + ',' + f(y + h) + 'V' + f(y + r) + 'A' + r + ',' + r + ' 0 0 1 ' + f(x + r) + ',' + f(y)
+    + 'H' + f(x + w - r) + 'A' + r + ',' + r + ' 0 0 1 ' + f(x + w) + ',' + f(y + r) + 'V' + f(y + h) + 'Z';
+}
+
+function _coSvgOpen(w, h, label) {
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="'
+    + escXml(label) + '" font-family="' + CO_CHART.font + '"><rect width="' + w + '" height="' + h + '" fill="#ffffff"/>';
+}
+function _coSvgText(x, y, s, o) {
+  o = o || {};
+  return '<text x="' + Math.round(x * 10) / 10 + '" y="' + Math.round(y * 10) / 10 + '" font-size="' + (o.size || 11) + '" fill="' + (o.fill || CO_CHART.ink2) + '"'
+    + (o.anchor ? ' text-anchor="' + o.anchor + '"' : '') + (o.bold ? ' font-weight="700"' : '') + '>' + escXml(s) + '</text>';
+}
+function _coHatchDef(id) {
+  return '<defs><pattern id="' + id + '" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">'
+    + '<rect width="6" height="6" fill="' + CO_CHART.s2 + '"/><line x1="0" y1="0" x2="0" y2="6" stroke="' + CO_CHART.s2hatch + '" stroke-width="2"/></pattern></defs>';
+}
+// Approximate text width, for sizing the label bands so nothing is clipped.
+function _coTextW(s, size) { return String(s).length * (size || 11) * 0.56; }
+
+// Stacked columns, one per period: outbound at the baseline, inbound above it.
+function _coSvgStacked(o) {
+  const W = CO_CHART.w, H = 272, n = o.labels.length;
+  const tot = o.a.map(function (v, i) { return v + o.b[i]; });
+  const max = Math.max.apply(null, tot.concat([1]));
+  const ticks = _coTicks(max, 4), top = ticks[ticks.length - 1];
+  const padL = Math.ceil(_coTextW(_coFmtN(top)) + 14), padR = 8, padT = 44, padB = 30;
+  const pw = W - padL - padR, ph = H - padT - padB, base = padT + ph;
+  const y = function (v) { return base - v / top * ph; };
+  const band = pw / n, bw = Math.max(3, Math.min(24, band * 0.64));
+  let s = _coSvgOpen(W, H, o.alt) + _coHatchDef(o.id + '-h');
+  // legend, top-left
+  s += '<rect x="' + padL + '" y="6" width="11" height="11" rx="2" fill="' + CO_CHART.s1 + '"/>' + _coSvgText(padL + 16, 15.5, o.aName, { fill: CO_CHART.ink });
+  const lx = padL + 16 + _coTextW(o.aName) + 22;
+  s += '<rect x="' + lx + '" y="6" width="11" height="11" rx="2" fill="url(#' + o.id + '-h)"/>' + _coSvgText(lx + 16, 15.5, o.bName, { fill: CO_CHART.ink });
+  ticks.forEach(function (t) {
+    if (t) s += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + y(t) + '" y2="' + y(t) + '" stroke="' + CO_CHART.grid + '" stroke-width="1"/>';
+    s += _coSvgText(padL - 7, y(t) + 4, _coFmtN(t), { anchor: 'end' });
+  });
+  let peak = 0;
+  tot.forEach(function (v, i) { if (v > tot[peak]) peak = i; });
+  const every = Math.ceil(n / 12);
+  o.labels.forEach(function (lab, i) {
+    const cx = padL + band * (i + 0.5), x = cx - bw / 2;
+    const ha = o.a[i] / top * ph, hb = o.b[i] / top * ph;
+    if (o.a[i]) s += '<path d="' + _coBarPath(x, base - ha, bw, ha, o.b[i] ? 'flat' : 'up') + '" fill="' + CO_CHART.s1 + '"/>';
+    if (o.b[i]) {
+      const gap = o.a[i] ? 2 : 0, yb = base - ha - hb, hh = Math.max(1, hb - gap);
+      s += '<path d="' + _coBarPath(x, yb, bw, hh, 'up') + '" fill="url(#' + o.id + '-h)"/>';
+    }
+    if ((n - 1 - i) % every === 0) s += _coSvgText(cx, base + 16, lab, { anchor: 'middle', size: 10.5 });
+    if (i === peak && tot[i]) s += _coSvgText(cx, y(tot[i]) - 6, _coFmtN(tot[i]), { anchor: 'middle', fill: CO_CHART.ink, bold: true });
+  });
+  s += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + base + '" y2="' + base + '" stroke="' + CO_CHART.base + '" stroke-width="1"/>';
+  return { svg: s + '</svg>', w: W, h: H };
+}
+// Horizontal bars, largest first, value at each tip.
+function _coSvgHBars(o) {
+  const W = CO_CHART.w, rowH = 26, bh = 16, padT = 6, padB = 6;
+  const H = padT + o.rows.length * rowH + padB;
+  const labs = o.rows.map(function (r) { const t = String(r[0]); return t.length > 34 ? t.slice(0, 33) + '…' : t; });
+  const labW = Math.min(230, Math.ceil(Math.max.apply(null, labs.map(function (l) { return _coTextW(l, 11.5); }))) + 12);
+  const max = Math.max.apply(null, o.rows.map(function (r) { return r[1]; }).concat([1]));
+  const x0 = labW, pw = W - x0 - 8 - _coTextW(_coFmtN(max), 11) - 10;
+  let s = _coSvgOpen(W, H, o.alt);
+  o.rows.forEach(function (r, i) {
+    const yc = padT + rowH * (i + 0.5), w = Math.max(1, r[1] / max * pw);
+    s += _coSvgText(x0 - 10, yc + 4, labs[i], { anchor: 'end', size: 11.5, fill: CO_CHART.ink });
+    s += '<path d="' + _coBarPath(x0, yc - bh / 2, w, bh, 'right') + '" fill="' + (r[2] || CO_CHART.s1) + '"/>';
+    s += _coSvgText(x0 + w + 6, yc + 4, _coFmtN(r[1]), { fill: CO_CHART.ink });
+  });
+  s += '<line x1="' + x0 + '" x2="' + x0 + '" y1="' + padT + '" y2="' + (H - padB) + '" stroke="' + CO_CHART.base + '" stroke-width="1"/>';
+  return { svg: s + '</svg>', w: W, h: H };
+}
+
+// One series over time: 2px line, ringed markers, the last value labelled.
+// pts: [{x (number on any scale), v, label}] in order.
+function _coSvgLine(o) {
+  const W = CO_CHART.w, H = 236, pts = o.pts;
+  const max = Math.max.apply(null, pts.map(function (p) { return p.v; }).concat([1]));
+  const ticks = _coTicks(max, 4), top = ticks[ticks.length - 1];
+  const last = pts[pts.length - 1];
+  const padL = Math.ceil(_coTextW(_coFmtN(top)) + 14), padR = Math.ceil(_coTextW(_coFmtN(last.v)) + 18), padT = 14, padB = 30;
+  const pw = W - padL - padR, ph = H - padT - padB, base = padT + ph;
+  const x0 = pts[0].x, x1 = last.x, span = x1 - x0 || 1;
+  const X = function (p) { return padL + 10 + (p.x - x0) / span * (pw - 20); };
+  const Y = function (v) { return base - v / top * ph; };
+  let s = _coSvgOpen(W, H, o.alt);
+  ticks.forEach(function (t) {
+    if (t) s += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + Y(t) + '" y2="' + Y(t) + '" stroke="' + CO_CHART.grid + '" stroke-width="1"/>';
+    s += _coSvgText(padL - 7, Y(t) + 4, _coFmtN(t), { anchor: 'end' });
+  });
+  s += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + base + '" y2="' + base + '" stroke="' + CO_CHART.base + '" stroke-width="1"/>';
+  s += '<polyline fill="none" stroke="' + CO_CHART.s1 + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="'
+    + pts.map(function (p) { return Math.round(X(p) * 10) / 10 + ',' + Math.round(Y(p.v) * 10) / 10; }).join(' ') + '"/>';
+  pts.forEach(function (p) { s += '<circle cx="' + X(p) + '" cy="' + Y(p.v) + '" r="4" fill="' + CO_CHART.s1 + '" stroke="#ffffff" stroke-width="2"/>'; });
+  s += _coSvgText(X(last) + 9, Y(last.v) + 4, _coFmtN(last.v), { fill: CO_CHART.ink, bold: true });
+  // x labels: the last always; earlier ones only where they don't crowd it.
+  const keep = [];
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const x = X(pts[i]);
+    if (!keep.length || keep[keep.length - 1].x - x >= 72) keep.push({ x: x, l: pts[i].label });
+  }
+  keep.forEach(function (k) { s += _coSvgText(k.x, base + 16, k.l, { anchor: 'middle', size: 10.5 }); });
+  return { svg: s + '</svg>', w: W, h: H };
+}
+
+// Interactions per month (per quarter past three years). Undated rows are
+// left out of the chart and the caption note says how many.
+function _coMonthly(ints) {
+  const dated = ints.filter(function (i) { return /^\d{4}-\d{2}/.test(String(i.date || '')); });
+  if (!dated.length) return null;
+  const ym = dated.map(function (i) { return String(i.date).slice(0, 7); }).sort();
+  let y = +ym[0].slice(0, 4), m = +ym[0].slice(5, 7);
+  const yE = +ym[ym.length - 1].slice(0, 4), mE = +ym[ym.length - 1].slice(5, 7);
+  const months = [];
+  while (y < yE || (y === yE && m <= mE)) { months.push([y, m]); if (++m > 12) { m = 1; y++; } }
+  const q = months.length > 36;
+  const key = function (yy, mm) { return q ? yy + '-Q' + Math.ceil(mm / 3) : yy + '-' + mm; };
+  const keys = [], labels = [], idx = {};
+  months.forEach(function (p) {
+    const k = key(p[0], p[1]);
+    if (k in idx) return;
+    idx[k] = keys.length; keys.push(k);
+    labels.push((q ? 'Q' + Math.ceil(p[1] / 3) : CO_MONTHS[p[1] - 1]) + ' ’' + String(p[0]).slice(2));
+  });
+  const a = keys.map(function () { return 0; }), b = a.slice();
+  dated.forEach(function (i) {
+    const k = idx[key(+String(i.date).slice(0, 4), +String(i.date).slice(5, 7))];
+    if (i.direction === 'Outgoing') a[k]++; else b[k]++;
+  });
+  return { labels: labels, a: a, b: b, quarterly: q, undated: ints.length - dated.length };
+}
+
+// A reading's date, only from forms people actually type: "Oct 2025",
+// "October 2025", "2025-10", "2025-10-14", "10/2025", "10/14/2025". Anything
+// else is NaN — Date.parse alone accepts things like "Week 3".
+function _coWhen(w) {
+  let m = w.match(/^([A-Za-z]{3,9})\.?,?\s+(\d{4})$/);
+  if (m) { const k = CO_MONTHS.indexOf(m[1].slice(0, 1).toUpperCase() + m[1].slice(1, 3).toLowerCase()); return k < 0 ? NaN : Date.UTC(+m[2], k, 1); }
+  if ((m = w.match(/^(\d{4})-(\d{1,2})(?:-(\d{1,2}))?$/))) return Date.UTC(+m[1], +m[2] - 1, +(m[3] || 1));
+  if ((m = w.match(/^(\d{1,2})\/(?:(\d{1,2})\/)?(\d{4})$/))) return Date.UTC(+m[3], +m[1] - 1, +(m[2] || 1));
+  return NaN;
+}
+// Website readings: placed in time when every reading's date can be read
+// ("Oct 2025", "2025-10", "10/2025"); otherwise evenly in the order entered.
+function _coVisitPoints(rows) {
+  const pts = (rows || []).filter(function (r) { return r && _coVal(r.visits) && isFinite(_coNum(r.visits)); })
+    .map(function (r, i) {
+      const w = String(r.when || '').trim();
+      return { t: _coWhen(w), i: i, v: _coNum(r.visits), label: w || 'Reading ' + (i + 1) };
+    });
+  if (pts.length < 2) return null;
+  const timed = pts.every(function (p) { return isFinite(p.t); });
+  pts.forEach(function (p) { p.x = timed ? p.t : p.i; });
+  if (timed) pts.sort(function (a, b) { return a.x - b.x; });
+  return { pts: pts, timed: timed };
+}
+
+// The figures and the two count tables, as report blocks. Returns the blocks
+// plus why anything was left out, for the report screen's section pill.
+function _coFigures(co, it) {
+  const pid = String(co.projectId);
+  const ints = (DB.get('interactions') || []).filter(function (i) { return String(i.projectId) === pid; });
+  const stakes = DB.get('stakeholders') || [];
+  const blocks = [], out = [];
+  let fig = 0;
+  const cap = function (title, note) {
+    fig++;
+    blocks.push({ t: 'p', keepNext: true, before: 10, after: 3, runs: [{ text: 'Figure ' + fig + '. ', b: true, size: 19 }, { text: title, size: 19 }] });
+    return 'co-fig' + fig;
+  };
+  const note = function (s) { blocks.push({ t: 'p', after: 4, runs: [{ text: s, i: true, size: 16 }] }); };
+  const tcap = function (title) { blocks.push({ t: 'p', keepNext: true, before: 10, after: 3, runs: [{ text: title, b: true, size: 19 }] }); };
+
+  // 1. Contacts per month, outbound and inbound.
+  const mo = ints.length ? _coMonthly(ints) : null;
+  if (mo && mo.labels.length >= 2) {
+    const id = cap('Logged stakeholder contacts per ' + (mo.quarterly ? 'quarter' : 'month') + ', outbound and inbound');
+    const c = _coSvgStacked({ id: id, labels: mo.labels, a: mo.a, b: mo.b, aName: 'Outbound (our team reaching out)', bName: 'Inbound and in-person',
+      alt: 'Stacked column chart of logged contacts per ' + (mo.quarterly ? 'quarter' : 'month') + ', ' + mo.labels[0] + ' to ' + mo.labels[mo.labels.length - 1] + '.' });
+    blocks.push({ t: 'chart', svg: c.svg, w: c.w, h: c.h, alt: 'Figure ' + fig + ': contacts per ' + (mo.quarterly ? 'quarter' : 'month') });
+    if (mo.undated) note(mo.undated + ' logged contact' + (mo.undated === 1 ? ' has' : 's have') + ' no date and ' + (mo.undated === 1 ? 'is' : 'are') + ' not shown.');
+  } else out.push(ints.length ? 'The contacts-per-month chart needs contacts in at least two months.' : 'No interactions logged, so no contact charts.');
+
+  // Contacts by channel — a table, since it carries two numbers per row.
+  if (ints.length) {
+    const ch = {};
+    ints.forEach(function (i) {
+      const k = _coVal(i.channel) ? String(i.channel).trim() : 'Not recorded';
+      ch[k] = ch[k] || [0, 0]; ch[k][i.direction === 'Outgoing' ? 0 : 1]++;
+    });
+    const keys = Object.keys(ch).sort(function (a, b) { return (ch[b][0] + ch[b][1]) - (ch[a][0] + ch[a][1]) || a.localeCompare(b); });
+    const oT = keys.reduce(function (n, k) { return n + ch[k][0]; }, 0), iT = ints.length - oT;
+    tcap('Logged contacts by channel');
+    blocks.push({ t: 'table', cols: [{ h: 'Channel', w: 3900 }, { h: 'Outbound', w: 1900 }, { h: 'Inbound & in-person', w: 2100 }, { h: 'Total', w: 1700 }],
+      rows: keys.map(function (k) { return [k, _coFmtN(ch[k][0]), _coFmtN(ch[k][1]), _coFmtN(ch[k][0] + ch[k][1])]; })
+        .concat([[[{ text: 'Total', b: true }], [{ text: _coFmtN(oT), b: true }], [{ text: _coFmtN(iT), b: true }], [{ text: _coFmtN(ints.length), b: true }]]]),
+      boldCol: 0 });
+  }
+
+  // 2. What the public contacted us about — inbound only. The team's own
+  // outreach topics are not what the public raised.
+  const inn = ints.filter(function (i) { return i.direction !== 'Outgoing'; });
+  // Top categories as bars; the long tail is stated in a note under the
+  // figure rather than drawn as one "other" bar that dwarfs the rest.
+  const bars = function (arr, keyFn, limit) {
+    const t = {};
+    arr.forEach(function (x) { const k = keyFn(x); t[k] = (t[k] || 0) + 1; });
+    const rows = Object.keys(t).map(function (k) { return [k, t[k]]; }).sort(function (a, b) { return b[1] - a[1] || a[0].localeCompare(b[0]); });
+    const rest = rows.slice(limit);
+    return { rows: rows.slice(0, limit), restN: rest.reduce(function (n, r) { return n + r[1]; }, 0), restK: rest.length };
+  };
+  const restNote = function (r, what) {
+    if (r.restK) note('Plus ' + _coFmtN(r.restN) + ' contact' + (r.restN === 1 ? '' : 's') + ' across ' + r.restK + ' other ' + what + (r.restK === 1 ? '' : 's') + '.');
+  };
+  const subj = bars(inn, function (i) { return _coVal(i.subject) ? String(i.subject).trim() : 'Not recorded'; }, 8);
+  if (subj.rows.length >= 2) {
+    const id = cap('Inbound and in-person contacts by subject');
+    const c = _coSvgHBars({ id: id, rows: subj.rows, alt: 'Bar chart of inbound and in-person contacts by subject; most common: ' + subj.rows[0][0] + ' (' + subj.rows[0][1] + ').' });
+    blocks.push({ t: 'chart', svg: c.svg, w: c.w, h: c.h, alt: 'Figure ' + fig + ': inbound contacts by subject' });
+    restNote(subj, 'subject');
+  } else out.push(inn.length ? 'The subjects chart needs inbound contacts on at least two subjects.' : 'No inbound contacts, so no subjects chart.');
+
+  // 3. Who we were in contact with, by type of stakeholder (never by name).
+  const types = bars(ints, function (i) { return _coWho(i, stakes).split(':')[0]; }, 8);
+  if (types.rows.length >= 2) {
+    const id = cap('Logged contacts by type of stakeholder');
+    const c = _coSvgHBars({ id: id, rows: types.rows, alt: 'Bar chart of logged contacts by type of stakeholder; most common: ' + types.rows[0][0] + ' (' + types.rows[0][1] + ').' });
+    blocks.push({ t: 'chart', svg: c.svg, w: c.w, h: c.h, alt: 'Figure ' + fig + ': contacts by stakeholder type' });
+    restNote(types, 'type');
+  } else if (ints.length) out.push('The stakeholder-type chart needs contacts with at least two types.');
+
+  // 4. Website visits over time, from the intake's readings.
+  const vp = _coVisitPoints(it.visits);
+  if (vp) {
+    const id = cap('Cumulative unique visits to the project website');
+    const c = _coSvgLine({ id: id, pts: vp.pts, alt: 'Line chart of cumulative unique website visits, ' + _coFmtN(vp.pts[0].v) + ' to ' + _coFmtN(vp.pts[vp.pts.length - 1].v) + '.' });
+    blocks.push({ t: 'chart', svg: c.svg, w: c.w, h: c.h, alt: 'Figure ' + fig + ': website visits' });
+    note('From the PI team’s website analytics, as entered in the close-out intake' + (vp.timed ? '.' : '; readings are spaced evenly in the order entered.'));
+  } else out.push('The website chart needs two or more visit readings in the intake.');
+
+  // Issues escalated — titles, category and outcome. The client already sees
+  // these in the portal; descriptions and resolution notes stay internal.
+  const issues = (DB.get('issues') || []).filter(function (x) { return String(x.projectId) === pid; })
+    .sort(function (a, b) { return String(a.dateRaised || '').localeCompare(String(b.dateRaised || '')); });
+  if (issues.length) {
+    tcap('Issues escalated to the project team');
+    blocks.push({ t: 'table', cols: [{ h: 'Issue', w: 4300 }, { h: 'Category', w: 1800 }, { h: 'Raised', w: 1300 }, { h: 'Outcome', w: 2200 }],
+      rows: issues.map(function (x) {
+        const res = x.status === 'Resolved';
+        return [x.title || 'Untitled', x.category || '—', x.dateRaised ? _fmtMDY(x.dateRaised) : '—',
+          res ? 'Resolved' + (x.dateResolved ? ' ' + _fmtMDY(x.dateResolved) : '') : (x.status || 'Open')];
+      }), boldCol: 3 });
+  }
+  return { blocks: blocks, figures: fig, out: out };
+}
+
+// SVG → PNG bytes, on a white ground, at `scale` × (624 px wide → 6.5 in at
+// 96 dpi; scale 3 is ~290 dpi, sharp in print).
+function _coSvgToPng(svg, w, h, scale) {
+  return new Promise(function (res, rej) {
+    const img = new Image();
+    img.onload = function () {
+      try {
+        const c = document.createElement('canvas');
+        c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+        const g = c.getContext('2d');
+        g.fillStyle = '#ffffff'; g.fillRect(0, 0, c.width, c.height);
+        g.drawImage(img, 0, 0, c.width, c.height);
+        c.toBlob(function (b) {
+          if (!b) return rej(new Error('chart PNG encoding failed'));
+          b.arrayBuffer().then(function (ab) { res(new Uint8Array(ab)); }, rej);
+        }, 'image/png');
+      } catch (e) { rej(e); }
+    };
+    img.onerror = function () { rej(new Error('chart SVG did not load')); };
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  });
+}
+
 // ── Renderers ─────────────────────────────────────────────────────────────
 function _coBlocksHTML(blocks) {
   const run = function (r) {
@@ -10120,6 +10448,7 @@ function _coBlocksHTML(blocks) {
     if (b.t === 'title') return '<div style="text-align:center;font-weight:700;font-size:18px;margin:0 0 ' + (b.after || 0) + 'px">' + escHtml(b.text) + '</div>';
     if (b.t === 'section') return '<div style="font-weight:700;font-size:17px;text-decoration:underline;margin:14px 0 10px">' + escHtml(b.text) + '</div>';
     if (b.t === 'todo') return '<div class="co-todo">' + escHtml(b.text) + '</div>';
+    if (b.t === 'chart') return '<div class="co-fig">' + b.svg + '</div>';
     if (b.t === 'table') {
       const tw = b.cols.reduce(function (n, c) { return n + c.w; }, 0);
       return '<table class="co-doc-tbl"><colgroup>' + b.cols.map(function (c) { return '<col style="width:' + (c.w / tw * 100).toFixed(1) + '%">'; }).join('')
@@ -10138,7 +10467,7 @@ function _coBlocksHTML(blocks) {
 // WordprocessingML for the blocks, plus the external hyperlinks they need
 // (each becomes a relationship in word/_rels/document.xml.rels).
 function _coBlocksDocx(blocks) {
-  const links = [];
+  const links = [], images = [];
   const run = function (r) {
     let rpr = (r.link ? '<w:rStyle w:val="Hyperlink"/>' : '') + (r.b ? '<w:b/>' : '') + (r.i ? '<w:i/>' : '')
       + (r.link ? '<w:color w:val="0563C1"/>' : '') + (r.size ? '<w:sz w:val="' + r.size + '"/><w:szCs w:val="' + r.size + '"/>' : '')
@@ -10149,7 +10478,7 @@ function _coBlocksDocx(blocks) {
     return '<w:hyperlink r:id="rIdCoL' + links.length + '" w:history="1">' + x + '</w:hyperlink>';
   };
   const ppr = function (b) {
-    return '<w:pPr><w:spacing w:before="' + Math.round((b.before || 0) * 20) + '" w:after="' + Math.round((b.after === undefined ? 6 : b.after) * 20) + '"/>'
+    return '<w:pPr>' + (b.keepNext ? '<w:keepNext/>' : '') + '<w:spacing w:before="' + Math.round((b.before || 0) * 20) + '" w:after="' + Math.round((b.after === undefined ? 6 : b.after) * 20) + '"/>'
       + (b.indent || b.left ? '<w:ind' + (b.left ? ' w:left="' + b.left + '"' : '') + (b.indent ? ' w:firstLine="' + b.indent + '"' : '') + '/>' : '')
       + (b.align === 'center' ? '<w:jc w:val="center"/>' : '') + '</w:pPr>';
   };
@@ -10176,8 +10505,25 @@ function _coBlocksDocx(blocks) {
         }).join('') + '</w:tr>';
       }).join('') + '</w:tbl>';
   };
+  // A chart: an inline picture, sized in EMU (914400 per inch, at 96 px per
+  // inch). <wp:extent> and the picture's own <a:ext> must agree or Word
+  // stretches it — see the letterhead-logo note in CLAUDE.md.
+  const chart = function (b) {
+    images.push(b);
+    const n = images.length, cx = Math.round(b.w / 96 * 914400), cy = Math.round(b.h / 96 * 914400);
+    return '<w:p><w:pPr><w:spacing w:before="0" w:after="80"/><w:jc w:val="center"/></w:pPr><w:r><w:drawing>'
+      + '<wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="' + cx + '" cy="' + cy + '"/>'
+      + '<wp:docPr id="' + (9000 + n) + '" name="Figure ' + n + '" descr="' + escXml(b.alt || '') + '"/>'
+      + '<wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></wp:cNvGraphicFramePr>'
+      + '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+      + '<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="' + (9000 + n) + '" name="coChart' + n + '.png"/><pic:cNvPicPr/></pic:nvPicPr>'
+      + '<pic:blipFill><a:blip r:embed="rIdCoImg' + n + '"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
+      + '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="' + cx + '" cy="' + cy + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>'
+      + '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
+  };
   const xml = blocks.map(function (b) {
     if (b.t === 'todo') return '';
+    if (b.t === 'chart') return chart(b);
     if (b.t === 'table') return table(b);
     if (b.t === 'break') return '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
     if (b.t === 'title') return '<w:p>' + ppr({ align: 'center', after: b.after || 0 }) + run({ text: b.text, b: true, size: 28 }) + '</w:p>';
@@ -10187,7 +10533,7 @@ function _coBlocksDocx(blocks) {
     }
     return '<w:p>' + ppr(b) + (b.runs || []).filter(function (r) { return r.text !== ''; }).map(run).join('') + '</w:p>';
   }).join('');
-  return { xml: xml, links: links };
+  return { xml: xml, links: links, images: images };
 }
 
 // ── Export ────────────────────────────────────────────────────────────────
@@ -10229,9 +10575,21 @@ async function exportCloseoutDocx() {
     let finalXml = _firstPageHeaderOnly(docXml.substring(0, bodyIdx + 8) + body.xml + docXml.substring(sectIdx));
     if (finalXml.indexOf('xmlns:r=') < 0) finalXml = finalXml.replace('<w:document ', '<w:document xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ');
 
+    // Charts: the preview's own SVG, rasterized here, one PNG per figure.
+    for (let i = 0; i < body.images.length; i++) {
+      const im = body.images[i];
+      zip.file('word/media/coChart' + (i + 1) + '.png', await _coSvgToPng(im.svg, im.w, im.h, 3));
+    }
+    if (body.images.length) {
+      const ct = await zip.file('[Content_Types].xml').async('string');
+      if (!/Extension="png"/i.test(ct)) zip.file('[Content_Types].xml', ct.replace('<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">', '$&<Default Extension="png" ContentType="image/png"/>'));
+    }
+
     let rels = await zip.file('word/_rels/document.xml.rels').async('string');
     rels = rels.replace('</Relationships>', body.links.map(function (u, i) {
       return '<Relationship Id="rIdCoL' + (i + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="' + escXml(u) + '" TargetMode="External"/>';
+    }).join('') + body.images.map(function (im, i) {
+      return '<Relationship Id="rIdCoImg' + (i + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/coChart' + (i + 1) + '.png"/>';
     }).join('') + '</Relationships>');
     if (brand === 'off') {
       // Written here, synchronously, so the archive below can't race it.
@@ -10309,6 +10667,7 @@ function renderCloseoutReport(el, co) {
         '<span style="display:flex;gap:6px;flex-shrink:0;margin-bottom:4px">'
         + '<button type="button" class="btn btn-sm" onclick="coDraftCommlog(this)">✦ AI Draft</button>'
         + '<button type="button" class="btn btn-sm" title="Draft on Sonnet 5.5 and Opus 5.5 side by side, then pick one" onclick="coCompareCommlog(this)">Compare models</button></span>'))
+    + box('figures', 'Stakeholder Engagement in Figures', '<div style="font-size:12px;color:var(--slate)">Charts and count tables drawn from the interaction log, issues and the intake’s website readings: contacts per month (outbound and inbound), contacts by channel, inbound contacts by subject, contacts by type of stakeholder, website visits and issues escalated. Nothing to write; a chart is left out when there isn’t enough data for it.</div>')
     + box('commitments', 'Commitments to the Public', '<div style="font-size:12px;color:var(--slate)">Listed from Commitments, with whether each was kept. Close any that were done before exporting.</div>')
     + box('row', 'Right-of-Way & Property Owner Outreach', slot('row', 'Narrative (optional)', 'What the outreach involved: tracing each parcel to the party who can sign, sharing legal descriptions and design exhibits, how owners received it. Counts are added below it from the Parcels view.', 4)
       + '<div style="font-size:11px;color:var(--fog)">Counts only. Owner names and concerns stay in the Parcels view’s Agent briefing for the ROW agents.</div>')

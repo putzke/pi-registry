@@ -2142,7 +2142,7 @@ that step is what caught this, and it would not have been caught any other
 way, including by everything in this session that came before actually
 running it.
 
-### Portal token links scoped to the token actually held — STAGED (Oct 2026)
+### Portal token links scoped to the token actually held — probe PASSED, rolling out (Oct 2026)
 Closes the residual gap above. `sql/2026-10-05_portal_token_scoping.sql`
 redefines **`pi_portal_project_ids()`** — the one function every anon policy
 funnels through (all `anon_portal_read` policies plus the report-files Storage
@@ -2152,7 +2152,13 @@ No header, an unknown, malformed (compared as text, never cast) or revoked
 token → no rows. Before: the anon key alone read any linked project by id.
 `client-portal.html` keeps the link in `_portalToken` and `anonHdrs()` adds
 the header, so every token-mode REST and Storage request carries it; login
-mode never sends one. Staff and OTP clients are untouched (authenticated).
+mode never sends one.
+**The probe also found that a token visitor's report download had never
+worked:** Storage rejects (400) a request with only `apikey` and no
+`Authorization`. `anonHdrs()` now sends `Authorization: Bearer <anon key>` as
+supabase-js does (PostgREST still runs it as anon, so reads are unchanged).
+Probe results, live: REST with header → the token, without → null; Storage
+with header + Bearer → 200, without the header → 400. Staff and OTP clients are untouched (authenticated).
 - **Rollout order matters, and it is waiting on a live check.** Hosted
   Supabase must (a) allow the header through CORS from putzke.github.io and
   (b) pass it to the database for BOTH PostgREST and Storage — none of which

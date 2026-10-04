@@ -596,8 +596,12 @@ function authHdrs() {
   const s = loadSession();
   return { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${s.access_token}`, 'Accept': 'application/json' };
 }
+// The Bearer is the anon key itself, as supabase-js sends it. PostgREST runs
+// the request as anon either way, but Storage refuses one with no
+// Authorization header: without it a token visitor's "Download report
+// (.docx)" failed with a 400 (found by the Oct 2026 live header probe).
 function anonHdrs() {
-  const h = { 'apikey': SUPA_KEY, 'Accept': 'application/json' };
+  const h = { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${SUPA_KEY}`, 'Accept': 'application/json' };
   if (_portalToken) h['x-portal-token'] = _portalToken;
   return h;
 }

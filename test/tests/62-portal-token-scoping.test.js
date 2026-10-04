@@ -97,7 +97,7 @@ module.exports = {
       const seen = [];
       app.page.on('request', r => {
         const u = r.url();
-        if (/\/(rest|storage)\/v1\//.test(u)) seen.push({ u: u.replace(/^https?:\/\/[^/]+/, '').slice(0, 60), tok: r.headers()['x-portal-token'] || null });
+        if (/\/(rest|storage)\/v1\//.test(u)) seen.push({ u: u.replace(/^https?:\/\/[^/]+/, '').slice(0, 60), tok: r.headers()['x-portal-token'] || null, auth: r.headers()['authorization'] || null });
       });
       await app.page.evaluate(async t0 => {
         window.alert = () => {};
@@ -109,6 +109,10 @@ module.exports = {
       t.ok(seen.length >= 5, 'the boot and a report download made REST and Storage requests: ' + seen.length);
       t.ok(seen.some(s => /storage\/v1\/object\/sign/.test(s.u)), 'including the report-download signing request');
       t.eq(seen.filter(s => s.tok !== tok.token).map(s => s.u), [], 'every one of them carries this link’s token');
+      // Storage refuses a request with no Authorization header (live probe,
+      // Oct 2026): the download's signing call must carry the anon Bearer.
+      const key = await app.page.evaluate(() => SUPA_KEY);
+      t.eq(seen.filter(s => s.auth !== 'Bearer ' + key).map(s => s.u), [], 'and the anon Bearer Storage requires (the download used to 400 without it)');
       t.eq(app.errors, [], 'no page errors');
     } finally {
       await app.close();

@@ -1,7 +1,7 @@
 # Cirrus Cc (formerly Horizon COMPASS) — Claude Code Context
 
 ## What this app is
-Single-file FHWA/NEPA public involvement (PI) compliance platform. All code lives in **`index.html`** (~13,600 lines). No build step. Deployed on **GitHub Pages** at `https://putzke.github.io/pi-registry/`. Backend is **Supabase** (REST API, no Supabase JS client).
+Single-file FHWA/NEPA public involvement (PI) compliance platform. All code lives in **`index.html`** (~13,600 lines). No build step. Deployed on **GitHub Pages** at `https://app.cirruscc.com/` (custom domain since Oct 2026; the old `putzke.github.io/pi-registry/` address forwards). Backend is **Supabase** (REST API, no Supabase JS client).
 
 Other files: `mobile.html` (mobile companion), `importer.html` (bulk data import), `seed-sample-data.js` (seed script run from browser console).
 
@@ -108,8 +108,8 @@ TXT `_github-pages-challenge-putzke` (both added through the Wix connector's
 account-level DNS API, which works; the root and `www` records still point at
 Wix), `cirruscc.com` verified on GitHub, the repo's custom domain set with HTTPS
 enforced (GitHub committed `CNAME`; test 65 asserts it), `APP_BASE_URL` flipped
-in both files. Steps 3–4 below (Supabase URL configuration, Maps key referrer)
-are Jeff's in their dashboards. The original checklist, kept for reference:
+in both files. Supabase URL configuration (step 3) saved by Jeff the same day;
+the Maps key referrer (step 4) is his to check in Google Cloud. The original checklist, kept for reference:
 
 #### The original plan (Oct 2026)
 `cirruscc.com` is owned; DNS is not pointed yet. The app address is ONE constant,

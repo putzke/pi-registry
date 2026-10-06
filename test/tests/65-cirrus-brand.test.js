@@ -65,7 +65,11 @@ module.exports = {
     // report letterhead choice, and break every portal link already sent.
     t.ok(src['index.html'].includes("'compass_claude_api_key_v2'"), 'the saved-API-key localStorage key is unchanged');
     t.ok(src['index.html'].includes("'compass_report_branding'"), 'the letterhead-choice localStorage key is unchanged');
-    t.ok(src['client-portal.html'].includes('putzke.github.io/pi-registry/client-portal.html'), 'the live portal address is unchanged until app.cirruscc.com exists');
+    // The app address lives in ONE constant per app, so the move to
+    // app.cirruscc.com is a one-line change made the day DNS is live.
+    const base = a => (src[a].match(/const APP_BASE_URL = '([^']+)'/) || [])[1];
+    t.ok(base('index.html') && base('index.html') === base('client-portal.html'), 'index.html and the portal agree on APP_BASE_URL');
+    for (const a of apps) t.eq((src[a].match(/putzke\.github\.io/g) || []).length, a === 'index.html' || a === 'client-portal.html' ? 1 : 0, `${a}: the address appears only in APP_BASE_URL`);
 
     // ── the .docx letterheads ────────────────────────────────────────────
     const app = await t.open('index.html', { email: 'putzke@demo.test' });

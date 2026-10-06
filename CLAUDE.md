@@ -99,9 +99,37 @@ sizes). **"PI Registry"**, an older name still in some visible strings, went too
   and letterhead choice), the close-out intake's internal `kind: 'compass'`,
   Supabase names, the repo name, and `putzke.github.io/pi-registry/…` URLs —
   every portal link already sent points there; move them only once
-  `app.cirruscc.com` exists. Demo-seed portal logins use
+  `app.cirruscc.com` exists (checklist below). Demo-seed portal logins use
   `@cirruscc.com` addresses since Oct 2026 (the seed still purges the old
   `@horizoncompass.com` ones; the live rows were renamed in place).
+
+### Switching to app.cirruscc.com (prepared Oct 2026, NOT yet switched)
+`cirruscc.com` is owned; DNS is not pointed yet. The app address is ONE constant,
+`APP_BASE_URL`, in `index.html` (portal share links) and `client-portal.html`
+(`PORTAL_URL`, the sign-in email's redirect), asserted equal by test 65.
+Flipping it early breaks two live things: every portal link copied after the
+flip points at an address that doesn't resolve, and client email sign-in lands
+on it too. Order:
+1. **DNS** (at the registrar): `CNAME app → putzke.github.io`. The marketing
+   site `www.cirruscc.com` is a SEPARATE site — GitHub Pages serves one custom
+   domain per repo, so it needs its own repo (or wherever it's built).
+2. **GitHub → putzke/pi-registry → Settings → Pages → Custom domain:**
+   `app.cirruscc.com`; wait for the certificate, tick **Enforce HTTPS**. This
+   commits a `CNAME` file, and from then on `putzke.github.io/pi-registry/…`
+   redirects to `app.cirruscc.com/…`, so links already sent keep working.
+   Don't add the `CNAME` file before step 1 resolves — it redirects the
+   working address to a dead one.
+3. **Supabase → Authentication → URL Configuration:** Site URL
+   `https://app.cirruscc.com`; Redirect URLs add
+   `https://app.cirruscc.com/client-portal.html` (keep the old one a while).
+4. **Google Cloud → the Maps/Places API key:** if it's restricted by HTTP
+   referrer, add `https://app.cirruscc.com/*`, or the Map view and address
+   autocomplete stop working on the new address.
+5. **Flip `APP_BASE_URL`** in both files to `https://app.cirruscc.com`, run the
+   suite, push.
+6. **Tell staff:** browser storage is per-address, so on the new address each
+   person signs in again and re-enters their Claude API key and letterhead
+   choice (Settings). Data in Supabase is unaffected.
 
 ### State
 ```javascript

@@ -531,6 +531,12 @@ window._srUdotLogo = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAA+gAAAECCAYA
 // ── DB ────────────────────────────────────────
 // ── SUPABASE CONFIG ────────────────────────────────────────────────
 const SUPA_URL = 'https://ncfbblhlsiglxkoiounv.supabase.co';
+// Where the apps are served. Switch to 'https://app.cirruscc.com' only after
+// DNS, the GitHub Pages custom domain and Supabase's redirect URLs are set up
+// (CLAUDE.md, "Switching to app.cirruscc.com"); before that every portal link
+// copied would point at an address that does not resolve. client-portal.html
+// has the same constant.
+const APP_BASE_URL = 'https://putzke.github.io/pi-registry';
 // ── MIGRATION NOTE ─────────────────────────────────────────────────
 // The isAnonymous flag has been removed from stakeholder entry.
 // Run this SQL in Supabase to clean up existing records:
@@ -6458,7 +6464,7 @@ async function updatePortalButtons() {
     const links = await res.json();
     document.querySelectorAll('.portal-btn-container button').forEach(b => { b.disabled = false; });
     links.forEach(lnk => {
-      _renderPortalBtnActive(lnk.project_id, `https://putzke.github.io/pi-registry/client-portal.html?token=${lnk.token}`);
+      _renderPortalBtnActive(lnk.project_id, `${APP_BASE_URL}/client-portal.html?token=${lnk.token}`);
     });
   } catch(_) {
     document.querySelectorAll('.portal-btn-container button').forEach(b => { b.disabled = false; });
@@ -6488,7 +6494,7 @@ async function sharePortalLink(projId, btn) {
     const rows = await res.json();
     if (!rows.length) throw new Error('Could not create portal link.');
     const token = rows[0].token;
-    const url = `https://putzke.github.io/pi-registry/client-portal.html?token=${token}`;
+    const url = `${APP_BASE_URL}/client-portal.html?token=${token}`;
     await navigator.clipboard.writeText(url).catch(() => prompt('Copy this link:', url));
     _renderPortalBtnActive(projId, url);
     const copyBtn = document.querySelector('.portal-btn-container[data-proj="'+projId+'"] [data-url]');

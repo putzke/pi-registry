@@ -119,7 +119,7 @@ module.exports = {
     }
 
     // ── signed-in clients don't send one (their access comes from the login) ──
-    const app2 = await t.open('client-portal.html', { email: 'demo@horizoncompass.com' });
+    const app2 = await t.open('client-portal.html', { email: 'demo@cirruscc.com' });
     try {
       t.eq(await app2.page.evaluate(() => [_tokenMode, _portalToken, 'x-portal-token' in anonHdrs()]), [false, null, false],
         'login mode: no token is held or sent');

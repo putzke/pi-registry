@@ -87,7 +87,13 @@ begin
   delete from pi_portal_links where token in (
     'a7f3c1d2-9e84-4b16-8f20-3c5d7e9a1b44'::uuid,
     'b2e5d8a4-1c73-4f92-a6d8-5b1e4c7f2a99'::uuid);
+  -- The @horizoncompass.com addresses are the pre-Oct-2026 ones (the product
+  -- was renamed Cirrus Cc and that domain was never bought). Still deleted here
+  -- so a database seeded before the rename is cleaned on its next re-run.
   delete from pi_client_access where lower(email) in (
+    'udot.demo@cirruscc.com',
+    'logancity.demo@cirruscc.com',
+    'demo@cirruscc.com',
     'udot.demo@horizoncompass.com',
     'logancity.demo@horizoncompass.com',
     'demo@horizoncompass.com');
@@ -1418,17 +1424,17 @@ from _seed_proj where slug = 'logan';
 -- Grant-by-email. user_id stays null until the client's first OTP login
 -- self-provisions the auth user (see sql/2026-07-13_client_access_by_email.sql).
 insert into pi_client_access (email, project_id)
-select 'udot.demo@horizoncompass.com', id from _seed_proj where slug = 'sr154'
+select 'udot.demo@cirruscc.com', id from _seed_proj where slug = 'sr154'
 on conflict (email, project_id) do nothing;
 
 insert into pi_client_access (email, project_id)
-select 'logancity.demo@horizoncompass.com', id from _seed_proj where slug = 'logan'
+select 'logancity.demo@cirruscc.com', id from _seed_proj where slug = 'logan'
 on conflict (email, project_id) do nothing;
 
 -- A third grant that sees BOTH projects — use this one to demo the portal's
 -- multi-project selector.
 insert into pi_client_access (email, project_id)
-select 'demo@horizoncompass.com', id from _seed_proj
+select 'demo@cirruscc.com', id from _seed_proj
 on conflict (email, project_id) do nothing;
 
 

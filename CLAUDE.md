@@ -99,8 +99,9 @@ sizes). **"PI Registry"**, an older name still in some visible strings, went too
   and letterhead choice), the close-out intake's internal `kind: 'compass'`,
   Supabase names, the repo name, and `putzke.github.io/pi-registry/…` URLs —
   every portal link already sent points there; move them only once
-  `app.cirruscc.com` exists. Demo-seed portal logins still use
-  `@horizoncompass.com` addresses — move them to a domain you own.
+  `app.cirruscc.com` exists. Demo-seed portal logins use
+  `@cirruscc.com` addresses since Oct 2026 (the seed still purges the old
+  `@horizoncompass.com` ones; the live rows were renamed in place).
 
 ### State
 ```javascript

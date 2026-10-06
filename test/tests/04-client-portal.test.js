@@ -73,7 +73,7 @@ module.exports = {
     } finally { await app.close(); }
 
     // ── magic-link mode: the multi-project selector ─────────────────────
-    app = await t.open('client-portal.html', { email: 'demo@horizoncompass.com' });
+    app = await t.open('client-portal.html', { email: 'demo@cirruscc.com' });
     try {
       await app.page.waitForSelector('.nepa-banner', { timeout: 15000 });
       const multi = await app.page.evaluate(() => {

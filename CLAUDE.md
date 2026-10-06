@@ -105,11 +105,16 @@ sizes). **"PI Registry"**, an older name still in some visible strings, went too
 ### Switching to app.cirruscc.com — SWITCHED 2026-10-06
 Done: Wix DNS `CNAME app → putzke.github.io` and the GitHub domain-verification
 TXT `_github-pages-challenge-putzke` (both added through the Wix connector's
-account-level DNS API, which works; the root and `www` records still point at
-Wix), `cirruscc.com` verified on GitHub, the repo's custom domain set with HTTPS
+account-level DNS API, which works), `cirruscc.com` verified on GitHub, the repo's custom domain set with HTTPS
 enforced (GitHub committed `CNAME`; test 65 asserts it), `APP_BASE_URL` flipped
 in both files. Supabase URL configuration (step 3) saved by Jeff the same day;
-the Maps key referrer (step 4) is his to check in Google Cloud. The original checklist, kept for reference:
+the Maps key referrer (step 4) added too (the Map view stayed blank until it
+was; `window.gm_authFailure` now says so on screen).
+**The marketing site** is `putzke/cirruscc-website` (renamed from
+`horizoncompass`), served at `www.cirruscc.com`: Wix DNS `CNAME www →
+putzke.github.io` and the root `A` records → GitHub's 185.199.108–111.153, so
+bare `cirruscc.com` forwards to www. Wix's own records for both were replaced
+2026-10-06 (no Wix site was attached). The original checklist, kept for reference:
 
 #### The original plan (Oct 2026)
 `cirruscc.com` is owned; DNS is not pointed yet. The app address is ONE constant,

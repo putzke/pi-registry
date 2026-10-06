@@ -408,6 +408,17 @@ function loadGoogleMaps() {
 window.onGoogleMapsReady = function() {
   window._googleMapsReady = true;
 };
+
+// Called by Google when it refuses the key — most often because the page's
+// address isn't in the key's website restrictions (seen on the move to
+// app.cirruscc.com). Without this the Map view just stays blank.
+window.gm_authFailure = function() {
+  window._googleMapsAuthFailed = true;
+  var msg = 'Google Maps refused this address (' + location.hostname + '). In Google Cloud → APIs & Services → Credentials, add https://' + location.hostname + '/* to the Maps key’s website restrictions, wait 5 minutes and reload.';
+  var ld = document.getElementById('mv-loading');
+  if (ld) { ld.textContent = msg; ld.style.maxWidth = '420px'; ld.style.textAlign = 'center'; ld.style.color = 'var(--amber)'; }
+  if (typeof showToast === 'function') showToast(msg, 'error', 12000);
+};
 </script>
 </head>
 <body>

@@ -136,6 +136,17 @@ module.exports = {
       const hasMap = await app.page.evaluate(() => !!window._mvMap);
       t.ok(hasMap, 'window._mvMap exists on an empty project — the exact condition Draw area was failing on ("Plot the map first")');
 
+      // ── Google refusing the key says so instead of staying blank ─────────
+      // Google calls window.gm_authFailure when the page's address is not in
+      // the key's website restrictions (hit live on the move to
+      // app.cirruscc.com: the map stayed an empty box).
+      const refused = await app.page.evaluate(() => {
+        window.gm_authFailure();
+        return document.getElementById('mv-loading').textContent;
+      });
+      t.ok(/Google Maps refused this address/.test(refused) && /website restrictions/.test(refused),
+           'a refused Maps key names the cause and the fix where the map would be');
+
       t.eq(app.errors, [], 'no page errors during the run');
     } finally {
       await app.close();

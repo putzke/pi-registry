@@ -2300,6 +2300,72 @@ with header + Bearer → 200, without the header → 400. Staff and OTP clients 
   request. Verified to fail against the old function and against a portal
   that omits the header. Tests 47 and 49 now set the header as a visitor would.
 
+### Staff are a LIST — `pi_staff` (Oct 2026)
+`sql/2026-10-06_staff_allowlist.sql`. Found while building two-step sign-in:
+every staff policy reads `not pi_is_portal_client()`, so "staff" meant ANY
+authenticated session not in `pi_client_access`. The portal's email sign-in
+sends `create_user: true`, so anyone could type any address, click the link in
+their own inbox, and hold a session that every staff policy let in — every
+project, contact and report file, and an INSERT into `pi_client_access` to
+grant themselves a project. (Live check 2026-10-06: no stranger accounts
+existed; the six auth users were staff, one real client, and the orphaned
+`demo@horizoncompass.com`.) Enrolling an authenticator does not close it —
+any user can enroll their own.
+- `pi_staff(email)` + `pi_is_staff()` (security definer), and ONE
+  **restrictive** policy `pi_staff_or_client` per RLS-enabled `pi_` table
+  (`pi_is_staff() or pi_is_portal_client()`), plus `report_files_staff_or_client`
+  on `storage.objects` scoped to the `report-files` bucket. Restrictive ANDs with
+  the permissive policies, so none was rewritten and staff/clients see what they
+  saw before. anon (token links) untouched.
+- **Staff emails are never committed** (public repo). The file has a marked
+  insert spot and refuses to run with an empty list. Add someone later:
+  `insert into pi_staff (email) values ('name@example.com');` — lower-case.
+- The policy goes only on tables with RLS ON. Production has it on all 24
+  (checked 2026-10-06). The HARNESS builds dashboard-made tables
+  (`pi_stakeholders`, …) without RLS, so role-switched tests count
+  `pi_interactions`, not contacts.
+- `test/run.js`'s `t.reset` re-inserts `staff@sunrise.example` after its
+  truncate — the login every role-switched test (47, 49, 57, 62, 66) uses.
+- Guarded by `test/tests/66-two-step-signin.test.js` (stranger sees nothing,
+  cannot self-grant, cannot read report files; staff and clients unchanged).
+
+### Two-step sign-in — Microsoft Authenticator (Oct 2026, OPTIONAL for now)
+Supabase Auth MFA (TOTP) over REST. Microsoft Authenticator gives a 6-digit
+code ("Other account"); push approval would need Entra ID SSO — not used.
+- **One block, three copies:** `// ── TWO-STEP SIGN-IN (begin)` … `(end)` is
+  byte-identical in `index.html`, `mobile.html`, `importer.html` (test 66).
+  `mfaGate(sess, done, cancel)` runs after the password and at boot for any
+  stored session that is not `aal2` (read from the JWT by `_jwtClaims`). A
+  verified factor → code step; the aal1 session sits in `_mfaPending` (memory
+  only), so a reload at the code step goes back to the password. The verify
+  answer is an aal2 session, stored before the app opens. An aal2 session
+  boots with no extra call. The importer opened from the desktop gets the
+  desktop's (already aal2) token in the URL and is not asked again.
+- **Settings → Two-step sign-in** (desktop only — set-up is a desk job with
+  the QR on screen): Set up (QR + typed key, then one code), Move to a new
+  phone (new one verified FIRST, then the old factor deleted — never a moment
+  with no way in), Turn off (hidden once required). GoTrue needs aal2 to delete
+  a verified factor; the user has it after signing in with the code.
+- `friendly_name` must be unique per user (GoTrue 422s otherwise) — it carries
+  a seconds timestamp; test 66 caught a per-minute one colliding.
+- If Supabase Auth can't be reached at boot the gate opens as before — the
+  database step below is the enforcement, not the client.
+- **Rollout:** (1) run the staff allowlist; (2) everyone sets up in Settings;
+  check with the query at the top of the pending file; (3) set
+  `MFA_REQUIRED = true` in all three apps (a user with no factor is walked
+  through set-up at sign-in) and push; (4) run
+  `sql/pending/2026-10-06_staff_require_aal2.sql` — staff policies then also
+  require `aal = 'aal2'`; portal clients and token links unaffected; staff sign
+  out and back in. `sql/pending/` is not applied by the harness; test 66 runs
+  it inside a rolled-back transaction.
+- **Lost phone:** `delete from auth.mfa_factors where user_id = (select id
+  from auth.users where lower(email) = '…');` in the SQL Editor — confirm with
+  the person first. They sign in with the password and set up again.
+- Not verifiable here: Microsoft Authenticator scanning the QR (standard
+  otpauth TOTP). Test once by hand. Test 66 fakes Supabase Auth statefully
+  (users, factors, aal1/aal2 tokens, a good and a bad code, the aal2 rule for
+  deleting a factor) via `openApp(file, {auth, session:false})`.
+
 ### Client Portal Access — staff can save directly now (Sep 2026)
 `sql/2026-09-06_client_access_self_serve.sql`. The Settings → Client Portal
 Access panel used to only generate copy-paste SQL (Phase 1, "Option C") — the

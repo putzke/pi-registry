@@ -85,6 +85,10 @@ const ALLOWED = {
   // concerns about private individuals. Staff-only for the same reason, and a
   // separate table precisely so a portal session can't select these columns.
   pi_parcel_outreach: { anon: [], authenticated: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'] },
+  // The staff list (sql/2026-10-06_staff_allowlist.sql): read-only to a
+  // signed-in session, and only its own staff can see it. Written only from
+  // the SQL Editor, so nobody can add themselves.
+  pi_staff: { anon: [], authenticated: ['SELECT'] },
 };
 
 // `grant a, b on t1, t2 to r1, r2;` — possibly across lines.
@@ -153,7 +157,7 @@ module.exports = {
 
     const tables = Object.keys(granted).filter(x => created.has(x)).sort();
     t.eq(tables, ['pi_client_access','pi_client_summaries','pi_closeouts',
-                  'pi_parcel_outreach','pi_parcel_owners','pi_parcels','pi_portal_links'],
+                  'pi_parcel_outreach','pi_parcel_owners','pi_parcels','pi_portal_links','pi_staff'],
          'every table a migration creates also grants it — none was missed entirely');
 
     for (const tbl of tables) {

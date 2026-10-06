@@ -78,6 +78,11 @@ class Assert {
     const t = new Assert();
     t.reset = async () => {
       await db.pool.query(`truncate ${TABLES.map(x => '"' + x + '"').join(',')} restart identity cascade`);
+      // The staff login the role-switched RLS tests (47, 49, 57, 62, 66) use.
+      // sql/2026-10-06_staff_allowlist.sql only lets a listed login see staff
+      // data, and real staff emails are never committed, so the harness lists
+      // its own — after the truncate, which empties pi_staff too.
+      await db.pool.query(`insert into pi_staff (email) values ('staff@sunrise.example') on conflict do nothing`);
       shim.calls.length = 0;
     };
     t.sql = (q, v) => db.pool.query(q, v).then(r => r.rows);

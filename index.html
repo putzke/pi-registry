@@ -651,6 +651,228 @@ async function refreshSession() {
   finally { _refreshInFlight = null; }
 }
 
+// ── TWO-STEP SIGN-IN (begin) ───────────────────────────────────────
+// A 6-digit code from Microsoft Authenticator (or any authenticator app) on top
+// of the password. Supabase Auth MFA (TOTP) over REST, like the rest of auth.
+// This block is IDENTICAL in index.html, mobile.html and importer.html — test
+// 66 asserts it — so change all three together.
+//
+// A password sign-in gives an "aal1" session. A user with a verified factor
+// must enter a code to turn it into "aal2" before the app opens. The aal1
+// session is held in memory only (_mfaPending), never in sessionStorage, so a
+// reload at the code step goes back to the password.
+//
+// MFA_REQUIRED false: optional — set up in Settings (desktop). true: a user
+// with no factor is walked through set-up at sign-in. Neither is enforcement:
+// that is the database, sql/pending/2026-10-06_staff_require_aal2.sql, which
+// refuses staff data to a session that is not aal2. Run it only once every
+// staff login has a factor. Lost phone: delete that user's row from
+// auth.mfa_factors (CLAUDE.md, "Two-step sign-in").
+const MFA_REQUIRED = false;
+let _mfaPending = null;
+
+function _jwtClaims(tok) {
+  try {
+    let p = String(tok || '').split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    p += '='.repeat((4 - p.length % 4) % 4);
+    return JSON.parse(atob(p));
+  } catch (e) { return {}; }
+}
+
+async function _mfaFetch(path, method, token, body) {
+  const r = await fetch(SUPA_URL + '/auth/v1' + path, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + token },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  let data = {};
+  try { data = await r.json(); } catch (e) {}
+  if (!r.ok) {
+    const err = new Error(data.msg || data.message || data.error_description || ('HTTP ' + r.status));
+    err.status = r.status;
+    throw err;
+  }
+  return data;
+}
+
+async function mfaFactors(token) {
+  const u = await _mfaFetch('/user', 'GET', token);
+  return (u.factors || []).filter(f => f.factor_type === 'totp');
+}
+
+// 'ok' (open the app) | 'challenge' (ask for a code) | 'enroll' (set one up first)
+async function mfaNextStep(token) {
+  if (_jwtClaims(token).aal === 'aal2') return { step: 'ok' };
+  const verified = (await mfaFactors(token)).filter(f => f.status === 'verified');
+  if (verified.length) return { step: 'challenge', factor: verified[0] };
+  return { step: MFA_REQUIRED ? 'enroll' : 'ok' };
+}
+
+async function mfaVerifyCode(token, factorId, code) {
+  const ch = await _mfaFetch('/factors/' + factorId + '/challenge', 'POST', token, {});
+  const s = await _mfaFetch('/factors/' + factorId + '/verify', 'POST', token,
+    { challenge_id: ch.id, code: String(code || '').replace(/\D/g, '') });
+  return { access_token: s.access_token, refresh_token: s.refresh_token, user: s.user };
+}
+
+async function mfaEnroll(token) {
+  // An abandoned set-up leaves an unverified factor; clear it so the new one
+  // is the only one the user's app could be holding.
+  for (const f of (await mfaFactors(token)).filter(f => f.status !== 'verified')) {
+    try { await _mfaFetch('/factors/' + f.id, 'DELETE', token); } catch (e) {}
+  }
+  const d = await _mfaFetch('/factors', 'POST', token,
+    { factor_type: 'totp', issuer: 'Cirrus Cc', friendly_name: 'Authenticator ' + new Date().toISOString().slice(0, 19).replace('T', ' ') });
+  let qr = (d.totp && d.totp.qr_code) || '';
+  // GoTrue returns "data:image/svg+xml;utf-8,<svg…>" with the SVG unescaped.
+  const svg = qr.replace(/^data:image\/svg\+xml;[^,]*,/, '');
+  if (/^\s*<svg/i.test(svg)) qr = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  return { id: d.id, qr, secret: (d.totp && d.totp.secret) || '', uri: (d.totp && d.totp.uri) || '' };
+}
+
+async function mfaUnenroll(token, factorId) {
+  await _mfaFetch('/factors/' + factorId, 'DELETE', token);
+}
+
+// Decide what a fresh or restored session still needs. done() runs once the
+// session is stored; cancel() goes back to the password screen.
+async function mfaGate(sess, done, cancel) {
+  let nx;
+  try { nx = await mfaNextStep(sess.access_token); }
+  catch (e) {
+    // Can't reach Supabase Auth: open as before. The database check (once
+    // run) still refuses an aal1 session, so this is never a way round it.
+    console.warn('Two-step sign-in check failed:', e);
+    nx = { step: 'ok' };
+  }
+  if (nx.step === 'ok') { setSession(sess); done(); return; }
+  clearSession();
+  _mfaPending = sess;
+  const back = () => { _mfaPending = null; _mfaClose(); cancel(); };
+  if (nx.step === 'challenge') mfaShowChallenge(nx.factor, done, back);
+  else mfaShowEnroll(sess.access_token, { required: true }, s => { _mfaPending = null; done(s); }, back);
+}
+
+const _MFA_CARD = 'background:#112236;border:1px solid #1A3350;border-radius:12px;padding:30px 28px;width:340px;max-width:calc(100vw - 32px);box-sizing:border-box;box-shadow:0 8px 40px rgba(0,0,0,.6);color:#E2E8F0;font-family:inherit;max-height:calc(100vh - 32px);overflow-y:auto';
+const _MFA_INPUT = 'width:100%;box-sizing:border-box;background:#0B1929;border:1px solid #1A3350;border-radius:6px;padding:10px 12px;font-size:22px;letter-spacing:8px;text-align:center;color:#E2E8F0;outline:none;font-family:monospace';
+const _MFA_BTN = 'width:100%;background:#1D4ED8;border:none;border-radius:6px;padding:10px;font-size:14px;font-weight:500;color:#fff;cursor:pointer;margin-top:14px';
+const _MFA_LINK = 'background:none;border:none;color:#94A3B8;font-size:12px;cursor:pointer;text-decoration:underline;padding:0;margin-top:14px;display:block;width:100%';
+const _MFA_ERR = 'display:none;background:#2D1B1B;border:1px solid #7F1D1D;border-radius:6px;padding:9px 12px;font-size:12px;color:#FCA5A5;margin-bottom:12px';
+
+function _mfaClose() { const o = document.getElementById('mfa-overlay'); if (o) o.remove(); }
+
+function _mfaOpen(html) {
+  _mfaClose();
+  const o = document.createElement('div');
+  o.id = 'mfa-overlay';
+  o.style.cssText = 'position:fixed;inset:0;background:rgba(11,25,41,.96);display:flex;align-items:center;justify-content:center;z-index:100000;font-family:inherit';
+  o.innerHTML = '<div style="' + _MFA_CARD + '">' + html + '</div>';
+  document.body.appendChild(o);
+  return o;
+}
+
+function _mfaEsc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// Wire a code box: digits only, submit on the 6th digit or Enter.
+function _mfaWireCode(o, submit) {
+  const inp = o.querySelector('#mfa-code');
+  inp.addEventListener('input', () => {
+    inp.value = inp.value.replace(/\D/g, '').slice(0, 6);
+    if (inp.value.length === 6) submit();
+  });
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+  o.querySelector('#mfa-go').addEventListener('click', submit);
+  setTimeout(() => inp.focus(), 0);
+  return inp;
+}
+
+function _mfaFail(o, msg) {
+  const err = o.querySelector('#mfa-err');
+  err.textContent = msg; err.style.display = 'block';
+  const btn = o.querySelector('#mfa-go'); btn.disabled = false; btn.textContent = 'Verify';
+  const inp = o.querySelector('#mfa-code'); inp.value = ''; inp.focus();
+}
+
+function _mfaCodeMsg(e) {
+  return /invalid|expired|code/i.test(e.message || '') ? 'That code didn’t work. Codes change every 30 seconds — enter the one showing now.' : e.message;
+}
+
+function mfaShowChallenge(factor, done, cancel) {
+  const email = (_mfaPending && _mfaPending.user && _mfaPending.user.email) || '';
+  const o = _mfaOpen(
+    '<div style="font-size:17px;font-weight:600;margin-bottom:6px">Two-step sign-in</div>'
+    + '<div style="font-size:13px;color:#94A3B8;line-height:1.5;margin-bottom:16px">Open Microsoft Authenticator and enter the 6-digit code for <b style="color:#E2E8F0">Cirrus Cc</b>' + (email ? ' (' + _mfaEsc(email) + ')' : '') + '.</div>'
+    + '<div id="mfa-err" style="' + _MFA_ERR + '"></div>'
+    + '<input id="mfa-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" style="' + _MFA_INPUT + '">'
+    + '<button id="mfa-go" style="' + _MFA_BTN + '">Verify</button>'
+    + '<button id="mfa-back" style="' + _MFA_LINK + '">Use a different account</button>');
+  let busy = false;
+  const inp = _mfaWireCode(o, async () => {
+    if (busy || inp.value.length !== 6) return;
+    busy = true;
+    const btn = o.querySelector('#mfa-go'); btn.disabled = true; btn.textContent = 'Checking…';
+    try {
+      const s = await mfaVerifyCode(_mfaPending.access_token, factor.id, inp.value);
+      if (!s.user) s.user = _mfaPending.user;
+      setSession(s);
+      _mfaPending = null;
+      _mfaClose();
+      done(s);
+    } catch (e) { _mfaFail(o, _mfaCodeMsg(e)); }
+    busy = false;
+  });
+  o.querySelector('#mfa-back').addEventListener('click', cancel);
+}
+
+// Set-up: scan the QR (or type the key), then prove it with one code. The
+// verify answer is an aal2 session, which is stored before done(s) runs.
+async function mfaShowEnroll(token, opts, done, cancel) {
+  opts = opts || {};
+  let o = _mfaOpen('<div style="font-size:13px;color:#94A3B8">Preparing set-up…</div>');
+  let f;
+  try { f = await mfaEnroll(token); }
+  catch (e) {
+    o = _mfaOpen('<div style="font-size:17px;font-weight:600;margin-bottom:8px">Two-step sign-in</div>'
+      + '<div style="font-size:13px;color:#FCA5A5;line-height:1.5">Set-up could not start: ' + _mfaEsc(e.message) + '</div>'
+      + '<button id="mfa-back" style="' + _MFA_LINK + '">Close</button>');
+    o.querySelector('#mfa-back').addEventListener('click', () => { _mfaClose(); cancel(); });
+    return;
+  }
+  const key = f.secret.replace(/(.{4})/g, '$1 ').trim();
+  o = _mfaOpen(
+    '<div style="font-size:17px;font-weight:600;margin-bottom:6px">Set up two-step sign-in</div>'
+    + (opts.required ? '<div style="font-size:12px;color:#FCD34D;line-height:1.5;margin-bottom:10px">Cirrus Cc now asks for a code from your phone at sign-in. This takes about a minute.</div>' : '')
+    + '<div style="font-size:13px;color:#94A3B8;line-height:1.55;margin-bottom:12px"><b style="color:#E2E8F0">1.</b> In Microsoft Authenticator tap <b style="color:#E2E8F0">+</b>, choose <b style="color:#E2E8F0">Other account</b>, and scan this code.</div>'
+    + '<div style="background:#fff;border-radius:8px;padding:10px;width:180px;height:180px;margin:0 auto 10px;box-sizing:border-box"><img id="mfa-qr" alt="QR code for Microsoft Authenticator" src="' + _mfaEsc(f.qr) + '" style="width:160px;height:160px;display:block"></div>'
+    + '<div style="font-size:11px;color:#94A3B8;line-height:1.5;margin-bottom:14px;text-align:center">Setting up on this phone, or can’t scan? Choose <b style="color:#E2E8F0">Enter code manually</b> and type this key:<div id="mfa-key" style="font-family:monospace;font-size:13px;color:#E2E8F0;letter-spacing:1px;word-spacing:4px;margin-top:4px;user-select:all">' + _mfaEsc(key) + '</div></div>'
+    + '<div style="font-size:13px;color:#94A3B8;line-height:1.55;margin-bottom:10px"><b style="color:#E2E8F0">2.</b> Enter the 6-digit code it now shows for Cirrus Cc.</div>'
+    + '<div id="mfa-err" style="' + _MFA_ERR + '"></div>'
+    + '<input id="mfa-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" style="' + _MFA_INPUT + '">'
+    + '<button id="mfa-go" style="' + _MFA_BTN + '">Verify</button>'
+    + '<button id="mfa-back" style="' + _MFA_LINK + '">' + (opts.required ? 'Use a different account' : 'Cancel') + '</button>');
+  let busy = false;
+  const inp = _mfaWireCode(o, async () => {
+    if (busy || inp.value.length !== 6) return;
+    busy = true;
+    const btn = o.querySelector('#mfa-go'); btn.disabled = true; btn.textContent = 'Checking…';
+    try {
+      const s = await mfaVerifyCode(token, f.id, inp.value);
+      if (!s.user) { const old = getSession() || _mfaPending; s.user = old && old.user; }
+      setSession(s);
+      _mfaClose();
+      done(s);
+    } catch (e) { _mfaFail(o, _mfaCodeMsg(e)); }
+    busy = false;
+  });
+  o.querySelector('#mfa-back').addEventListener('click', async () => {
+    try { await mfaUnenroll(token, f.id); } catch (e) {}
+    _mfaClose(); cancel();
+  });
+}
+// ── TWO-STEP SIGN-IN (end) ─────────────────────────────────────────
+
 // ── LOGIN OVERLAY ──────────────────────────────────────────────────
 function showLoginOverlay() {
   const overlay = document.createElement('div');
@@ -697,15 +919,17 @@ async function doLogin() {
   errDiv.style.display = 'none';
   btn.textContent = 'Signing in…';
   btn.disabled = true;
+  const reset = () => { btn.textContent = 'Sign In'; btn.disabled = false; };
   try {
-    await signIn(email, password);
-    document.getElementById('login-overlay').remove();
-    initApp();
+    const d = await signIn(email, password);
+    // A user with Microsoft Authenticator set up is asked for a code first.
+    await mfaGate({ access_token: d.access_token, refresh_token: d.refresh_token, user: d.user },
+      () => { document.getElementById('login-overlay')?.remove(); initApp(); },
+      () => { clearSession(); reset(); document.getElementById('login-password').value = ''; document.getElementById('login-password').focus(); });
   } catch(e) {
     errDiv.textContent = e.message;
     errDiv.style.display = 'block';
-    btn.textContent = 'Sign In';
-    btn.disabled = false;
+    reset();
   }
 }
 
@@ -1980,7 +2204,10 @@ const DEV_BYPASS = false;
   if (DEV_BYPASS) { initApp(); return; }
   const sess = getSession();
   if (sess && sess.access_token) {
-    initApp();
+    // A session from before the user set up two-step sign-in (another tab,
+    // or this one before Settings) is aal1: ask for the code now.
+    if (_jwtClaims(sess.access_token).aal === 'aal2') initApp();
+    else mfaGate(sess, initApp, () => { clearSession(); showLoginOverlay(); });
   } else {
     showLoginOverlay();
   }
@@ -22870,6 +23097,13 @@ function renderSettings(m) {
   <div class="content" style="display:block;overflow-y:auto">
   <div style="padding:24px;max-width:800px;margin:0 auto">
 
+    <!-- Two-step sign-in -->
+    <div style="background:var(--navy-mid);border:1px solid rgba(74,155,232,.25);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">
+      <div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:4px">Two-step sign-in</div>
+      <div style="font-size:12px;color:var(--fog);margin-bottom:14px;line-height:1.5">After your password, Cirrus Cc asks for a 6-digit code from Microsoft Authenticator on your phone, so a stolen password alone can't open client data. Set up once; then each sign-in takes one extra step. This is your own login only — clients signing in to the portal are not affected.</div>
+      <div id="mfa-card-body" style="font-size:13px;color:var(--fog)">Checking…</div>
+    </div>
+
     <!-- Claude AI -->
     <div style="background:var(--navy-mid);border:1px solid rgba(74,155,232,.25);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
@@ -22944,6 +23178,77 @@ function renderSettings(m) {
   </div>
   </div>`;
   setTimeout(function(){ if(document.getElementById('client-access-panel')) renderClientAccessPanel(); }, 0);
+  setTimeout(function(){ if(document.getElementById('mfa-card-body')) renderMfaCard(); }, 0);
+}
+
+// Settings → Two-step sign-in. The sign-in side (mfaGate and friends) is the
+// shared block near the login overlay; this is only the user's own on/off.
+async function renderMfaCard() {
+  var el = document.getElementById('mfa-card-body');
+  if (!el) return;
+  var sess = getSession();
+  if (!sess || !sess.access_token) { el.textContent = 'Sign in to manage two-step sign-in.'; return; }
+  var factors;
+  try { factors = (await mfaFactors(sess.access_token)).filter(function(f){ return f.status === 'verified'; }); }
+  catch (e) { el.innerHTML = '<span style="color:var(--amber)">Could not check two-step sign-in: ' + escHtml(e.message) + '</span>'; return; }
+  if (!document.body.contains(el)) return;
+  if (factors.length) {
+    var since = factors[0].created_at ? fmt(String(factors[0].created_at).slice(0, 10)) : '';
+    el.innerHTML = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+      + '<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(40,168,112,.2);color:var(--green)">On</span>'
+      + '<span style="color:var(--mist)">Microsoft Authenticator' + (since ? ' · set up ' + escHtml(since) : '') + '</span>'
+      + '<span style="flex:1"></span>'
+      + '<button class="btn" onclick="mfaReplacePhone()">Move to a new phone</button>'
+      + (MFA_REQUIRED ? '' : '<button class="btn" style="color:var(--fog);border-color:rgba(255,255,255,.15)" onclick="mfaTurnOff()">Turn off</button>')
+      + '</div>';
+  } else {
+    el.innerHTML = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+      + '<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,.07);color:var(--fog)">Off</span>'
+      + '<span style="color:var(--fog)">' + (MFA_REQUIRED ? 'Required — set it up now.' : 'Optional for now. Once everyone on the team has set it up, it becomes required.') + '</span>'
+      + '<span style="flex:1"></span>'
+      + '<button class="btn btn-primary" onclick="mfaSetUp()">Set up</button>'
+      + '</div>';
+  }
+}
+
+function mfaSetUp() {
+  var sess = getSession();
+  if (!sess) return;
+  mfaShowEnroll(sess.access_token, {}, function(){
+    showToast('Two-step sign-in is on. Next time you sign in, have your phone ready.', 'info', 5000);
+    renderMfaCard();
+  }, renderMfaCard);
+}
+
+// Set up the new phone first, and only then remove the old one, so there is
+// never a moment with no way to sign in.
+async function mfaReplacePhone() {
+  var sess = getSession();
+  if (!sess) return;
+  var old;
+  try { old = (await mfaFactors(sess.access_token)).filter(function(f){ return f.status === 'verified'; }).map(function(f){ return f.id; }); }
+  catch (e) { showToast('Could not check two-step sign-in: ' + e.message, 'error'); return; }
+  mfaShowEnroll(sess.access_token, {}, async function(s){
+    for (var i = 0; i < old.length; i++) {
+      try { await mfaUnenroll(s.access_token, old[i]); }
+      catch (e) { console.warn('Could not remove the old authenticator:', e); }
+    }
+    showToast('Moved to the new phone. The old one no longer works for Cirrus Cc — you can delete it there.', 'info', 6000);
+    renderMfaCard();
+  }, renderMfaCard);
+}
+
+async function mfaTurnOff() {
+  if (!confirm('Turn off two-step sign-in?\n\nYour password alone will open Cirrus Cc again. You can turn it back on any time.')) return;
+  var sess = getSession();
+  try {
+    var fs = (await mfaFactors(sess.access_token)).filter(function(f){ return f.status === 'verified'; });
+    for (var i = 0; i < fs.length; i++) await mfaUnenroll(sess.access_token, fs[i].id);
+    showToast('Two-step sign-in is off. You can delete Cirrus Cc from Microsoft Authenticator.', 'info', 5000);
+  } catch (e) {
+    showToast('Could not turn it off: ' + e.message + (e.status === 403 ? ' — sign out and back in with your code, then try again.' : ''), 'error', 7000);
+  }
+  renderMfaCard();
 }
 
 // ── CLIENT PORTAL ACCESS (Phase 2: staff can save directly, Sep 2026) ─────────

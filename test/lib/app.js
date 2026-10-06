@@ -11,7 +11,7 @@ const REPO = path.join(__dirname, '..', '..');
 const CHROME = '/opt/pw-browsers/chromium';
 const CHARTJS = path.join(__dirname, '..', 'node_modules', 'chart.js', 'dist', 'chart.umd.js');
 
-async function openApp(file, { shimOrigin, email = 'putzke@demo.test', viewport, portalToken } = {}) {
+async function openApp(file, { shimOrigin, email = 'putzke@demo.test', viewport, portalToken, auth, session: withSession = true } = {}) {
   const browser = await chromium.launch({ executablePath: CHROME });
   const page = await browser.newPage({ viewport: viewport || { width: 1440, height: 900 } });
 
@@ -68,8 +68,9 @@ async function openApp(file, { shimOrigin, email = 'putzke@demo.test', viewport,
     expires_at: Math.floor(Date.now() / 1000) + 3600,
     user: { id: 'test-user', email },
   };
-  await page.route('**/auth/v1/**', route =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) }));
+  // `auth` replaces this with a test's own Supabase Auth (test 66 fakes MFA).
+  await page.route('**/auth/v1/**', auth || (route =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) })));
 
   // Chart.js from disk so a blocked CDN can't fail a test run
   await page.route('**/cdn.jsdelivr.net/**', route => fs.existsSync(CHARTJS)
@@ -78,7 +79,9 @@ async function openApp(file, { shimOrigin, email = 'putzke@demo.test', viewport,
 
   // index.html keeps its session in sessionStorage under 'pi_session';
   // client-portal.html uses localStorage under 'cp_session_v1'.
-  await page.addInitScript(s => {
+  // session:false starts signed out, and leaves whatever the page stores
+  // alone across reloads.
+  if (withSession) await page.addInitScript(s => {
     sessionStorage.setItem('pi_session', JSON.stringify(s));
     localStorage.setItem('cp_session_v1', JSON.stringify(s));
   }, session);
@@ -87,7 +90,7 @@ async function openApp(file, { shimOrigin, email = 'putzke@demo.test', viewport,
   await page.goto('file://' + path.join(REPO, file) + q);
   await page.waitForTimeout(150);
   // Dismiss the login overlay if the app still put one up.
-  await page.evaluate(() => document.getElementById('login-overlay')?.remove());
+  if (withSession) await page.evaluate(() => document.getElementById('login-overlay')?.remove());
 
   return {
     page, errors,

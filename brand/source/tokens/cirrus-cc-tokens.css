@@ -1,0 +1,15 @@
+/* Cirrus Cc brand tokens */
+@import url('https://fonts.googleapis.com/css2?family=Michroma&family=Saira:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400&display=swap');
+:root{
+  --cc-ink:#141A24;      /* primary dark, type on light */
+  --cc-cirrus:#1F7A9C;   /* primary brand blue, headers, icons, compass arc */
+  --cc-sky:#35A6C9;      /* interactive, links, Cc badge, live indicator */
+  --cc-paper:#F4F2ED;    /* page + card backgrounds */
+  --cc-haze:#8A93A0;     /* secondary text, dividers, muted labels */
+  --cc-amber:#C4862F;    /* overdue, deadlines, alerts */
+  --cc-pointer:#A4302A;  /* compass needle, errors, critical only */
+  --cc-pointer-on-dark:#C24A42;
+  --cc-slate:#5A6573;    /* body secondary on light */
+  --cc-font-display:'Michroma',sans-serif;
+  --cc-font-body:'Saira',sans-serif;
+}

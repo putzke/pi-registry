@@ -2,7 +2,7 @@
 //
 // The Messages API is intercepted at the network layer (as in 59), so this
 // checks what is actually SENT for the one long synthesis in the app:
-//   - every count is computed by COMPASS and matches the database; the log is
+//   - every count is computed by Cirrus Cc and matches the database; the log is
 //     sent to be read, labelled "do not count";
 //   - nobody is identified by personal name: each line names WHO by
 //     organization and type, anonymous contacts as "Member of the public";

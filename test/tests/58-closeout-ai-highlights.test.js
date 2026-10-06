@@ -2,7 +2,7 @@
 //
 // _claudeNarrative is stubbed (same technique as 34-draft-all-parity), so this
 // checks what is SENT and what happens to what comes back, without a key:
-//   - facts are computed in code from COMPASS and the intake, and the counts in
+//   - facts are computed in code from Cirrus Cc and the intake, and the counts in
 //     them are the database's counts;
 //   - web and email addresses are never handed to the model (they print as
 //     links under the paragraph; a model that has them tends to repeat them);

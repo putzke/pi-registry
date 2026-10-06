@@ -4,6 +4,12 @@
 //
 //   node tools/swap-letterhead-logo.js udot path/to/new-logo.png
 //   node tools/swap-letterhead-logo.js udot path/to/new-logo.png --dry-run
+//   node tools/swap-letterhead-logo.js udot path/to/product-mark.png --drawing 2
+//
+// --drawing N picks the Nth picture in header1.xml (default 1, the client or
+// firm logo). On Sunrise Alt and UDOT the 2nd is the product mark (Cirrus Cc,
+// formerly Horizon COMPASS); the Sunrise template's letterhead is one banner
+// image with no product mark, so it has no 2nd drawing and the tool refuses.
 //
 // The three letterhead templates live in index.html as base64 .docx blobs
 // (window._piDocxTemplate / _piDocxTemplateUdot / _piDocxTemplateSunriseAlt).
@@ -34,6 +40,8 @@ const BRANDS = {
 
 const [brand, logoPath, ...flags] = process.argv.slice(2);
 const dryRun = flags.includes('--dry-run');
+const drawingIdx = flags.includes('--drawing') ? Number(flags[flags.indexOf('--drawing') + 1]) : 1;
+if (!(drawingIdx >= 1)) { console.error('--drawing takes a number, 1 or more'); process.exit(2); }
 
 function die(msg) { console.error('✗ ' + msg); process.exit(1); }
 
@@ -163,7 +171,7 @@ const entries = unzip(Buffer.from(m[1], 'base64'));
 
 // Which media part is the brand logo? Follow header1.xml's FIRST drawing to its
 // relationship, rather than guessing at a file name — image numbering differs
-// between the three templates and the Horizon COMPASS mark sits in the same
+// between the three templates and the product mark (Cirrus Cc) sits in the same
 // header.
 const header = entries.find(e => e.name === 'word/header1.xml');
 const rels   = entries.find(e => e.name === 'word/_rels/header1.xml.rels');
@@ -171,9 +179,16 @@ if (!header || !rels) die('template has no word/header1.xml — is this the righ
 const headerXml = header.data.toString('utf8');
 const relsXml   = rels.data.toString('utf8');
 
-const embeds = [...headerXml.matchAll(/r:embed="([^"]+)"/g)].map(x => x[1]);
-if (!embeds.length) die('header1.xml references no images');
-const relId = embeds[0];
+// Everything below works on ONE drawing block, found by position.
+const drawBlocks = [...headerXml.matchAll(/<w:drawing>[\s\S]*?<\/w:drawing>/g)];
+if (!drawBlocks.length) die('header1.xml has no <w:drawing> block');
+if (drawingIdx > drawBlocks.length) {
+  die(`--drawing ${drawingIdx}: header1.xml has only ${drawBlocks.length} picture(s)`);
+}
+const chosenDraw = drawBlocks[drawingIdx - 1];
+const embedM = chosenDraw[0].match(/r:embed="([^"]+)"/);
+if (!embedM) die(`drawing ${drawingIdx} references no image`);
+const relId = embedM[1];
 const target = (relsXml.match(new RegExp(`Id="${relId}"[^>]*Target="([^"]+)"`)) || [])[1];
 if (!target) die(`relationship ${relId} not found in header1.xml.rels`);
 const partName = 'word/' + target.replace(/^\/?/, '');
@@ -191,9 +206,9 @@ if (newSize.type !== oldSize.type) {
 }
 
 // ── resize the drawing to the new aspect ratio ──────────────────────────────
-const extents = [...headerXml.matchAll(/<wp:extent cx="(\d+)" cy="(\d+)"\/>/g)];
-if (!extents.length) die('header1.xml has no <wp:extent> to resize');
-const [, oldCxStr, oldCyStr] = extents[0];
+const extM = chosenDraw[0].match(/<wp:extent cx="(\d+)" cy="(\d+)"\/>/);
+if (!extM) die(`drawing ${drawingIdx} has no <wp:extent> to resize`);
+const [, oldCxStr, oldCyStr] = extM;
 const oldCx = Number(oldCxStr), oldCy = Number(oldCyStr);
 const newCx = Math.round(oldCy * (newSize.w / newSize.h));   // keep the height
 const newCy = oldCy;
@@ -208,7 +223,7 @@ console.log(`aspect     : ${(oldSize.w/oldSize.h).toFixed(2)}:1 → ${(newSize.w
 
 if (dryRun) { console.log('\n--dry-run: nothing written.'); process.exit(0); }
 
-// Only the FIRST drawing — the second is the Horizon COMPASS mark. Patched by
+// Only the chosen drawing (--drawing, default the first). Patched by
 // POSITION, not by assuming the inner <a:ext> textually equals the old
 // <wp:extent> — that assumption used to be this tool's own bug. Word draws a
 // picture from TWO places that are supposed to agree: <wp:extent> on the
@@ -226,9 +241,7 @@ if (dryRun) { console.log('\n--dry-run: nothing written.'); process.exit(0); }
 // FIRST <w:drawing>...</w:drawing> block) can't have this failure mode: it
 // either finds exactly one of each, or it dies instead of silently doing
 // half the job.
-const drawBlocks = [...headerXml.matchAll(/<w:drawing>[\s\S]*?<\/w:drawing>/g)];
-if (!drawBlocks.length) die('header1.xml has no <w:drawing> block');
-const firstDraw = drawBlocks[0];
+const firstDraw = chosenDraw;
 const drawStart = firstDraw.index;
 const drawEnd = drawStart + firstDraw[0].length;
 const drawBlock = firstDraw[0];
@@ -267,7 +280,7 @@ if (!rh.includes(`cx="${newCx}"`)) die('the resized extent did not survive the r
 // The check that would have caught the original bug: both extents inside the
 // logo's drawing block must describe the SAME aspect ratio, or Word distorts
 // the picture regardless of which one "looks" right in a diff.
-const rDraw = ([...rh.matchAll(/<w:drawing>[\s\S]*?<\/w:drawing>/g)])[0][0];
+const rDraw = ([...rh.matchAll(/<w:drawing>[\s\S]*?<\/w:drawing>/g)])[drawingIdx - 1][0];
 const rWp = rDraw.match(/<wp:extent cx="(\d+)" cy="(\d+)"\/>/);
 const rA  = rDraw.match(/<a:ext cx="(\d+)" cy="(\d+)"\/>/);
 const wpRatio = Number(rWp[1]) / Number(rWp[2]);

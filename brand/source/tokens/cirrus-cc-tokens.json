@@ -1,0 +1,17 @@
+{
+  "color": {
+    "ink": "#141A24",
+    "cirrus": "#1F7A9C",
+    "sky": "#35A6C9",
+    "paper": "#F4F2ED",
+    "haze": "#8A93A0",
+    "amber": "#C4862F",
+    "pointer": "#A4302A",
+    "pointerOnDark": "#C24A42",
+    "slate": "#5A6573"
+  },
+  "font": {
+    "display": "Michroma",
+    "body": "Saira"
+  }
+}

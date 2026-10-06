@@ -1,4 +1,6 @@
-# Horizon COMPASS — Product Feature Summary
+# Cirrus Cc — Product Feature Summary
+
+*Formerly Horizon COMPASS. Tagline: "Consultant to client, in real time." Web: cirruscc.com.*
 
 *Current as of October 4, 2026. A plain-language summary of what the product does today, for use as source material for the product website and sales materials. Developer documentation lives in `CLAUDE.md`.*
 
@@ -6,7 +8,7 @@
 
 ## What it is
 
-Horizon COMPASS is the system of record for **public involvement (PI) consultants** working on FHWA/NEPA-regulated transportation and infrastructure projects. Its users are the consultant's own team, not the public. It handles three jobs in one place:
+Cirrus Cc is the system of record for **public involvement (PI) consultants** working on FHWA/NEPA-regulated transportation and infrastructure projects. Its users are the consultant's own team, not the public. It handles three jobs in one place:
 
 1. **The daily PI workflow.** Contacts, every logged conversation, follow-ups, issues, commitments, deliverables, events and right-of-way outreach.
 2. **Compliance documentation.** NEPA classification and checklists, comment periods, hearing notice timing, Title VI / LEP / Environmental Justice tracking, and reports that hold up as a record.
@@ -184,6 +186,6 @@ The final deliverable to the client at project close. For UDOT, this is the cons
 ## Notes for website copy
 
 - **Interactions are never AI-generated.** The AI drafts report prose from facts the app computes; people enter the records and review the drafts.
-- **Position it as complementary** to agency-side engagement platforms (for example PublicInput or Granicus). Those tools help the agency reach the public; Horizon COMPASS is the consultant's own workspace and their reporting line to the client.
+- **Position it as complementary** to agency-side engagement platforms (for example PublicInput or Granicus). Those tools help the agency reach the public; Cirrus Cc is the consultant's own workspace and their reporting line to the client.
 - **Check competitive claims before publishing.** Internal notes say no researched competitor offers NEPA-specific workflows, a consultant-to-client portal or a draw-a-shape stakeholder query, but that was a June 2026 review. Confirm it before printing "only" or "first".
 - **Use firm-neutral language** where the site targets other firms. Some features (the Sunrise letterheads, the UDOT close-out format) are specific to Sunrise and UDOT today.

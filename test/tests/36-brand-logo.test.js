@@ -94,7 +94,7 @@ module.exports = {
 
       // header1.xml pins the image to an explicit box, so swapping the bytes
       // without moving the extent lets Word stretch the art to the old shape.
-      t.gt(docx.extents.length, 1, 'the header band holds the logo and the COMPASS mark');
+      t.gt(docx.extents.length, 1, 'the header band holds the logo and the Cirrus Cc mark');
       const box = docx.extents[0];
       const drawn = box.cx / box.cy, actual = srcW / srcH;
       t.ok(Math.abs(drawn - actual) < 0.02,
@@ -102,7 +102,9 @@ module.exports = {
            + `${actual.toFixed(2)}:1) — the box it replaced was 3.08:1`);
       const dpi = srcW / (box.cx / 914400);
       t.ok(dpi >= 300, `it prints at ${Math.round(dpi)} DPI, above the 300 DPI standard`);
-      t.eq(docx.extents[1].cx, 2683017, 'and the COMPASS mark beside it was not disturbed');
+      // The product mark beside it (Cirrus Cc since Oct 2026) is its own swap,
+      // checked byte for byte in test 65; here only that it kept its height.
+      t.eq(docx.extents[1].cy, 510639, 'and the Cirrus Cc mark beside it kept its height');
 
       // The inner <a:ext> must agree with the outer <wp:extent> — a
       // real, live mismatch here (3.88:1 outer vs 3.08:1 inner, the outer

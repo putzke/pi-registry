@@ -1,4 +1,4 @@
-# Horizon COMPASS — Claude Code Context
+# Cirrus Cc (formerly Horizon COMPASS) — Claude Code Context
 
 ## What this app is
 Single-file FHWA/NEPA public involvement (PI) compliance platform. All code lives in **`index.html`** (~13,600 lines). No build step. Deployed on **GitHub Pages** at `https://putzke.github.io/pi-registry/`. Backend is **Supabase** (REST API, no Supabase JS client).
@@ -62,6 +62,45 @@ Other files: `mobile.html` (mobile companion), `importer.html` (bulk data import
   focused, or a local write in flight / just made (`_writesInFlight`,
   `_lastLocalWriteAt` — both set in `_sbWrite`). Replaces arrays, so no memory
   growth. Views not in `_viewTables` (settings, map, reports) don't auto-refresh.
+
+## Brand: Cirrus Cc (renamed from Horizon COMPASS, Oct 2026)
+Full rename, from the Claude Design handoff kept verbatim in `brand/source/`
+(its `README.md` has the rules: name "Cirrus Cc", never "CC"; caps contexts
+"CIRRUS Cc"; tagline "Consultant to client, in real time"; tokens; minimum
+sizes). **"PI Registry"**, an older name still in some visible strings, went too.
+- **`tools/build-brand.py`** writes `brand/*.svg`: the handoff's symbol, favicon
+  and app icon with their 8 KB C2PA metadata stripped, and the lockups and
+  wordmarks **rebuilt from the reference HTML's spacing rules with the text
+  outlined** (Michroma / Saira 300 shaped by HarfBuzz; `pip install fonttools
+  uharfbuzz`). Not the handoff's lockup SVGs: those set live text at
+  approximate positions, and with the real fonts the horizontal lockup's
+  subtitle overran its viewBox ("STAKEHOLDER MANAGEME"). Outlined text is also
+  the only kind an `<img src="data:…svg">`, a print view or Word can draw —
+  none of them can load a web font. Verified by overlaying the reference HTML,
+  rendered with the real fonts, in difference mode.
+- **`tools/render-brand-png.js`** writes `brand/png/`: the letterhead mark
+  (2100 px, transparent) and the 180 px apple-touch tile (square and
+  full-bleed — iOS rounds it and paints transparency black).
+- Where each copy lives (all asserted byte-equal to `brand/` by
+  `test/tests/65-cirrus-brand.test.js`): favicon in all four apps; desktop
+  sidebar + sign-in = stacked reversed lockup inline (sidebar 186 px wide, the
+  width that keeps the subtitle at the brief's 8 px minimum); quick-report
+  header `window._srHeader` = horizontal light lockup at 70 px tall; mobile
+  header, portal top bar = reversed wordmark only and importer header = light
+  wordmark (the brief: wordmark only on bars under ~200 px); sign-in screens
+  carry the tagline in Saira italic (loaded from Google Fonts, the only live
+  brand text); the portal top bar has the Sky "You're cc'd on this project"
+  indicator (hidden under 768 px). **.docx**: `image3.png` in Sunrise Alt and
+  UDOT via `node tools/swap-letterhead-logo.js <brand> brand/png/cirrus-cc-lockup-horizontal-light.png --drawing 2`
+  (the tool now takes `--drawing N`; it used to touch only the first picture).
+  The Sunrise template's letterhead is one banner with no product mark.
+- **Deliberately NOT renamed:** localStorage keys `compass_claude_api_key_v2` /
+  `compass_report_branding` (renaming signs everyone out of their saved AI key
+  and letterhead choice), the close-out intake's internal `kind: 'compass'`,
+  Supabase names, the repo name, and `putzke.github.io/pi-registry/…` URLs —
+  every portal link already sent points there; move them only once
+  `app.cirruscc.com` exists. Demo-seed portal logins still use
+  `@horizoncompass.com` addresses — move them to a domain you own.
 
 ### State
 ```javascript
@@ -365,7 +404,7 @@ there was nothing to count.
   withheld**: a portal token link is unauthenticated, anyone holding the URL can
   read it, and the owners are private individuals, so the client sees an owner
   COUNT per parcel. Internal parcel `notes` are withheld for the same reason.
-  The consultant has both in COMPASS. Guarded by `test/tests/04-client-portal.test.js`,
+  The consultant has both in Cirrus Cc. Guarded by `test/tests/04-client-portal.test.js`,
   which asserts the owner's surname does NOT appear in the rendered section.
 - **Map layer — BUILT (Aug 2026).** `S.mapLayer` (`contacts` | `parcels` |
   `both`) toggles a parcel layer on the Map view. Parcels are SQUARES coloured
@@ -484,7 +523,7 @@ there was nothing to count.
     LibreOffice is broken in the dev container and rejects even a textbook
     minimal .xlsx, so it is NOT a usable validator here.
   - **Google Sheets sync is NOT built and is staged deliberately.** Push
-    (COMPASS -> Sheet, `drive.file` scope, client-side OAuth) is safe; a
+    (Cirrus Cc -> Sheet, `drive.file` scope, client-side OAuth) is safe; a
     read-back must be a REVIEWED import (diff -> human accepts), never
     bidirectional auto-sync — the register is a compliance record and an
     unattended writer has no attribution. Needs an OAuth client ID from Jeff.
@@ -778,7 +817,8 @@ twice and neither copy reads the other:
 - **`window._srUdotLogo`** (~line 498) — a data: URI, used by `_rptBrandHeader()`
   for the HTML quick reports, the print package and the archived-report preview.
 - **`word/media/image2.png` inside `window._piDocxTemplateUdot`** — the .docx.
-  (`image3.png` in the same header is the Horizon COMPASS mark. Do not touch it.)
+  (`image3.png` in the same header is the product mark — Cirrus Cc since Oct 2026,
+  swapped with `--drawing 2`; see "Brand: Cirrus Cc". Leave it alone when swapping UDOT.)
 
 A client can receive both from one project on the same day, so a swap applied to
 one and not the other ships two different UDOT logos under one firm's name. That
@@ -792,7 +832,7 @@ The data: URI is a plain base64 replace. **The .docx half is not just a byte
 swap:** `header1.xml` pins the image to an explicit `<wp:extent>` in EMU, so a
 replacement with a different aspect ratio gets stretched to the old box. The
 tool keeps the template's HEIGHT (523745 EMU / 0.57", which is what keeps the
-logo level with the COMPASS mark) and recomputes the width — 1615044 → 2030019
+logo level with the product mark) and recomputes the width — 1615044 → 2030019
 EMU here, since the new mark is 3.88:1 against the old 3.08:1. It finds the part
 by following `header1.xml`'s first drawing through its relationship, never by
 file name (numbering differs across the three templates), and refuses a format
@@ -926,7 +966,7 @@ internal narrative pointers and is a working draft, never client-facing.
 - **Counts are NEVER stored.** `_closeoutFacts(projId)` computes interactions,
   inbound calls (Phone · Incoming), stakeholders, archived PI reports, events,
   issues, commitments kept, deliverables live. The intake only holds what
-  COMPASS cannot know. A typed **override** is allowed per metric and is to be
+  Cirrus Cc cannot know. A typed **override** is allowed per metric and is to be
   footnoted in the report as the consultant's figure.
 - **Only recipient and signature are required.** An empty optional section reads
   "Left out of the report" — it is omitted, never padded. `_coSectionState` is
@@ -937,7 +977,7 @@ internal narrative pointers and is a working draft, never client-facing.
   and the intake then asks for a typed count and says why.
 - **Delivery-against-scope wording defaults from the deliverable's status**
   (`_coDefaultWording`) so an untouched row can never claim "Delivered" for a
-  deliverable COMPASS has as Not started. Saved per deliverable id under
+  deliverable Cirrus Cc has as Not started. Saved per deliverable id under
   `intake.deliverables[id] = {wording, evidence}`.
 - New close-outs carry the **signature block** from this user's most recent
   close-out (signature keys only), suggest the **UDOT region** from the
@@ -1015,7 +1055,7 @@ is no longer used.
 - **PI Program at a Glance** (always): duration, PI reports, stakeholders,
   interactions + span, inbound calls, issues + resolved, events, commitments
   kept, website visits (last intake reading), subscribers, email updates,
-  ROW parcels, custom metrics. **Every figure not counted by COMPASS** (an
+  ROW parcels, custom metrics. **Every figure not counted by Cirrus Cc** (an
   override, an intake reading, a typed count, a custom metric) is marked **†**
   with a footnote, so the table says where each number came from.
 - **Commitments to the Public** (only if any): counted intro sentence + table
@@ -1041,12 +1081,12 @@ is no longer used.
 Each highlight box has **✦ AI Draft**; the PI Highlights box has **✦ Draft all
 highlights**. Same discipline as the PI report editor — facts computed in code,
 the model narrates, never counts.
-- `_coHighlightFacts(co, hid)` → `{lines, notes}`. `lines` come from COMPASS +
+- `_coHighlightFacts(co, hid)` → `{lines, notes}`. `lines` come from Cirrus Cc +
   the intake, per heading (`CO_HL_TASKS` holds each heading's task and word
   budget, taken from the reference reports: outreach ~180, website ~120,
   concerns ~120, coord ~70, email ~60, traffic ~60, social ~50). `notes` = what
   is already typed in that box, sent as AUTHORITATIVE ("include every point").
-  That is how facts COMPASS has no record of (a traffic-app alert, a
+  That is how facts Cirrus Cc has no record of (a traffic-app alert, a
   press-release template) reach the paragraph: type two lines, then draft.
   Re-drafting a box therefore rewrites the current text, keeping its points.
 - **Web and email addresses are never in the facts** — they print as links
@@ -1703,7 +1743,7 @@ worse QuestionPro and repeats the "don't compete on engagement scale" trap.
 **What IS strategically sound — an ingestion bridge, not an engine.** Every
 survey tool is generic; NONE ties responses to a NEPA comment period, Title
 VI/LEP/EJ documentation, or the consultant's system of record. That linkage is
-the COMPASS thesis. So: pull survey responses via API into
+the Cirrus Cc thesis. So: pull survey responses via API into
 `pi_public_comments` / `pi_comment_periods`, carrying the equity flags we
 already have (`lep`/`underserved`/`equityFormSubmitted`) + response-status
 tracking → a NEPA-documentable compliance record no survey vendor produces.
@@ -1722,7 +1762,7 @@ whatever tool the firm already runs.
 **Optional native piece (only if validation demands it):** a single narrow
 purpose-built **meeting feedback / equity-intake form** (Title VI/LEP/EJ tied to
 a specific meeting) — NOT a form builder. If it ever goes native, house it in a
-separate **Horizon Interactive Technologies** app to keep COMPASS's focus clean.
+separate **Horizon Interactive Technologies** app to keep Cirrus Cc's focus clean.
 
 **GATE (do before any build):** validate with 3–5 PI managers at other firms —
 ask specifically *"when you collect public comment during a NEPA comment period,
@@ -1853,14 +1893,14 @@ Granicus, Syrenis SMART, Citizen Space (UK compliance/consultation). **None of
 these — including Simply Stakeholders — are purpose-built for FHWA/NEPA-
 regulated U.S. transportation PI.** No NEPA stage tagging, no U.S. Title VI/EJ
 compliance fields, no UDOT-specific workflow. That gap is real and is Horizon
-COMPASS's defensible niche.
+Cirrus Cc's defensible niche.
 
 **Core distinction driving all product decisions:** PublicInput is built for
-the *agency* to collect public input at scale. Horizon COMPASS is built for
+the *agency* to collect public input at scale. Cirrus Cc is built for
 the *PI consultant* (the Sunrise-style firm) to manage stakeholder
 relationships, commitments, issues, and FHWA/NEPA compliance documentation
 as their actual daily internal workflow. Compliance in PublicInput is a
-byproduct of engagement data; in Horizon COMPASS it is the product itself.
+byproduct of engagement data; in Cirrus Cc it is the product itself.
 
 **Differentiation priorities (do NOT build toward #1):**
 1. Do not compete on public engagement scale — no mass SMS/social campaigns, no survey tooling. PublicInput owns this; not worth contesting.
@@ -1869,7 +1909,7 @@ byproduct of engagement data; in Horizon COMPASS it is the product itself.
 4. AI report drafting (`_claudeNarrative()`) is a genuine wedge — no competitor researched offers this.
 5. Win on price/speed of adoption vs. PublicInput's agency procurement cycle — sell to the consultant/firm, not the state.
 
-**Strategic framing for any UDOT-facing pitch:** position Horizon COMPASS as
+**Strategic framing for any UDOT-facing pitch:** position Cirrus Cc as
 *complementary to* existing PublicInput contracts a DOT may already have,
 not a replacement. Full positioning brief: `HC_Competitive_Positioning_Brief.docx`
 (not in this repo — held by Jeff).
@@ -1878,7 +1918,7 @@ not a replacement. Full positioning brief: `HC_Competitive_Positioning_Brief.doc
 1. No researched competitor is purpose-built for FHWA/NEPA-regulated U.S.
    transportation PI — this gap is real and currently unaddressed.
 2. The builder is the buyer — every competitor was built by a software
-   company selling to PI professionals from the outside; Horizon COMPASS is
+   company selling to PI professionals from the outside; Cirrus Cc is
    built by a working PI professional living the daily workflow. This shows
    up in design details (report distribution groups, anonymous contact
    logging, bulk import) shaped by real friction, not guesswork.
@@ -1904,7 +1944,7 @@ served well by competitors):** influence map / stakeholder engagement
 matrix visualizations, sentiment tracking / bulk sentiment update,
 group/coalition management. Do NOT build mass public engagement tooling
 (surveys, SMS blasts, social monitoring, resident-facing input portals) —
-that's PublicInput/Granicus/EngagementHQ territory; Horizon COMPASS stays
+that's PublicInput/Granicus/EngagementHQ territory; Cirrus Cc stays
 internal-facing.
 
 ## PI Client Portal — BUILT (`client-portal.html`, ~1,470 lines)
@@ -2420,7 +2460,7 @@ single current trend, prior ones kept as history.
 1. ✅ Migration: `sql/2026-07-06_portal_shared_reports.sql` — add `client_visible`
    + idempotent grants. **CONFIRMED applied 2026-07-24** — verified all three parts
    present (client_visible column, `anon_portal_read` policy, anon UPDATE grant).
-2. ✅ COMPASS Report Archive: "Share with client" toggle per archived report
+2. ✅ Cirrus Cc Report Archive: "Share with client" toggle per archived report
    (`toggleReportShared()` flips `client_visible`); trend button → generate →
    editable textarea → "Publish trend to client portal" (`publishClientTrend()`,
    keeps human gate). Client-portal status line in archive header.
@@ -2474,8 +2514,8 @@ already the survey vendor is stronger evidence than 3–5 interviews. Keep the
 build thin anyway — it validates the need on one project, not industry-wide.
 
 **Framing — do NOT rebuild ESRI's analytics.** ESRI answers "what did the public
-say" and will do it better. COMPASS answers "what did we do about it, and can we
-prove it to FHWA". ESRI is the instrument; COMPASS is the system of record.
+say" and will do it better. Cirrus Cc answers "what did we do about it, and can we
+prove it to FHWA". ESRI is the instrument; Cirrus Cc is the system of record.
 
 **Locked design decisions:**
 1. **Target table is `pi_public_comments`, NOT `pi_interactions`.** It already
@@ -2505,7 +2545,7 @@ prove it to FHWA". ESRI is the instrument; COMPASS is the system of record.
 ## FUTURE — Phone Hotline Voicemail Transcription (in development, vendor TBD)
 
 Automatically transcribe project phone hotline voicemails and log them as
-interaction records in Horizon COMPASS. Construction-phase PI hotlines are
+interaction records in Cirrus Cc. Construction-phase PI hotlines are
 often required by UDOT or the contractor; currently voicemails require
 manual transcription and re-entry into the PI log — a significant time drain.
 
@@ -2578,7 +2618,7 @@ Always reference this before suggesting new features or architectural changes.
 
 ---
 
-### WHO HORIZON COMPASS IS COMPETING AGAINST
+### WHO HORIZON Cirrus Cc IS COMPETING AGAINST
 
 **1. PublicInput (direct competitor — most important)**
 - Built for the AGENCY to collect public input at scale (surveys, SMS, hotlines,
@@ -2614,7 +2654,7 @@ PublicInput  = built for the AGENCY to manage public input at scale
 Granicus     = built for the AGENCY to talk to residents
 Simply Stakeholders = general stakeholder relationship management
 
-Horizon COMPASS = built for the PI CONSULTANT's internal workflow +
+Cirrus Cc = built for the PI CONSULTANT's internal workflow +
                   FHWA/NEPA compliance documentation +
                   live reporting back to the PI consultant's CLIENT
 

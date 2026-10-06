@@ -88,7 +88,7 @@ module.exports = {
       t.ok(/Needs/.test(intake.recipPill), 'recipient is required and flagged while empty: ' + intake.recipPill);
       t.ok(/Complete/.test(intake.sigPill), 'signature already complete from the carried-forward name');
       t.eq(intake.newsPill, 'Left out of the report', 'an untouched optional section is left out, not failed');
-      t.eq(intake.metricsPill, 'Counted by COMPASS', 'metrics need nothing typed');
+      t.eq(intake.metricsPill, 'Counted by Cirrus Cc', 'metrics need nothing typed');
       t.ok(intake.reline.includes('Logan City 400 North Reconstruction'), 'Re: line previews from the project');
 
       // ── edits autosave ───────────────────────────────────────────────────

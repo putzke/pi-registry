@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Cirrus Cc symbol" viewBox="0 0 100 100"><circle cx="50" cy="50" r="37" fill="none" stroke="#141A24" stroke-width="3"></circle>
+<line x1="14" y1="50" x2="86" y2="50" stroke="#141A24" stroke-width="1.6"></line>
+<path d="M50 13 A37 37 0 0 1 84.5 36.5" fill="none" stroke="#141A24" stroke-width="7.5" stroke-linecap="round"></path>
+<path d="M42 4.8 A46 46 0 0 1 89.5 27 Q93 33 98.5 31" fill="none" stroke="#141A24" stroke-width="3.4" stroke-linecap="round"></path>
+<polygon points="65.6,34.4 52.97,52.97 47.03,47.03" fill="#141A24"></polygon>
+<polygon points="38,62 52.97,52.97 47.03,47.03" fill="none" stroke="#141A24" stroke-width="2" stroke-linejoin="round"></polygon>
+<circle cx="50" cy="50" r="4" fill="#141A24"></circle>
+</svg>

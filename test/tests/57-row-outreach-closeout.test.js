@@ -150,7 +150,7 @@ module.exports = {
       }));
       t.ok(pv.heads.includes('Metric|Result'), 'Program at a Glance is a table');
       t.ok(pv.text.includes('Right-of-way parcels') && pv.text.includes('Door hangers') && pv.text.includes('240 †'),
-        'it includes parcels and a custom metric, the custom one marked † as not counted in COMPASS');
+        'it includes parcels and a custom metric, the custom one marked † as not counted in Cirrus Cc');
       t.ok(pv.text.includes('† Figure from the PI team'), 'with the † footnote');
       t.ok(pv.text.includes('Right-of-Way & Property Owner Outreach:') && /In the report/.test(pv.rowPill), 'the ROW section is in the report');
       t.ok(pv.text.includes('We traced every parcel to the party who could sign.'), 'with its narrative');

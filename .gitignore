@@ -9,3 +9,4 @@ package-lock.json
 # Scratch output from the test harness (screenshots, preview builds)
 test/_*.png
 preview.html
+tools/.font-cache/

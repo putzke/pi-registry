@@ -2328,6 +2328,12 @@ any user can enroll their own.
   truncate — the login every role-switched test (47, 49, 57, 62, 66) uses.
 - Guarded by `test/tests/66-two-step-signin.test.js` (stranger sees nothing,
   cannot self-grant, cannot read report files; staff and clients unchanged).
+- **RUN LIVE 2026-10-06** (pasted in the SQL Editor; the Supabase connector
+  times out on writes). Verified through the connector: 25/25 RLS tables carry
+  the rule, the storage rule exists, three staff logins listed; a role-switched
+  stranger session reads 0 projects / contacts / interactions / report files
+  while staff reads 6 / 257 / 969. `demo@horizoncompass.com` auth user deleted
+  the same paste. `sunriseinput@gmail.com` is a portal-TEST login, not staff.
 
 ### Two-step sign-in — Microsoft Authenticator (Oct 2026, OPTIONAL for now)
 Supabase Auth MFA (TOTP) over REST. Microsoft Authenticator gives a 6-digit

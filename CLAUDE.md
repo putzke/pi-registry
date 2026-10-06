@@ -97,13 +97,21 @@ sizes). **"PI Registry"**, an older name still in some visible strings, went too
 - **Deliberately NOT renamed:** localStorage keys `compass_claude_api_key_v2` /
   `compass_report_branding` (renaming signs everyone out of their saved AI key
   and letterhead choice), the close-out intake's internal `kind: 'compass'`,
-  Supabase names, the repo name, and `putzke.github.io/pi-registry/…` URLs —
-  every portal link already sent points there; move them only once
-  `app.cirruscc.com` exists (checklist below). Demo-seed portal logins use
+  Supabase names and the repo name. App links moved to `app.cirruscc.com` on
+  2026-10-06 (below); old `putzke.github.io/pi-registry/…` links forward. Demo-seed portal logins use
   `@cirruscc.com` addresses since Oct 2026 (the seed still purges the old
   `@horizoncompass.com` ones; the live rows were renamed in place).
 
-### Switching to app.cirruscc.com (prepared Oct 2026, NOT yet switched)
+### Switching to app.cirruscc.com — SWITCHED 2026-10-06
+Done: Wix DNS `CNAME app → putzke.github.io` and the GitHub domain-verification
+TXT `_github-pages-challenge-putzke` (both added through the Wix connector's
+account-level DNS API, which works; the root and `www` records still point at
+Wix), `cirruscc.com` verified on GitHub, the repo's custom domain set with HTTPS
+enforced (GitHub committed `CNAME`; test 65 asserts it), `APP_BASE_URL` flipped
+in both files. Steps 3–4 below (Supabase URL configuration, Maps key referrer)
+are Jeff's in their dashboards. The original checklist, kept for reference:
+
+#### The original plan (Oct 2026)
 `cirruscc.com` is owned; DNS is not pointed yet. The app address is ONE constant,
 `APP_BASE_URL`, in `index.html` (portal share links) and `client-portal.html`
 (`PORTAL_URL`, the sign-in email's redirect), asserted equal by test 65.

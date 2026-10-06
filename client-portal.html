@@ -390,11 +390,10 @@
 <script>
 const SUPA_URL  = 'https://ncfbblhlsiglxkoiounv.supabase.co';
 const SUPA_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5jZmJibGhsc2lnbHhrb2lvdW52Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0MTUzOTMsImV4cCI6MjA5NDk5MTM5M30.-fRI1QGkr1teN0sFvl25Uq7U38Jq1SAc6heIJvOud2Q';
-// Where the apps are served (same constant as index.html). Switch to
-// 'https://app.cirruscc.com' only once that address is live: PORTAL_URL is the
-// redirect a sign-in email sends the client to, so it must resolve and be in
-// Supabase's allowed redirect URLs.
-const APP_BASE_URL = 'https://putzke.github.io/pi-registry';
+// Where the apps are served (same constant as index.html). PORTAL_URL is the
+// redirect a sign-in email sends the client to, so it must be in Supabase's
+// allowed redirect URLs (Authentication → URL Configuration).
+const APP_BASE_URL = 'https://app.cirruscc.com';
 const PORTAL_URL = APP_BASE_URL + '/client-portal.html';
 // Client-facing support contact shown on the "no access yet" screen. Change to
 // your business/client-facing email.

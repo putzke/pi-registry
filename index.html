@@ -531,12 +531,11 @@ window._srUdotLogo = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAA+gAAAECCAYA
 // ── DB ────────────────────────────────────────
 // ── SUPABASE CONFIG ────────────────────────────────────────────────
 const SUPA_URL = 'https://ncfbblhlsiglxkoiounv.supabase.co';
-// Where the apps are served. Switch to 'https://app.cirruscc.com' only after
-// DNS, the GitHub Pages custom domain and Supabase's redirect URLs are set up
-// (CLAUDE.md, "Switching to app.cirruscc.com"); before that every portal link
-// copied would point at an address that does not resolve. client-portal.html
-// has the same constant.
-const APP_BASE_URL = 'https://putzke.github.io/pi-registry';
+// Where the apps are served — portal share links are built from it.
+// The custom domain since Oct 2026; the old GitHub Pages address forwards
+// here, so links sent before the move still work. client-portal.html has the
+// same constant (test 65 asserts they agree).
+const APP_BASE_URL = 'https://app.cirruscc.com';
 // ── MIGRATION NOTE ─────────────────────────────────────────────────
 // The isAnonymous flag has been removed from stakeholder entry.
 // Run this SQL in Supabase to clean up existing records:

@@ -5,7 +5,7 @@
 // project data, leaving the app completely empty.
 //
 // HOW TO RUN:
-//   1. Open the live app (https://putzke.github.io/pi-registry/) and
+//   1. Open the live app (https://app.cirruscc.com/) and
 //      let it fully load.
 //   2. Open DevTools (F12) → Console tab.
 //   3. Paste this entire file and press Enter.

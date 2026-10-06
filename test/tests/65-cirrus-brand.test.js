@@ -69,7 +69,9 @@ module.exports = {
     // app.cirruscc.com is a one-line change made the day DNS is live.
     const base = a => (src[a].match(/const APP_BASE_URL = '([^']+)'/) || [])[1];
     t.ok(base('index.html') && base('index.html') === base('client-portal.html'), 'index.html and the portal agree on APP_BASE_URL');
-    for (const a of apps) t.eq((src[a].match(/putzke\.github\.io/g) || []).length, a === 'index.html' || a === 'client-portal.html' ? 1 : 0, `${a}: the address appears only in APP_BASE_URL`);
+    t.eq(base('index.html'), 'https://app.cirruscc.com', 'the apps live at app.cirruscc.com');
+    t.eq(fs.readFileSync(path.join(root, 'CNAME'), 'utf8').trim(), 'app.cirruscc.com', 'and GitHub Pages serves that domain (CNAME file)');
+    for (const a of apps) t.eq((src[a].match(/putzke\.github\.io|app\.cirruscc\.com/g) || []).length, a === 'index.html' || a === 'client-portal.html' ? 1 : 0, `${a}: the address appears only in APP_BASE_URL`);
 
     // ── the .docx letterheads ────────────────────────────────────────────
     const app = await t.open('index.html', { email: 'putzke@demo.test' });

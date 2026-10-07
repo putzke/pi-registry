@@ -5674,8 +5674,8 @@ function sortDeliverables(dels){
     else if(col==='contracted'){av=a.contractedQty||0;bv=b.contractedQty||0;}
     else if(col==='delivered'){av=a.deliveredCount||0;bv=b.deliveredCount||0;}
     else if(col==='progress'){
-      av=String(a.contractedQty>0?Math.round((a.deliveredCount||0)/a.contractedQty*100):(a.progress||0));
-      bv=String(b.contractedQty>0?Math.round((b.deliveredCount||0)/b.contractedQty*100):(b.progress||0));
+      av=String(a.contractedQty>0?Math.round((a.deliveredCount||0)/a.contractedQty*100):-1);
+      bv=String(b.contractedQty>0?Math.round((b.deliveredCount||0)/b.contractedQty*100):-1);
     }
     else if(col==='status'){av=a.status||'';bv=b.status||'';}
     else if(col==='due'){av=a.dueDate||'9999';bv=b.dueDate||'9999';}
@@ -6108,8 +6108,8 @@ function renderDelScope(pF){
                   <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" style="width:8px;height:8px"><path d="M5 2v6M2 5h6"/></svg>
                 </button>
               </div>
-              <div class="del-pbar" title="${isOver2?'+'+overAmt2+' over contracted':''}" style="width:50px"><div class="del-pbar-fill ${isOver2?'amber':pct2===100?'done':pct2>75?'amber':''}" style="width:${pct2}%"></div></div>
-              <span style="font-size:11px;color:${isOver2?'var(--amber)':'var(--slate)'}">${isOver2?rawPct2+'%':pct2+'%'}</span>
+              ${_delOpenEnded(d)?_delNoTargetHTML(''):`<div class="del-pbar" title="${isOver2?'+'+overAmt2+' over contracted':''}" style="width:50px"><div class="del-pbar-fill ${isOver2?'amber':pct2===100?'done':pct2>75?'amber':''}" style="width:${pct2}%"></div></div>
+              <span style="font-size:11px;color:${isOver2?'var(--amber)':'var(--slate)'}">${isOver2?rawPct2+'%':pct2+'%'}</span>`}
             </div></td>
             <td><div style="display:flex;align-items:center;gap:4px"><span class="badge badge-btn ${d.status==='Complete'?'b-green':d.status==='In progress'?'b-sky':d.status==='On hold'?'b-amber':d.status==='Cancelled'?'b-red':'b-gray'}" style="font-size:11px">${d.status}</span>${isOver2?'<span class="badge b-amber" style="font-size:10px" title="Delivered exceeds contracted quantity">+'+overAmt2+' over</span>':''}</div></td>
             <td style="font-size:12px;color:var(--slate)">${d.scopeType==='recurring'?d.freq:d.milestoneStart||'—'}</td>
@@ -6296,7 +6296,7 @@ function renderDelAll(pF){
               <span class="ictr-val">${d.deliveredCount||0}</span>
               <button class="ictr-btn" onclick="adjDel('${d.id}',1)"><svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" style="width:8px;height:8px"><path d="M5 2v6M2 5h6"/></svg></button>
             </div></td>
-            <td><div style="display:flex;align-items:center;gap:5px"><div class="del-pbar" style="width:60px"><div class="del-pbar-fill ${isOver?'amber':pct===100?'done':''}" style="width:${pct}%"></div></div><span style="font-size:12px;color:${isOver?'var(--amber)':'inherit'}">${isOver?rawPct+'%':pct+'%'}</span></div></td>
+            <td>${_delOpenEnded(d)?_delNoTargetHTML(''):`<div style="display:flex;align-items:center;gap:5px"><div class="del-pbar" style="width:60px"><div class="del-pbar-fill ${isOver?'amber':pct===100?'done':''}" style="width:${pct}%"></div></div><span style="font-size:12px;color:${isOver?'var(--amber)':'inherit'}">${isOver?rawPct+'%':pct+'%'}</span></div>`}</td>
             <td><div style="display:flex;align-items:center;gap:4px"><span class="badge badge-btn ${d.status==='Complete'?'b-green':d.status==='In progress'?'b-sky':d.status==='On hold'?'b-amber':d.status==='Cancelled'?'b-red':'b-gray'}" style="font-size:11px">${d.status}</span>${isOver?'<span class="badge b-amber" style="font-size:10px">+'+overAmt+' over</span>':''}</div></td>
             <td style="font-size:12px;color:var(--slate)">${d.dueDate||'—'}</td>
             <td style="white-space:nowrap"><button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="openDelModal('${d.id}')">Edit</button> <button class="btn btn-xs" style="background:rgba(220,60,60,.15);border-color:rgba(220,60,60,.4);color:#f87171" onclick="deleteDeliverable('${d.id}')">Delete</button></td>
@@ -6348,7 +6348,7 @@ function renderDelAll(pF){
           return`<tr>
             <td style="padding-left:20px"><div style="display:flex;align-items:center;gap:6px"><span style="color:var(--sky-lt);flex-shrink:0">${delGroupIcon(d.type)}</span><span class="badge b-dark" style="font-size:11px">${d.type}</span></div></td>
             <td><span class="badge ${d.scopeType==='recurring'?'b-sky':d.scopeType==='milestone'?'b-purple':'b-gray'}" style="font-size:11px">${d.scopeType}</span></td>
-            <td><div style="display:flex;align-items:center;gap:5px"><div class="del-pbar" style="width:70px"><div class="del-pbar-fill ${isOver?'amber':pct===100?'done':''}" style="width:${pct}%"></div></div><span style="font-size:12px;color:${isOver?'var(--amber)':'inherit'}">${isOver?rawPct+'%':pct+'%'}</span></div></td>
+            <td>${_delOpenEnded(d)?_delNoTargetHTML((d.deliveredCount||0)+' delivered'):`<div style="display:flex;align-items:center;gap:5px"><div class="del-pbar" style="width:70px"><div class="del-pbar-fill ${isOver?'amber':pct===100?'done':''}" style="width:${pct}%"></div></div><span style="font-size:12px;color:${isOver?'var(--amber)':'inherit'}">${isOver?rawPct+'%':pct+'%'}</span></div>`}</td>
             <td><div style="display:flex;align-items:center;gap:4px"><span class="badge badge-btn ${d.status==='Complete'?'b-green':d.status==='In progress'?'b-sky':d.status==='On hold'?'b-amber':d.status==='Cancelled'?'b-red':'b-gray'}" style="font-size:11px">${d.status}</span>${isOver?'<span class="badge b-amber" style="font-size:10px">+'+overAmt+' over</span>':''}</div></td>
             <td style="font-size:12px;color:var(--slate)">${d.dueDate||'—'}</td>
             <td style="white-space:nowrap"><button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="openDelModal('${d.id}')">Edit</button> <button class="btn btn-xs" style="background:rgba(220,60,60,.15);border-color:rgba(220,60,60,.4);color:#f87171" onclick="deleteDeliverable('${d.id}')">Delete</button></td>
@@ -6494,6 +6494,15 @@ function confirmTplDelete(tplId){
   closeM();S.tplEditId=null;
   showToast('Template deleted.');
   renderDeliverables(document.getElementById('main'));
+}
+
+// A deliverable with no contracted quantity ("As needed", "Per phase") has no
+// target, so a percentage of it means nothing. The stored `progress` field the
+// bar used to fall back to was a placeholder saveDel() derives from the status
+// (In progress = 50), never a measurement. Show the count instead.
+function _delOpenEnded(d){ return !(d.contractedQty>0); }
+function _delNoTargetHTML(lead){
+  return `<span style="font-size:11px;color:var(--slate)" title="No contracted quantity, so there is no target to measure a percentage against">${lead?lead+' · ':''}no target</span>`;
 }
 
 function adjDel(id,delta){
@@ -8143,7 +8152,10 @@ function saveDel(){
   const v=id=>document.getElementById(id)?.value||'';
   const vDate=id=>{const val=document.getElementById(id)?.value||'';return val||null;};
   const data={id:S.editId||DB.uid(),projectId:v('f-dp'),type:v('f-dt'),scopeType:v('f-ds'),status:v('f-dst'),contractedQty:parseInt(v('f-dcq'))||0,deliveredCount:parseInt(v('f-ddc'))||0,freq:v('f-dfr'),milestoneStart:v('f-dm1'),milestoneEnd:v('f-dm2'),dueDate:vDate('f-ddu'),distList:v('f-ddl'),notes:v('f-dno')};
-  if(false){return}
+  // Something has been delivered, so it has started — the same rule adjDel()
+  // applies on "+". Only 'Not started' is corrected; On hold / Cancelled /
+  // Complete are deliberate choices from this dropdown and are kept.
+  if(data.status==='Not started'&&data.deliveredCount>0)data.status='In progress';
   if(data.contractedQty>0){
     data.progress=Math.min(100,Math.round((data.deliveredCount/data.contractedQty)*100));
   } else {
@@ -12318,13 +12330,13 @@ function generateReport(type){
       +'<table class="dtable" style="font-size:13px"><thead><tr>'
       +'<th>Type</th><th>Title</th><th>Scope</th><th>Contracted</th><th>Delivered</th><th>Status</th><th>Due</th><th>Milestone</th></tr></thead><tbody>';
     dels.forEach(function(d){
-      var pct=d.contractedQty>0?Math.min(100,Math.round((d.deliveredCount||0)/d.contractedQty*100)):d.progress;
+      var pct=d.contractedQty>0?Math.min(100,Math.round((d.deliveredCount||0)/d.contractedQty*100)):null; // no target → no %
       body+='<tr>'
         +'<td><span class="badge b-dark">'+d.type+'</span></td>'
         +'<td style="font-weight:500;color:var(--white)">'+d.type+'</td>'
         +'<td><span class="badge '+(d.scopeType==='recurring'?'b-sky':d.scopeType==='milestone'?'b-purple':'b-gray')+'">'+d.scopeType+'</span></td>'
         +'<td style="text-align:center">'+(d.contractedQty||'—')+'</td>'
-        +'<td style="text-align:center">'+(d.deliveredCount||0)+' ('+pct+'%)</td>'
+        +'<td style="text-align:center">'+(d.deliveredCount||0)+(pct===null?'':' ('+pct+'%)')+'</td>'
         +'<td><span class="badge '+(d.status==='Complete'?'b-green':d.status==='In progress'?'b-sky':'b-gray')+'">'+d.status+'</span></td>'
         +'<td style="font-size:12px;color:var(--slate)">'+(d.dueDate||'—')+'</td>'
         +'<td style="font-size:12px;color:var(--slate)">'+(d.scopeType==='recurring'?(d.freq||'—'):(d.milestoneStart||'—'))+'</td></tr>';
@@ -14348,12 +14360,14 @@ function _buildSectionPreviewTable(secType, projF, pstart, pend, includeInternal
       +'<thead><tr><th style="'+thStyle+'">Type</th><th style="'+thStyle+'">Title</th><th style="'+thStyle+'">Contracted</th><th style="'+thStyle+'">Delivered</th><th style="'+thStyle+'">%</th><th style="'+thStyle+'">Status</th></tr></thead><tbody>';
     if (!dels.length) { tbl += '<tr><td colspan="6" style="'+tdStyle+';color:#aaa;font-style:italic">No deliverables tracked.</td></tr>'; }
     dels.forEach(function(d){
-      var pct = d.contractedQty > 0 ? Math.min(100, Math.round((d.deliveredCount||0)/d.contractedQty*100)) : (d.progress||0);
+      // No contracted quantity → no target, so no %. The stored `progress` is a
+      // status placeholder (In progress = 50), never a measurement.
+      var pct = d.contractedQty > 0 ? Math.min(100, Math.round((d.deliveredCount||0)/d.contractedQty*100)) : null;
       tbl += '<tr><td style="'+tdStyle+'">'+escHtml(d.type||'—')+'</td>'
         +'<td style="'+tdStyle+'">'+escHtml(d.title||d.type||'—')+'</td>'
         +'<td style="'+tdStyle+';text-align:center">'+escHtml(String(d.contractedQty||'—'))+'</td>'
         +'<td style="'+tdStyle+';text-align:center">'+escHtml(String(d.deliveredCount||0))+'</td>'
-        +'<td style="'+tdStyle+';text-align:center">'+pct+'%</td>'
+        +'<td style="'+tdStyle+';text-align:center">'+(pct===null?'—':pct+'%')+'</td>'
         +'<td style="'+tdStyle+'">'+escHtml(d.status||'—')+'</td></tr>';
     });
 
@@ -16600,8 +16614,8 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
           var dCols=[1600,2860,1300,1300,700,1800]; var dHdrs=['Type','Title','Contracted','Delivered','%','Status'];
           var dRows=tblHdrRow(dHdrs,dCols);
           dels.forEach(function(d,ri){
-            var pct=d.contractedQty>0?Math.min(100,Math.round((d.deliveredCount||0)/d.contractedQty*100)):(d.progress||0);
-            dRows+=tblDataRow([d.type||'\u2014',d.title||d.type||'\u2014',String(d.contractedQty||'\u2014'),String(d.deliveredCount||0),pct+'%',d.status||'\u2014'],dCols,ri%2!==0);
+            var pct=d.contractedQty>0?Math.min(100,Math.round((d.deliveredCount||0)/d.contractedQty*100)):null; // same rule as the preview table
+            dRows+=tblDataRow([d.type||'\u2014',d.title||d.type||'\u2014',String(d.contractedQty||'\u2014'),String(d.deliveredCount||0),pct===null?'\u2014':pct+'%',d.status||'\u2014'],dCols,ri%2!==0);
           });
           xml+=tblWrap(9560,dCols,dRows); xml+=spacer();
         }
@@ -17144,7 +17158,7 @@ function exportProject(projectId) {
   ];
   const delRows = pDels.map(d => [
     d.type||'', d.title||'', d.scopeType||'', d.status||'',
-    d.contractedQty||0, d.deliveredCount||0, d.progress||0,
+    d.contractedQty||0, d.deliveredCount||0, d.contractedQty>0 ? Math.min(100, Math.round((d.deliveredCount||0)/d.contractedQty*100)) : '',
     d.scopeType === 'recurring' ? '' : (d.milestoneStart||''),
     d.scopeType === 'recurring' ? (d.freq||'') : '',
     d.distList||'', d.notes||''

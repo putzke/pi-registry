@@ -1671,12 +1671,13 @@ function progCell(d) {
   if (!isNaN(contracted) && contracted > 0) {
     pct = Math.min(100, Math.round((parseInt(d.delivered_count, 10) || 0) / contracted * 100));
   } else {
-    pct = parseInt(d.progress, 10);
+    // No contracted quantity → no target, so no %. The stored `progress` is a
+    // placeholder the desktop derives from the status (In progress = 50), not
+    // a measurement — showing it here told the client something untrue.
+    const n = parseInt(d.delivered_count, 10) || 0;
+    return n > 0 ? `${n} delivered` : '—';
   }
-  if (!isNaN(pct)) {
-    return `<div class="prog-wrap"><div class="prog-bar"><div class="prog-fill" style="width:${Math.min(100,Math.max(0,pct))}%"></div></div><span class="prog-lbl">${pct}%</span></div>`;
-  }
-  return d.progress ? esc(String(d.progress)) : '—';
+  return `<div class="prog-wrap"><div class="prog-bar"><div class="prog-fill" style="width:${Math.min(100,Math.max(0,pct))}%"></div></div><span class="prog-lbl">${pct}%</span></div>`;
 }
 
 // ── Project Updates (current trend + trend history + shared reports) ────────────

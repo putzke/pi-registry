@@ -285,6 +285,30 @@ just the two endpoints. `markDelDone`/`cycleDelStatus`, two adjacent-looking
 functions, are dead code — grepped and confirmed called from no `onclick`
 anywhere — and were left untouched; they were not implicated in this bug.
 
+### A deliverable with no contracted quantity has no percentage (Oct 2026)
+Reported live on SR-201: "Website update" (no contracted qty, 6 delivered) read
+**50% · In progress**; "Lane closure graphic" (same) read **0% · Not started**.
+Neither number was measured. With `contractedQty` 0 every surface fell back to
+the stored `progress` field, which `saveDel()` fills with a placeholder from the
+STATUS (`Complete` 100 / `In progress` 50 / else 0) — and `adjDel()` never
+updates it. So the bar repeated the status back as a fake percentage.
+- **No target → the count, never a %.** `_delOpenEnded(d)` / `_delNoTargetHTML()`
+  (next to `adjDel`) on the desktop view ("no target"; all-projects table
+  "6 delivered · no target"); `—` in the PI report preview table (which the
+  archive freezes) and the `.docx`; no `(N%)` in the quick report; blank in the
+  Excel export's Progress % column; and `progCell()` in `client-portal.html`
+  prints "6 delivered" — that fake 50% was reaching the client. Sorting by
+  progress puts open-ended rows together (-1) instead of by the placeholder.
+- **`saveDel()` won't store `Not started` with something delivered** — it
+  saves as `In progress`, the rule `adjDel()` already applied on "+". On hold /
+  Cancelled / Complete are deliberate and kept. Not retroactive: existing rows
+  correct the next time they are saved.
+- `progress` is still written (backward compat) and still read by
+  `snapshot.trendFacts` (`pct`) — left alone so archived trend diffs stay
+  comparable.
+- Guarded by `test/tests/67-deliverable-no-target.test.js` (13 checks; verified
+  to fail against the old code).
+
 ### Events do NOT create follow-ups (Aug 2026)
 The Edit-event modal's "Action items" textarea used to create a `pi_interactions`
 row per line. Removed — the field is now documentation on the event record only.

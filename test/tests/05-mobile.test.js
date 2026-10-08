@@ -66,6 +66,18 @@ module.exports = {
         }, String(assigned.id));
         t.ok(seen.forAssignee, 'the assignee sees it in their list');
         t.eq(seen.forLogger, false, 'the original logger no longer does');
+
+        // And the card actually DRAWS. The checks above only tested the
+        // filter; the card itself called an escHtml that was private to the
+        // error overlay, so opening Follow-ups threw for exactly this item.
+        const card = await app.page.evaluate(id => {
+          document.getElementById('fu-user').value = 'all';
+          showScreen('screen-followups');
+          const el = document.getElementById('fu-list');
+          return { text: el.textContent, hasItem: el.innerHTML.includes(id) };
+        }, String(assigned.id));
+        t.ok(/assigned by/.test(card.text), 'the Follow-ups screen draws the assigned-by line');
+        t.eq(app.errors, [], 'opening Follow-ups throws nothing');
       }
 
       // Mobile must not silently drop an assignment it never edits.

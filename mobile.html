@@ -2085,6 +2085,13 @@ function renderFollowupsList(){
 // Reassignment stays desktop-only on purpose: mobile is a logging tool, not an
 // admin surface. It reads the assignment, it doesn't change it.
 function _fuOwner(i){ return (i && (i.followUpAssignedTo || i.loggedBy)) || ''; }
+// Page-level escape for names typed into the app. The error overlay further
+// down has its own escHtml, but that one is private to its block — the
+// follow-up card called it from here and threw "escHtml is not defined"
+// whenever a follow-up was assigned to someone other than its logger.
+function escHtml(s){
+  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
 function fuItemHTML(i,stakes,projs,resolved){
   const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));

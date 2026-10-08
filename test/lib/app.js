@@ -11,9 +11,12 @@ const REPO = path.join(__dirname, '..', '..');
 const CHROME = '/opt/pw-browsers/chromium';
 const CHARTJS = path.join(__dirname, '..', 'node_modules', 'chart.js', 'dist', 'chart.umd.js');
 
-async function openApp(file, { shimOrigin, email = 'putzke@demo.test', viewport, portalToken, auth, session: withSession = true } = {}) {
+async function openApp(file, { shimOrigin, email = 'putzke@demo.test', viewport, userAgent, query, portalToken, auth, session: withSession = true } = {}) {
   const browser = await chromium.launch({ executablePath: CHROME });
-  const page = await browser.newPage({ viewport: viewport || { width: 1440, height: 900 } });
+  // userAgent lets a test open the app AS a phone (index.html sends phones to
+  // mobile.html); omitted, it is Chromium's desktop default.
+  const page = await browser.newPage({ viewport: viewport || { width: 1440, height: 900 },
+                                       ...(userAgent ? { userAgent } : {}) });
 
   // ORDER MATTERS: Playwright matches the LAST registered route first, so the
   // catch-all goes down first and the specific handlers below override it.
@@ -86,7 +89,7 @@ async function openApp(file, { shimOrigin, email = 'putzke@demo.test', viewport,
     localStorage.setItem('cp_session_v1', JSON.stringify(s));
   }, session);
 
-  const q = portalToken ? '?token=' + portalToken : '';
+  const q = portalToken ? '?token=' + portalToken : (query || '');
   await page.goto('file://' + path.join(REPO, file) + q);
   await page.waitForTimeout(150);
   // Dismiss the login overlay if the app still put one up.

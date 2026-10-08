@@ -55,6 +55,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .content.no-pad{padding:0;gap:0}
 
 /* ── BOTTOM NAV ── */
+.stake-link{text-decoration:underline;text-decoration-color:rgba(74,155,232,.45);text-underline-offset:3px;cursor:pointer;padding:6px 0}
 .bottom-nav{background:var(--surface);border-top:1px solid var(--border);padding:8px 0 calc(8px + env(safe-area-inset-bottom));display:flex;flex-shrink:0;position:sticky;bottom:0;z-index:100}
 .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;border:none;background:transparent;cursor:pointer;padding:6px 4px;position:relative}
 .nav-item svg{width:22px;height:22px;stroke:var(--text3);transition:stroke .15s}
@@ -191,9 +192,6 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 .detail-org{font-size:13px;color:rgba(255,255,255,.65);margin-top:3px}
 .detail-pills{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
 
-/* ── QUICK LOG FAB ── */
-
-
 /* ── MODAL SHEET ── */
 .sheet-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;display:none;align-items:flex-end}
 .sheet-overlay.open{display:flex}
@@ -262,11 +260,11 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
         </div>
         <div class="card" id="home-int-list"></div>
       </div>
+      <!-- Phones are sent here from index.html; this is the way back, remembered on this device. -->
+      <div style="text-align:center;padding:18px 0 6px">
+        <a href="index.html?desktop=1" style="font-size:13px;color:var(--text3);text-decoration:underline">Use full desktop site</a>
+      </div>
     </div>
-    <!-- FAB -->
-    <button class="fab" onclick="openSheet('sheet-log')" title="Log interaction">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-    </button>
     <!-- Bottom nav -->
     <nav class="bottom-nav" id="nav-home">
       <button class="nav-item active" onclick="showScreen('screen-home')">
@@ -351,7 +349,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
   ══════════════════════════════════════════ -->
   <div class="screen" id="screen-contact-detail">
     <div class="topbar">
-      <button class="topbar-back" onclick="showScreen('screen-contacts')">
+      <button class="topbar-back" onclick="showScreen(window._detailBackTo||'screen-contacts')">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
       </button>
       <div style="flex:1;display:flex;align-items:center;gap:8px"><div style="height:40px;display:flex;align-items:center"><div style="height:40px;width:auto;overflow:hidden"><div class="hdr-logo" role="img" aria-label="Cirrus Cc — Stakeholder Management"></div></div></div><div class="topbar-title" style="font-size:15px" id="detail-topbar-name">Contact</div></div>
@@ -1766,7 +1764,7 @@ function refreshHome(){
             <span class="badge b-sky" style="font-size:12px">${i.subject||'General'}</span>
           </div>
           <div style="font-size:14px;color:var(--text);line-height:1.4">${i.summary}</div>
-          <div style="font-size:14px;font-weight:600;color:var(--sky);margin-top:3px">${s?dispName(s):(i.anonLabel||'Anonymous')}${projLabel?' · '+projLabel:''}${i.loggedBy?' · '+i.loggedBy:''}</div>
+          <div style="font-size:14px;font-weight:600;color:var(--sky);margin-top:3px">${s?_stakeLinkHTML(s):(i.anonLabel||'Anonymous')}${projLabel?' · '+projLabel:''}${i.loggedBy?' · '+i.loggedBy:''}</div>
         </div>
       </div>`;
     }).join('');
@@ -1837,8 +1835,13 @@ function renderContacts(){
 // ── CONTACT DETAIL ─────────────────────────────────────────────────────
 function showContactDetail(id){
   const stakes=DB.getActive('stakeholders');
-  const s=stakes.find(x=>x.id===id);
+  const s=stakes.find(x=>String(x.id)===String(id));
   if(!s)return;
+  id=s.id;
+  // Back returns to the screen the contact was opened from (Dashboard,
+  // Interactions, Follow-ups…), not always to Contacts.
+  const cur=document.querySelector('.screen.active');
+  if(cur&&cur.id!=='screen-contact-detail') window._detailBackTo=cur.id;
 
   // Pre-select this stakeholder in log sheet
   window._detailStakeId=id;
@@ -2033,7 +2036,7 @@ function renderInteractionsList(){
         <span class="badge b-sky" style="font-size:12px">${i.subject||'General'}</span>
       </div>
       <div class="int-summary">${i.summary}</div>
-      <div style="font-size:14px;font-weight:600;color:var(--sky);margin-top:4px">${s?dispName(s):'—'}${i.loggedBy?' · '+i.loggedBy:''}</div>
+      <div style="font-size:14px;font-weight:600;color:var(--sky);margin-top:4px">${s?_stakeLinkHTML(s):(i.anonLabel||'—')}${i.loggedBy?' · '+i.loggedBy:''}</div>
       ${i.followUp&&!i.followUpDone?`<div style="margin-top:6px;display:inline-flex;align-items:center;gap:4px;background:#FEF3CD;border-radius:6px;padding:4px 8px;font-size:11px;color:#6B4400"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg> F/U${i.followUpDue?' · '+fmtShort(i.followUpDue):''}</div>`:''}
     </div>`;
   }).join('');
@@ -2096,6 +2099,13 @@ function _fuOwner(i){ return (i && (i.followUpAssignedTo || i.loggedBy)) || ''; 
 // down has its own escHtml, but that one is private to its block — the
 // follow-up card called it from here and threw "escHtml is not defined"
 // whenever a follow-up was assigned to someone other than its logger.
+// The contact's name in an interaction row: its own tap target that opens the
+// contact screen. stopPropagation keeps the row's own tap (edit) from firing.
+// A row with no linked contact (anonymous) stays plain text.
+function _stakeLinkHTML(s){
+  if(!s) return '';
+  return '<span class="stake-link" role="link" onclick="event.stopPropagation();showContactDetail(\''+s.id+'\')">'+escHtml(dispName(s))+'</span>';
+}
 function escHtml(s){
   return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
@@ -2130,7 +2140,7 @@ function fuItemHTML(i,stakes,projs,resolved){
   return'<div class="fu-item">'+
     '<div class="fu-due '+(od?'overdue':'open')+'">'+(od?'OVERDUE &middot; ':'')+( i.followUpDue?fmt(i.followUpDue):'No due date')+'</div>'+
     '<div class="fu-note">'+(i.followUpNote||i.summary)+'</div>'+
-    '<div class="fu-meta">'+(s?s.firstName+' '+s.lastName:'—')+(p?' &middot; '+p.pid+' '+p.name:'')+'</div>'+
+    '<div class="fu-meta">'+(s?_stakeLinkHTML(s):'—')+(p?' &middot; '+p.pid+' '+p.name:'')+'</div>'+
     (asg?'<div class="fu-meta" style="margin-top:2px">'+asg+'</div>':'')+
     '<div class="fu-actions">'+resolveBtn+editBtn+'</div>'+
   '</div>';

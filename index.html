@@ -5,6 +5,23 @@
   <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://maps.googleapis.com https://maps.gstatic.com; style-src 'unsafe-inline' https://fonts.googleapis.com https://maps.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://ncfbblhlsiglxkoiounv.supabase.co https://maps.googleapis.com https://places.googleapis.com https://api.anthropic.com https://cdnjs.cloudflare.com https://services1.arcgis.com; img-src 'self' data: https://maps.gstatic.com https://maps.googleapis.com;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+// Phones go to the mobile app. Tablets and computers stay here: the desktop
+// app works on a tablet, and reports, the map and close-outs are desktop-only.
+// "Use full desktop site" in the mobile app links to ?desktop=1, which this
+// device then remembers (?desktop=0 forgets it). An address carrying anything
+// else (a sign-in or password-reset link, say) is left alone.
+(function(){
+  try{
+    var q=location.search, h=location.hash;
+    if(/[?&]desktop=1\b/.test(q)){ localStorage.setItem('cc_prefer_desktop','1'); return; }
+    if(/[?&]desktop=0\b/.test(q)) localStorage.removeItem('cc_prefer_desktop');
+    else if(q||h) return;
+    if(localStorage.getItem('cc_prefer_desktop')==='1') return;
+  }catch(e){}
+  if(/iPhone|iPod|Android.+Mobile|Windows Phone/i.test(navigator.userAgent)) location.replace('mobile.html');
+})();
+</script>
 <title>Cirrus Cc — Stakeholder Management</title>
 <link href="https://fonts.googleapis.com/css2?family=Saira:ital,wght@1,300;1,400&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">

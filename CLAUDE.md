@@ -1658,8 +1658,8 @@ Field companion for logging interactions, managing contacts, follow-ups, and iss
   - `validateEmail` was `new RegExp('…\s…')` in a string, so `\s` was a
     literal "s": mobile refused any address with an "s" before the last dot
     (`jeff@sunrise.com`). Now the same regex literal as index.html.
-  - The orphan link row itself is harmless to the counts now; deleting it is
-    a one-line cleanup (`delete from pi_project_stakeholders where id = 207;`).
+  - Link row 207 was deleted by Jeff in the SQL Editor on 2026-10-08; verified
+    after: zero `tmp_` or orphaned links anywhere, project 16 at 65 contacts.
 
 - **Phones open the mobile app; names open contacts — Oct 2026**
   (`test/tests/69-mobile-redirect-and-contact-links.test.js`, 28 checks):
@@ -1679,8 +1679,6 @@ Field companion for logging interactions, managing contacts, follow-ups, and iss
     already gone, so it drew as a bare grey bar over the bottom nav. The top
     bar's "+ Log Interaction" and the Log nav item remain.
   - The harness's `openApp` now takes `userAgent` and `query`.
-  - Link row 207 (the `tmp_` link above): the delete was approved but the
-    Supabase connector times out on writes — run it in the SQL Editor.
 
 ## Importer app (`importer.html`)
 Bulk CSV import wizard for stakeholders and interactions. ~2,420 lines.

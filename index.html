@@ -5021,7 +5021,7 @@ function applyMasterBulkUpdate() {
   if (type) parts.push('type → ' + type);
   if (!confirm(`Apply ${parts.join(', ')} to ${S.masterBulkSelected.length} stakeholder${S.masterBulkSelected.length!==1?'s':''}?`)) return;
 
-  const allStakes = DB.getActive('stakeholders');
+  const allStakes = DB.get('stakeholders'); // all rows: DB.set deletes any it is not handed
   allStakes.forEach(s => {
     if (S.masterBulkSelected.includes(String(s.id))) {
       if (influence) s.influenceTier = influence;
@@ -5161,7 +5161,7 @@ function applyBulkUpdate() {
 
   // Update stakeholders master record for influence tier
   if (influence) {
-    const allStakes = DB.getActive('stakeholders');
+    const allStakes = DB.get('stakeholders'); // all rows: DB.set deletes any it is not handed
     allStakes.forEach(s => {
       if (S.bulkSelected.includes(String(s.id))) {
         s.influenceTier = influence;
@@ -7003,7 +7003,9 @@ async function saveStake(){
   }
 
   const isNew=!S.editId;
-  const all=DB.getActive('stakeholders');
+  // DB.get, not getActive: DB._sync deletes any stored row missing from the
+  // array it is handed, so an active-only array would delete archived contacts.
+  const all=DB.get('stakeholders');
   if(S.editId){const i=all.findIndex(x=>x.id===S.editId);if(i>-1)all[i]=data;}else all.push(data);
   await DB.set('stakeholders',all);
 

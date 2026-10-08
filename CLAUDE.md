@@ -1638,6 +1638,29 @@ Field companion for logging interactions, managing contacts, follow-ups, and iss
   - The log toast read "Interactionsged ✓"; now "Interaction logged ✓" /
     "Interaction updated ✓".
 
+- **Contact count, failed saves, email check — Oct 2026**
+  (`test/tests/68-mobile-contact-count.test.js`, 11 checks):
+  - Home "Contacts" counted project LINK rows; desktop counts links whose
+    contact exists and is active. They disagreed 66 vs 65 on 3600 West
+    Reconstruction because production held one link with stakeholder_id
+    `tmp_mrspoajt7fh` (link id 207, project 16, 2026-07-20) — a temporary id that
+    never became a contact. Mobile now uses the desktop rule.
+  - **How it got there:** both mobile "new contact" paths (`saveInteraction`'s
+    new-caller block and `saveStakeholder`) linked `newS.id` after
+    `DB.set`, but a failed insert leaves the `tmp_` id in place.
+    `_mobNewStakeId(newS)` returns the real id or null; on null nothing is
+    linked or logged and a toast says so.
+  - **`DB._sync` deletes any stored row missing from the array it is handed.**
+    Several save paths (mobile ×3, desktop `saveStake` + two bulk edits) handed
+    `DB.set('stakeholders', …)` a `DB.getActive()` array, which would delete
+    every ARCHIVED contact. Latent only: 0 archived rows, and no UI archives
+    anyone yet. Now `DB.get`. Never pass a filtered array to `DB.set`.
+  - `validateEmail` was `new RegExp('…\s…')` in a string, so `\s` was a
+    literal "s": mobile refused any address with an "s" before the last dot
+    (`jeff@sunrise.com`). Now the same regex literal as index.html.
+  - The orphan link row itself is harmless to the counts now; deleting it is
+    a one-line cleanup (`delete from pi_project_stakeholders where id = 207;`).
+
 ## Importer app (`importer.html`)
 Bulk CSV import wizard for stakeholders and interactions. ~2,420 lines.
 - **Updated this session**: added LEP and EJ/underserved field support:

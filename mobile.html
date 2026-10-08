@@ -1512,7 +1512,10 @@ function validatePhone(raw){
 }
 function validateEmail(email){
   if(!email||!email.trim()) return null;
-  var re=new RegExp('^[^\s@]+@[^\s@]+\.[^\s@]{2,}$');
+  // A regex LITERAL, same as index.html. This was new RegExp('…\s…') in a
+  // string, where \s is just "s" — so any address with an "s" before its last
+  // dot (jeff@sunrise.com, jsmith@…) was refused as invalid on mobile.
+  var re=/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
   if(!re.test(email.trim())) return 'Email address appears invalid. Please check the format (e.g. name@example.com).';
   return null;
 }
@@ -1732,7 +1735,11 @@ function refreshHome(){
   const projInts=pF?ints.filter(i=>i.projectId===pF):ints;
   const openFU=projInts.filter(i=>i.followUp&&!i.followUpDone);
   const overdueFU=openFU.filter(i=>isOverdue(i.followUpDue));
-  const stakeCount=pF?ps.filter(x=>x.projectId===pF).length:stakes.length;
+  // Count CONTACTS, not link rows — the same rule as the desktop Contact list:
+  // a link whose contact no longer exists (or is archived) is not a contact.
+  // Counting raw links showed 66 here against the desktop's 65 when one link
+  // carried a temporary id that never became a real contact.
+  const stakeCount=pF?ps.filter(x=>x.projectId===pF&&stakes.some(s=>String(s.id)===String(x.stakeholderId))).length:stakes.length;
 
   // Stats
   document.getElementById('home-stats').innerHTML=`
@@ -2093,6 +2100,19 @@ function escHtml(s){
   return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// After DB.set('stakeholders', …) with a new contact: its REAL id, or null if
+// the insert failed. DB._sync swaps the temporary id in place on success; on
+// failure (sbAdd returns null) the tmp_ id stays, and anything linked with it
+// — a project link, an interaction — points at a contact that never existed.
+// That is how one 'tmp_…' project link reached the database in July 2026.
+// On failure the unsaved contact is also dropped from the cache.
+function _mobNewStakeId(newS){
+  const id=String(newS.id||'');
+  if(id && !id.startsWith('tmp_')) return id;
+  _syncCache['stakeholders']=(_syncCache['stakeholders']||[]).filter(x=>x!==newS&&String(x.id)!==id);
+  return null;
+}
+
 function fuItemHTML(i,stakes,projs,resolved){
   const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
   const p=projs.find(x=>x.id===i.projectId);
@@ -2350,14 +2370,18 @@ async function saveInteraction(){
         isMaster:false,
         notes:'Auto-created from interaction log'
       };
-      const allStakes=DB.getActive('stakeholders');
+      // DB.get, not getActive: DB._sync deletes any stored row missing from the
+      // array it is handed, so an active-only array would delete archived contacts.
+      const allStakes=DB.get('stakeholders');
       allStakes.push(newS);
       await DB.set('stakeholders',allStakes);
+      const newId=_mobNewStakeId(newS);
+      if(!newId){showToast("Couldn't save the new contact — nothing was logged. Check your connection and try again.",'error');return;}
       // Link to project
       const ps=DB.get('project_stakeholders');
-      ps.push({id:DB.uid(),projectId:projId,stakeholderId:newS.id});
+      ps.push({id:DB.uid(),projectId:projId,stakeholderId:newId});
       await DB.set('project_stakeholders',ps);
-      stakeId=newS.id;
+      stakeId=newId;
     }
   }
   const fuChecked=document.getElementById('log-fu').checked;
@@ -2484,16 +2508,15 @@ async function saveStakeholder(){
 
   try{
     showToast('Saving...','info');
-    const stakes=DB.getActive('stakeholders');
+    const stakes=DB.get('stakeholders'); // all, not active-only — see saveInteraction
     stakes.push(newS);
     await DB.set('stakeholders',stakes);
+    const realId=_mobNewStakeId(newS);
+    if(!realId){showToast("Couldn't save the contact — check your connection and try again.",'error');return;}
 
     // Link to project if selected
     if(projId){
       const ps=DB.get('project_stakeholders');
-      // Update stakeholderId in case it was replaced by Supabase numeric id
-      const saved=(_syncCache['stakeholders']||[]).find(x=>x.firstName===fn&&x.lastName===ln&&x.email===email);
-      const realId=saved?saved.id:newS.id;
       ps.push({
         id:DB.uid(),
         projectId:projId,
@@ -2570,7 +2593,7 @@ async function updateStakeholder(){
   const emailErr2=validateEmail(email);
   if(emailErr2){showToast(emailErr2,'error');return;}
   const phone=rawPhone?formatPhone(cleanPhone(rawPhone)):'';
-  const stakes=DB.getActive('stakeholders')||[];
+  const stakes=DB.get('stakeholders')||[]; // all, not active-only — DB.set would delete archived rows
   const idx=stakes.findIndex(x=>x.id===id);
   if(idx<0){showToast('Stakeholder not found','error');return;}
   stakes[idx]={

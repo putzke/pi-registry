@@ -1776,8 +1776,11 @@ function renderSummary() {
       const ad = fmt(r.archived_at ? r.archived_at.slice(0,10) : '');
       const title = esc(r.report_title||'PI Report') + (r.report_num ? ` <span style="color:#9ca3af;font-weight:400">#${esc(String(r.report_num))}</span>` : '');
       const hasDocx = !!r.docx_path;
+      const isPdf = /\.pdf$/i.test(r.docx_path || '');
       const actions = hasDocx
-        ? `<button onclick="downloadSharedReportDocx('${r.id}')" style="padding:6px 12px;border-radius:6px;border:1px solid #4f46e5;background:#4f46e5;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Download report (.docx)</button>`
+        ? (isPdf
+          ? `<button onclick="openSharedReportPdf('${r.id}')" style="padding:6px 12px;border-radius:6px;border:1px solid #4f46e5;background:#4f46e5;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Open report (PDF)</button>`
+          : `<button onclick="downloadSharedReportDocx('${r.id}')" style="padding:6px 12px;border-radius:6px;border:1px solid #4f46e5;background:#4f46e5;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Download report (.docx)</button>`)
         : `<button onclick="var b=document.getElementById('rpt-body-${i}');b.style.display=b.style.display==='none'?'block':'none'" style="padding:6px 12px;border-radius:6px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:12px;font-weight:500;cursor:pointer">View</button>
             <button onclick="printSharedReport('${r.id}')" style="padding:6px 12px;border-radius:6px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:12px;font-weight:500;cursor:pointer">Print / PDF</button>`;
       return `<div style="border:1px solid #e5e7eb;border-radius:10px;margin-bottom:10px;overflow:hidden">
@@ -1874,9 +1877,11 @@ async function downloadSharedReportDocx(archiveId) {
   if (!rec || !rec.docx_path) return;
   try {
     const headers = _tokenMode ? anonHdrs() : authHdrs();
-    const res = await fetch(`${SUPA_URL}/storage/v1/object/sign/report-files/${rec.docx_path}?expiresIn=120`, {
+    const res = await fetch(`${SUPA_URL}/storage/v1/object/sign/report-files/${rec.docx_path}`, {
       method: 'POST',
-      headers: { ...headers, 'Content-Type': 'application/json' }
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      // Storage's sign endpoint takes the lifetime in the JSON body.
+      body: JSON.stringify({ expiresIn: 120 })
     });
     if (!res.ok) throw new Error(`Could not prepare the download (${res.status})`);
     const data = await res.json();
@@ -1889,6 +1894,38 @@ async function downloadSharedReportDocx(archiveId) {
     a.remove();
   } catch (err) {
     alert(`Unable to download this report right now: ${err.message}. Please try again or contact your project manager.`);
+  }
+}
+
+// Open the final report PDF in a new tab (PDFs are the report of record since
+// Oct 2026; every browser and Gmail/Drive shows one as issued). The tab is
+// opened inside the click, before the signed link is fetched — a window
+// opened after an await is blocked as a pop-up. If it was blocked anyway,
+// fall back to downloading the file.
+async function openSharedReportPdf(archiveId) {
+  const rec = _sharedReports.find(r => String(r.id) === String(archiveId));
+  if (!rec || !rec.docx_path) return;
+  const win = window.open('', '_blank');
+  if (win) win.document.write('<p style="font-family:sans-serif;color:#555;padding:24px">Opening the report…</p>');
+  try {
+    const headers = _tokenMode ? anonHdrs() : authHdrs();
+    const res = await fetch(`${SUPA_URL}/storage/v1/object/sign/report-files/${rec.docx_path}`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expiresIn: 300 })
+    });
+    if (!res.ok) throw new Error(`Could not prepare the report (${res.status})`);
+    const data = await res.json();
+    if (!data.signedURL) throw new Error('No link returned');
+    const url = `${SUPA_URL}/storage/v1${data.signedURL}`;
+    if (win) { win.location.href = url; return; }
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(rec.report_title || 'PI Report').replace(/[^\w\- ]+/g, '')}.pdf`;
+    document.body.appendChild(a); a.click(); a.remove();
+  } catch (err) {
+    if (win) win.close();
+    alert(`Unable to open this report right now: ${err.message}. Please try again or contact your project manager.`);
   }
 }
 

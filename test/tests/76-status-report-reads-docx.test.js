@@ -74,10 +74,10 @@ module.exports = {
       t.ok(!/HEADER-MARKER/.test(user), 'header and footer text is left out');
       t.ok(/Report 2 \(#2, Aug 15, 2026 – Aug 28, 2026\) — SOURCE: final delivered report \(\.docx\)/.test(user),
         'it is labelled as the final delivered report (period from the snapshot when the columns are blank)');
-      t.ok(/Report 1 [^\n]*SOURCE: archived draft wording \(no final \.docx attached\): ARCHIVED-ONE/.test(user), 'no file → archived wording, labelled');
-      t.ok(/Report 3 [^\n]*SOURCE: archived draft wording \(the final \.docx could not be read\): ARCHIVED-THREE/.test(user), 'unreadable file → archived wording, labelled');
+      t.ok(/Report 1 [^\n]*SOURCE: archived draft wording \(no final report attached\): ARCHIVED-ONE/.test(user), 'no file → archived wording, labelled');
+      t.ok(/Report 3 [^\n]*SOURCE: archived draft wording \(the final file could not be read\): ARCHIVED-THREE/.test(user), 'unreadable file → archived wording, labelled');
       t.ok(/report of record/.test(sys) && /computed facts win/.test(sys), 'the instructions rank the final file above the draft, and the computed facts above both');
-      t.ok(/Read from the final \.docx: 1 of 3 \(1 could not be read/.test(confirmText), 'the cost check says how many were read from the final file');
+      t.ok(/Read from the final report: 1 of 3; 1 could not be read/.test(confirmText), 'the cost check says how many were read from the final file');
       t.ok(/About [\d,]+ tokens of input/.test(confirmText), '…and gives a token estimate from the actual text');
 
       // A long report is cut at the per-report limit, on a word boundary, and flagged.

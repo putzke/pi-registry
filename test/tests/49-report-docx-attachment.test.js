@@ -144,8 +144,8 @@ module.exports = {
 
         // ── Panel shows the unattached state and a disabled Share ──────────
         const htmlBefore = isolatedArchiveHTML();
-        res.showsNoDocx = /No final \.docx attached/.test(htmlBefore);
-        res.showsAttachButton = /Attach final \.docx/.test(htmlBefore);
+        res.showsNoDocx = /No final report attached/.test(htmlBefore);
+        res.showsAttachButton = /Attach final PDF/.test(htmlBefore);
         res.shareDisabledBefore = new RegExp('disabled[^>]*>Share<').test(htmlBefore);
 
         // ── Client-side guard: toggling share with no file attached is refused ──
@@ -160,14 +160,13 @@ module.exports = {
         res.toastAfterBadFile = window.__toasts.slice(-1)[0];
         res.docxPathAfterBadFile = recAfterBlocked.docxPath || null;
 
-        // ── Attaches a real .docx, then Share becomes available and works ──
-        const goodFile = new File(['docx bytes'], 'Final Report.docx',
-          { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+        // ── Attaches the final PDF (the format since Oct 2026), then Share works ──
+        const goodFile = new File(['%PDF-1.4 bytes'], 'Final Report.pdf', { type: 'application/pdf' });
         await _doUploadReportDocx(insId, goodFile);
         res.docxPathAfterUpload = recAfterBlocked.docxPath;
 
         const htmlAfter = isolatedArchiveHTML();
-        res.showsAttachedAfter = /Final \.docx attached/.test(htmlAfter);
+        res.showsAttachedAfter = /Final PDF attached/.test(htmlAfter);
         res.shareEnabledAfter = /onclick="toggleReportShared\('/.test(htmlAfter) && !new RegExp('disabled[^>]*>Share<').test(htmlAfter);
 
         await toggleReportShared(insId);
@@ -177,19 +176,19 @@ module.exports = {
       }, proj.id);
 
       t.ok(out.showsNoDocx, 'archive panel names the unattached state honestly');
-      t.ok(out.showsAttachButton, 'and offers "Attach final .docx"');
+      t.ok(out.showsAttachButton, 'and offers "Attach final PDF"');
       t.ok(out.shareDisabledBefore, 'Share is disabled before a file is attached');
 
       t.ok(out.toastAfterBlockedShare && /Attach the final/i.test(out.toastAfterBlockedShare.msg),
            'toggling share with no file attached is refused client-side with a clear reason');
       t.eq(out.clientVisibleAfterBlocked, false, 'and clientVisible never actually flips');
 
-      t.ok(out.toastAfterBadFile && /\.docx file/i.test(out.toastAfterBadFile.msg),
-           'a non-.docx file is rejected before any upload is attempted');
+      t.ok(out.toastAfterBadFile && /as a PDF/i.test(out.toastAfterBadFile.msg),
+           'a non-PDF file is rejected before any upload is attempted');
       t.eq(out.docxPathAfterBadFile, null, 'so the record is left untouched');
 
-      t.ok(out.docxPathAfterUpload && /\.docx$/.test(out.docxPathAfterUpload),
-           `a real .docx upload records a path (got: ${out.docxPathAfterUpload})`);
+      t.ok(out.docxPathAfterUpload && /\.pdf$/.test(out.docxPathAfterUpload),
+           `a PDF upload records a path (got: ${out.docxPathAfterUpload})`);
       t.ok(out.showsAttachedAfter, 'the panel reflects the attached file after upload');
       t.ok(out.shareEnabledAfter, 'and Share is no longer disabled');
       t.eq(out.clientVisibleAfterShare, true, 'sharing now succeeds once a file is attached');

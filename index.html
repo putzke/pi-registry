@@ -15794,7 +15794,7 @@ async function toggleReportShared(archiveId) {
   // before this feature shipped (grandfathered, docxPath still null) can
   // still be freely UNshared; it just can't be re-shared without a file.
   if (newVal && !rec.docxPath) {
-    showToast('Attach the final .docx before sharing this report with the client.', 'warn', 5000);
+    showToast('Attach the final report PDF before sharing this report with the client.', 'warn', 5000);
     return;
   }
   try {
@@ -15821,10 +15821,14 @@ async function toggleReportShared(archiveId) {
 // created and clicked rather than kept permanently in the DOM, since one
 // row can trigger this for any archive id and re-using a single static
 // input would need re-wiring its handler on every click anyway.
+function _isPdfPath(p) { return /\.pdf$/i.test(String(p || '')); }
 function uploadReportDocx(archiveId) {
   var input = document.createElement('input');
   input.type = 'file';
-  input.accept = '.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  // PDF only for new uploads (Oct 2026): it opens in any browser and in
+  // Gmail/Drive exactly as issued, and reads as a final record. Reports
+  // attached earlier as .docx stay valid until replaced.
+  input.accept = '.pdf,application/pdf';
   input.onchange = function() {
     if (input.files && input.files[0]) _doUploadReportDocx(archiveId, input.files[0]);
   };
@@ -15834,11 +15838,12 @@ function uploadReportDocx(archiveId) {
 async function _doUploadReportDocx(archiveId, file) {
   var rec = (_syncCache['report_archive']||[]).find(function(r){ return String(r.id)===String(archiveId); });
   if (!rec) { showToast('Archive record not found', 'error'); return; }
-  if (!/\.docx$/i.test(file.name)) {
-    showToast('Please attach a .docx file — that is what the client portal will offer for download.', 'warn', 5000);
+  if (!/\.pdf$/i.test(file.name)) {
+    showToast('Please attach the final report as a PDF (in Word: File → Save As → PDF). That is what the client portal opens.', 'warn', 6000);
     return;
   }
-  var path = String(rec.projectId) + '/' + String(archiveId) + '.docx';
+  var path = String(rec.projectId) + '/' + String(archiveId) + '.pdf';
+  var oldPath = rec.docxPath && rec.docxPath !== path ? rec.docxPath : '';
   showToast('Uploading final report…', 'info', 2000);
   try {
     var sess = getSession();
@@ -15847,7 +15852,7 @@ async function _doUploadReportDocx(archiveId, file) {
       headers: {
         'apikey': SUPA_KEY,
         'Authorization': 'Bearer ' + (sess ? sess.access_token : SUPA_KEY),
-        'Content-Type': file.type || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'Content-Type': 'application/pdf',
         // Overwrite on re-upload (a further hand-edit) rather than erroring
         // on an existing object — this is expected to happen more than once
         // per report as the consultant revises the delivered copy.
@@ -15867,6 +15872,15 @@ async function _doUploadReportDocx(archiveId, file) {
     }
     rec.docxPath = path;
     rec.docxUploadedAt = uploadedAt;
+    // A .docx replaced by its PDF is removed from storage (best effort — the
+    // record already points at the PDF, so a leftover file is only clutter).
+    if (oldPath) {
+      try {
+        await fetch(SUPA_URL + '/storage/v1/object/' + REPORT_DOCX_BUCKET + '/' + oldPath, {
+          method: 'DELETE', headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + (sess ? sess.access_token : SUPA_KEY) }
+        });
+      } catch (e) { console.warn('Old report file not removed:', oldPath, e.message); }
+    }
     var panel = document.getElementById('rpt-archive-panel');
     if (panel) panel.innerHTML = _buildArchiveHTML(S.projectFilter);
     showToast('Final report attached.', 'info', 2500);
@@ -15928,6 +15942,7 @@ function _buildArchiveHTML(projF) {
     var period = (r.periodStart||r.periodEnd) ? ((r.periodStart?fmt(r.periodStart):'?')+' – '+(r.periodEnd?fmt(r.periodEnd):'?')) : 'No period set';
     var secCount = (r.sections||[]).length;
     var hasDocx = !!r.docxPath;
+    var isPdf = _isPdfPath(r.docxPath);
     // Share is disabled (client-side) until a real file is attached — the
     // same rule the database trigger enforces. A report shared before this
     // feature shipped (grandfathered) keeps working and can still be
@@ -15949,7 +15964,7 @@ function _buildArchiveHTML(projF) {
           +'<button class="btn btn-xs" style="flex-shrink:0;color:var(--amber);border-color:rgba(217,164,65,.4)" onclick="toggleReportShared(\''+r.id+'\')" title="Remove this report from the client portal">Unshare</button>'
         : (canShare
           ? '<button class="btn btn-xs" style="flex-shrink:0;color:var(--sky-lt);border-color:rgba(90,135,198,.4)" onclick="toggleReportShared(\''+r.id+'\')" title="Publish this report to the client portal"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:10px;height:10px"><circle cx="12" cy="4" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="12" r="2"/><path d="M6 7.5l4-2M6 8.5l4 2"/></svg> Share</button>'
-          : '<button class="btn btn-xs" disabled style="flex-shrink:0;opacity:.45;cursor:not-allowed" title="Attach the final .docx before sharing">Share</button>'))
+          : '<button class="btn btn-xs" disabled style="flex-shrink:0;opacity:.45;cursor:not-allowed" title="Attach the final report PDF before sharing">Share</button>'))
       +'<button class="btn btn-xs" style="flex-shrink:0" onclick="previewArchivedReport(\''+r.id+'\')">Preview</button>'
       +'<button class="btn btn-xs" style="color:var(--red);border-color:rgba(220,80,80,.3);background:rgba(220,80,80,.08);flex-shrink:0" '
       +'onclick="deleteArchivedReport(\''+r.id+'\')">Delete</button>'
@@ -15959,11 +15974,13 @@ function _buildArchiveHTML(projF) {
       // rather than pretending one exists.
       +'<div style="display:flex;align-items:center;gap:8px;padding-top:4px;border-top:1px solid rgba(255,255,255,.06)">'
       +(hasDocx
-        ? '<span style="flex-shrink:0;display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--green)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px"><path d="M4 2h6l3 3v9H4z"/><path d="M10 2v3h3"/></svg>Final .docx attached'
+        ? '<span style="flex-shrink:0;display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--green)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px"><path d="M4 2h6l3 3v9H4z"/><path d="M10 2v3h3"/></svg>Final '+(isPdf?'PDF':'.docx')+' attached'
           +(r.docxUploadedAt?' · '+fmt(String(r.docxUploadedAt).slice(0,10)):'')+'</span>'
-          +'<button class="btn btn-xs" style="flex-shrink:0" onclick="uploadReportDocx(\''+r.id+'\')" title="Upload a revised copy — overwrites the current file">Replace file</button>'
-        : '<span style="flex-shrink:0;font-size:11px;color:var(--fog)">No final .docx attached'+(r.clientVisible?' (shared before this was required)':'')+'</span>'
-          +'<button class="btn btn-xs" style="flex-shrink:0;color:var(--sky-lt);border-color:rgba(90,135,198,.4)" onclick="uploadReportDocx(\''+r.id+'\')">Attach final .docx</button>')
+          +(isPdf
+            ? '<button class="btn btn-xs" style="flex-shrink:0" onclick="uploadReportDocx(\''+r.id+'\')" title="Upload a revised PDF — overwrites the current file">Replace file</button>'
+            : '<button class="btn btn-xs" style="flex-shrink:0;color:var(--sky-lt);border-color:rgba(90,135,198,.4)" onclick="uploadReportDocx(\''+r.id+'\')" title="Final reports are now PDFs. Upload the PDF of this report to replace the .docx.">Replace with PDF</button>')
+        : '<span style="flex-shrink:0;font-size:11px;color:var(--fog)">No final report attached'+(r.clientVisible?' (shared before this was required)':'')+'</span>'
+          +'<button class="btn btn-xs" style="flex-shrink:0;color:var(--sky-lt);border-color:rgba(90,135,198,.4)" onclick="uploadReportDocx(\''+r.id+'\')">Attach final PDF</button>')
       +'</div>'
       +'</div>';
   });
@@ -16358,16 +16375,44 @@ function _docxProseFromXml(xml) {
   }
   return out.join('\n');
 }
+// Final PDFs are sent whole (Claude reads them natively); only the newest
+// STATUS_PDF_MAX per run, so a project with 30 reports doesn't cost 30 PDFs.
+// ~2,500 tokens per page is the planning figure for the cost check.
+const STATUS_PDF_MAX = 6;
+const STATUS_PDF_TOKENS_PER_PAGE = 2500;
+async function _archiveFileBytes(rec) {
+  var sess = getSession();
+  var r = await fetch(SUPA_URL + '/storage/v1/object/authenticated/' + REPORT_DOCX_BUCKET + '/' + rec.docxPath, {
+    headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + (sess ? sess.access_token : SUPA_KEY) }
+  });
+  if (!r.ok) { console.warn('Final report not readable for archive', rec.id, r.status); return null; }
+  return new Uint8Array(await r.arrayBuffer());
+}
+// → {pdf: base64, pages} or null. Pages are counted from the file's page
+// objects; when it hides them in compressed streams, ~1 per 40 KB.
+async function _archivePdfFile(rec) {
+  if (!rec || !rec.docxPath) return null;
+  try {
+    var bytes = await _archiveFileBytes(rec);
+    if (!bytes || bytes.length < 5) return null;
+    var head = String.fromCharCode.apply(null, bytes.subarray(0, 5));
+    if (head !== '%PDF-') { console.warn('Not a PDF:', rec.docxPath); return null; }
+    var bin = '', CH = 0x8000;
+    for (var i = 0; i < bytes.length; i += CH) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+    var pages = (bin.match(/\/Type\s*\/Page(?![s\w])/g) || []).length || Math.max(1, Math.round(bytes.length / 40000));
+    return { pdf: btoa(bin), pages: pages };
+  } catch (e) {
+    console.warn('Final PDF could not be read for archive', rec && rec.id, e.message);
+    return null;
+  }
+}
 // → {text, trimmed} or null when the file is missing or unreadable.
 async function _archiveDocxProse(rec) {
   if (!rec || !rec.docxPath) return null;
   try {
-    var sess = getSession();
-    var r = await fetch(SUPA_URL + '/storage/v1/object/authenticated/' + REPORT_DOCX_BUCKET + '/' + rec.docxPath, {
-      headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + (sess ? sess.access_token : SUPA_KEY) }
-    });
-    if (!r.ok) { console.warn('Final .docx not readable for archive', rec.id, r.status); return null; }
-    var zip = await JSZip.loadAsync(await r.arrayBuffer());
+    var bytes = await _archiveFileBytes(rec);
+    if (!bytes) return null;
+    var zip = await JSZip.loadAsync(bytes);
     var part = zip.file('word/document.xml');
     if (!part) return null;
     var text = _docxProseFromXml(await part.async('string'));
@@ -16407,31 +16452,53 @@ async function generateTrendSummary() {
     return;
   }
 
-  // Each report's wording: the final delivered .docx when one is attached and
-  // readable, else the archived draft. Downloads run 4 at a time.
+  // Each report's wording, newest files first in priority:
+  //  - a final PDF (the format since Oct 2026) is sent to Claude as the
+  //    document itself — Claude reads PDFs natively, layout and all. Only the
+  //    newest STATUS_PDF_MAX are sent, so the cost stays bounded as reports
+  //    accumulate; older ones use their archived wording.
+  //  - a final .docx (attached before PDFs) contributes its paragraphs.
+  //  - otherwise, or if the file can't be read, the archived draft wording.
+  var pdfIdx = archives.map(function(r, i){ return _isPdfPath(r.docxPath) ? i : -1; }).filter(function(i){ return i >= 0; });
+  var pdfSend = {}; pdfIdx.slice(-STATUS_PDF_MAX).forEach(function(i){ pdfSend[i] = true; });
   var withFile = archives.filter(function(r){ return r.docxPath; }).length;
   if (withFile && btn) btn.textContent = '✦ Reading ' + withFile + ' final report' + (withFile===1?'':'s') + '…';
-  var prose = await _mapLimit(archives, 4, function(r){ return r.docxPath ? _archiveDocxProse(r) : Promise.resolve(null); });
-  var fromDocx = prose.filter(Boolean).length;
-  var unreadable = withFile - fromDocx;
-  var digest = archives.map(function(r, i) {
+  var files = await _mapLimit(archives, 4, function(r, i){
+    if (!r.docxPath) return Promise.resolve(null);
+    if (_isPdfPath(r.docxPath)) return pdfSend[i] ? _archivePdfFile(r) : Promise.resolve(null);
+    return _archiveDocxProse(r);
+  });
+  var fromFile = files.filter(Boolean).length;
+  var pdfOlder = pdfIdx.length - Object.keys(pdfSend).length;
+  var unreadable = withFile - fromFile - pdfOlder;
+  var pdfPages = 0, pdfCount = 0;
+  // One entry per report: {text} or {text, pdf}. Joined into a plain string
+  // when no PDF is attached; content blocks (text + document) when one is.
+  var reportParts = archives.map(function(r, i) {
     var period = (r.periodStart && r.periodEnd) ? (fmt(r.periodStart)+' to '+fmt(r.periodEnd))
                : ((r.snapshot && r.snapshot.periodLabel) || 'period unknown');
     var head = 'Report '+(i+1)+' (#'+(r.reportNum||'?')+', '+period+')';
-    if (prose[i]) {
-      return head + ' — SOURCE: final delivered report (.docx), as the client received it'
-        + (prose[i].trimmed ? '; long report, the first part only' : '') + ':\n' + prose[i].text;
+    var f = files[i];
+    if (f && f.pdf) {
+      pdfPages += f.pages; pdfCount++;
+      return { text: head + ' — SOURCE: final delivered report (PDF), as the client received it; the document follows.', pdf: f.pdf };
+    }
+    if (f) {
+      return { text: head + ' — SOURCE: final delivered report (.docx), as the client received it'
+        + (f.trimmed ? '; long report, the first part only' : '') + ':\n' + f.text };
     }
     var secs = (r.sections||[]).map(function(s){
       var parts = [s.title];
       if (s.summary) parts.push(s.summary);
       return parts.join(': ');
     }).join(' | ');
-    return head + ' — SOURCE: archived draft wording'
-      + (r.docxPath ? ' (the final .docx could not be read)' : ' (no final .docx attached)') + ': '
-      + (r.overallSummary||'')
-      + (secs?' Sections — '+secs:'');
-  }).join('\n\n');
+    var why = !r.docxPath ? 'no final report attached'
+            : (_isPdfPath(r.docxPath) && !pdfSend[i]) ? 'an older report; only the newest ' + STATUS_PDF_MAX + ' final PDFs are read in full'
+            : 'the final file could not be read';
+    return { text: head + ' — SOURCE: archived draft wording (' + why + '): '
+      + (r.overallSummary||'') + (secs?' Sections — '+secs:'') };
+  });
+  var digest = reportParts.map(function(x){ return x.text; }).join('\n\n');
 
   var proj = (DB.get('projects')||[]).find(function(p){return p.id===projF;});
   var projName = proj ? proj.name : 'this project';
@@ -16468,10 +16535,12 @@ async function generateTrendSummary() {
     +'Never assert that something closed, opened or changed unless it appears in those facts, and never contradict '
     +'a stated number. Where a category shows no movement, say so plainly or omit it — do not manufacture a trend. '
     +'Be candid about being behind schedule; a client is better served by an honest status than a reassuring one.\n\n'
-    +'Each report below is marked with its SOURCE. A final delivered report (.docx) is the wording the client actually '
-    +'received, after the consultant\'s edits; treat it as the report of record. An archived draft is the pre-edit '
-    +'wording, used only where no final file is attached. Any number written in either kind of report is context only; '
-    +'the computed facts win wherever they differ.\n\n'
+    +'Each report below is marked with its SOURCE. A final delivered report (a PDF, or for older reports a .docx) is what '
+    +'the client actually received, after the consultant\'s edits; treat it as the report of record. An archived draft is '
+    +'the pre-edit wording, used where no final file is attached or read. Any number written in either kind of report is '
+    +'context only; the computed facts win wherever they differ. The PDFs include tables that may name private '
+    +'individuals: never name, quote or describe a private individual; refer to them by role (a resident, a business '
+    +'owner) if at all.\n\n'
     +'Use plain, professional language, third person, 6-9 sentences. '
     +'IMPORTANT: Output plain prose paragraphs only. No markdown, no hashtags, no headers, no bullet points, '
     +'no asterisks, no special formatting of any kind.';
@@ -16498,16 +16567,31 @@ async function generateTrendSummary() {
     + '\nArchived PI report narratives in chronological order:\n\n'+digest
     + movement
     + '\n\nWrite the project status narrative.';
+  // With PDFs, the same text in the same order, each PDF placed right after
+  // the line that introduces it.
+  var messageContent = userContent;
+  if (pdfCount) {
+    messageContent = [{ type: 'text', text: 'Project: '+projName+'\n\n'+planFacts+'\nArchived PI reports in chronological order:' }];
+    reportParts.forEach(function(x){
+      messageContent.push({ type: 'text', text: x.text });
+      if (x.pdf) messageContent.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: x.pdf } });
+    });
+    messageContent.push({ type: 'text', text: movement.replace(/^\n+/, '') + '\n\nWrite the project status narrative.' });
+  }
 
   var total = archives.length;
   // Cost from the text actually being sent (~4 characters per token), at
   // Sonnet 5.5's $2 / $10 per million tokens: input, plus the 1,200-token
   // reply and its thinking room.
-  var estTokens = Math.round((systemPrompt.length + userContent.length) / 4);
+  var estTokens = Math.round((systemPrompt.length + userContent.length) / 4) + pdfPages * STATUS_PDF_TOKENS_PER_PAGE;
   var estCost = (estTokens * 2 / 1e6 + (1200 + CLAUDE_THINKING_HEADROOM) * 10 / 1e6).toFixed(2);
   if (!confirm('This will send 1 API call to Claude (Sonnet) analyzing '+total+' archived reports.\n'
-    +(withFile ? 'Read from the final .docx: '+fromDocx+' of '+total+(unreadable ? ' ('+unreadable+' could not be read — their archived wording is used)' : '')+'. The rest use their archived wording.\n'
-               : 'No final .docx is attached yet, so each report\'s archived wording is used.\n')
+    +(withFile ? 'Read from the final report: '+fromFile+' of '+total
+                 +(pdfCount ? ' ('+pdfCount+' PDF'+(pdfCount===1?'':'s')+', about '+pdfPages+' page'+(pdfPages===1?'':'s')+')' : '')
+                 +(pdfOlder ? '; '+pdfOlder+' older PDF'+(pdfOlder===1?'':'s')+' left out to keep the cost down' : '')
+                 +(unreadable > 0 ? '; '+unreadable+' could not be read' : '')
+                 +'. The rest use their archived wording.\n'
+               : 'No final report is attached yet, so each report\'s archived wording is used.\n')
     +'About '+estTokens.toLocaleString()+' tokens of input. Estimated cost: ~$'+estCost+' or less.\n\nProceed?')) {
     if (btn) { btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px"><path d="M2 12 L5 8 L8 10 L11 5 L14 3"/></svg> ✦ AI: Project Status Report'; }
     return;
@@ -16518,7 +16602,7 @@ async function generateTrendSummary() {
       model: CLAUDE_TEXT_MODEL,
       max_tokens: 1200,
       system: systemPrompt,
-      messages: [{ role: 'user', content: userContent }]
+      messages: [{ role: 'user', content: messageContent }]
     });
     // Collect every text block — reading only content[0] returns nothing when the
     // first block isn't text (the same silent failure that broke draft-all).

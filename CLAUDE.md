@@ -1531,6 +1531,33 @@ ROW agents read that before negotiating.
     reason (nothing scoped, but nothing asked for more than one project's
     worth of data either) rather than actually failing. Re-verified after
     the fix: same role-switch test, same result.
+- **The final report of record is a PDF (Oct 2026, Jeff's call).** New
+  uploads are PDF only (`uploadReportDocx` → `.pdf,application/pdf`;
+  `_doUploadReportDocx` refuses anything else, stores
+  `{project_id}/{archive_id}.pdf` as `application/pdf`). It opens in any
+  browser and in Gmail/Drive exactly as issued (UDOT runs Google Workspace),
+  and reads as final. The column is still named `docx_path` (renaming it is a
+  migration over live rows for no behavior); `_isPdfPath()` tells the two
+  apart. A `.docx` attached earlier stays valid — labelled "Final .docx
+  attached" with **Replace with PDF**; replacing deletes the old object from
+  storage (best effort; staff hold delete via `report_files_staff_all`). The
+  share rule and DB trigger are unchanged (any attached file counts).
+  - Portal: a PDF shows **Open report (PDF)** (`openSharedReportPdf`: the tab
+    is opened inside the click, then pointed at a 300 s signed URL — a window
+    opened after an await is pop-up-blocked; falls back to a download). A
+    .docx keeps **Download report (.docx)**. Both signing calls now send
+    `{expiresIn}` in the JSON BODY, which Storage's sign endpoint reads — the
+    .docx one used a query string and was never exercised live.
+  - Status report: the newest `STATUS_PDF_MAX` (6) final PDFs go to Claude as
+    `document` blocks (base64), each right after its `SOURCE: final delivered
+    report (PDF)` label; older PDFs, unreadable files (or non-`%PDF-` bytes)
+    and reports without a file use the archived wording with the reason.
+    `.docx` reports still contribute paragraphs. The prompt is a plain string
+    when no PDF is sent, content blocks when one is. The PDFs include tables
+    that can name private individuals, so the system prompt forbids naming,
+    quoting or describing one. Cost check counts pages (`/Type /Page`
+    objects, else ~1 per 40 KB) × `STATUS_PDF_TOKENS_PER_PAGE` (2,500).
+  - Guarded by `test/tests/77-final-report-pdf.test.js` (fails on the old code).
 - **FROZEN SNAPSHOTS (July 2026).** An archived report is a point-in-time
   compliance record. `_buildReportSnapshot(projF, saved)` captures, at archive
   time, everything the report renders: `recipients` (the Distributed-To

@@ -8268,7 +8268,11 @@ async function saveTeamMember(){
   const old=id?all.find(x=>String(x.id)===String(id)):null;
   if(all.some(x=>String(x.id)!==String(id)&&String(x.initials||'').toUpperCase()===rec.initials)){alert('Someone on the team already uses '+rec.initials+'. Initials must be unique — they are how the app tells people apart.');return}
   if(rec.email&&all.some(x=>String(x.id)!==String(id)&&String(x.email||'').toLowerCase()===rec.email)){alert('Someone on the team already has that email.');return}
-  if(rec.email&&_iniFromEmail(rec.email)&&_iniFromEmail(rec.email)!==rec.initials&&!confirm('Signing in as '+rec.email+' logs interactions as "'+_iniFromEmail(rec.email)+'", not "'+rec.initials+'". Their projects will still be found through this email, but their logs will carry the other initials. Save anyway?')) return;
+  // Warn only when the typed initials have never logged anything: if they
+  // already appear in the logs, this person signs in under some other email
+  // that yields them, and the address here is just their contact email.
+  const _iniLogged=(DB.get('interactions')||[]).some(i=>String(i.loggedBy||'').toUpperCase()===rec.initials);
+  if(rec.email&&!_iniLogged&&_iniFromEmail(rec.email)&&_iniFromEmail(rec.email)!==rec.initials&&!confirm('Signing in as '+rec.email+' logs interactions as "'+_iniFromEmail(rec.email)+'", not "'+rec.initials+'". Their projects will still be found through this email, but their logs will carry the other initials. Save anyway?')) return;
   const oldIni=old?String(old.initials||'').toUpperCase():'';
   const _rekey=oldIni&&oldIni!==rec.initials;
   const led=_rekey?(DB.get('projects')||[]).filter(p=>String(p.lead||'').toUpperCase()===oldIni):[];

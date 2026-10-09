@@ -351,7 +351,9 @@ first time a fetched project row carries a `lead` key — so a save never 400s).
   **whole** project record to `sbUpdate`: `toSB` nulls every date column a
   partial object omits (test 73 proves it would).
 - `_myInitials()` = the roster row whose email is the login, else
-  `getLoggedBy()`. `_fuTeam()` now unions the active roster.
+  `getLoggedBy()`. `_fuTeam()` now unions the active roster. Saving a member
+  whose email prefix gives other initials warns ONLY if the typed initials have
+  no logs yet (Jeff signs in on another address; the email is contact-only).
 - **My projects | All** (`_projScope`/`setProjScope`/`_scopeProjects`,
   localStorage `cc_proj_scope`) on the dashboard's Active projects cards and
   both Projects tabs (tab counts follow the scope). No saved choice → "mine"

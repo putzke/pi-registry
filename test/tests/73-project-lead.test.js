@@ -34,7 +34,16 @@ module.exports = {
         await saveTeamMember();
       }, f);
 
-      await addMember({ name: 'Jeff Putzke', initials: 'PUT', title: 'PI Manager', email: 'putzke@demo.test' });
+      // Contact email whose prefix gives other initials ("JPU"): warned about
+      // only when the typed initials have no logs yet.
+      await app.page.evaluate(() => { window._confirms = []; window.confirm = m => { window._confirms.push(m); return true; }; });
+      await addMember({ name: 'Logged Before', initials: 'LGB', email: 'jlogged@demo.test' });
+      t.ok(await app.page.evaluate(() => window._confirms.some(m => /logs interactions as "JLO"/.test(m))), 'initials with no logs: the email mismatch is flagged');
+      await app.page.evaluate(() => { window._confirms = []; const a = DB.get('interactions'); a[0].loggedBy = 'PUT'; });
+      await addMember({ name: 'Jeff Putzke', initials: 'PUT', title: 'PI Manager', email: 'jputzke@demo.test' });
+      t.ok(await app.page.evaluate(() => !window._confirms.some(m => /logs interactions as/.test(m))), 'initials already in the logs: no warning');
+      await t.sql(`delete from pi_team_members where initials='LGB'`);
+      await app.page.evaluate(async () => { window.confirm = () => true; _syncCache.team_members = await sbGet('team_members', {strict:true}); });
       await addMember({ name: 'New Hire', initials: 'NH', title: 'PI Coordinator', phone: '801-555-0100', email: '' });
       const rows = await t.sql(`select name, initials, email, active from pi_team_members order by name`);
       t.eq(rows.map(r => r.initials), ['PUT', 'NH'], 'both members were saved');

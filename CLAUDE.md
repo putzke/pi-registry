@@ -1572,6 +1572,25 @@ ROW agents read that before negotiating.
     quoting or describing one. Cost check counts pages (`/Type /Page`
     objects, else ~1 per 40 KB) × `STATUS_PDF_TOKENS_PER_PAGE` (2,500).
   - Guarded by `test/tests/77-final-report-pdf.test.js` (fails on the old code).
+- **"Copy client link" — one report, one link (Oct 2026).** On a shared
+  report with a final PDF (Report Archive card, beside Replace file;
+  disabled until shared). `copyReportClientLink` copies
+  `client-portal.html?token=<the project's portal link>&report=<archive id>`
+  as rich text (`_copyRichLink`: `text/html` anchor whose text is
+  `_reportLinkLabel` — "Project: Title #N, period (PDF)" — plus a
+  `text/plain` "label: url"), so an email shows the report's name, not a
+  bare URL. No portal link yet → `confirm()` then created
+  (`_portalTokenFor`, cached per project); a refused clipboard write opens
+  `_reportLinkDialog`. Nothing new is stored: revoking the portal link or
+  unsharing the report stops it, and the holder can also open the portal.
+  Portal: `bootFromToken(token, reportId)` → `openReportDeepLink` signs the
+  PDF (300 s) and `location.replace`s to it (`_goToUrl`, stubbable); not
+  shared / no PDF / failure → Project PI Reports with a note.
+  **Portal nav "Project Updates" → "Project PI Reports"**, reports listed
+  first on that tab, and an Overview card (`latestReportCard`) with the
+  newest shared report + "All PI reports (N)". The harness's
+  `pi_portal_links.token` now defaults to `gen_random_uuid()` as the
+  migration declares. Guarded by `test/tests/79-report-client-link.test.js`.
 - **FROZEN SNAPSHOTS (July 2026).** An archived report is a point-in-time
   compliance record. `_buildReportSnapshot(projF, saved)` captures, at archive
   time, everything the report renders: `recipients` (the Distributed-To
@@ -2831,7 +2850,7 @@ single current trend, prior ones kept as history.
 3. ✅ Removed Client Summary tab + `generateClientSummaryDraft()` +
    `publishClientSummary()`. Stale `S.rptTab==='client-summary'` normalized to
    'reports'.
-4. ✅ Portal (`client-portal.html`): "AI Summary" nav → "Project Updates";
+4. ✅ Portal (`client-portal.html`): "AI Summary" nav → "Project Updates" (→ "Project PI Reports", Oct 2026);
    both boots fetch `pi_report_archive?client_visible=eq.true` into
    `_sharedReports`; `renderSummary()` → current trend (`content_full`) + trend
    history + shared-reports list. `renderArchivedReportHTML()` renders sections

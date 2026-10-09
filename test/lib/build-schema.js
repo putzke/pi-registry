@@ -160,7 +160,7 @@ for (const line of fs.readFileSync(path.join(here, 'schema-columns.txt'), 'utf8'
         ? 'id bigint generated always as identity primary key'
         : 'id bigserial primary key';
     }
-    if (col === 'token') return 'token uuid primary key';
+    if (col === 'token') return 'token uuid primary key default gen_random_uuid()';   // as sql/2026-07-04_portal_links.sql declares
     // OCC depends on updated_at defaulting to now(), so timestamps keep theirs.
     if (TIMESTAMPS.has(col) && ty === 'timestamptz') return `${col} timestamptz default now()`;
     return `${col} ${ty}`;

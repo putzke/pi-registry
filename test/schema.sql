@@ -304,7 +304,7 @@ create table pi_parcels (
 );
 
 create table pi_portal_links (
-  token uuid primary key,
+  token uuid primary key default gen_random_uuid(),
   project_id bigint,
   label text,
   created_at timestamptz default now()

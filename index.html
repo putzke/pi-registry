@@ -428,7 +428,7 @@ window.onGoogleMapsReady = function() {
 
 // Called by Google when it refuses the key — most often because the page's
 // address isn't in the key's website restrictions (seen on the move to
-// app.cirruscc.com). Without this the Map view just stays blank.
+// the app's own domain, APP_BASE_URL). Without this the Map view just stays blank.
 window.gm_authFailure = function() {
   window._googleMapsAuthFailed = true;
   var msg = 'Google Maps refused this address (' + location.hostname + '). In Google Cloud → APIs & Services → Credentials, add https://' + location.hostname + '/* to the Maps key’s website restrictions, wait 5 minutes and reload.';
@@ -15844,6 +15844,88 @@ async function toggleReportShared(archiveId) {
 // row can trigger this for any archive id and re-using a single static
 // input would need re-wiring its handler on every click anyway.
 function _isPdfPath(p) { return /\.pdf$/i.test(String(p || '')); }
+
+// ── "Copy client link" on an archived report (Oct 2026) ──────────────────────
+// A link that opens ONE shared report's PDF, to paste into an email reply:
+// client-portal.html?token=<the project's portal link>&report=<archive id>.
+// The portal resolves it and goes straight to the PDF (openReportDeepLink).
+// It rides the project's ordinary portal link, so revoking that link or
+// unsharing the report stops it; nothing new is stored. Copied as rich text
+// (the report's name as the link text) so the email shows a descriptive
+// link instead of a bare URL; plain-text paste gets "name: url".
+var _portalTokenCache = {};
+async function _portalTokenFor(projId, create) {
+  var k = String(projId);
+  if (_portalTokenCache[k]) return _portalTokenCache[k];
+  var res = await fetch(SUPA_REST + '/pi_portal_links?project_id=eq.' + encodeURIComponent(k) + '&select=token', { headers: getAuthHeaders() });
+  if (!res.ok) throw new Error('Could not read the portal link (' + res.status + ')');
+  var rows = await res.json();
+  if (rows.length) return (_portalTokenCache[k] = rows[0].token);
+  if (!create) return null;
+  var p = (DB.get('projects') || []).find(function(x){ return String(x.id) === k; }) || {};
+  if (!confirm('"' + (p.name || 'This project') + '" has no client portal link yet. Report links open through it, and anyone holding a report link can also open this project\'s portal.\n\nCreate the portal link now?')) return null;
+  var cr = await fetch(SUPA_REST + '/pi_portal_links', {
+    method: 'POST', headers: Object.assign({}, getAuthHeaders(), { 'Prefer': 'return=representation' }),
+    body: JSON.stringify({ project_id: Number(k) })
+  });
+  if (!cr.ok) throw new Error('Could not create the portal link (' + cr.status + ')');
+  var made = await cr.json();
+  if (!made.length) throw new Error('Could not create the portal link');
+  return (_portalTokenCache[k] = made[0].token);
+}
+function _reportLinkLabel(rec) {
+  var p = (DB.get('projects') || []).find(function(x){ return String(x.id) === String(rec.projectId); }) || {};
+  var t = (rec.reportTitle || 'PI Report') + (rec.reportNum ? ' #' + rec.reportNum : '');
+  var per = (rec.periodStart || rec.periodEnd) ? ', ' + _fmtDateRange(rec.periodStart, rec.periodEnd) : '';
+  return (p.name ? p.name + ': ' : '') + t + per + ' (PDF)';
+}
+function _reportLinkUrl(token, rec) {
+  return APP_BASE_URL + '/client-portal.html?token=' + encodeURIComponent(token) + '&report=' + encodeURIComponent(rec.id);
+}
+async function _copyRichLink(label, url) {
+  var html = '<a href="' + escHtml(url) + '">' + escHtml(label) + '</a>';
+  var plain = label + ': ' + url;
+  if (navigator.clipboard && window.ClipboardItem) {
+    await navigator.clipboard.write([new ClipboardItem({
+      'text/html': new Blob([html], { type: 'text/html' }),
+      'text/plain': new Blob([plain], { type: 'text/plain' })
+    })]);
+  } else {
+    await navigator.clipboard.writeText(plain);
+  }
+}
+async function copyReportClientLink(archiveId, btn) {
+  var rec = (_syncCache['report_archive'] || []).find(function(r){ return String(r.id) === String(archiveId); });
+  if (!rec) { showToast('Archive record not found', 'error'); return; }
+  if (!rec.clientVisible) { showToast('Share this report first — the link only opens shared reports.', 'warn', 4000); return; }
+  if (!_isPdfPath(rec.docxPath)) { showToast('Attach the final PDF first.', 'warn', 4000); return; }
+  var label = _reportLinkLabel(rec), token;
+  try { token = await _portalTokenFor(rec.projectId, true); }
+  catch (e) { showToast(e.message, 'error', 5000); return; }
+  if (!token) return;
+  var url = _reportLinkUrl(token, rec);
+  try {
+    await _copyRichLink(label, url);
+  } catch (e) {
+    // The clipboard can refuse a write that follows a network wait or a
+    // dialog (Safari). Show the link with its own Copy button instead.
+    _reportLinkDialog(label, url);
+    return;
+  }
+  if (btn) {
+    var orig = btn.innerHTML;
+    btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px"><path d="M2 8l4 4 8-8"/></svg> Copied';
+    setTimeout(function(){ btn.innerHTML = orig; }, 2000);
+  }
+  showToast('Link copied. Paste it into your email; it shows as "' + label + '".', 'success', 4500);
+}
+function _reportLinkDialog(label, url) {
+  window._rptLink = { label: label, url: url };
+  openM('Client link',
+    '<div style="font-size:13px;margin-bottom:8px">Pastes into an email as <strong>' + escHtml(label) + '</strong>.</div>'
+    + '<input readonly style="width:100%;font-size:12px" value="' + escHtml(url) + '" onfocus="this.select()">',
+    '<button class="btn" onclick="closeM()">Close</button><button class="btn btn-primary" onclick="_copyRichLink(window._rptLink.label,window._rptLink.url).then(function(){closeM();showToast(\'Link copied\',\'success\');},function(){showToast(\'Select the link and press Ctrl+C\',\'warn\');})">Copy link</button>');
+}
 function uploadReportDocx(archiveId) {
   var input = document.createElement('input');
   input.type = 'file';
@@ -16000,6 +16082,10 @@ function _buildArchiveHTML(projF) {
           +(r.docxUploadedAt?' · '+fmt(String(r.docxUploadedAt).slice(0,10)):'')+'</span>'
           +(isPdf
             ? '<button class="btn btn-xs" style="flex-shrink:0" onclick="uploadReportDocx(\''+r.id+'\')" title="Upload a revised PDF — overwrites the current file">Replace file</button>'
+              +(r.clientVisible
+                ? '<button class="btn btn-xs" style="flex-shrink:0;color:var(--sky-lt);border-color:rgba(90,135,198,.4)" onclick="copyReportClientLink(\''+r.id+'\',this)" title="Copy a link that opens this PDF for the client. Pastes into an email as the report\'s name.">'
+                  +'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:10px;height:10px"><path d="M6.5 9.5l3-3M7 4.5l1-1a2.5 2.5 0 013.5 3.5l-1 1M9 11.5l-1 1A2.5 2.5 0 014.5 9l1-1"/></svg> Copy client link</button>'
+                : '<button class="btn btn-xs" disabled style="flex-shrink:0;opacity:.45;cursor:not-allowed" title="Share this report first — the link only opens shared reports">Copy client link</button>')
             : '<button class="btn btn-xs" style="flex-shrink:0;color:var(--sky-lt);border-color:rgba(90,135,198,.4)" onclick="uploadReportDocx(\''+r.id+'\')" title="Final reports are now PDFs. Upload the PDF of this report to replace the .docx.">Replace with PDF</button>')
         : '<span style="flex-shrink:0;font-size:11px;color:var(--fog)">No final report attached'+(r.clientVisible?' (shared before this was required)':'')+'</span>'
           +'<button class="btn btn-xs" style="flex-shrink:0;color:var(--sky-lt);border-color:rgba(90,135,198,.4)" onclick="uploadReportDocx(\''+r.id+'\')">Attach final PDF</button>')

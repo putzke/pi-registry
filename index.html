@@ -1323,7 +1323,25 @@ async function _sbWrite(url, method, bodyObj, headerOverrides) {
       }
     }
     throw lastErr;
-  } finally { _writesInFlight--; _lastLocalWriteAt = Date.now(); }
+  } finally { _writesInFlight--; _lastLocalWriteAt = Date.now(); _scheduleBadges(); }
+}
+
+// The sidebar counts (Master List, Follow-ups, Issues, Events, Parcels,
+// Comments…) follow the data, not the redraw. Only render() used to refresh
+// them, and ~20 save paths redraw just their own view (saveIssue →
+// renderIssuesView, saveMeeting → renderMeetings, attachOwner → the parcel
+// modal…), so a count stayed stale until the next full render. Every cache
+// write (DB.set) and every database write (_sbWrite) now schedules one
+// refresh; the timeout runs after the caller's own cache update, and a burst
+// of writes costs one refresh.
+let _badgeTimer = null;
+function _scheduleBadges() {
+  if (_badgeTimer) return;
+  _badgeTimer = setTimeout(() => {
+    _badgeTimer = null;
+    try { if (typeof refreshBadges === 'function') refreshBadges(); }
+    catch (e) { console.warn('Sidebar counts not refreshed:', e.message); }
+  }, 0);
 }
 
 // Surface a single, debounced warning when a write can't reach Supabase after
@@ -1696,7 +1714,10 @@ const DB = {
   set(k, arr) {
     const old = JSON.parse(JSON.stringify(_syncCache[k] || []));
     _syncCache[k] = arr;
-    return DB._sync(k, old, arr); // return promise so callers can await if needed
+    _scheduleBadges();
+    const p = DB._sync(k, old, arr); // return promise so callers can await if needed
+    p.then(_scheduleBadges, _scheduleBadges); // again once ids settle / a failed insert rolls back
+    return p;
   },
   async _sync(table, oldArr, newArr) {
     const oldMap = {}; oldArr.forEach(x => { if(x.id) oldMap[x.id] = x; });
@@ -17282,6 +17303,8 @@ function exportProject(projectId) {
   const allProjsE=DB.get('projects')||[];
   const projIdx=allProjsE.findIndex(x=>x.id===projectId);
   if(projIdx>-1){allProjsE[projIdx].lastExported=localToday();DB.set('projects',allProjsE);}
+  // Redraw so the card's "Exported today" flag updates now, not on reload.
+  render();
   showToast(`Exported: ${filename}`);
 
   } catch(err) {
@@ -17668,6 +17691,7 @@ function exportPortfolio() {
     if(pi>-1){allProjsP[pi].lastExported=todayStr;}
   });
   DB.set('projects',allProjsP);
+  render(); // the project cards' "Exported" flags change with this
   showToast(`Portfolio exported: ${allProjs.length} projects`);
 }
 

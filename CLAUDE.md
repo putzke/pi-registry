@@ -309,6 +309,28 @@ updates it. So the bar repeated the status back as a fake percentage.
 - Guarded by `test/tests/67-deliverable-no-target.test.js` (13 checks; verified
   to fail against the old code).
 
+### Flags that updated only after a refresh (Oct 2026)
+Reported live: exporting 1200 South Wastewater (PIN 700) left its card without
+"Exported today" until a reload. `exportProject` / `exportPortfolio` wrote
+`lastExported` to the cache and never redrew; both now call `render()`.
+**A sweep of both apps** (every function that writes data, checked for a
+redraw) found two shapes:
+- **No redraw at all:** only the two exports. Everything else redraws, often
+  through a helper (`_renderGroupsManager`, `selectIntStake`,
+  `runIntegrityScan`, `openCloseoutIntake`, `_emailRerender`, `setView`).
+- **Partial redraw, stale sidebar counts:** ~20 saves redraw just their own
+  view (`saveIssue`/`deleteIssue`, `saveMeeting`/`delMeeting`,
+  `saveComment`/`delComment`, `attachOwner`/`detachOwner`, bulk contact
+  edits, unlinks, `_mvImportUntracked`…), but only `render()` refreshed the
+  badges. Fixed centrally, not per call site: `_scheduleBadges()` (next to
+  `_sbWrite`) runs `refreshBadges()` on the next tick after every `DB.set`,
+  again when its sync settles, and after every `_sbWrite` — so a new save
+  path is covered without remembering. A burst of writes costs one refresh.
+- Mobile was clean: every save redraws its screen, and its two counts
+  (`updateFUBadges`/`updateIssBadges`) run on every `showScreen`.
+- Guarded by `test/tests/70-stale-flags.test.js` (7 checks; verified to fail
+  on the old code).
+
 ### Events do NOT create follow-ups (Aug 2026)
 The Edit-event modal's "Action items" textarea used to create a `pi_interactions`
 row per line. Removed — the field is now documentation on the event record only.

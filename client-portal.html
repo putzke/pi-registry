@@ -10,6 +10,20 @@
        and treated as optional: if the CDN is unreachable (conference wifi), the
        chart falls back to a self-contained inline SVG — see engagementChart(). -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+  <script>
+    // A link to one report (?token=…&report=…) shows only a plain "Opening"
+    // screen until the PDF opens — never a flash of the sign-in screen or
+    // the dashboard. Removed again if it falls back to the portal.
+    (function(){ var q = new URLSearchParams(location.search);
+      if (q.get('token') && q.get('report')) document.documentElement.classList.add('deep-report'); })();
+  </script>
+  <style>
+    #report-splash { display:none; }
+    html.deep-report #login-screen, html.deep-report #app { display:none !important; }
+    html.deep-report #report-splash { display:flex; position:fixed; inset:0; align-items:center; justify-content:center; flex-direction:column; gap:14px; background:#0B1929; color:#cfe3ef; font:15px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; text-align:center; padding:24px; }
+    #report-splash .rs-spin { width:28px; height:28px; border:3px solid rgba(53,166,201,.25); border-top-color:#35A6C9; border-radius:50%; animation:rs-spin .8s linear infinite; }
+    @keyframes rs-spin { to { transform:rotate(360deg); } }
+  </style>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f6fa; color: #1a1a2e; }
@@ -351,6 +365,8 @@
 </head>
 <body>
 
+<div id="report-splash"><div class="rs-spin"></div><div id="report-splash-msg">Opening your report&hellip;</div></div>
+
 <!-- ── Login Screen ──────────────────────────────────────────────────── -->
 <div id="login-screen">
   <div class="login-card-wrap">
@@ -520,7 +536,9 @@ async function ensureSession() {
 window.addEventListener('DOMContentLoaded', async () => {
   const params = new URLSearchParams(window.location.search);
   const token = params.get('token');
-  if (token) { _tokenMode = true; _portalToken = token; bootFromToken(token, params.get('report')); return; }
+  if (token) { _tokenMode = true; _portalToken = token;
+    if (params.get('report')) { openReportLinkFast(token, params.get('report')); return; }
+    bootFromToken(token); return; }
 
   const hash = window.location.hash;
   if (hash && hash.includes('access_token=')) {
@@ -955,6 +973,34 @@ function latestReportCard() {
 // Anything else (unshared, no PDF, signing failed) lands on Project PI Reports
 // with a note, never a blank page.
 let _goToUrl = url => window.location.replace(url);
+
+// The fast path for an emailed report link: resolve the token, read that one
+// report, sign its PDF and go — the dashboard is never drawn. Anything else
+// (not shared, no PDF, a failure) drops the splash and boots the portal,
+// which lands on Project PI Reports with a note (openReportDeepLink).
+async function openReportLinkFast(token, reportId) {
+  try {
+    const projId = await sbFetch(`rpc/pi_resolve_portal_token?t=${encodeURIComponent(token)}`);
+    if (!projId) throw new Error('link');
+    const rows = await sbFetch(`pi_report_archive?id=eq.${encodeURIComponent(reportId)}&project_id=eq.${encodeURIComponent(projId)}&client_visible=eq.true&select=id,report_title,report_num,docx_path`);
+    const rec = rows[0];
+    if (!rec || !/\.pdf$/i.test(rec.docx_path || '')) throw new Error('report');
+    const msg = document.getElementById('report-splash-msg');
+    if (msg) msg.textContent = `Opening ${rec.report_title || 'PI Report'}${rec.report_num ? ' #' + rec.report_num : ''}…`;
+    const res = await fetch(`${SUPA_URL}/storage/v1/object/sign/report-files/${rec.docx_path}`, {
+      method: 'POST',
+      headers: { ...anonHdrs(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expiresIn: 300 })
+    });
+    if (!res.ok) throw new Error('sign');
+    const data = await res.json();
+    if (!data.signedURL) throw new Error('sign');
+    _goToUrl(`${SUPA_URL}/storage/v1${data.signedURL}`);
+  } catch (e) {
+    document.documentElement.classList.remove('deep-report');
+    bootFromToken(token, reportId);
+  }
+}
 async function openReportDeepLink(reportId) {
   const rec = _sharedReports.find(r => String(r.id) === String(reportId));
   if (!rec || !/\.pdf$/i.test(rec.docx_path || '')) {

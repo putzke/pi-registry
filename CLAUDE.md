@@ -1583,9 +1583,14 @@ ROW agents read that before negotiating.
   (`_portalTokenFor`, cached per project); a refused clipboard write opens
   `_reportLinkDialog`. Nothing new is stored: revoking the portal link or
   unsharing the report stops it, and the holder can also open the portal.
-  Portal: `bootFromToken(token, reportId)` → `openReportDeepLink` signs the
-  PDF (300 s) and `location.replace`s to it (`_goToUrl`, stubbable); not
-  shared / no PDF / failure → Project PI Reports with a note.
+  Portal, fast path (no dashboard flash, reported live): a `<head>` script
+  adds `html.deep-report` when both `token` and `report` are in the URL, so
+  only `#report-splash` ("Opening <title>…") ever paints — no sign-in screen,
+  no dashboard. `openReportLinkFast` resolves the token, reads that ONE
+  `pi_report_archive` row (shared, PDF), signs it (300 s) and
+  `location.replace`s (`_goToUrl`, stubbable). Not shared / no PDF / any
+  failure → drops the class and `bootFromToken(token, reportId)` →
+  `openReportDeepLink` → Project PI Reports with a note.
   **Portal nav "Project Updates" → "Project PI Reports"**, reports listed
   first on that tab, and an Overview card (`latestReportCard`) with the
   newest shared report + "All PI reports (N)". The harness's

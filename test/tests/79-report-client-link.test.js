@@ -67,12 +67,33 @@ module.exports = {
     // The emailed link goes straight to the PDF
     portal = await t.open('client-portal.html', { query: `?token=${tok.token}&report=${shared.id}` });
     try {
-      await portal.page.waitForFunction(() => document.getElementById('deep-open') && /could not be opened|Opening/.test(document.getElementById('deep-open').textContent), null, { timeout: 15000 });
+      await portal.page.waitForFunction(() => document.getElementById('deep-open') && /could not be opened/.test(document.getElementById('deep-open').textContent), null, { timeout: 15000 });
+      t.ok(await portal.page.evaluate(() => !document.documentElement.classList.contains('deep-report') && /Project PI Reports/.test(document.body.textContent)), 'a link whose PDF cannot be signed lands on the portal, not a blank page');
       let signedFor = '';
       await portal.page.route('**/storage/v1/object/sign/**', r => { signedFor = r.request().url(); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ signedURL: '/object/sign/report-files/x.pdf?token=t' }) }); });
       const went = await portal.page.evaluate(async id => { let u = ''; _goToUrl = x => { u = x; }; await openReportDeepLink(id); return u; }, String(shared.id));
       t.ok(/\/storage\/v1\/object\/sign\/report-files\/x\.pdf\?token=t$/.test(went), 'it goes to the signed PDF in the same tab');
       t.ok(signedFor.endsWith(`/report-files/${P}/a.pdf`), 'it signs that report\'s file');
+      // The fast path (what the emailed link runs): the dashboard is never drawn.
+      const fast = await portal.page.evaluate(async ([tk, id]) => {
+        document.getElementById('content').innerHTML = '';
+        document.documentElement.classList.add('deep-report');
+        let u = ''; _goToUrl = x => { u = x; };
+        await openReportLinkFast(tk, id);
+        return { u, content: document.getElementById('content').innerHTML, splash: getComputedStyle(document.getElementById('report-splash')).display, login: getComputedStyle(document.getElementById('login-screen')).display, msg: document.getElementById('report-splash-msg').textContent };
+      }, [tok.token, String(shared.id)]);
+      t.ok(/x\.pdf\?token=t$/.test(fast.u), 'the fast path goes to the signed PDF');
+      t.eq(fast.content, '', 'the dashboard is never drawn on the way');
+      t.ok(fast.splash === 'flex' && fast.login === 'none', 'only the "Opening" screen shows, not the sign-in screen');
+      t.ok(/Opening Project Team PI Update #7/.test(fast.msg), 'the splash names the report: ' + fast.msg);
+      const back = await portal.page.evaluate(async ([tk, id]) => {
+        document.documentElement.classList.add('deep-report');
+        let u = ''; _goToUrl = x => { u = x; };
+        await openReportLinkFast(tk, id);
+        await new Promise(r => setTimeout(r, 300));
+        return { u, deep: document.documentElement.classList.contains('deep-report'), txt: (document.querySelector('.content-inner') || {}).textContent || '' };
+      }, [tok.token, String(unshared.id)]);
+      t.ok(!back.u && !back.deep && /no longer shared/.test(back.txt), 'an unshared report falls back to the portal with a note');
       const gone = await portal.page.evaluate(async id => { let u = ''; _goToUrl = x => { u = x; }; await openReportDeepLink(id); return { u, txt: document.querySelector('.content-inner').textContent }; }, String(unshared.id));
       t.ok(!gone.u && /no longer shared/.test(gone.txt), 'an unshared report goes nowhere and says so');
     } finally { await portal.close(); }

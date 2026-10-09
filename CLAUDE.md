@@ -191,6 +191,18 @@ What stays is what a dashboard is for: **overdue follow-ups** and **how long
 since the client got a status report** — things that are wrong or going stale,
 which no other screen surfaces at a glance. Card height 171px → 109px.
 
+**"Last report: <date>" replaced "✦ Portal: <date>" (Oct 2026).** The old
+chip counted only published AI Project Status Reports, so it was blank on
+every project reported by shared PI report PDFs (live: 3600 West and SR-201,
+4 and 2 shared PDFs, no chip) and showed only the demo seed's July dates.
+`_lastClientReport(projId)` (next to `TEAM_STALE_DAYS`) = the newest of a
+shared PI report (`docxUploadedAt`, else `archivedAt`; unshared ones never
+count) or a published status report; amber at `LAST_REPORT_STALE_DAYS` (30);
+an active project with neither reads "No report shared yet". The Team view's
+"No report 30+ days" column uses the same helper. Dashboard and Team refresh
+`report_archive` + `client_summaries`. Guarded by
+`test/tests/18-portal-chip.test.js`.
+
 The footer row is omitted entirely when a project has neither, rather than
 rendering an empty bordered strip. `fuTag` lost its `margin-left:auto` (it is
 now the first chip, not the last) and the portal chip keeps its own, so the two
@@ -391,8 +403,9 @@ first time a fetched project row carries a `lead` key — so a save never 400s).
   inactive) who still leads a project or owns an open follow-up — projects
   led (Active/On hold, buttons open the project dialog to reassign), open /
   overdue follow-ups by `_fuOwner`, interactions logged in 30 days, and how
-  many of their projects have had no Project Status Report published
-  (`client_summaries`, the dashboard's "Portal:" date) in 30+ days. Banner
+  many of their projects' clients have had no report in 30+ days
+  (`_lastClientReport` — shared PI report or status report, the dashboard
+  card's "Last report" date). Banner
   lists active projects with no lead.
 - The test REST shim's RPC now passes request headers as `request.headers`
   and returns rows for set-returning functions, as PostgREST does.

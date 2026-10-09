@@ -1606,7 +1606,7 @@ let _bgRefreshBusy   = false;
 
 function _viewTables(v){
   const m = {
-    dashboard:    ['interactions','stakeholders','issues','projects','deliverables','meetings'],
+    dashboard:    ['interactions','stakeholders','issues','projects','deliverables','meetings','report_archive','client_summaries'],
     projects:     ['projects','interactions','stakeholders','project_stakeholders'],
     master:       ['stakeholders','project_stakeholders','interactions'],
     stakeholders: ['stakeholders','project_stakeholders','interactions','projects'],
@@ -1617,7 +1617,7 @@ function _viewTables(v){
     deliverables: ['deliverables','projects'],
     meetings:     ['meetings','projects','stakeholders'],
     issues:       ['issues','interactions','projects'],
-    team:         ['projects','interactions','team_members','client_summaries']
+    team:         ['projects','interactions','team_members','client_summaries','report_archive']
   };
   return m[v] || [];   // views not listed (settings, map, reports) don't auto-refresh
 }
@@ -2467,7 +2467,6 @@ function renderDash(el){
   const nepaProjs=scopeProjs.filter(p=>p.nepaChecklist&&p.nepaChecklist.length>0);
   const avgNepaPct=nepaProjs.length>0?Math.round(nepaProjs.reduce((sum,p)=>{const cl=p.nepaChecklist||[];return sum+(cl.length>0?cl.filter(x=>x.checked).length/cl.length:0);},0)/nepaProjs.length*100):null;
   const active=scopeProjs.filter(p=>p.status==='Active');
-  const clientSums=DB.get('client_summaries')||[];
   function projCard(p){
     // No contact/sentiment/interaction counts on this card any more, so the
     // scans that fed them are gone too — they ran per card on every dashboard
@@ -2476,25 +2475,19 @@ function renderDash(el){
     const projOD=ints.filter(i=>i.projectId===p.id&&i.followUp&&!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<new Date()).length;
     var pStatus=p.status==='Active'?'var(--green)':p.status==='On hold'?'var(--amber)':'var(--fog)';
     const fuTag=projFU>0?`<span style="color:${projOD>0?'var(--red)':'var(--amber)'};font-weight:500">${projOD>0?projOD+' overdue':projFU+' open FU'}</span>`:'';
-    var pSums=clientSums.filter(function(s){return String(s.projectId)===String(p.id);});
-    pSums.sort(function(a,b){return a.publishedAt>b.publishedAt?-1:1;});
-    var lastSum=pSums[0];
-    // The chip reads "Portal: <date>", which invites being read as "this project
-    // has a portal" or "the client has these reports". It is neither: it is the
-    // last time a Project Status Report was PUBLISHED (publishClientTrend), and
-    // nothing else. A project can have a live portal link the client checks
-    // weekly and show no chip at all. The title says so, and the colour goes
-    // amber at 30 days — a client who hasn't had a narrative in a month is the
-    // whole reason to surface the date rather than a tick.
-    var portalChip='';
-    if(lastSum){
-      var pubDay=(lastSum.publishedAt||'').slice(0,10);
-      var pubAge=pubDay?Math.floor((Date.now()-new Date(pubDay+'T00:00:00'))/86400000):0;
-      var pubTip='Project Status Report last published to the client portal — '
-                +fmt(pubDay)+(pubDay?' ('+ago(pubDay)+')':'')
-                +'.\nSeparate from shared reports, and from whether a portal link exists.';
-      portalChip='<span title="'+escHtml(pubTip)+'" style="color:'+(pubAge>=30?'var(--amber)':'var(--teal)')
-                +';font-size:11px;font-weight:600;margin-left:auto;cursor:help">✦ Portal: '+fmt(pubDay)+'</span>';
+    // When the client last got a report (Oct 2026; was "Portal: <date>", the
+    // last AI Project Status Report only — blank on every project reported by
+    // shared PDFs). Amber at 30 days; an active project with none says so.
+    var lr=_lastClientReport(p.id);
+    var portalChip;
+    if(lr.date){
+      var lrAge=Math.floor((Date.now()-new Date(lr.date+'T00:00:00'))/86400000);
+      var lrTip='Last report the client received: '+lr.what+' — '+fmt(lr.date)+' ('+ago(lr.date)+').'
+               +'\nCounts PI reports shared to the portal and published Project Status Reports.';
+      portalChip='<span title="'+escHtml(lrTip)+'" style="color:'+(lrAge>=LAST_REPORT_STALE_DAYS?'var(--amber)':'var(--teal)')
+                +';font-size:11px;font-weight:600;margin-left:auto;cursor:help">Last report: '+fmt(lr.date)+'</span>';
+    }else{
+      portalChip='<span title="No PI report has been shared to the client portal and no Project Status Report published." style="color:var(--amber);font-size:11px;font-weight:600;margin-left:auto;cursor:help">No report shared yet</span>';
     }
     // The dashboard card is IDENTITY + EXCEPTIONS, nothing else.
     //
@@ -8295,28 +8288,44 @@ function _projScopeHTML(list){
 // ── TEAM VIEW: who carries what ──
 // One row per person: active projects they lead, follow-ups they own (open /
 // overdue, by _fuOwner — the same rule as the Follow-ups view), what they
-// logged in the last 30 days, and how stale their projects' client status
-// reports are (Project Status Report published to the portal, the date the
-// dashboard card shows; amber at 30 days there, counted here).
+// logged in the last 30 days, and how long since their projects' clients got
+// a report (_lastClientReport — the dashboard card's date; amber at 30 days
+// there, counted here).
 // Rows also appear for initials that lead a project or own a follow-up but
 // are not on the team list, and for a deactivated member still holding
 // either — those are the rows that need rebalancing.
 const TEAM_STALE_DAYS=30;
+const LAST_REPORT_STALE_DAYS=30;
+// The newest report the client actually received for a project: a PI report
+// shared to the portal (its final file's upload date, else when it was
+// archived) or a published Project Status Report. {date:'', what:''} if none.
+// The dashboard card and the Team view both read this, so they agree.
+function _lastClientReport(projId){
+  const k=String(projId); let best={date:'',what:''};
+  (DB.get('report_archive')||[]).forEach(r=>{
+    if(String(r.projectId)!==k||!r.clientVisible) return;
+    const d=String(r.docxUploadedAt||r.archivedAt||'').slice(0,10);
+    if(d&&d>best.date) best={date:d,what:(r.reportTitle||'PI report')+(r.reportNum?' #'+r.reportNum:'')};
+  });
+  (DB.get('client_summaries')||[]).forEach(x=>{
+    if(String(x.projectId)!==k) return;
+    const d=String(x.publishedAt||'').slice(0,10);
+    if(d&&d>best.date) best={date:d,what:'Project Status Report'};
+  });
+  return best;
+}
 function _teamWorkload(){
   const projs=(DB.get('projects')||[]).filter(p=>p.status==='Active'||p.status==='On hold');
   const ints=DB.get('interactions')||[];
-  const sums=DB.get('client_summaries')||[];
   const now=new Date(), today=localToday();
   const d30=new Date(now.getTime()-30*86400000).toISOString().slice(0,10);
-  const lastPub={};
-  sums.forEach(s=>{ const k=String(s.projectId), d=String(s.publishedAt||'').slice(0,10); if(d&&(!lastPub[k]||d>lastPub[k])) lastPub[k]=d; });
   const rows={};
   const row=ini=>{ const k=String(ini||'').trim().toUpperCase(); if(!k) return null;
     if(!rows[k]){ const m=_teamByIni(k); rows[k]={ini:k,member:m,projects:[],open:0,overdue:0,logged30:0,stale:[]}; }
     return rows[k]; };
   _team(true).forEach(m=>row(m.initials));
   projs.forEach(p=>{ const r=row(p.lead); if(!r) return;
-    const lp=lastPub[String(p.id)]||'';
+    const lp=_lastClientReport(p.id).date;
     const age=lp?Math.floor((new Date(today+'T00:00:00')-new Date(lp+'T00:00:00'))/86400000):null;
     r.projects.push({p,lastPub:lp,age});
     if(age===null||age>=TEAM_STALE_DAYS) r.stale.push({p,age}); });
@@ -8332,7 +8341,7 @@ function renderTeam(el){
   const {rows,noLead}=_teamWorkload();
   const me=_myInitials();
   const chip=x=>{
-    const tip=x.lastPub?'Status report last published '+fmt(x.lastPub)+' ('+x.age+' days ago)':'No status report published to the portal yet';
+    const tip=x.lastPub?'Last report to the client '+fmt(x.lastPub)+' ('+x.age+' days ago)':'No report shared with the client yet';
     const amber=x.age===null||x.age>=TEAM_STALE_DAYS;
     return `<button class="btn btn-sm" title="${escHtml(x.p.name+' — '+tip+'. Click to edit the project (PI Lead).')}" onclick="openProjModal('${escHtml(x.p.id)}')" style="margin:2px 4px 2px 0;font-size:11px;${amber?'border-color:rgba(232,160,32,.45);':''}">${escHtml(x.p.pid||'')} ${escHtml(String(x.p.name||'').slice(0,28))}</button>`;
   };
@@ -8346,7 +8355,7 @@ function renderTeam(el){
       <td style="padding:10px 8px;vertical-align:top;text-align:center">${r.open}</td>
       <td style="padding:10px 8px;vertical-align:top;text-align:center;${r.overdue?'color:var(--red);font-weight:700':''}">${r.overdue}</td>
       <td style="padding:10px 8px;vertical-align:top;text-align:center">${r.logged30}</td>
-      <td style="padding:10px 8px;vertical-align:top;text-align:center" title="Projects with no status report published in ${TEAM_STALE_DAYS}+ days, or never">${stale}</td>
+      <td style="padding:10px 8px;vertical-align:top;text-align:center" title="Projects whose client has had no report in ${TEAM_STALE_DAYS}+ days, or never">${stale}</td>
     </tr>`;
   }).join('');
   el.innerHTML=`
@@ -8358,9 +8367,9 @@ function renderTeam(el){
       <thead><tr style="text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--fog)">
         <th style="padding:6px 8px">Person</th><th style="padding:6px 8px;text-align:center">Leads</th><th style="padding:6px 8px">Active projects (click to reassign)</th>
         <th style="padding:6px 8px;text-align:center">Open follow-ups</th><th style="padding:6px 8px;text-align:center">Overdue</th>
-        <th style="padding:6px 8px;text-align:center">Logged · 30 days</th><th style="padding:6px 8px;text-align:center">Status report ${TEAM_STALE_DAYS}+ days</th></tr></thead>
+        <th style="padding:6px 8px;text-align:center">Logged · 30 days</th><th style="padding:6px 8px;text-align:center">No report ${TEAM_STALE_DAYS}+ days</th></tr></thead>
       <tbody>${body}</tbody></table></div>`:`<div style="color:var(--fog);font-size:13px;padding:40px;text-align:center">No one on the team list yet. <a href="#" onclick="setView('settings');return false" style="color:var(--sky-lt)">Add your team in Settings</a>.</div>`}
-    <div style="font-size:11px;color:var(--fog);margin-top:12px;line-height:1.5">Projects counted are Active and On hold. Follow-ups belong to whoever they are assigned to, or whoever logged them when unassigned — the same rule as the Follow-ups page. Amber project buttons have had no Project Status Report published to the client portal in ${TEAM_STALE_DAYS} days, or ever.</div>
+    <div style="font-size:11px;color:var(--fog);margin-top:12px;line-height:1.5">Projects counted are Active and On hold. Follow-ups belong to whoever they are assigned to, or whoever logged them when unassigned — the same rule as the Follow-ups page. Amber project buttons have had no report reach the client (a PI report shared to the portal, or a Project Status Report) in ${TEAM_STALE_DAYS} days, or ever.</div>
   </div></div>`;
 }
 

@@ -9154,60 +9154,46 @@ el.innerHTML=topbar
   var champCt=extPS.filter(function(x){return x.support==='Champion'}).length;
   var neutCt=extPS.filter(function(x){return x.support==='Neutral'}).length;
   var oppCt=extPS.filter(function(x){return x.support==='Opponent'}).length;
-  var sentTot=champCt+neutCt+oppCt||1;
   var delPctR=projDels.length>0?Math.round(doneDels/projDels.length*100):0;
   var overdueFU=projInts.filter(function(i){return i.followUp&&!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<new Date()}).length;
 
   // Mini donut for deliverables
   function miniDonut(pct,color,sz){
-    var r=sz/2-3,c=2*Math.PI*r,d2=pct/100*c,g=c-d2;
-    return '<div style="position:relative;width:'+sz+'px;height:'+sz+'px;display:inline-flex;align-items:center;justify-content:center">'
+    var sw=sz<60?4:5, r=sz/2-sw/2-1,c=2*Math.PI*r,d2=pct/100*c,g=c-d2;
+    var fs=Math.min(13,Math.round(sz*0.24));
+    return '<div style="position:relative;width:'+sz+'px;height:'+sz+'px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">'
       +'<svg width="'+sz+'" height="'+sz+'" viewBox="0 0 '+sz+' '+sz+'" style="transform:rotate(-90deg)">'
-      +'<circle cx="'+sz/2+'" cy="'+sz/2+'" r="'+r+'" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="5"/>'
-      +'<circle cx="'+sz/2+'" cy="'+sz/2+'" r="'+r+'" fill="none" stroke="'+color+'" stroke-width="5" stroke-dasharray="'+d2+' '+g+'" stroke-linecap="round"/>'
-      +'</svg><div style="position:absolute;font-size:13px;font-weight:700;color:var(--white)">'+pct+'%</div></div>';
+      +'<circle cx="'+sz/2+'" cy="'+sz/2+'" r="'+r+'" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="'+sw+'"/>'
+      +'<circle cx="'+sz/2+'" cy="'+sz/2+'" r="'+r+'" fill="none" stroke="'+color+'" stroke-width="'+sw+'" stroke-dasharray="'+d2+' '+g+'" stroke-linecap="round"/>'
+      +'</svg><div style="position:absolute;font-size:'+fs+'px;font-weight:700;color:var(--white)">'+pct+'%</div></div>';
   }
-
-  // Sentiment mini bar
-  var sentMiniBar='<div style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:rgba(255,255,255,.06);margin:8px 0">'
-    +'<div style="width:'+(champCt/sentTot*100)+'%;background:var(--green)" title="Champions"></div>'
-    +'<div style="width:'+(neutCt/sentTot*100)+'%;background:var(--slate)" title="Neutral"></div>'
-    +'<div style="width:'+(oppCt/sentTot*100)+'%;background:var(--red)" title="Opponents"></div></div>';
 
   var fuColor=overdueFU>0?'var(--red)':openFUs>0?'var(--amber)':'var(--green)';
   var delColor=delPctR>=75?'#28A870':delPctR>=40?'#5BA4CF':'#D9A544';
-  var summaryBar='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px">'
-    +'<div style="background:linear-gradient(160deg,#1e3a5f,#1A3050);border:1px solid rgba(255,255,255,.14);border-top:3px solid var(--teal);border-radius:12px;padding:18px 20px">'
-    +'<div style="font-size:11px;font-weight:700;color:var(--fog);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">Stakeholders</div>'
-    +'<div style="font-size:48px;font-weight:700;line-height:1;color:var(--white);margin-bottom:8px">'+projPS.length+'</div>'
-    +'<div style="display:flex;gap:10px;font-size:14px;margin-bottom:8px">'
-    +'<span style="color:var(--teal)">'+extPS.length+' external</span>'
-    +'<span style="color:var(--sky-lt)">'+intPS.length+' internal</span></div>'
-    +sentMiniBar
-    +'<div style="display:flex;gap:10px;font-size:13px">'
-    +'<span style="color:var(--green)">'+champCt+' champ</span>'
-    +'<span style="color:var(--slate)">'+neutCt+' neutral</span>'
-    +'<span style="color:var(--red)">'+oppCt+' opp</span></div>'
-    +'</div>'
-    +'<div style="background:linear-gradient(160deg,#1e3a5f,#1A3050);border:1px solid rgba(255,255,255,.14);border-top:3px solid var(--sky-lt);border-radius:12px;padding:18px 20px">'
-    +'<div style="font-size:11px;font-weight:700;color:var(--fog);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">Interactions</div>'
-    +'<div style="font-size:48px;font-weight:700;line-height:1;color:var(--white);margin-bottom:8px">'+projInts.length+'</div>'
-    +'<div style="display:flex;gap:10px;font-size:14px">'
-    +'<span style="color:var(--sky-lt)">'+projInts.filter(function(i){return i.direction==='Incoming'}).length+' incoming</span>'
-    +'<span style="color:var(--green)">'+projInts.filter(function(i){return i.direction==='Outgoing'}).length+' outgoing</span></div>'
-    +'</div>'
-    +'<div style="background:linear-gradient(160deg,#1e3a5f,#1A3050);border:1px solid rgba(255,255,255,.14);border-top:3px solid '+fuColor+';border-radius:12px;padding:18px 20px">'
-    +'<div style="font-size:11px;font-weight:700;color:var(--fog);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">Follow-ups</div>'
-    +'<div style="font-size:48px;font-weight:700;line-height:1;color:'+fuColor+';margin-bottom:8px">'+openFUs+'</div>'
-    +'<div style="font-size:14px;color:'+fuColor+'">'+(overdueFU>0?overdueFU+' overdue':openFUs>0?'All on track':'None pending')+'</div>'
-    +'</div>'
-    +'<div style="background:linear-gradient(160deg,#1e3a5f,#1A3050);border:1px solid rgba(255,255,255,.14);border-top:3px solid '+delColor+';border-radius:12px;padding:18px 20px">'
-    +'<div style="font-size:11px;font-weight:700;color:var(--fog);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">Deliverables</div>'
-    +'<div style="display:flex;align-items:center;gap:16px">'
-    +miniDonut(delPctR,delColor,88)
-    +'<div><div style="font-size:28px;font-weight:700;color:var(--white);line-height:1">'+doneDels+'<span style="font-size:18px;color:var(--fog);font-weight:400"> of '+projDels.length+'</span></div>'
-    +'<div style="font-size:14px;color:var(--fog);margin-top:4px">complete</div></div></div>'
-    +'</div></div>';
+  // Compact summary cards (Oct 2026): label on top, then the figure with its
+  // breakdown BESIDE it rather than stacked under it — about 75px tall, down
+  // from ~180. Every number the old cards carried is still here; only the
+  // sentiment bar went, since the three counts beside it say the same thing.
+  var _card=function(accent,label,body){
+    return '<div style="background:linear-gradient(160deg,#1e3a5f,#1A3050);border:1px solid rgba(255,255,255,.14);border-top:3px solid '+accent+';border-radius:10px;padding:10px 14px">'
+      +'<div style="font-size:10px;font-weight:700;color:var(--fog);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">'+label+'</div>'
+      +'<div style="display:flex;align-items:center;gap:12px">'+body+'</div></div>';
+  };
+  var _big=function(n,color){ return '<div style="font-size:30px;font-weight:700;line-height:1;color:'+(color||'var(--white)')+'">'+n+'</div>'; };
+  var _lines=function(rows){ return '<div style="display:flex;flex-direction:column;gap:2px;font-size:12px;line-height:1.3">'+rows.join('')+'</div>'; };
+  var summaryBar='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px">'
+    +_card('var(--teal)','Stakeholders', _big(projPS.length)+_lines([
+        '<div><span style="color:var(--teal)">'+extPS.length+' external</span> &nbsp;<span style="color:var(--sky-lt)">'+intPS.length+' internal</span></div>',
+        '<div><span style="color:var(--green)">'+champCt+' champ</span> &nbsp;<span style="color:var(--slate)">'+neutCt+' neutral</span> &nbsp;<span style="color:var(--red)">'+oppCt+' opp</span></div>']))
+    +_card('var(--sky-lt)','Interactions', _big(projInts.length)+_lines([
+        '<div style="color:var(--sky-lt)">'+projInts.filter(function(i){return i.direction==='Incoming'}).length+' incoming</div>',
+        '<div style="color:var(--green)">'+projInts.filter(function(i){return i.direction==='Outgoing'}).length+' outgoing</div>']))
+    +_card(fuColor,'Follow-ups', _big(openFUs,fuColor)+_lines([
+        '<div style="color:'+fuColor+'">'+(overdueFU>0?overdueFU+' overdue':openFUs>0?'All on track':'None pending')+'</div>']))
+    +_card(delColor,'Deliverables', miniDonut(delPctR,delColor,46)+_lines([
+        '<div style="font-size:18px;font-weight:700;color:var(--white);line-height:1">'+doneDels+'<span style="font-size:13px;color:var(--fog);font-weight:400"> of '+projDels.length+'</span></div>',
+        '<div style="color:var(--fog)">complete</div>']))
+    +'</div>';
 
   var groupPanel='<div style="margin-bottom:20px;background:#0E1E30;border:1px solid rgba(255,255,255,.13);border-radius:10px;padding:14px 18px">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px">'

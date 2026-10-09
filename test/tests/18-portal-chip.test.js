@@ -24,7 +24,7 @@ module.exports = {
         try { localStorage.setItem('cc_proj_scope', 'all'); } catch (e) {}
         _syncCache.client_summaries = [{ id: 'x2', projectId: b, contentFull: 'old', publishedAt: day(45) + 'T12:00:00Z' }];
         _syncCache.report_archive = [
-          { id: 'r1', projectId: a, reportTitle: 'PI Update', reportNum: '7', clientVisible: true, docxPath: a + '/r1.pdf', docxUploadedAt: day(3) + 'T12:00:00Z', archivedAt: day(10) + 'T12:00:00Z' },
+          { id: 'r1', projectId: a, reportTitle: 'PI Update', reportNum: '7', clientVisible: true, docxPath: a + '/r1.pdf', docxUploadedAt: day(1) + 'T12:00:00Z', archivedAt: day(3) + 'T12:00:00Z' },
           { id: 'r2', projectId: a, reportTitle: 'PI Update', reportNum: '8', clientVisible: false, docxPath: a + '/r2.pdf', docxUploadedAt: day(1) + 'T12:00:00Z' },
           { id: 'r3', projectId: c, reportTitle: 'Draft', clientVisible: false, archivedAt: day(2) + 'T12:00:00Z' },
         ];
@@ -35,7 +35,7 @@ module.exports = {
                  day3: day(3), day45: day(45) };
       }, [viaPdf.id, viaSum.id, none.id]);
 
-      t.ok(out.a && out.a.style.includes('--teal') && /PI Update #7/.test(out.a.title), 'a PDF shared 3 days ago counts, teal, and names the report (an unshared newer one does not)');
+      t.ok(out.a && out.a.style.includes('--teal') && /PI Update #7/.test(out.a.title), 'a PDF archived 3 days ago counts by its archive date (not a later upload), teal, and names the report; an unshared newer one does not');
       t.ok(out.b && out.b.style.includes('--amber') && /Project Status Report/.test(out.b.title), 'a status report 45 days ago still counts, amber');
       t.ok(out.c && /^No report shared yet/.test(out.c.text) && out.c.style.includes('--amber'), 'a project whose only report is unshared says "No report shared yet"');
       t.ok(!out.old, 'the old "Portal:" chip is gone');

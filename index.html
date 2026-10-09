@@ -8297,14 +8297,16 @@ function _projScopeHTML(list){
 const TEAM_STALE_DAYS=30;
 const LAST_REPORT_STALE_DAYS=30;
 // The newest report the client actually received for a project: a PI report
-// shared to the portal (its final file's upload date, else when it was
-// archived) or a published Project Status Report. {date:'', what:''} if none.
+// shared to the portal (when it was archived) or a published Project Status
+// Report. {date:'', what:''} if none.
 // The dashboard card and the Team view both read this, so they agree.
 function _lastClientReport(projId){
   const k=String(projId); let best={date:'',what:''};
   (DB.get('report_archive')||[]).forEach(r=>{
     if(String(r.projectId)!==k||!r.clientVisible) return;
-    const d=String(r.docxUploadedAt||r.archivedAt||'').slice(0,10);
+    // Archived = when it was issued. Not the file's upload date: replacing
+    // the PDF later (a correction, a .docx swapped for a PDF) would move it.
+    const d=String(r.archivedAt||r.docxUploadedAt||'').slice(0,10);
     if(d&&d>best.date) best={date:d,what:(r.reportTitle||'PI report')+(r.reportNum?' #'+r.reportNum:'')};
   });
   (DB.get('client_summaries')||[]).forEach(x=>{

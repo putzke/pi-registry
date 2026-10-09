@@ -196,8 +196,8 @@ chip counted only published AI Project Status Reports, so it was blank on
 every project reported by shared PI report PDFs (live: 3600 West and SR-201,
 4 and 2 shared PDFs, no chip) and showed only the demo seed's July dates.
 `_lastClientReport(projId)` (next to `TEAM_STALE_DAYS`) = the newest of a
-shared PI report (`docxUploadedAt`, else `archivedAt`; unshared ones never
-count) or a published status report; amber at `LAST_REPORT_STALE_DAYS` (30);
+shared PI report (`archivedAt` — when it was issued; a later PDF
+replacement must not move it — unshared ones never count) or a published status report; amber at `LAST_REPORT_STALE_DAYS` (30);
 an active project with neither reads "No report shared yet". The Team view's
 "No report 30+ days" column uses the same helper. Dashboard and Team refresh
 `report_archive` + `client_summaries`. Guarded by

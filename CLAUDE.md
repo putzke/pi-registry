@@ -1575,6 +1575,23 @@ ROW agents read that before negotiating.
     (text/status/due), deliverables (title/status/pct), sentiment split, external
     contact count, events. Archives predating it degrade to narrative-only and the
     prompt says so rather than inventing movement.
+  - **Reads the final .docx (Oct 2026).** For each archived report with a
+    `docx_path`, `_archiveDocxProse(rec)` downloads it
+    (`/storage/v1/object/authenticated/report-files/…`, the staff session),
+    unzips with the embedded JSZip and `_docxProseFromXml` keeps TOP-LEVEL
+    body paragraphs only — tables (stakeholder names; the figures come from
+    computed facts) and header/footer parts are never read. Capped at
+    `DOCX_PROSE_MAX_CHARS` (8000, ~2k tokens) per report, cut on a word and
+    flagged. No file, or an unreadable one → the archived wording. Every
+    report in the prompt is labelled `SOURCE: final delivered report (.docx)`
+    or `SOURCE: archived draft wording (no final .docx attached | could not be
+    read)`, and the system prompt ranks the final file as the report of record
+    and the computed facts above both. The period falls back to the
+    snapshot's `periodLabel` when the columns are blank. The confirm states
+    how many came from the final file and estimates tokens/cost from the
+    actual text (Sonnet 5.5 $2/$10 per MTok). Measured sizes: archived
+    digest ~250–600 tokens/report; .docx files are 165–275 KB, mostly images.
+    Guarded by `test/tests/76-status-report-reads-docx.test.js`.
   - Delivery is deliberate: generated on demand, held in `_lastTrendResult`,
     editable, printable — persisted ONLY via `publishClientTrend()` to the portal.
     The status report is derived analysis; the archived reports are the record.

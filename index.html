@@ -16326,6 +16326,60 @@ function _buildTrendComparison(archives) {
   };
 }
 
+// ── The final .docx as the status report's source (Oct 2026) ──
+// The consultant hand-edits the exported .docx before it goes to the client,
+// so for a report with a final file attached, the status report reads THAT
+// wording rather than the archived draft. Paragraphs only: tables are
+// skipped (the figures come from computed facts, which the model is told are
+// authoritative, and the interaction tables carry stakeholder names the
+// narrative does not need). Headers and footers live in other parts and are
+// never read. A report with no file, or whose file cannot be read, falls back
+// to its archived wording, and the prompt says which source each one is.
+const DOCX_PROSE_MAX_CHARS = 8000;   // ~2,000 tokens per report, a long report's prose
+function _docxProseFromXml(xml) {
+  var doc = new DOMParser().parseFromString(xml, 'application/xml');
+  var W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  var body = doc.getElementsByTagNameNS(W, 'body')[0];
+  if (!body) return '';
+  var out = [];
+  for (var n = body.firstElementChild; n; n = n.nextElementSibling) {
+    if (n.namespaceURI !== W || n.localName !== 'p') continue;   // top-level paragraphs only — skips w:tbl
+    var txt = '';
+    var walk = function (el) {
+      for (var c = el.firstElementChild; c; c = c.nextElementSibling) {
+        if (c.namespaceURI === W && c.localName === 't') txt += c.textContent;
+        else if (c.namespaceURI === W && (c.localName === 'tab' || c.localName === 'br')) txt += ' ';
+        else walk(c);
+      }
+    };
+    walk(n);
+    txt = txt.replace(/\s+/g, ' ').trim();
+    if (txt) out.push(txt);
+  }
+  return out.join('\n');
+}
+// → {text, trimmed} or null when the file is missing or unreadable.
+async function _archiveDocxProse(rec) {
+  if (!rec || !rec.docxPath) return null;
+  try {
+    var sess = getSession();
+    var r = await fetch(SUPA_URL + '/storage/v1/object/authenticated/' + REPORT_DOCX_BUCKET + '/' + rec.docxPath, {
+      headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + (sess ? sess.access_token : SUPA_KEY) }
+    });
+    if (!r.ok) { console.warn('Final .docx not readable for archive', rec.id, r.status); return null; }
+    var zip = await JSZip.loadAsync(await r.arrayBuffer());
+    var part = zip.file('word/document.xml');
+    if (!part) return null;
+    var text = _docxProseFromXml(await part.async('string'));
+    if (!text) return null;
+    var trimmed = text.length > DOCX_PROSE_MAX_CHARS;
+    return { text: trimmed ? text.slice(0, DOCX_PROSE_MAX_CHARS).replace(/\s+\S*$/, '') : text, trimmed: trimmed };
+  } catch (e) {
+    console.warn('Final .docx could not be read for archive', rec && rec.id, e.message);
+    return null;
+  }
+}
+
 async function generateTrendSummary() {
   var projF = S.projectFilter;
   if (!projF) return;
@@ -16353,17 +16407,30 @@ async function generateTrendSummary() {
     return;
   }
 
-  // Build a compact digest of each archived report for the prompt
+  // Each report's wording: the final delivered .docx when one is attached and
+  // readable, else the archived draft. Downloads run 4 at a time.
+  var withFile = archives.filter(function(r){ return r.docxPath; }).length;
+  if (withFile && btn) btn.textContent = '✦ Reading ' + withFile + ' final report' + (withFile===1?'':'s') + '…';
+  var prose = await _mapLimit(archives, 4, function(r){ return r.docxPath ? _archiveDocxProse(r) : Promise.resolve(null); });
+  var fromDocx = prose.filter(Boolean).length;
+  var unreadable = withFile - fromDocx;
   var digest = archives.map(function(r, i) {
-    var period = (r.periodStart && r.periodEnd) ? (fmt(r.periodStart)+' to '+fmt(r.periodEnd)) : 'period unknown';
+    var period = (r.periodStart && r.periodEnd) ? (fmt(r.periodStart)+' to '+fmt(r.periodEnd))
+               : ((r.snapshot && r.snapshot.periodLabel) || 'period unknown');
+    var head = 'Report '+(i+1)+' (#'+(r.reportNum||'?')+', '+period+')';
+    if (prose[i]) {
+      return head + ' — SOURCE: final delivered report (.docx), as the client received it'
+        + (prose[i].trimmed ? '; long report, the first part only' : '') + ':\n' + prose[i].text;
+    }
     var secs = (r.sections||[]).map(function(s){
       var parts = [s.title];
       if (s.summary) parts.push(s.summary);
       return parts.join(': ');
     }).join(' | ');
-    return 'Report '+(i+1)+' (#'+(r.reportNum||'?')+', '+period+'): '
-      +(r.overallSummary||'')
-      +(secs?' Sections — '+secs:'');
+    return head + ' — SOURCE: archived draft wording'
+      + (r.docxPath ? ' (the final .docx could not be read)' : ' (no final .docx attached)') + ': '
+      + (r.overallSummary||'')
+      + (secs?' Sections — '+secs:'');
   }).join('\n\n');
 
   var proj = (DB.get('projects')||[]).find(function(p){return p.id===projF;});
@@ -16401,6 +16468,10 @@ async function generateTrendSummary() {
     +'Never assert that something closed, opened or changed unless it appears in those facts, and never contradict '
     +'a stated number. Where a category shows no movement, say so plainly or omit it — do not manufacture a trend. '
     +'Be candid about being behind schedule; a client is better served by an honest status than a reassuring one.\n\n'
+    +'Each report below is marked with its SOURCE. A final delivered report (.docx) is the wording the client actually '
+    +'received, after the consultant\'s edits; treat it as the report of record. An archived draft is the pre-edit '
+    +'wording, used only where no final file is attached. Any number written in either kind of report is context only; '
+    +'the computed facts win wherever they differ.\n\n'
     +'Use plain, professional language, third person, 6-9 sentences. '
     +'IMPORTANT: Output plain prose paragraphs only. No markdown, no hashtags, no headers, no bullet points, '
     +'no asterisks, no special formatting of any kind.';
@@ -16429,9 +16500,15 @@ async function generateTrendSummary() {
     + '\n\nWrite the project status narrative.';
 
   var total = archives.length;
-  var estCost = (total * 0.01 + 0.02).toFixed(2);
+  // Cost from the text actually being sent (~4 characters per token), at
+  // Sonnet 5.5's $2 / $10 per million tokens: input, plus the 1,200-token
+  // reply and its thinking room.
+  var estTokens = Math.round((systemPrompt.length + userContent.length) / 4);
+  var estCost = (estTokens * 2 / 1e6 + (1200 + CLAUDE_THINKING_HEADROOM) * 10 / 1e6).toFixed(2);
   if (!confirm('This will send 1 API call to Claude (Sonnet) analyzing '+total+' archived reports.\n'
-    +'Estimated cost: ~$'+estCost+' or less.\n\nProceed?')) {
+    +(withFile ? 'Read from the final .docx: '+fromDocx+' of '+total+(unreadable ? ' ('+unreadable+' could not be read — their archived wording is used)' : '')+'. The rest use their archived wording.\n'
+               : 'No final .docx is attached yet, so each report\'s archived wording is used.\n')
+    +'About '+estTokens.toLocaleString()+' tokens of input. Estimated cost: ~$'+estCost+' or less.\n\nProceed?')) {
     if (btn) { btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px"><path d="M2 12 L5 8 L8 10 L11 5 L14 3"/></svg> ✦ AI: Project Status Report'; }
     return;
   }

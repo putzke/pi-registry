@@ -1309,8 +1309,11 @@ function toSB(table, obj) {
   for (const [intKey, sbCol] of Object.entries(map)) {
     if (intKey === 'id') continue;
     let val = obj[intKey];
-    if (DATE_FIELDS.has(sbCol) && (val === '' || val === undefined)) val = null;
-    if (val !== undefined && val !== null) {
+    // An absent key stays out of the write (same rule as index.html's toSB):
+    // nulling every absent date let a partial save erase other dates.
+    if (val === undefined) continue;
+    if (DATE_FIELDS.has(sbCol) && val === '') val = null;
+    if (val !== null) {
       // Cast FK integer columns to numbers so Supabase accepts them
       if (SB_INT_FIELDS.has(sbCol) && val !== '') {
         const n = Number(val);

@@ -347,9 +347,9 @@ first time a fetched project row carries a `lead` key — so a save never 400s).
   `pi_projects.lead` = initials; `lead_history` = `[{from,to,date,by}]`
   (phase-history shape), appended by `saveProj` on change (a first lead on an
   existing project is recorded from `''`; a new project's starting lead is not).
-  Changing a member's initials re-keys `lead` and history entries — passing the
-  **whole** project record to `sbUpdate`: `toSB` nulls every date column a
-  partial object omits (test 73 proves it would).
+  Changing a member's initials re-keys `lead` and history entries, passing the
+  whole project record to `sbUpdate` (written while `toSB` still nulled omitted
+  dates — see "Partial saves erased dates" below; harmless now).
 - `_myInitials()` = the roster row whose email is the login, else
   `getLoggedBy()`. `_fuTeam()` now unions the active roster. Saving a member
   whose email prefix gives other initials warns ONLY if the typed initials have
@@ -392,6 +392,23 @@ first time a fetched project row carries a `lead` key — so a save never 400s).
   role-switched for the function; verified to fail with each piece removed).
 - Guarded by `test/tests/73-project-lead.test.js` (27 checks; verified to fail
   with the scope filter removed and with a partial-record re-key).
+
+### Partial saves erased dates (`toSB`, fixed Oct 2026)
+`toSB()` (index.html AND mobile.html) turned every ABSENT date column into
+`null`, so any `sbUpdate` with a partial object wiped the record's other
+dates. Found live from "No period set" on archived PI reports: attaching the
+final .docx (`{docxPath, docxUploadedAt}`) blanked `period_start`/`period_end`
+on 5 reports, and the Share switch (`{clientVisible}`) had the same shape;
+"Reconcile with UGRC" (`_ugrcReconcileParcel`'s patch) blanked 5 demo
+parcels' `notice_date`. Now an absent key is left OUT of the write; a date sent
+as `''` or `null` still clears (the edit dialogs rely on that). The Aug 2026
+note under Report archive claiming partial updates were safe was true for
+lazy `snapshot` but never for dates. Live data repaired by
+`sql/fixes/2026-10-09_restore_erased_dates.sql` (periods recovered from each
+snapshot's `periodLabel`; parcel dates from the demo seed). `sql/fixes/` is
+not applied by the harness. Guarded by
+`test/tests/75-partial-update-keeps-dates.test.js` (verified to fail on the
+old `toSB`).
 
 ### Events do NOT create follow-ups (Aug 2026)
 The Edit-event modal's "Action items" textarea used to create a `pi_interactions`

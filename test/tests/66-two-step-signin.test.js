@@ -107,8 +107,11 @@ module.exports = {
 
       // ── Settings: set up ──────────────────────────────────────────────
       await app.page.evaluate(() => setView('settings'));
-      await app.page.waitForSelector('#mfa-card-body button');
-      t.ok(/Off/.test(await app.page.textContent('#mfa-card-body')), 'Settings shows two-step sign-in as Off');
+      // The boot's data load can redraw Settings just after the card fills in,
+      // putting it back to "Checking…" for a moment — wait for the settled card.
+      const offShown = await app.page.waitForFunction(() => { const b = document.getElementById('mfa-card-body'); return !!(b && b.querySelector('button') && /Off/.test(b.textContent)); }, null, { timeout: 8000 }).then(() => true, () => false);
+      t.ok(offShown, 'Settings shows two-step sign-in as Off');
+      await app.page.waitForFunction(() => { const b = document.getElementById('mfa-card-body'); return !!(b && b.querySelector('button')); }, null, { timeout: 8000 });
       await app.page.click('#mfa-card-body button:has-text("Set up")');
       await app.page.waitForSelector('#mfa-qr');
       const qr = await app.page.getAttribute('#mfa-qr', 'src');

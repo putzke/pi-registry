@@ -687,6 +687,31 @@ listed beneath it. Every `externalIds` array is now built with `String()` to
 match the rule's own comparison; `project_id`/`stakeholder_id` types are mixed
 across tables (see the schema-fidelity section), so that is not paranoia.
 
+### Report package executive summary — only the reports chosen (Oct 2026)
+Quick Reports → **Build report package** → "Generate with AI". Reported live: a
+package of Interaction log + Deliverables + Events opened with sentiment,
+follow-up and issue facts — reports it didn't contain. `_buildPackageFacts`
+gathered every report type regardless of the selection, and the call used
+`_claudeSystemPrompt()` (capped at 2-4 sentences).
+- `_pkgSelectedIds()` reads the numbered reports in package order;
+  `_buildPackageFacts(projF, ids)` builds one fact block per CHOSEN report,
+  each from that report's own scope (interaction log honours the internal
+  toggle; follow-ups cover all interactions, as the report does).
+  `_pkgSummaryRequest()` is the one place the call is shaped: an orienting
+  sentence, then one paragraph per report in order, ~60 words each and ~140
+  for the interaction log, under `_claudeSectionSystemPrompt()`.
+- **The interaction paragraph reads the log** (newest `PKG_SUMMARY_LOG_LINES`
+  = 60, trimmed to 220 chars), so it can say what contact was about, not just
+  "recurring themes". Counts are computed and authoritative; outbound and
+  inbound separate; who = `_coWho()` (type/organization, never a name); the
+  project is "this project". Nothing numbered → no call, a toast says so.
+- **Also fixed:** the Quick Reports' external filter (`generateReport`) was a
+  raw `externalStakeIds.indexOf(i.stakeholderId)` — the Aug 2026
+  `_intIsExternal` sweep missed it under that name — so every quick report
+  and package dropped anonymous callers. Now `_intIsExternal`.
+- Guarded by `test/tests/72-package-exec-summary.test.js` (18 checks;
+  `_claudeNarrative` stubbed; verified to fail on the old code).
+
 ### The report-period label belongs to ONE section (`_periodLabel`, Aug 2026)
 The counts chip under every auto section was prefixed "19-day report period · ".
 Only **`auto-concerns`** is actually bounded by `pstart`/`pend`. Deliverables,

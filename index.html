@@ -12123,8 +12123,11 @@ function generateReport(type){
 
   // External-only stakeholders (for interaction/sentiment/follow-up/comment reports)
   var externalPS=ps.filter(function(lk){return(lk.stakeholderRole||'External')==='External'});
-  var externalStakeIds=externalPS.map(function(lk){return lk.stakeholderId});
-  var externalInts=ints.filter(function(i){return externalStakeIds.indexOf(i.stakeholderId)>=0});
+  var externalStakeIds=externalPS.map(function(lk){return String(lk.stakeholderId)});
+  // _intIsExternal: no stakeholder id → external. The raw indexOf this
+  // replaced dropped every anonymous caller from the quick reports (the
+  // Aug 2026 fix missed this copy because the variable had another name).
+  var externalInts=ints.filter(function(i){return _intIsExternal(i, externalStakeIds)});
   // For interaction log: respect the toggle
   var logInts=includeInternal?ints:externalInts;
 
@@ -12483,7 +12486,7 @@ function openReportSequenceModal(){
     +'</div>'
     +'<textarea id="pkg-exec-summary" placeholder="A short cohesive overview of this reporting period — write your own, or generate a draft with AI and edit it before printing." '
     +'style="width:100%;min-height:90px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:10px 12px;resize:vertical;font-family:inherit;line-height:1.6;box-sizing:border-box"></textarea>'
-    +'<div style="font-size:11px;color:var(--fog);margin-top:5px">Claude Sonnet synthesizes the project\'s current interactions, sentiment, deliverables, issues, and comments. Always review before printing.</div>'
+    +'<div style="font-size:11px;color:var(--fog);margin-top:5px">Summarizes only the reports you have numbered above, in that order — number them first. Always review before printing.</div>'
     +'</div>';
   var body='<div style="font-size:13px;color:var(--slate);margin-bottom:16px;line-height:1.55">'
     +'Assign a sequence number (1–9) to each report you want included. They print in that order as one document — '
@@ -12561,85 +12564,183 @@ function generateReportSequence(){
   _openRptPopup(combined,'Public Involvement Report Package',projLabel,dateStr);
 }
 
-// Build a compact current-state facts digest for the package executive summary
-// (project-wide, no report-period concept — the package reflects "now").
-function _buildPackageFacts(projF){
-  var proj=(DB.get('projects')||[]).find(function(p){return p.id===projF;});
-  if(!proj)return null;
-  var allStakes=DB.getActive('stakeholders');
-  var ps=(DB.get('project_stakeholders')||[]).filter(function(x){return String(x.projectId)===String(projF);});
-  var extPS=ps.filter(function(lk){return (lk.stakeholderRole||'External')==='External';});
-  var ints=(DB.get('interactions')||[]).filter(function(i){return String(i.projectId)===String(projF);});
-  var extIds=extPS.map(function(lk){return String(lk.stakeholderId);});
-  var extInts=ints.filter(function(i){return _intIsExternal(i, extIds);});
-  var champ=extPS.filter(function(lk){return lk.support==='Champion';}).length;
-  var opp=extPS.filter(function(lk){return lk.support==='Opponent';}).length;
-  var neut=extPS.length-champ-opp;
-  var openFU=extInts.filter(function(i){return i.followUp&&!i.followUpDone;}).length;
-  var dels=(DB.get('deliverables')||[]).filter(function(d){return String(d.projectId)===String(projF);});
-  var delDone=dels.filter(function(d){return d.status==='Complete';}).length;
-  var issues=(DB.get('issues')||[]).filter(function(i){return String(i.projectId)===String(projF);});
-  var openIss=issues.filter(function(i){return i.status==='Open'||i.status==='In Progress';}).length;
-  var comments=(DB.get('public_comments')||[]).filter(function(c){return String(c.projectId)===String(projF);});
-  var responded=comments.filter(function(c){return c.responseStatus==='Responded';}).length;
-  var meetings=(DB.get('meetings')||[]).filter(function(m){return String(m.projectId)===String(projF);});
-  var pubMeet=meetings.filter(function(m){return m.type==='Public meeting'||m.type==='Public event';}).length;
-  // Channel mix for interactions
-  var chan={};
-  extInts.forEach(function(i){var c=i.channel||'Unknown';chan[c]=(chan[c]||0)+1;});
-  var chanStr=Object.keys(chan).sort(function(a,b){return chan[b]-chan[a];}).slice(0,3)
-    .map(function(c){return c+' ('+chan[c]+')';}).join(', ');
+// ── PACKAGE EXECUTIVE SUMMARY (Oct 2026) ──────────────────────────────────
+// Written from the reports the user actually numbered in the package, in
+// package order — never the whole project. It used to gather deliverables,
+// issues, comments, sentiment and follow-ups regardless of the selection, so a
+// package of three reports could open with facts from reports it didn't
+// contain: an unsupported claim in a document that goes to the client. And it
+// was requested under _claudeSystemPrompt(), whose "2-4 sentence" cap made a
+// real overview impossible.
+//
+// Now: one short opening, then one paragraph per included report, each built
+// from that report's own scope (the same rows the report prints). Counts are
+// computed here and handed over as authoritative; the model narrates and never
+// counts. The interaction log gets a real look at what was said — the log
+// itself, newest first and trimmed — so its paragraph can describe what the
+// contact was about, not just name "recurring themes". Private individuals are
+// described by type/organization (_coWho), never by name, the same privacy
+// rule the close-out comm-log uses.
+var PKG_SUMMARY_LOG_LINES=60;      // newest interactions the model reads
+var PKG_SUMMARY_LINE_CHARS=220;    // per-summary trim
 
-  var f=[];
-  f.push('Project: '+proj.name+(proj.pid?' ('+proj.pid+')':'')+'.');
-  if(proj.phase)f.push('Current phase: '+proj.phase+'.');
-  f.push('External stakeholders on record: '+extPS.length+' ('+champ+' Champion, '+neut+' Neutral, '+opp+' Opponent).');
-  f.push('External stakeholder interactions logged: '+extInts.length+(chanStr?'; primary channels '+chanStr:'')+'.');
-  f.push('Open follow-up actions: '+openFU+'.');
-  if(pubMeet)f.push('Public meetings/events held: '+pubMeet+'.');
-  f.push('Deliverables complete: '+delDone+' of '+dels.length+'.');
-  f.push('Open issues: '+openIss+' of '+issues.length+' total.');
-  if(comments.length)f.push('Public comments received: '+comments.length+' ('+responded+' responded).');
-  var stats=f.join(' ');
-
-  // Thin qualitative layer: short excerpts of the most recent external
-  // interactions so the summary can name the 2-3 dominant THEMES (not just
-  // counts). Kept brief and theme-level; full descriptive narrative stays in
-  // the PI Report Editor. (Subject is often just a category like "General", so
-  // we use the interaction summary text, trimmed.)
-  var recent=extInts.slice().sort(function(a,b){return (b.date||'').localeCompare(a.date||'');}).slice(0,12);
-  var topics=recent.map(function(i){
-    var t=((i.summary||'').trim()||(i.subject||'').trim()).replace(/\s+/g,' ');
-    if(!t)return '';
-    return '- '+(t.length>110?t.slice(0,110)+'…':t);
-  }).filter(Boolean);
-  if(topics.length){
-    stats+='\n\nRecent interaction excerpts (use ONLY to identify the 2-3 recurring themes stakeholders raised; do not restate them individually or quote names):\n'+topics.join('\n');
+// The ids the user has numbered in the open package modal, in package order.
+function _pkgSelectedIds(){
+  var sels=document.querySelectorAll('.rpt-seq-sel'), out=[];
+  for(var i=0;i<sels.length;i++){
+    var v=parseInt(sels[i].value,10);
+    if(v>0) out.push({id:sels[i].getAttribute('data-rid'),ord:v,idx:i});
   }
-  return stats;
+  out.sort(function(a,b){return a.ord-b.ord||a.idx-b.idx;});
+  return out.map(function(x){return x.id;});
 }
 
-// Tier 1 package AI: generate ONE executive summary paragraph for the whole
-// package (Sonnet), into the editable textarea for human review before print.
+// { blocks:[{id,name,lines:[...]}], log:[...]|null } — facts for the given
+// report ids only, or null if the project is missing.
+function _buildPackageFacts(projF, ids){
+  var proj=(DB.get('projects')||[]).find(function(p){return String(p.id)===String(projF);});
+  if(!proj) return null;
+  ids=ids||[];
+  var stakes=DB.getActive('stakeholders');
+  var ps=(DB.get('project_stakeholders')||[]).filter(function(x){return String(x.projectId)===String(projF);});
+  var extPS=ps.filter(function(lk){return (lk.stakeholderRole||'External')==='External';});
+  var extIds=extPS.map(function(lk){return String(lk.stakeholderId);});
+  var ints=(DB.get('interactions')||[]).filter(function(i){return String(i.projectId)===String(projF);});
+  var extInts=ints.filter(function(i){return _intIsExternal(i, extIds);});
+  var includeInternal=!!((document.getElementById('rpt-ed-include-internal')||document.getElementById('rpt-include-internal')||{}).checked);
+  var today=localToday();
+  var tally=function(arr,fn,top){
+    var m={}; arr.forEach(function(x){var k=fn(x); if(k) m[k]=(m[k]||0)+1;});
+    return Object.keys(m).sort(function(a,b){return m[b]-m[a];}).slice(0,top||8).map(function(k){return k+' '+m[k];}).join(', ');
+  };
+  var nameOf=function(id){var r=PACKAGE_REPORTS.find(function(x){return x.id===id;});return r?r.name:id;};
+  var blocks=[], log=null;
+
+  ids.forEach(function(id){
+    var L=[];
+    if(id==='contact-list'){
+      var linked=ps.filter(function(lk){return stakes.some(function(s){return String(s.id)===String(lk.stakeholderId);});});
+      var intn=linked.length-linked.filter(function(lk){return (lk.stakeholderRole||'External')==='External';}).length;
+      L.push('Contacts on the list: '+linked.length+' ('+(linked.length-intn)+' external, '+intn+' project team / internal).');
+      var ext=extPS.map(function(lk){return stakes.find(function(s){return String(s.id)===String(lk.stakeholderId);});}).filter(Boolean);
+      var types=tally(ext,function(s){return s.type;});
+      if(types) L.push('External contacts by type: '+types+'.');
+      var lep=ext.filter(function(s){return s.lep;}).length, ej=ext.filter(function(s){return s.underserved;}).length;
+      if(lep||ej) L.push('Flagged limited English proficiency: '+lep+'; flagged underserved (EJ): '+ej+'.');
+    }
+    else if(id==='interaction-log'){
+      var li=(includeInternal?ints:extInts).slice().sort(function(a,b){return String(a.date||'').localeCompare(String(b.date||''));});
+      if(!li.length){ L.push('No interactions are logged.'); }
+      else {
+        var out=li.filter(function(i){return i.direction==='Outgoing';}).length;
+        var first=li[0].date, last=li[li.length-1].date;
+        L.push('Interactions in the log: '+li.length+(includeInternal?' (internal contacts included)':' (external contacts and members of the public)')+', '+_fmtDateRange(first,last)+'.');
+        L.push('Outbound from the team: '+out+'; inbound or in-person from stakeholders: '+(li.length-out)+'.');
+        var c=tally(li,function(i){return i.channel;}); if(c) L.push('By channel: '+c+'.');
+        var n=tally(li,function(i){return i.nature;}); if(n) L.push('By nature: '+n+'.');
+        var sj=tally(li,function(i){return i.subject;},6); if(sj) L.push('Most common subjects: '+sj+'.');
+        var anon=li.filter(function(i){return !i.stakeholderId;}).length;
+        if(anon) L.push('Contacts from members of the public who were not named: '+anon+'.');
+        var since=new Date(Date.now()-30*864e5).toISOString().slice(0,10);
+        L.push('Logged in the last 30 days: '+li.filter(function(i){return String(i.date||'')>=since;}).length+'.');
+        log=li.slice(-PKG_SUMMARY_LOG_LINES).reverse().map(function(i){
+          var t=String(i.summary||'').replace(/\s+/g,' ').trim();
+          if(t.length>PKG_SUMMARY_LINE_CHARS) t=t.slice(0,PKG_SUMMARY_LINE_CHARS)+'…';
+          return '- '+(i.date||'undated')+' · '+(i.direction==='Outgoing'?'outbound':'inbound')+' · '+(i.channel||'')+' · '+_coWho(i,stakes)+(i.subject?' · '+i.subject:'')+': '+(t||'(no summary)');
+        });
+      }
+    }
+    else if(id==='followup-status'){
+      var fu=ints.filter(function(i){return i.followUp;});
+      var open=fu.filter(function(i){return !i.followUpDone;});
+      var od=open.filter(function(i){return i.followUpDue&&i.followUpDue<today;}).length;
+      L.push('Follow-ups: '+fu.length+' total, '+open.length+' open ('+od+' overdue), '+(fu.length-open.length)+' resolved.');
+    }
+    else if(id==='sentiment-summary'){
+      var ch=extPS.filter(function(lk){return lk.support==='Champion';}).length;
+      var op=extPS.filter(function(lk){return lk.support==='Opponent';}).length;
+      L.push('External stakeholder positions: '+ch+' champion, '+(extPS.length-ch-op)+' neutral, '+op+' opponent.');
+    }
+    else if(id==='deliverable-status'){
+      var dl=(DB.get('deliverables')||[]).filter(function(d){return String(d.projectId)===String(projF);});
+      if(!dl.length){ L.push('No deliverables are tracked.'); }
+      else {
+        L.push('Deliverables: '+dl.length+' tracked; status '+tally(dl,function(d){return d.status||'Not started';})+'.');
+        dl.slice(0,15).forEach(function(d){
+          var q=d.contractedQty>0?(d.deliveredCount||0)+' of '+d.contractedQty+' delivered':(d.deliveredCount||0)+' delivered (no contracted quantity)';
+          L.push('- '+(d.title||d.type||'Deliverable')+': '+(d.status||'Not started')+', '+q+'.');
+        });
+      }
+    }
+    else if(id==='comment-matrix'){
+      var cm=(DB.get('public_comments')||[]).filter(function(c){return String(c.projectId)===String(projF);});
+      if(!cm.length){ L.push('No formal public comments are recorded.'); }
+      else {
+        L.push('Formal public comments: '+cm.length+'; response status '+tally(cm,function(c){return c.responseStatus||'Pending';})+'.');
+        var cat=tally(cm,function(c){return c.category;}); if(cat) L.push('By category: '+cat+'.');
+      }
+    }
+    else if(id==='issues-report'){
+      var is=(DB.get('issues')||[]).filter(function(i){return String(i.projectId)===String(projF);});
+      if(!is.length){ L.push('No issues are tracked.'); }
+      else {
+        L.push('Issues: '+is.length+'; status '+tally(is,function(i){return i.status;})+'.');
+        is.slice(0,12).forEach(function(i){ L.push('- '+(i.title||'Untitled')+' ('+(i.status||'')+(i.category?', '+i.category:'')+').'); });
+      }
+    }
+    else if(id==='events-log'){
+      var ev=(DB.get('meetings')||[]).filter(function(m){return String(m.projectId)===String(projF);})
+        .sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));});
+      if(!ev.length){ L.push('No events are logged.'); }
+      else {
+        var att=ev.reduce(function(a,m){return a+(parseInt(m.attendanceCount,10)||0);},0);
+        L.push('Events: '+ev.length+'; by type '+tally(ev,function(m){return m.type;})+'; total recorded attendance '+att+'.');
+        ev.slice(0,10).forEach(function(m){ L.push('- '+(m.date||'')+': '+(m.title||m.type||'Event')+(m.attendanceCount?' ('+m.attendanceCount+' attended)':'')+'.'); });
+      }
+    }
+    if(L.length) blocks.push({id:id,name:nameOf(id),lines:L});
+  });
+  return {phase:proj.phase||'',blocks:blocks,log:log};
+}
+
+// The one place the package summary is requested.
+function _pkgSummaryRequest(f){
+  var words=40+f.blocks.reduce(function(a,b){return a+(b.id==='interaction-log'?140:60);},0);
+  var userContent='Write the executive summary that opens a public involvement report package. The package contains '
+    +'these reports, in this order: '+f.blocks.map(function(b){return b.name;}).join('; ')+'.\n\n'
+    +'Structure: one opening sentence that orients the reader to where the project stands'+(f.phase?' (it is in the '+f.phase+' phase)':'')+', '
+    +'then ONE short paragraph per report above, in the same order, each summarizing what that report shows. '
+    +'Cover ONLY these reports — never mention a report, or a fact, that is not listed below. '
+    +'Refer to the project as "this project", never by its name.\n'
+    +'For the interaction log, describe what the contact was actually about: the main topics and concerns, '
+    +'notable exchanges and how they were handled, and the outreach the team did. A large outbound count with '
+    +'few inbound contacts is the normal shape of early outreach — state the numbers plainly, never call it an imbalance. '
+    +'Refer to private individuals by role or organization, never by name, phone or email.\n'
+    +'Counts below are authoritative: use them exactly and do not count anything yourself. Do not invent facts.\n'
+    +'Write at about a 9th-10th grade reading level: short sentences, everyday words. Plain paragraphs separated by '
+    +'a blank line, no headings, bullets or markdown. About '+words+' words in total.\n\n';
+  f.blocks.forEach(function(b){ userContent+='REPORT: '+b.name+'\n'+b.lines.join('\n')+'\n\n'; });
+  if(f.log&&f.log.length) userContent+='INTERACTION LOG, newest first (read it for topics and tone; do not count from it):\n'+f.log.join('\n')+'\n';
+  // ~1.6 tokens per word plus room for a finished last sentence.
+  return {system:_claudeSectionSystemPrompt(), user:userContent, maxTokens:Math.round(words*1.6)+200};
+}
+
 async function genPackageExecSummary(btn){
   var projF=S.projectFilter;
   if(!projF){alert('Select a project first.');return;}
   if(!_getClaudeKey()){showToast('Add your Claude API key in Settings to use AI','warn');return;}
+  var ids=_pkgSelectedIds();
+  if(!ids.length){showToast('Number the reports for this package first — the summary covers only those.','warn',4000);return;}
   var ta=document.getElementById('pkg-exec-summary');
   if(ta&&ta.value.trim()&&!confirm('Replace the current summary with a new AI draft?'))return;
-  var facts=_buildPackageFacts(projF);
-  if(!facts){showToast('Not enough project data to summarize yet','warn');return;}
+  var facts=_buildPackageFacts(projF, ids);
+  if(!facts||!facts.blocks.length){showToast('Not enough project data to summarize yet','warn');return;}
+  var req=_pkgSummaryRequest(facts);
   var orig=btn?btn.innerHTML:'';
   if(btn){btn.disabled=true;btn.textContent='Generating…';}
-  var proj=(DB.get('projects')||[]).find(function(p){return p.id===projF;})||{};
-  var userContent='Write a 3-5 sentence executive summary for a public involvement report package covering project "'
-    +(proj.name||'this project')+'"'+(proj.pid?' ('+proj.pid+')':'')+'. '
-    +'Synthesize the following current project facts into a cohesive narrative for a client/agency audience, '
-    +'highlighting engagement level, stakeholder sentiment, the main themes stakeholders have raised, and any '
-    +'open items. Base it strictly on these facts: '+facts;
-  var narrative=await _claudeNarrative(_claudeSystemPrompt(),userContent,600);
+  var narrative=await _claudeNarrative(req.system,req.user,req.maxTokens);
   if(btn){btn.disabled=false;btn.innerHTML=orig;}
-  if(narrative&&ta){ta.value=narrative;showToast('Executive summary drafted — review before printing','info',2500);}
+  if(narrative&&ta){ta.value=narrative.trim();showToast('Executive summary drafted — review before printing','info',2500);}
   else if(!narrative){showToast('AI draft failed — check the console','error',4000);}
 }
 

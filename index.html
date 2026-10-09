@@ -1024,7 +1024,7 @@ const SB_TO_INT = {
     nature:'nature', direction:'direction', summary:'summary',
     loggedBy:'logged_by', followUp:'follow_up', followUpDue:'follow_up_due',
     followUpAssignedTo:'follow_up_assigned_to',
-    followUpNote:'follow_up_note', followUpDone:'follow_up_done', followUpResolved:'follow_up_resolved', meetingId:'meeting_id'
+    followUpNote:'follow_up_note', followUpDone:'follow_up_done', followUpResolved:'follow_up_resolved', followUpResolution:'follow_up_resolution', meetingId:'meeting_id'
   },
   pi_deliverables: {
     id:'id', projectId:'project_id', title:'title', type:'deliverable_type', scopeType:'scope_type',
@@ -1247,6 +1247,8 @@ function toSB(table, obj) {
   if (sbTable === 'pi_projects' && !window._leadCols) { delete result.lead; delete result.lead_history; }
   // Same gate for sql/2026-10-10_portal_pi_contact.sql's column.
   if (sbTable === 'pi_team_members' && !window._teamPortalCol) delete result.show_on_portal;
+  // And for sql/2026-10-11_followup_resolution_note.sql's column.
+  if (sbTable === 'pi_interactions' && !window._fuResCol) delete result.follow_up_resolution;
   return result;
 }
 
@@ -1273,6 +1275,7 @@ function fromSB(table, row) {
   // column.
   if (sbTable === 'pi_projects' && row && row.lead !== undefined) window._leadCols = true;
   if (sbTable === 'pi_projects' && !Array.isArray(result.leadHistory)) result.leadHistory = [];
+  if (sbTable === 'pi_interactions' && row && row.follow_up_resolution !== undefined) window._fuResCol = true;
   if (sbTable === 'pi_team_members') {
     if (row && row.show_on_portal !== undefined) window._teamPortalCol = true;
     result.showOnPortal = row ? row.show_on_portal !== false : true;   // default on, as the column is
@@ -5613,7 +5616,7 @@ function renderStakeDetail(s,link){
         <div class="log-sum">${i.summary}</div>
         ${i.followUp?`<div class="log-fu${i.followUpDone?' done':''}">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">${i.followUpDone?'<path d="M3 8l4 4 6-6"/>':'<circle cx="8" cy="8" r="6"/><path d="M8 5v4M8 11v1"/>'}</svg>
-          <span>${i.followUpDone?'Resolved: ':'Follow-up: '}<strong>${i.followUpNote}</strong>${i.followUpDone&&i.followUpResolved?' — '+fmt(i.followUpResolved):''}${!i.followUpDone&&i.followUpDue?' — due '+fmt(i.followUpDue):''}</span>
+          <span>${i.followUpDone?'Resolved: ':'Follow-up: '}<strong>${i.followUpNote}</strong>${i.followUpDone&&i.followUpResolved?' — '+fmt(i.followUpResolved):''}${!i.followUpDone&&i.followUpDue?' — due '+fmt(i.followUpDue):''}${_fuResNoteLine(i,'font-size:12px;opacity:.85;margin-top:2px')}</span>
           ${!i.followUpDone?`<button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" style="margin-left:auto" onclick="resolveFollowUp('${i.id}')">Resolve</button>`:''}        </div>`:''}        <div style="margin-top:6px"><button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="openEditIntModal('${i.id}')">Edit</button></div>
       </div>
     </div>`).join('')}
@@ -5791,7 +5794,7 @@ function renderFollowups(el){
   else if(myLoggedBy&&userF==='logged') ints=ints.filter(i=>i.loggedBy===myLoggedBy);
   if(search)ints=ints.filter(i=>{
     const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
-    return(i.followUpNote||'').toLowerCase().includes(search)||(s&&(s.firstName+' '+s.lastName).toLowerCase().includes(search));
+    return(i.followUpNote||'').toLowerCase().includes(search)||(i.followUpResolution||'').toLowerCase().includes(search)||(s&&(s.firstName+' '+s.lastName).toLowerCase().includes(search));
   });
 
   // Sort by selected column (default: due date asc, overdue first)
@@ -5906,7 +5909,7 @@ function renderFollowups(el){
                     ${od?'<div style="font-size:11px;color:var(--red);font-weight:700;letter-spacing:.3px">OVERDUE</div>':''}
                     ${i.followUpDone?'<div style="font-size:11px;color:var(--green)">✓ Resolved'+(i.followUpResolved?' · '+new Date(i.followUpResolved+'T00:00:00').toLocaleDateString('en-US',{month:"short",day:"numeric",year:"numeric"}):'')+'</div>':''}
                   </td>
-                  <td style="font-weight:500;color:var(--white)">${i.followUpNote||'—'}</td>
+                  <td style="font-weight:500;color:var(--white)">${i.followUpNote||'—'}${_fuResNoteLine(i)}</td>
                   <td style="white-space:nowrap">
                     ${i.stakeholderId
                       ?`<div class="td-link" onclick="openContact('${i.stakeholderId}','${i.projectId||projId||''}')">${s?dispName(s):'Unknown contact'}</div>`
@@ -7971,8 +7974,9 @@ function openIntModal(preStake){
     <div class="fr"><label>Due date</label><input type="date" id="f-ifud"></div>
   </div>
   <div class="fr"><label>Assign to <span id="f-ifua-hint" style="font-weight:400;color:var(--fog)">(defaults to you)</span></label><select id="f-ifua" onchange="this.dataset.touched='1';_fuAssignPick(this)">${_fuAssignOptions('', getLoggedBy())}</select></div>
-  <div class="fr"><div class="fcheck"><input type="checkbox" id="f-ifudo" onchange="document.getElementById('fu-rdate').style.display=this.checked?'':'none'"><label for="f-ifudo">Follow-up resolved</label></div></div>
-  <div id="fu-rdate" style="display:none"><div class="fr"><label>Date resolved</label><input type="date" id="f-ifudr" value="${localToday()}"></div></div></div>`,
+  <div class="fr"><div class="fcheck"><input type="checkbox" id="f-ifudo" onchange="document.getElementById('fu-rdate').style.display=this.checked?'':'none';document.getElementById('fu-rnote').style.display=this.checked?'':'none'"><label for="f-ifudo">Follow-up resolved</label></div></div>
+  <div id="fu-rdate" style="display:none"><div class="fr"><label>Date resolved</label><input type="date" id="f-ifudr" value="${localToday()}"></div></div>
+  ${_fuResNoteHTML('',false)}</div>`,
   `<button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-primary" onclick="saveInt()">Save interaction</button>`,true);
   // If a project is already selected (via filter), populate stakeholders for that project
   if(S.projectFilter){ updateIntStakeholders(); updateIntIssues(); }
@@ -8060,7 +8064,7 @@ async function openEditIntModal(id){
   <div class="fsec">Follow-up</div>
   <div class="fr"><div style="display:flex;gap:20px;flex-wrap:wrap">
     <div class="fcheck"><input type="checkbox" id="f-ifu"${i.followUp?' checked':''} onchange="document.getElementById('fu-f').style.display=this.checked?'':'none';document.getElementById('fu-done-wrap').style.display=this.checked?'':'none'"><label for="f-ifu">Requires follow-up</label></div>
-    <div class="fcheck" id="fu-done-wrap" style="${i.followUp?'':'display:none'}"><input type="checkbox" id="f-ifudo"${i.followUpDone?' checked':''} onchange="document.getElementById('fu-rdate').style.display=this.checked?'block':'none'"><label for="f-ifudo">Follow-up resolved</label></div>
+    <div class="fcheck" id="fu-done-wrap" style="${i.followUp?'':'display:none'}"><input type="checkbox" id="f-ifudo"${i.followUpDone?' checked':''} onchange="document.getElementById('fu-rdate').style.display=this.checked?'block':'none';document.getElementById('fu-rnote').style.display=this.checked?'':'none'"><label for="f-ifudo">Follow-up resolved</label></div>
   </div></div>
   <div id="fu-f" style="${i.followUp?'':'display:none'}"><div class="fgrid fg2f">
     <div class="fr"><label>Action</label><input id="f-ifun" value="${i.followUpNote||''}"></div>
@@ -8069,6 +8073,7 @@ async function openEditIntModal(id){
       <div id="fu-rdate" style="${i.followUpDone?'flex:1':'display:none'}"><label>Date resolved</label><input type="date" id="f-ifudr" value="${i.followUpResolved||localToday()}"></div>
     </div>
   </div>
+  ${_fuResNoteHTML(i.followUpResolution||'',!!i.followUpDone)}
   <div class="fr"><label>Assign to <span style="font-weight:400;color:var(--fog)">(defaults to whoever logged it)</span></label><select id="f-ifua" onchange="_fuAssignPick(this)">${_fuAssignOptions(i.followUpAssignedTo, i.loggedBy)}</select></div>
   </div>`,
   `<button class="btn btn-danger" onclick="delInt('${id}')">Delete</button>
@@ -8088,6 +8093,9 @@ async function saveInt(){
   const _existingInt=S.editId?(DB.get('interactions')||[]).find(x=>x.id===S.editId):null;
   const _nepaStageVal=S.editId?(_existingInt?.nepaStage||''):v('f-inepastage');
   const data={id:S.editId||DB.uid(),projectId:projId,stakeholderId:stakeId,anonLabel:anonLbl,date:vDate('f-id'),channel:v('f-ic'),direction:v('f-idr'),subject:v('f-isub')||'General',nature:v('f-inat')||'Inquiry',summary:v('f-isu'),loggedBy:v('f-il'),nepaStage:_nepaStageVal,followUp:_fuOn,followUpNote:v('f-ifun'),followUpDue:vDate('f-ifud'),followUpDone:fuDone,followUpResolved:fuResolved,
+    // Optional "how it was resolved". Cleared with the date when the follow-up
+    // is reopened or switched off, so an open follow-up never carries one.
+    followUpResolution:(_fuOn&&fuDone)?v('f-ifures').trim():'',
     // Clearing the follow-up clears its owner too — an assignment on a
     // non-follow-up would be invisible and unresolvable.
     followUpAssignedTo:_fuOn?((v('f-ifua')==='__new'?'':v('f-ifua'))||''):''};
@@ -8131,8 +8139,22 @@ function reopenFollowUp(id){
   const i=all.findIndex(x=>x.id===id);
   // Clear followUpResolved too — without it a reopened follow-up shows as open
   // while still carrying the date it was previously resolved on.
-  if(i>-1) all[i]={...all[i], followUpDone:false, followUpResolved:''};
+  if(i>-1) all[i]={...all[i], followUpDone:false, followUpResolved:'', followUpResolution:''};
   DB.set('interactions',all);refreshBadges();render();
+}
+
+// Optional resolution note in the interaction dialogs (Oct 2026). The one-click
+// Resolve button still resolves with no note; this is for when staff want to
+// record HOW it was resolved. Shown only while "Follow-up resolved" is ticked.
+function _fuResNoteHTML(val, show){
+  const off=!window._fuResCol&&(DB.get('interactions')||[]).length
+    ?'<div style="font-size:11px;color:var(--amber,#e8a020);margin-top:4px">Not saved yet: run sql/2026-10-11_followup_resolution_note.sql in Supabase first.</div>':'';
+  return '<div id="fu-rnote" class="fr" style="'+(show?'':'display:none')+'"><label>How it was resolved <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--fog)">(optional)</span></label>'
+    +'<textarea id="f-ifures" rows="2" placeholder="e.g. Emailed the detour exhibit; resident confirmed access is fine.">'+escHtml(val||'')+'</textarea>'+off+'</div>';
+}
+function _fuResNoteLine(i, style){
+  return (i&&i.followUpDone&&i.followUpResolution)
+    ?'<div style="'+(style||'font-size:11px;color:var(--slate);margin-top:2px')+'">'+escHtml(i.followUpResolution)+'</div>':'';
 }
 
 // ── Follow-up ownership ────────────────────────────────────────────────────
@@ -12605,7 +12627,7 @@ function generateReport(type){
       var od=!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<now;
       body+='<tr style="'+(od?'background:rgba(217,64,64,.06)':'')+(i.followUpDone?'opacity:.65':'')+'">'
         +'<td style="font-weight:600;color:'+(od?'var(--red)':i.followUpDone?'var(--green)':'var(--amber)')+'">'+(i.followUpDue||'No date')+(od?' OVERDUE':'')+'</td>'
-        +'<td style="font-weight:500;color:var(--white)">'+(i.followUpNote||'—')+'</td>'
+        +'<td style="font-weight:500;color:var(--white)">'+(i.followUpNote||'—')+_fuResNoteLine(i)+'</td>'
         +'<td>'+(s?dispName(s):(i.anonLabel||'Anonymous'))+'</td>'
         +'<td>'+(i.followUpDone?'<span class="badge b-green">Resolved</span>'+(i.followUpResolved?'<div style="font-size:10px;color:var(--green);margin-top:2px">'+new Date(i.followUpResolved+'T00:00:00').toLocaleDateString('en-US',{month:"short",day:"numeric",year:"numeric"})+'</div>':''):'<span class="badge b-amber">Open</span>')+'</td>'
         +'<td class="td-mono">'+fmt(i.date)+'</td>'

@@ -393,6 +393,20 @@ first time a fetched project row carries a `lead` key — so a save never 400s).
 - Guarded by `test/tests/73-project-lead.test.js` (27 checks; verified to fail
   with the scope filter removed and with a partial-record re-key).
 
+### Follow-up resolution note (Oct 2026)
+`sql/2026-10-11_followup_resolution_note.sql` adds `pi_interactions.follow_up_resolution`
+(`followUpResolution`) — **must be pasted in the SQL Editor**; until then `toSB`
+leaves it out (`window._fuResCol`, set by `fromSB` on a row carrying the key,
+the `_leadCols` pattern) and the box says it won't save yet.
+`follow_up_note` is the ACTION; this is HOW it was resolved, optional. Both
+interaction dialogs show a "How it was resolved" box (`_fuResNoteHTML`) only
+while "Follow-up resolved" is ticked. One-click **Resolve** is unchanged (no
+note). `saveInt` clears it when unresolved/follow-up off; `reopenFollowUp`
+clears it with the date. Shown (`_fuResNoteLine`) under the action in the
+Follow-ups view, the contact's log and the Follow-ups quick report; the
+Follow-ups search matches it. Mobile does not map it (its edits leave it
+alone). Guarded by `test/tests/78-followup-resolution-note.test.js`.
+
 ### Partial saves erased dates (`toSB`, fixed Oct 2026)
 `toSB()` (index.html AND mobile.html) turned every ABSENT date column into
 `null`, so any `sbUpdate` with a partial object wiped the record's other

@@ -114,18 +114,35 @@ function buildOrder(params) {
 // scalar-returning function's response body is the bare JSON value, not an
 // array of rows — mirrored here so sbFetch's res.json() gets back exactly
 // what it would from the real API (a number or null, not [{result: ...}]).
-async function handleRpc(pool, fn, sp) {
+//
+// The request's headers are handed to the database as `request.headers`, as
+// PostgREST does, so a function that reads them (pi_portal_project_ids()
+// reads x-portal-token) sees what the page sent. A set-returning function
+// answers with an array of rows, as PostgREST does.
+async function handleRpc(pool, fn, sp, req) {
   if (!/^[a-z_][a-z0-9_]*$/.test(fn)) throw new Error('bad function: ' + fn);
   const args = [...sp.values()];
-  const ph = args.map((_, i) => `$${i + 1}`).join(',');
-  const { rows } = await pool.query(`select ${fn}(${ph}) as result`, args);
-  return { status: 200, body: rows[0] ? rows[0].result : null };
+  const hdrs = {};
+  Object.entries((req && req.headers) || {}).forEach(([k, v]) => { hdrs[k.toLowerCase()] = String(v); });
+  const c = await pool.connect();
+  try {
+    await c.query('begin');
+    await c.query(`select set_config('request.headers', $1, true)`, [JSON.stringify(hdrs)]);
+    const { rows: meta } = await c.query(`select bool_or(proretset) as set from pg_proc where proname = $1`, [fn]);
+    const q = meta[0] && meta[0].set
+      ? `select * from ${fn}(${args.map((_, i) => `$${i + 1}`).join(',')})`
+      : `select ${fn}(${args.map((_, i) => `$${i + 1}`).join(',')}) as result`;
+    const { rows } = await c.query(q, args);
+    await c.query('commit');
+    return { status: 200, body: meta[0] && meta[0].set ? rows : (rows[0] ? rows[0].result : null) };
+  } catch (e) { await c.query('rollback').catch(() => {}); throw e; }
+  finally { c.release(); }
 }
 
 async function handle(pool, req, body) {
   const url = new URL(req.url, 'http://local');
   const rpcMatch = url.pathname.match(/^\/rest\/v1\/rpc\/([a-z_][a-z0-9_]*)\/?$/);
-  if (rpcMatch) return handleRpc(pool, rpcMatch[1], url.searchParams);
+  if (rpcMatch) return handleRpc(pool, rpcMatch[1], url.searchParams, req);
   const table = url.pathname.replace(/^\/rest\/v1\//, '').replace(/\/$/, '');
   if (!/^[a-z_][a-z0-9_]*$/.test(table)) throw new Error('bad table: ' + table);
   const params = [...url.searchParams.entries()];

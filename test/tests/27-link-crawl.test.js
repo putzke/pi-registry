@@ -24,7 +24,7 @@
 // navigation and wiring. What each handler DOES is covered by its own test.
 const VIEWS = ['dashboard', 'projects', 'master', 'stakeholders', 'interactions',
                'followups', 'commitments', 'comments', 'deliverables', 'meetings',
-               'issues', 'parcels', 'reports', 'settings'];
+               'issues', 'parcels', 'reports', 'settings', 'team'];
 
 // Language and browser built-ins that appear inside inline handlers. Anything
 // NOT in here and not a function on window is a dead reference.

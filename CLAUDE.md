@@ -359,9 +359,37 @@ first time a fetched project row carries a `lead` key — so a save never 400s).
   both Projects tabs (tab counts follow the scope). No saved choice → "mine"
   only if you lead something. The dashboard's portfolio stats stay firm-wide.
   Lead chip (`_leadChipHTML`) on both card kinds, highlighted when it's you.
-- The portal does not read `lead` (explicit column lists). Proposed, not built:
-  lead as default follow-up assignee / close-out signer / portal "Your PI
-  contact", and a team workload view.
+- The portal does not select `lead` (explicit column lists).
+- **Step 4 — the lead as default (Oct 2026):**
+  - **Follow-ups:** the NEW interaction modal pre-selects the project's lead in
+    Assign-to (`_fuDefaultToLead`, run on open and on project change), with
+    the label saying so. Not when you are the lead or the lead is inactive
+    (stays unassigned = whoever logged it). Once the picker is touched
+    (`data-touched`) a project change leaves it alone. `_fuOwner` is
+    unchanged, so existing follow-ups and mobile are untouched.
+  - **Close-out signature** (`_coSeedIntake`): led by someone else → their
+    team-list name/title/email/phone only (never mixed with your last
+    signature); led by you → your last signature wins, team list fills gaps.
+  - **Portal "Your PI contact"** (`loadPiContact` on the Overview, `.pi-contact`):
+    `sql/2026-10-10_portal_pi_contact.sql` adds `pi_team_members.show_on_portal`
+    (default true; "Show as Your PI contact" in the member dialog) and
+    `pi_portal_contact(p_project)` — SECURITY DEFINER, returns name/title/
+    phone/email of an ACTIVE, shown lead, only to a token holder of that
+    project (`pi_portal_project_ids()`) or a client granted it. The team
+    table stays staff-only. No row / function missing → no card, no error.
+    `show_on_portal` is gated in `toSB` (`window._teamPortalCol`) like `lead`.
+- **Step 5 — Team view** (`setView('team')`, nav "Team", `renderTeam`,
+  `_teamWorkload`): a row per active member plus anyone (off-list or
+  inactive) who still leads a project or owns an open follow-up — projects
+  led (Active/On hold, buttons open the project dialog to reassign), open /
+  overdue follow-ups by `_fuOwner`, interactions logged in 30 days, and how
+  many of their projects have had no Project Status Report published
+  (`client_summaries`, the dashboard's "Portal:" date) in 30+ days. Banner
+  lists active projects with no lead.
+- The test REST shim's RPC now passes request headers as `request.headers`
+  and returns rows for set-returning functions, as PostgREST does.
+- Guarded by `test/tests/74-lead-defaults-and-team-view.test.js` (31 checks,
+  role-switched for the function; verified to fail with each piece removed).
 - Guarded by `test/tests/73-project-lead.test.js` (27 checks; verified to fail
   with the scope filter removed and with a partial-record re-key).
 

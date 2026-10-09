@@ -184,6 +184,12 @@
     .prog-lbl  { font-size: 12px; color: #9ca3af; }
 
     /* ── Attention panel ─────────────────────────────────────────────── */
+    .pi-contact { display:flex; align-items:center; gap:16px; flex-wrap:wrap; background:white; border-radius:10px; padding:14px 20px; box-shadow:0 1px 4px rgba(0,0,0,0.06); margin-bottom:16px; border-left:4px solid #1d7f9e; }
+    .pi-contact .pc-lbl { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#6b7280; }
+    .pi-contact .pc-who { font-size:15px; font-weight:700; color:#111827; }
+    .pi-contact .pc-title { font-size:13px; color:#4b5563; }
+    .pi-contact .pc-links { display:flex; gap:14px; flex-wrap:wrap; margin-left:auto; font-size:13px; }
+    .pi-contact .pc-links a { color:#1d7f9e; text-decoration:none; font-weight:600; }
     .attention-panel { background: #fffbeb; border: 1px solid #fcd34d; border-left: 4px solid #f59e0b; border-radius: 10px; padding: 16px 20px; margin-bottom: 20px; }
     .attn-header { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #92400e; margin-bottom: 12px; }
     .attn-header svg { width: 15px; height: 15px; flex-shrink: 0; }
@@ -886,6 +892,29 @@ function renderSection(view) {
   }
 }
 
+// ── Your PI contact ───────────────────────────────────────────────────────────
+// The project's PI Lead, via pi_portal_contact() (sql/2026-10-10_portal_pi_contact.sql):
+// the team list itself is staff-only, so the function returns just this one
+// person's name, title, phone and email, and only to a caller who can see the
+// project. No lead, a lead kept off the portal, or the function not deployed
+// yet → no card at all; it never shows an error or a blank box.
+async function loadPiContact(projId) {
+  const el = document.getElementById('ov-contact');
+  if (!el) return;
+  let rows = [];
+  try { rows = await sbFetch(`rpc/pi_portal_contact?p_project=${encodeURIComponent(projId)}`); }
+  catch (e) { if (e && e.message === 'session_expired') throw e; return; }
+  if (projId !== _projId) return;
+  const c = Array.isArray(rows) ? rows[0] : null;
+  if (!c || !c.name) { el.innerHTML = ''; return; }
+  const tel = c.phone ? String(c.phone).replace(/[^0-9+]/g, '') : '';
+  el.innerHTML = `<div class="pi-contact">
+    <div><div class="pc-lbl">Your PI contact</div>
+      <div class="pc-who">${esc(c.name)}</div>${c.title ? `<div class="pc-title">${esc(c.title)}</div>` : ''}</div>
+    <div class="pc-links">${c.phone ? `<a href="tel:${esc(tel)}">${esc(c.phone)}</a>` : ''}${c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : ''}</div>
+  </div>`;
+}
+
 // ── Overview ──────────────────────────────────────────────────────────────────
 async function renderOverview() {
   const projDevs = _deliverables.filter(d => String(d.project_id) === String(_projId));
@@ -894,6 +923,7 @@ async function renderOverview() {
   const pctD   = totalD ? Math.round(doneD / totalD * 100) : 0;
 
   setContent(`${projCardsGrid()}${projBanner()}
+    <div id="ov-contact"></div>
     <div id="ov-attention"></div>
     <div class="stat-row">
       <div class="stat-tile stat-blue">
@@ -921,6 +951,7 @@ async function renderOverview() {
 
   // Fetch stats + recent activity + attention items in parallel
   const projAtFetch = _projId;   // guard against a project switch mid-flight
+  loadPiContact(projAtFetch);
   try {
     const weeks = engagementWeeks();
     const [issues, meetings, interactions, commitments, commentPeriods, trendRows] = await Promise.all([

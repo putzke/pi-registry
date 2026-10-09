@@ -331,6 +331,38 @@ redraw) found two shapes:
 - Guarded by `test/tests/70-stale-flags.test.js` (7 checks; verified to fail
   on the old code).
 
+### PI team list + project PI Lead + "My projects" (Oct 2026)
+`sql/2026-10-09_team_and_project_lead.sql` — **must be pasted in the SQL Editor**;
+until it runs the app works as before (the team list reads empty; `toSB` leaves
+`lead`/`lead_history` out, gated on `window._leadCols`, which `fromSB` sets the
+first time a fetched project row carries a `lead` key — so a save never 400s).
+- **`pi_team_members`** — people, NOT logins (`pi_staff` is still the login
+  list): name, initials (unique, case-insensitive), title, phone, optional
+  email, active. Staff-only (closeouts pattern + `pi_staff_or_client`). A new
+  hire goes on before they have an email. Deactivate, never delete — initials
+  stay in logs and histories. Settings → **PI team** (`renderTeamCard`,
+  `openTeamMemberModal`, `saveTeamMember`); "Initials in the logs with nobody on
+  the list" offers one-click adds. **No staff names in the repo** (public).
+- **Initials are the key**, as for `loggedBy`/`followUpAssignedTo`.
+  `pi_projects.lead` = initials; `lead_history` = `[{from,to,date,by}]`
+  (phase-history shape), appended by `saveProj` on change (a first lead on an
+  existing project is recorded from `''`; a new project's starting lead is not).
+  Changing a member's initials re-keys `lead` and history entries — passing the
+  **whole** project record to `sbUpdate`: `toSB` nulls every date column a
+  partial object omits (test 73 proves it would).
+- `_myInitials()` = the roster row whose email is the login, else
+  `getLoggedBy()`. `_fuTeam()` now unions the active roster.
+- **My projects | All** (`_projScope`/`setProjScope`/`_scopeProjects`,
+  localStorage `cc_proj_scope`) on the dashboard's Active projects cards and
+  both Projects tabs (tab counts follow the scope). No saved choice → "mine"
+  only if you lead something. The dashboard's portfolio stats stay firm-wide.
+  Lead chip (`_leadChipHTML`) on both card kinds, highlighted when it's you.
+- The portal does not read `lead` (explicit column lists). Proposed, not built:
+  lead as default follow-up assignee / close-out signer / portal "Your PI
+  contact", and a team workload view.
+- Guarded by `test/tests/73-project-lead.test.js` (27 checks; verified to fail
+  with the scope filter removed and with a partial-record re-key).
+
 ### Events do NOT create follow-ups (Aug 2026)
 The Edit-event modal's "Action items" textarea used to create a `pi_interactions`
 row per line. Removed — the field is now documentation on the event record only.

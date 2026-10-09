@@ -983,7 +983,8 @@ const SB_TABLES = {
   parcels:              'pi_parcels',
   parcel_owners:        'pi_parcel_owners',
   closeouts:            'pi_closeouts',
-  parcel_outreach:      'pi_parcel_outreach'
+  parcel_outreach:      'pi_parcel_outreach',
+  team_members:         'pi_team_members'
 };
 
 // Map our internal field names to Supabase column names
@@ -994,7 +995,8 @@ const SB_TO_INT = {
     endDate:'end_date', preconDate:'precon_date', notes:'notes', lastExported:'last_exported',
     nepaClassification:'nepa_classification', nepaStage:'nepa_stage',
     nepaChecklist:'nepa_checklist', phaseHistory:'phase_history',
-    nepaStageHistory:'nepa_stage_history'
+    nepaStageHistory:'nepa_stage_history',
+    lead:'lead', leadHistory:'lead_history'
   },
   pi_stakeholders: {
     id:'id', firstName:'first_name', lastName:'last_name', org:'org',
@@ -1152,6 +1154,12 @@ const SB_TO_INT = {
     id:'id', projectId:'project_id', reportType:'report_type', label:'label',
     intake:'intake', createdAt:'created_at', createdBy:'created_by',
     updatedAt:'updated_at', updatedBy:'updated_by'
+  },
+  // The PI team (sql/2026-10-09_team_and_project_lead.sql). People, not
+  // logins: a new hire can lead projects before they have an email.
+  pi_team_members: {
+    id:'id', name:'name', initials:'initials', title:'title', phone:'phone',
+    email:'email', active:'active', updatedBy:'updated_by'
   }
 };
 
@@ -1227,6 +1235,7 @@ function toSB(table, obj) {
       result[sbCol] = null;
     }
   }
+  if (sbTable === 'pi_projects' && !window._leadCols) { delete result.lead; delete result.lead_history; }
   return result;
 }
 
@@ -1247,7 +1256,13 @@ function fromSB(table, row) {
     result[intKey] = row[sbCol] !== undefined ? row[sbCol] : (intKey.startsWith('is') ? false : '');
   }
   // Normalize booleans
-  ['isMaster','isAnonymous','followUp','followUpDone','isArchived','equityFormSubmitted','lep','underserved','needsReview','authorizedSigner'].forEach(f => {
+  // The lead columns (sql/2026-10-09_team_and_project_lead.sql) only exist once
+  // that migration has run. Seeing one on a fetched row is the signal; until
+  // then toSB leaves them out, so saving a project never 400s on an unknown
+  // column.
+  if (sbTable === 'pi_projects' && row && row.lead !== undefined) window._leadCols = true;
+  if (sbTable === 'pi_projects' && !Array.isArray(result.leadHistory)) result.leadHistory = [];
+  ['isMaster','isAnonymous','followUp','followUpDone','isArchived','equityFormSubmitted','lep','underserved','needsReview','authorizedSigner','active'].forEach(f => {
     if (result[f] !== undefined) result[f] = result[f] === true || result[f] === 1;
   });
   // OCC baseline: carry updated_at/updated_by into the cache record so the next
@@ -1534,7 +1549,7 @@ function cacheClear(k) { delete _cache[k]; delete _cacheTime[k]; }
 const _syncCache = {};
 
 async function loadAllData() {
-  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments','comment_periods','tribal_consultations','reports','report_archive','client_summaries','parcels','parcel_owners','parcel_outreach','closeouts'];
+  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments','comment_periods','tribal_consultations','reports','report_archive','client_summaries','parcels','parcel_owners','parcel_outreach','closeouts','team_members'];
   // Boot stays tolerant — one unreachable table should not lock the app — but a
   // table that FAILED must not be presented as an empty one. An empty Master
   // List that is really a 401 is worse than an error message.
@@ -2479,7 +2494,7 @@ function renderDash(el){
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px${chips?';margin-bottom:8px':''}">
       <div style="min-width:0"><div style="font-weight:600;font-size:14px;margin-bottom:2px">${p.name}</div>
       <div style="font-size:12px;color:var(--fog);font-family:var(--mono)">${p.pid} · ${p.client}</div></div>
-      <span class="badge b-sky" style="flex-shrink:0">${p.phase}</span></div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0"><span class="badge b-sky">${p.phase}</span>${_leadChipHTML(p)}</div></div>
       ${chips?`<div style="display:flex;gap:12px;font-size:12px;align-items:center;padding-top:8px;border-top:1px solid var(--border)">${chips}</div>`:''}</div>`;
   }
   const dels=DB.get('deliverables');
@@ -2933,9 +2948,9 @@ function renderDash(el){
 
     <!-- ROW 5: Active project cards -->
     <div class="dash-anim" style="animation-delay:540ms">
-      <div class="sec-hd"><span class="sec-t">Active projects</span><button class="btn btn-ghost btn-sm" onclick="setView('projects')">View all</button></div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px">
-        ${active.map(projCard).join('')||'<div style="color:var(--fog);font-size:13px">No active projects.</div>'}
+      <div class="sec-hd" style="gap:10px;flex-wrap:wrap"><span class="sec-t">Active projects</span>${_projScopeHTML(active)}<button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="setView('projects')">View all</button></div>
+      <div id="dash-proj-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px">
+        ${_scopeProjects(active).map(projCard).join('')||(_projScope()==='mine'?'<div style="color:var(--fog);font-size:13px">You aren\u2019t the PI Lead on any active project. <a href="#" onclick="setProjScope(\'all\');return false" style="color:var(--sky-lt)">Show all</a></div>':'<div style="color:var(--fog);font-size:13px">No active projects.</div>')}
       </div>
     </div>
   </div>`;
@@ -6585,9 +6600,14 @@ function renderProjects(el){
   const ps=DB.get('project_stakeholders');
   const ints=DB.get('interactions');
   const tab=S.projTab||'active';
-  const activeProjs=allProjs.filter(p=>p.status==='Active'||p.status==='On hold');
-  const archivedProjs=allProjs.filter(p=>p.status==='Complete'||p.status==='Cancelled');
+  // "My projects | All" scopes both tabs; the tab counts follow the scope so
+  // the number on a tab is the number of cards under it.
+  const _unActive=allProjs.filter(p=>p.status==='Active'||p.status==='On hold');
+  const _unArch=allProjs.filter(p=>p.status==='Complete'||p.status==='Cancelled');
+  const activeProjs=_scopeProjects(_unActive);
+  const archivedProjs=_scopeProjects(_unArch);
   const projs=tab==='active'?activeProjs:archivedProjs;
+  const _scopeMine=_projScope()==='mine';
 
   el.innerHTML=`
   <div class="topbar">
@@ -6610,8 +6630,9 @@ function renderProjects(el){
   </div>
   <div class="content" style="overflow-y:auto">
     <div style="padding:20px">
+    <div style="margin-bottom:14px">${_projScopeHTML(tab==='active'?_unActive:_unArch)}</div>
     ${projs.length===0
-      ? `<div style="text-align:center;padding:60px;color:var(--fog);font-size:14px">${tab==='active'?'No active projects. Create one to get started.':'No archived projects yet.'}</div>`
+      ? `<div style="text-align:center;padding:60px;color:var(--fog);font-size:14px">${_scopeMine&&(tab==='active'?_unActive:_unArch).length?`You aren\u2019t the PI Lead on any ${tab==='active'?'active':'archived'} project. <a href="#" onclick="setProjScope('all');return false" style="color:var(--sky-lt)">Show all projects</a>`:tab==='active'?'No active projects. Create one to get started.':'No archived projects yet.'}</div>`
       : `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:start">
       ${projs.map(p=>{
         const psSt=ps.filter(x=>x.projectId===p.id);
@@ -6637,7 +6658,7 @@ function renderProjects(el){
             <span class="badge ${statusBadge}">${p.status}</span>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
-            <span class="badge b-sky">${p.phase}</span><span class="badge b-dark">${p.type}</span>
+            <span class="badge b-sky">${p.phase}</span><span class="badge b-dark">${p.type}</span>${_leadChipHTML(p)}
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;font-size:12px;color:var(--slate);margin-bottom:12px">
             
@@ -8093,8 +8114,183 @@ function _fuTeam(){
     if(i.followUpAssignedTo) set.add(i.followUpAssignedTo);
   });
   const me=getLoggedBy(); if(me) set.add(me);
+  // Plus the active team list, so someone just hired can be assigned work
+  // before they have logged anything.
+  (DB.get('team_members')||[]).forEach(m=>{ if(m.active!==false&&m.initials) set.add(String(m.initials).trim().toUpperCase()); });
   return [...set].sort();
 }
+// ── THE PI TEAM + PROJECT LEAD (sql/2026-10-09_team_and_project_lead.sql) ──
+// pi_team_members is the firm's PI staff as people (name, initials, title,
+// phone, email when known). Initials are the key, as everywhere else in the
+// app: pi_projects.lead holds a member's initials, the same way logged_by and
+// follow_up_assigned_to do. Members are deactivated, never deleted — a past
+// lead's initials stay in project histories and interaction logs.
+function _team(activeOnly){
+  const all=(DB.get('team_members')||[]).slice();
+  return (activeOnly?all.filter(m=>m.active!==false):all)
+    .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+}
+function _teamByIni(ini){
+  const k=String(ini||'').trim().toUpperCase();
+  return k?(DB.get('team_members')||[]).find(m=>String(m.initials||'').trim().toUpperCase()===k)||null:null;
+}
+// Initials the app derives from an email, the getLoggedBy() rule.
+function _iniFromEmail(email){
+  return String(email||'').split('@')[0].replace(/[^a-zA-Z]/g,'').slice(0,3).toUpperCase();
+}
+// "Me" for the My-projects filter: the roster row with my login email wins
+// (so a member whose initials differ from their email prefix still finds
+// their projects); otherwise the initials derived from the email.
+function _myInitials(){
+  const sess=getSession();
+  const em=(sess&&sess.user&&sess.user.email||'').toLowerCase();
+  if(em){
+    const m=(DB.get('team_members')||[]).find(x=>String(x.email||'').trim().toLowerCase()===em);
+    if(m&&m.initials) return String(m.initials).trim().toUpperCase();
+  }
+  return getLoggedBy();
+}
+function _leadName(ini){
+  const m=_teamByIni(ini);
+  return m?(m.name||ini):(ini||'');
+}
+// Lead chip for a project card. Nothing when no lead is set — the "no lead"
+// count lives beside the My-projects switch, not on every card.
+function _leadChipHTML(p){
+  if(!p||!p.lead) return '';
+  const nm=_leadName(p.lead), mine=String(p.lead).toUpperCase()===_myInitials();
+  return `<span class="lead-chip" title="PI Lead: ${escHtml(nm)}" style="display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 7px;border-radius:9px;background:${mine?'rgba(74,155,232,.22)':'rgba(255,255,255,.07)'};color:${mine?'var(--sky-lt)':'var(--slate)'};border:1px solid ${mine?'rgba(74,155,232,.4)':'rgba(255,255,255,.12)'};white-space:nowrap">Lead · ${escHtml(nm)}</span>`;
+}
+// Options for the project modal's PI Lead select: the active team, plus the
+// project's current lead if they have since been deactivated or were never
+// on the list, so opening and saving a project can't silently drop its lead.
+function _leadOptionsHTML(cur){
+  const c=String(cur||'').trim().toUpperCase();
+  const act=_team(true);
+  let opts='<option value="">— No lead set —</option>';
+  let seen=false;
+  act.forEach(m=>{
+    const ini=String(m.initials||'').trim().toUpperCase();
+    if(ini===c) seen=true;
+    opts+=`<option value="${escHtml(ini)}"${ini===c?' selected':''}>${escHtml(m.name||ini)} (${escHtml(ini)})</option>`;
+  });
+  if(c&&!seen){
+    const m=_teamByIni(c);
+    opts+=`<option value="${escHtml(c)}" selected>${escHtml(m?(m.name||c):c)} (${escHtml(c)})${m?' — inactive':' — not on the team list'}</option>`;
+  }
+  return opts;
+}
+function _leadHistoryHTML(p){
+  const h=(p&&Array.isArray(p.leadHistory))?p.leadHistory:[];
+  if(!h.length) return '';
+  return `<div style="font-size:11px;color:var(--fog);margin-top:6px;line-height:1.5">${h.slice().reverse().map(e=>
+    `${escHtml(fmt(e.date))}: ${escHtml(e.from?_leadName(e.from):'no lead')} → ${escHtml(e.to?_leadName(e.to):'no lead')}${e.by?' <span style="opacity:.7">(by '+escHtml(e.by)+')</span>':''}`).join('<br>')}</div>`;
+}
+
+// ── My projects | All (dashboard + Projects view) ──
+// Remembered per browser. With no saved choice it opens on "mine" when you
+// lead at least one project, otherwise "all" — a list filtered to nothing is
+// not a useful first screen.
+const MYPROJ_KEY='cc_proj_scope';
+function _projScope(){
+  let v=null; try{ v=localStorage.getItem(MYPROJ_KEY); }catch(e){}
+  if(v==='mine'||v==='all') return v;
+  const me=_myInitials();
+  return me&&(DB.get('projects')||[]).some(p=>String(p.lead||'').toUpperCase()===me)?'mine':'all';
+}
+function setProjScope(v){
+  try{ localStorage.setItem(MYPROJ_KEY,v); }catch(e){}
+  render();
+}
+function _scopeProjects(list){
+  if(_projScope()!=='mine') return list;
+  const me=_myInitials();
+  return list.filter(p=>String(p.lead||'').toUpperCase()===me);
+}
+function _projScopeHTML(list){
+  const scope=_projScope(), me=_myInitials();
+  const mine=list.filter(p=>String(p.lead||'').toUpperCase()===me).length;
+  const noLead=list.filter(p=>!p.lead).length;
+  const b=(v,l)=>`<button class="btn btn-sm${scope===v?' btn-primary':''}" data-scope="${v}" onclick="setProjScope('${v}')">${l}</button>`;
+  return `<div class="proj-scope" style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap">${b('mine','My projects ('+mine+')')}${b('all','All ('+list.length+')')}${noLead?`<span style="font-size:11px;color:var(--fog)" title="Set a PI Lead in each project's Edit dialog">${noLead} with no lead</span>`:''}</div>`;
+}
+
+// ── Settings → PI team ──
+function renderTeamCard(){
+  const el=document.getElementById('team-card-body'); if(!el) return;
+  const all=_team(false);
+  const rows=all.map(m=>`<tr style="${m.active===false?'opacity:.5':''}">
+      <td style="padding:6px 8px;color:var(--white)">${escHtml(m.name||'')}</td>
+      <td style="padding:6px 8px;font-family:var(--mono)">${escHtml(m.initials||'')}</td>
+      <td style="padding:6px 8px">${escHtml(m.title||'')}</td>
+      <td style="padding:6px 8px">${escHtml(m.phone||'')}</td>
+      <td style="padding:6px 8px">${m.email?escHtml(m.email):'<span style="opacity:.6">—</span>'}</td>
+      <td style="padding:6px 8px">${m.active===false?'Inactive':'Active'}</td>
+      <td style="padding:6px 8px;text-align:right"><button class="btn btn-sm" onclick="openTeamMemberModal('${escHtml(m.id)}')">Edit</button></td>
+    </tr>`).join('');
+  // Initials already in use in the logs with nobody on the list — usually
+  // the people who should be.
+  const known=new Set(all.map(m=>String(m.initials||'').toUpperCase()));
+  const seen=new Set();
+  (DB.get('interactions')||[]).forEach(i=>{ [i.loggedBy,i.followUpAssignedTo].forEach(x=>{ x=String(x||'').trim().toUpperCase(); if(x&&!known.has(x)) seen.add(x); }); });
+  (DB.get('projects')||[]).forEach(p=>{ const x=String(p.lead||'').trim().toUpperCase(); if(x&&!known.has(x)) seen.add(x); });
+  const extra=[...seen].sort();
+  el.innerHTML=`${all.length?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;color:var(--fog)">
+      <thead><tr style="text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--fog)"><th style="padding:4px 8px">Name</th><th style="padding:4px 8px">Initials</th><th style="padding:4px 8px">Title</th><th style="padding:4px 8px">Phone</th><th style="padding:4px 8px">Email</th><th style="padding:4px 8px">Status</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`:'<div style="font-size:12px;color:var(--fog)">Nobody on the list yet.</div>'}
+    ${extra.length?`<div style="font-size:12px;color:var(--fog);margin-top:10px">Initials in the logs with nobody on the list: ${extra.map(x=>`<button class="btn btn-sm" style="margin:2px 4px 2px 0" onclick="openTeamMemberModal(null,'${escHtml(x)}')">+ ${escHtml(x)}</button>`).join('')}</div>`:''}
+    <div style="margin-top:12px"><button class="btn btn-primary btn-sm" onclick="openTeamMemberModal()">+ Add team member</button></div>`;
+}
+function openTeamMemberModal(id,presetIni){
+  S.editTeamId=id||null;
+  const m=id?(DB.get('team_members')||[]).find(x=>String(x.id)===String(id))||{}:{initials:presetIni||''};
+  openM(id?'Edit team member':'Add team member',
+  `<div class="fgrid fg2f">
+    <div class="fr"><label>Name *</label><input id="f-tm-name" value="${escHtml(m.name||'')}" maxlength="80"></div>
+    <div class="fr"><label>Initials * <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--fog)">(as they appear in the logs)</span></label><input id="f-tm-ini" value="${escHtml(m.initials||'')}" maxlength="4" style="font-family:var(--mono);text-transform:uppercase" oninput="this.value=this.value.replace(/[^a-zA-Z]/g,'').toUpperCase()"></div>
+    <div class="fr"><label>Title</label><input id="f-tm-title" value="${escHtml(m.title||'')}" maxlength="80" placeholder="e.g. PI Coordinator"></div>
+    <div class="fr"><label>Phone</label><input id="f-tm-phone" value="${escHtml(m.phone||'')}" maxlength="30"></div>
+    <div class="fr"><label>Email <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--fog)">(optional — add once they have one)</span></label><input id="f-tm-email" type="email" value="${escHtml(m.email||'')}" maxlength="120"></div>
+    <div class="fr"><label>Status</label><select id="f-tm-active"><option value="1"${m.active!==false?' selected':''}>Active</option><option value="0"${m.active===false?' selected':''}>Inactive</option></select></div>
+  </div>
+  <div style="font-size:11px;color:var(--fog);line-height:1.5;margin-top:6px">The team list is not a login. Signing in is set up separately; adding someone here lets them lead projects and be assigned follow-ups.</div>`,
+  `<button class="btn" onclick="closeM()">Cancel</button>
+   <button class="btn btn-primary" onclick="saveTeamMember()">Save</button>`);
+}
+async function saveTeamMember(){
+  const v=id=>(document.getElementById(id)?.value||'').trim();
+  const id=S.editTeamId;
+  const rec={name:v('f-tm-name'),initials:v('f-tm-ini').toUpperCase(),title:v('f-tm-title'),phone:v('f-tm-phone'),email:v('f-tm-email').toLowerCase(),active:v('f-tm-active')!=='0',updatedBy:getLoggedBy()||''};
+  if(!rec.name){alert('Name is required.');return}
+  if(!/^[A-Z]{2,4}$/.test(rec.initials)){alert('Initials must be 2 to 4 letters.');return}
+  if(rec.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rec.email)){alert('That email address doesn’t look right.');return}
+  const all=DB.get('team_members')||[];
+  const old=id?all.find(x=>String(x.id)===String(id)):null;
+  if(all.some(x=>String(x.id)!==String(id)&&String(x.initials||'').toUpperCase()===rec.initials)){alert('Someone on the team already uses '+rec.initials+'. Initials must be unique — they are how the app tells people apart.');return}
+  if(rec.email&&all.some(x=>String(x.id)!==String(id)&&String(x.email||'').toLowerCase()===rec.email)){alert('Someone on the team already has that email.');return}
+  if(rec.email&&_iniFromEmail(rec.email)&&_iniFromEmail(rec.email)!==rec.initials&&!confirm('Signing in as '+rec.email+' logs interactions as "'+_iniFromEmail(rec.email)+'", not "'+rec.initials+'". Their projects will still be found through this email, but their logs will carry the other initials. Save anyway?')) return;
+  const oldIni=old?String(old.initials||'').toUpperCase():'';
+  const _rekey=oldIni&&oldIni!==rec.initials;
+  const led=_rekey?(DB.get('projects')||[]).filter(p=>String(p.lead||'').toUpperCase()===oldIni):[];
+  const named=_rekey?(DB.get('projects')||[]).filter(p=>String(p.lead||'').toUpperCase()===oldIni||(p.leadHistory||[]).some(e=>String(e.from||'').toUpperCase()===oldIni||String(e.to||'').toUpperCase()===oldIni)):[];
+  if(led.length&&!confirm(`${old.name||oldIni} leads ${led.length} project${led.length===1?'':'s'} as ${oldIni}. Move ${led.length===1?'it':'them'} to ${rec.initials}?`)) return;
+  const ok=id?await sbUpdate('team_members',id,rec):!!(await sbAdd('team_members',rec));
+  if(!ok){showToast('Couldn’t save the team member. If this is the first one, the team migration (sql/2026-10-09_team_and_project_lead.sql) may not have been run yet.','error',7000);return}
+  // Same person, new initials: re-key their projects and the history entries
+  // that name them. The WHOLE record goes to sbUpdate — toSB nulls any date
+  // column a partial object leaves out.
+  for(const p of named){
+    if(String(p.lead||'').toUpperCase()===oldIni) p.lead=rec.initials;
+    p.leadHistory=(p.leadHistory||[]).map(e=>({...e,from:String(e.from||'').toUpperCase()===oldIni?rec.initials:e.from,to:String(e.to||'').toUpperCase()===oldIni?rec.initials:e.to}));
+    await sbUpdate('projects',p.id,p);
+  }
+  if(named.length){ try{ _syncCache.projects=await sbGet('projects',{strict:true}); }catch(e){ console.error('Project reload failed', e.message); } }
+  try{ _syncCache.team_members=await sbGet('team_members',{strict:true}); }catch(e){ console.error('Team reload failed', e.message); }
+  closeM(); S.editTeamId=null;
+  showToast(id?'Team member updated':'Team member added','info',2000);
+  renderTeamCard();
+}
+
 
 // Options for the modal's "Assign to" picker.
 // The empty value means UNASSIGNED, which _fuOwner() resolves to whoever logged
@@ -8251,6 +8447,7 @@ function openProjModal(id){
     <div class="fr"><label>County / region</label><input id="f-pco" value="${p.county||''}" list="dl-counties" autocomplete="off"><datalist id="dl-counties">${countyOpts}</datalist></div>
     <div class="fr"><label>Phase</label><select id="f-pph" onchange="var show=['Precon','Construction','Closeout'].indexOf(this.value)>=0;document.getElementById('precon-date-wrap').style.display=show?'':'none';if(!show)document.getElementById('f-ppd').value=''">${['Planning','CatEx / CE','NEPA / Environmental','Design','Precon','Construction','Closeout','Community Outreach','Survey / Data Collection','Analysis','Draft Plan / Public Comment','Final Adoption'].map(t=>`<option${p.phase===t?' selected':''}>${t}</option>`).join('')}</select></div>
     <div class="fr"><label>Status</label><select id="f-pst">${['Active','On hold','Complete','Cancelled'].map(t=>`<option${p.status===t?' selected':''}>${t}</option>`).join('')}</select></div>
+    <div class="fr"><label>PI Lead <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--fog)">(from Settings → PI team)</span></label><select id="f-plead">${_leadOptionsHTML(p.lead)}</select>${_leadHistoryHTML(p)}${(DB.get('projects')||[]).length&&!window._leadCols?'<div style="font-size:11px;color:var(--amber,#e8a020);margin-top:4px">Not saved yet: run sql/2026-10-09_team_and_project_lead.sql in Supabase first.</div>':''}</div>
   </div>
 
   <div class="fsec">Timeline</div>
@@ -8307,6 +8504,15 @@ async function saveProj(){
   if(_existing&&(_existing.nepaStage||'')!==_nepaStage&&_nepaStage){
     _nepaHistory.push({from:_existing.nepaStage||'',to:_nepaStage,date:_today,by:_by});
   }
+  // PI Lead + handoff history ({from,to,date,by}, the phase-history shape).
+  // A first lead on an existing project is recorded too (from ''), so the
+  // history says when ownership began; a brand-new project's starting lead
+  // is not a handoff and starts the history empty.
+  const _lead=v('f-plead').trim().toUpperCase();
+  const _leadHistory=[...(_existing?.leadHistory||[])];
+  if(_existing&&String(_existing.lead||'').toUpperCase()!==_lead){
+    _leadHistory.push({from:String(_existing.lead||'').toUpperCase(),to:_lead,date:_today,by:_by});
+  }
   // Build NEPA checklist — preserve checked items, add new ones for changed classification
   const _defaultItems=(NEPA_CHECKLISTS[_nepaClass]||[]).map(item=>({key:item.key,group:item.group,label:item.label,checked:false,checkedDate:'',checkedBy:''}));
   let _nepaChecklist=_existing?.nepaChecklist||[];
@@ -8323,7 +8529,7 @@ async function saveProj(){
   } else {
     _nepaChecklist=[];
   }
-  const data={id:S.editId||DB.uid(),pid:v('f-pid'),name:v('f-pn'),client:v('f-pc2'),type:v('f-pty'),county:v('f-pco'),phase:_phase,status:v('f-pst'),startDate:vDate('f-psd'),endDate:vDate('f-ped'),preconDate:_preconPhases.indexOf(_phase)>=0?vDate('f-ppd'):null,notes:v('f-pno'),nepaClassification:_nepaClass,nepaStage:_nepaStage,phaseHistory:_phaseHistory,nepaStageHistory:_nepaHistory,nepaChecklist:_nepaChecklist};
+  const data={id:S.editId||DB.uid(),pid:v('f-pid'),name:v('f-pn'),client:v('f-pc2'),type:v('f-pty'),county:v('f-pco'),phase:_phase,status:v('f-pst'),startDate:vDate('f-psd'),endDate:vDate('f-ped'),preconDate:_preconPhases.indexOf(_phase)>=0?vDate('f-ppd'):null,notes:v('f-pno'),nepaClassification:_nepaClass,nepaStage:_nepaStage,phaseHistory:_phaseHistory,nepaStageHistory:_nepaHistory,nepaChecklist:_nepaChecklist,lead:_lead,leadHistory:_leadHistory};
   if(!data.pid||!/^\d{3,5}$/.test(data.pid)){alert('Project ID must be 3 to 5 digits.');return}
   if(!data.name){alert('Project name is required.');return}
   if(!data.startDate&&!data.preconDate){alert('Please enter at least a Start date or Precon date — this is required for deliverable scheduling.');return}
@@ -23258,6 +23464,13 @@ function renderSettings(m) {
       <div id="mfa-card-body" style="font-size:13px;color:var(--fog)">Checking…</div>
     </div>
 
+    <!-- PI team -->
+    <div style="background:var(--navy-mid);border:1px solid rgba(74,155,232,.25);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">
+      <div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:4px">PI team</div>
+      <div style="font-size:12px;color:var(--fog);margin-bottom:14px;line-height:1.5">The people who lead projects and take follow-ups. Each project's PI Lead is picked from this list (Edit project), and the dashboard and Projects page can show just the projects you lead. Deactivate someone who leaves rather than removing them — their initials stay in the logs and project histories.</div>
+      <div id="team-card-body" style="font-size:13px;color:var(--fog)"></div>
+    </div>
+
     <!-- Claude AI -->
     <div style="background:var(--navy-mid);border:1px solid rgba(74,155,232,.25);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
@@ -23333,6 +23546,7 @@ function renderSettings(m) {
   </div>`;
   setTimeout(function(){ if(document.getElementById('client-access-panel')) renderClientAccessPanel(); }, 0);
   setTimeout(function(){ if(document.getElementById('mfa-card-body')) renderMfaCard(); }, 0);
+  renderTeamCard();
 }
 
 // Settings → Two-step sign-in. The sign-in side (mfaGate and friends) is the

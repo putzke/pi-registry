@@ -357,9 +357,17 @@ first time a fetched project row carries a `lead` key — so a save never 400s).
 - **My projects | All** (`_projScope`/`setProjScope`/`_scopeProjects`,
   localStorage `cc_proj_scope`) on the dashboard's Active projects cards and
   both Projects tabs (tab counts follow the scope). No saved choice → "mine"
-  only if you lead something. The dashboard's portfolio stats stay firm-wide.
+  only if you lead something. The dashboard's stats follow it too (below).
   Lead chip (`_leadChipHTML`) on both card kinds, highlighted when it's you.
 - The portal does not select `lead` (explicit column lists).
+- **The whole dashboard follows the toggle (Oct 2026).** `renderDash` builds
+  `scopeProjs` = `_scopeProjects(Active + On hold)` and filters every data set
+  by it (`inS`): stat cards, deliverables, sentiment, channels, swim lanes,
+  feed, NEPA, comments/periods, LEP/EJ (stakeholders linked to scoped
+  projects). "All" = every Active and On hold project. The toggle moved to
+  the dashboard topbar; the project cards (Active + On hold) sit directly
+  under the stat row. Lookups (`projs`, `stakes`) stay unscoped. Guarded by
+  `test/tests/80-dashboard-scope.test.js` (fails on the old code).
 - **Step 4 — the lead as default (Oct 2026):**
   - **Follow-ups:** the NEW interaction modal pre-selects the project's lead in
     Assign-to (`_fuDefaultToLead`, run on open and on project change), with

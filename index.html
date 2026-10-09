@@ -2423,10 +2423,23 @@ function render(){
 
 // ── DASHBOARD ─────────────────────────────────
 function renderDash(el){
+  // The whole dashboard follows the My projects | All toggle (Oct 2026):
+  // "All" = every Active and On hold project, "My projects" = those you lead.
+  // Every figure below is computed from rows on the projects in scope, so a
+  // card never shows a firm-wide number beside a list scoped to you.
+  // `projs` / `stakes` stay complete — they are only used to look names up.
   const projs=DB.get('projects');
   const stakes=DB.getActive('stakeholders');
-  const ints=DB.get('interactions');
-  const ps=DB.get('project_stakeholders');
+  const _scopeAll=projs.filter(p=>p.status==='Active'||p.status==='On hold');
+  const scopeProjs=_scopeProjects(_scopeAll);
+  const _inScopeIds=new Set(scopeProjs.map(p=>String(p.id)));
+  const inS=x=>_inScopeIds.has(String(x.projectId));
+  const ints=DB.get('interactions').filter(inS);
+  const ps=DB.get('project_stakeholders').filter(inS);
+  const meetsS=(DB.get('meetings')||[]).filter(inS);
+  const _activeStakeIds=new Set(stakes.map(s=>String(s.id)));
+  const scopeStakeIds=new Set(ps.map(x=>String(x.stakeholderId)).filter(id=>_activeStakeIds.has(id)));
+  const scopeStakes=stakes.filter(s=>scopeStakeIds.has(String(s.id)));
   // Follow-up counts lead with what the signed-in user owns — a dashboard number
   // is only actionable if it's about you. The team total rides along as context
   // so nobody loses sight of the backlog. Falls back to team-wide when there's
@@ -2440,21 +2453,20 @@ function renderDash(el){
   const overdueCt=_openFUMine.filter(_isOverdue).length;
   const todayStr=localToday();
   const projF=null;
-  const allCommD=DB.get('commitments').filter(c=>!projF||String(c.projectId)===String(projF));
+  const allCommD=DB.get('commitments').filter(inS);
   const openCommCt=allCommD.filter(c=>c.status==='Open'||c.status==='Overdue').length;
   const commOverdueCt=allCommD.filter(c=>(c.status==='Open'||c.status==='Overdue')&&c.dueDate&&c.dueDate<todayStr).length;
-  const allPcomm=DB.get('public_comments')||[];
+  const allPcomm=(DB.get('public_comments')||[]).filter(inS);
   const pendingCmtCt=allPcomm.filter(c=>c.responseStatus==='Pending').length;
   const respondedCmtCt=allPcomm.filter(c=>c.responseStatus==='Responded').length;
   const cmtRespPct=allPcomm.length>0?Math.round(respondedCmtCt/allPcomm.length*100):null;
-  const allStakesFull=DB.getActive('stakeholders');
-  const lepCt=allStakesFull.filter(s=>s.lep).length;
-  const ejCt=allStakesFull.filter(s=>s.underserved).length;
-  const allPeriods=DB.get('comment_periods')||[];
+  const lepCt=scopeStakes.filter(s=>s.lep).length;
+  const ejCt=scopeStakes.filter(s=>s.underserved).length;
+  const allPeriods=(DB.get('comment_periods')||[]).filter(inS);
   const openPeriodsCt=allPeriods.filter(p=>p.status==='Open').length;
-  const nepaProjs=projs.filter(p=>p.nepaChecklist&&p.nepaChecklist.length>0);
+  const nepaProjs=scopeProjs.filter(p=>p.nepaChecklist&&p.nepaChecklist.length>0);
   const avgNepaPct=nepaProjs.length>0?Math.round(nepaProjs.reduce((sum,p)=>{const cl=p.nepaChecklist||[];return sum+(cl.length>0?cl.filter(x=>x.checked).length/cl.length:0);},0)/nepaProjs.length*100):null;
-  const active=projs.filter(p=>p.status==='Active');
+  const active=scopeProjs.filter(p=>p.status==='Active');
   const clientSums=DB.get('client_summaries')||[];
   function projCard(p){
     // No contact/sentiment/interaction counts on this card any more, so the
@@ -2517,7 +2529,7 @@ function renderDash(el){
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0"><span class="badge b-sky">${p.phase}</span>${_leadChipHTML(p)}</div></div>
       ${chips?`<div style="display:flex;gap:12px;font-size:12px;align-items:center;padding-top:8px;border-top:1px solid var(--border)">${chips}</div>`:''}</div>`;
   }
-  const dels=DB.get('deliverables');
+  const dels=DB.get('deliverables').filter(inS);
   const totalDels=dels.length;
   const completeDels=dels.filter(d=>d.status==='Complete').length;
   const inProgDels=dels.filter(d=>d.status==='In progress').length;
@@ -2563,9 +2575,9 @@ function renderDash(el){
     var DAYS=28;
     var allActivity=[].concat(
       ints.map(function(i){return{date:i.date,projId:i.projectId};}),
-      (DB.get('meetings')||[]).map(function(m){return{date:m.date,projId:m.projectId};})
+      meetsS.map(function(m){return{date:m.date,projId:m.projectId};})
     );
-    var activeProjs=projs.filter(function(p){return p.status==='Active'||p.status==='On hold';});
+    var activeProjs=scopeProjs;
     if(!activeProjs.length)return'<div style="font-size:12px;color:var(--fog)">No active projects.</div>';
 
     function abbrev(name){
@@ -2683,7 +2695,7 @@ function renderDash(el){
     // Bucket interactions into weeks
     var allActivity=[].concat(
       ints.map(function(i){return{date:i.date,channel:i.channel||'Other',projId:i.projectId,type:'int'};}),
-      (DB.get('meetings')||[]).map(function(m){return{date:m.date,channel:m.type||'Other',projId:m.projectId,type:'meet'};})
+      meetsS.map(function(m){return{date:m.date,channel:m.type||'Other',projId:m.projectId,type:'meet'};})
     );
     allActivity.forEach(function(a){
       if(!a.date)return;
@@ -2710,7 +2722,7 @@ function renderDash(el){
         name:s?(s.firstName+' '+s.lastName):'(no stakeholder)',
         sub:(p?p.pid+' · ':'')+((i.summary||'').slice(0,55)+((i.summary||'').length>55?'…':''))};
     });
-    var feedMeets=(DB.get('meetings')||[]).map(function(m){
+    var feedMeets=meetsS.map(function(m){
       var p=projs.find(function(x){return x.id===m.projectId;});
       return{ts:new Date(m.date+'T00:00:00').getTime(),
         label:m.type||'Meeting',color:'#a080e8',
@@ -2727,7 +2739,7 @@ function renderDash(el){
         sub:(p?p.pid+' · ':'')+((i.followUpNote||i.subject||'Resolved').slice(0,55))};
     });
     // Issues resolved
-    var feedIssues=(DB.get('issues')||[]).filter(function(i){return i.dateResolved;}).map(function(i){
+    var feedIssues=(DB.get('issues')||[]).filter(inS).filter(function(i){return i.dateResolved;}).map(function(i){
       var p=projs.find(function(x){return x.id===i.projectId;});
       return{ts:new Date(i.dateResolved+'T00:00:00').getTime(),
         label:'Issue resolved',color:'var(--amber)',
@@ -2735,7 +2747,7 @@ function renderDash(el){
         sub:(p?p.pid+' · ':'')+((i.resolutionSummary||i.category||'').slice(0,55))};
     });
     // Commitments fulfilled
-    var feedComm=(DB.get('commitments')||[]).filter(function(c){return c.fulfilledDate;}).map(function(c){
+    var feedComm=allCommD.filter(function(c){return c.fulfilledDate;}).map(function(c){
       var p=projs.find(function(x){return x.id===c.projectId;});
       var s=c.stakeholderId?stakes.find(function(x){return String(x.id)===String(c.stakeholderId);}):null;
       var madeTo=s?((s.firstName||'')+' '+(s.lastName||'')).trim()||(s.org||''):(c.madeTo||'');
@@ -2768,7 +2780,7 @@ function renderDash(el){
   }
 
   el.innerHTML=`
-  <div class="topbar"><div class="topbar-title">Dashboard</div><div class="topbar-sp"></div>
+  <div class="topbar"><div class="topbar-title">Dashboard</div><div style="margin-left:14px" title="Every figure on this page follows this choice">${_projScopeHTML(_scopeAll)}</div><div class="topbar-sp"></div>
     <div class="topbar-acts">
       <button class="btn btn-primary" onclick="openStakeModal()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v10M3 8h10"/></svg>New stakeholder</button>
       <button class="btn" onclick="openIntModal()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v10M3 8h10"/></svg>Log interaction</button>
@@ -2780,12 +2792,12 @@ function renderDash(el){
       <div class="stat-card sc-sky dash-anim" style="cursor:pointer;animation-delay:0ms" onclick="setView('projects')">
         <div class="stat-lbl">Active projects</div>
         <div class="stat-val sv-sky" id="sv-proj">0</div>
-        <div class="stat-sub">${projs.filter(p=>p.status==='Complete').length} complete · ${projs.filter(p=>p.status==='On hold').length} on hold</div>
+        <div class="stat-sub">${scopeProjs.filter(p=>p.status==='On hold').length} on hold</div>
       </div>
       <div class="stat-card sc-green dash-anim" style="cursor:pointer;animation-delay:60ms" onclick="setView('master')">
         <div class="stat-lbl">Total stakeholders</div>
         <div class="stat-val sv-green" id="sv-stakes">0</div>
-        <div class="stat-sub">${DB.get('project_stakeholders').map(x=>x.projectId).filter((v,i,a)=>a.indexOf(v)===i).length} active projects</div>
+        <div class="stat-sub">across ${scopeProjs.length} project${scopeProjs.length!==1?'s':''}</div>
       </div>
       <div class="stat-card sc-sky dash-anim" style="cursor:pointer;animation-delay:120ms" onclick="setView('interactions')">
         <div class="stat-lbl">Interactions logged</div>
@@ -2817,6 +2829,14 @@ function renderDash(el){
         <div class="stat-val" style="color:${avgNepaPct===100?'var(--green)':avgNepaPct>=60?'#4db6ac':'var(--sky-lt)'}" id="sv-nepa">0%</div>
         <div class="stat-sub">${nepaProjs.length} project${nepaProjs.length!==1?'s':''} with NEPA classification</div>
       </div>`:''}
+    </div>
+
+    <!-- ROW 1b: project cards, right under the figures they scope -->
+    <div class="dash-anim" style="animation-delay:200ms;margin-bottom:14px">
+      <div class="sec-hd" style="gap:10px;flex-wrap:wrap"><span class="sec-t">${_projScope()==='mine'?'My active &amp; on-hold projects':'Active &amp; on-hold projects'}</span><button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="setView('projects')">View all</button></div>
+      <div id="dash-proj-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px">
+        ${scopeProjs.map(projCard).join('')||(_projScope()==='mine'?'<div style="color:var(--fog);font-size:13px">You aren\u2019t the PI Lead on any active or on-hold project. <a href="#" onclick="setProjScope(\'all\');return false" style="color:var(--sky-lt)">Show all</a></div>':'<div style="color:var(--fog);font-size:13px">No active or on-hold projects.</div>')}
+      </div>
     </div>
 
     <!-- ROW 2: Visual panels -->
@@ -2851,7 +2871,7 @@ function renderDash(el){
           <div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--slate);line-height:1">${allNeut}</div><div style="font-size:11px;color:var(--fog);margin-top:2px"><span style="display:inline-block;width:7px;height:7px;background:var(--slate);border-radius:50%;margin-right:3px"></span>Neutral</div></div>
           <div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--red);line-height:1">${allOpp}</div><div style="font-size:11px;color:var(--fog);margin-top:2px"><span style="display:inline-block;width:7px;height:7px;background:var(--red);border-radius:50%;margin-right:3px"></span>Opponents</div></div>
         </div>
-        <div style="margin-top:7px;font-size:11px;color:var(--fog);text-align:center">Across all active projects (External only)</div>
+        <div style="margin-top:7px;font-size:11px;color:var(--fog);text-align:center">Across ${_projScope()==='mine'?'my':'all'} active &amp; on-hold projects (External only)</div>
       </div>
       <div class="dash-anim" style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:12px 14px;animation-delay:360ms">
         <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:9px">Interaction channels</div>
@@ -2966,13 +2986,6 @@ function renderDash(el){
       </div>
     </div>
 
-    <!-- ROW 5: Active project cards -->
-    <div class="dash-anim" style="animation-delay:540ms">
-      <div class="sec-hd" style="gap:10px;flex-wrap:wrap"><span class="sec-t">Active projects</span>${_projScopeHTML(active)}<button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="setView('projects')">View all</button></div>
-      <div id="dash-proj-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px">
-        ${_scopeProjects(active).map(projCard).join('')||(_projScope()==='mine'?'<div style="color:var(--fog);font-size:13px">You aren\u2019t the PI Lead on any active project. <a href="#" onclick="setProjScope(\'all\');return false" style="color:var(--sky-lt)">Show all</a></div>':'<div style="color:var(--fog);font-size:13px">No active projects.</div>')}
-      </div>
-    </div>
   </div>`;
 
   // ── COUNT-UP ANIMATION ──────────────────────────────────────────
@@ -2990,7 +3003,7 @@ function renderDash(el){
     },delayMs);
   }
   countUp('sv-proj', active.length, 50);
-  countUp('sv-stakes', stakes.length, 110);
+  countUp('sv-stakes', scopeStakes.length, 110);
   countUp('sv-ints', ints.length, 170);
   countUp('sv-fu', openFUCt, 230);
   countUp('sv-comm', openCommCt, 290);

@@ -2741,6 +2741,13 @@ sees every row through their own login; a client still sees only their own
 grant row, unaffected.
 
 ### Demo dataset — `sql/2026-07-26_udot_conference_demo_seed.sql`
+**REMOVED FROM LIVE (Oct 2026, Jeff's call).** The live database now holds real
+projects only. `sql/fixes/2026-10-10_remove_demo_and_test_projects.sql` deleted
+the three demo projects plus `1200 South Wastewater` (PIN 700, a staff test
+project) and their 156 project-only contacts. **Never run the seed on live
+again** — it belongs on the dev database once that exists. The tests still use
+it (the harness's own Postgres), unaffected.
+
 Three realistic Utah projects with ~63 stakeholders, ~586 interactions,
 deliverables, events, issues, commitments, a comment period with 23 public
 comments, portal links and grant-by-email rows:

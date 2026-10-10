@@ -37,7 +37,11 @@ module.exports = {
       t.ok(/no client portal link yet/.test(clip.asked), 'with no portal link it asks before creating one');
       const [lnk] = await t.sql(`select token from pi_portal_links where project_id::text=$1`, [P]);
       t.ok(!!lnk, 'the portal link is created');
-      const url = `https://app.cirruscc.com/client-portal.html?token=${lnk.token}&report=${shared.id}`;
+      // The link is built on the address this copy is served from (test 81):
+      // app.cirruscc.com on the live site, the dev address here.
+      const base = await app.page.evaluate(() => APP_BASE_URL);
+      t.eq(base, 'https://dev.cirruscc.com', 'opened from disk, links point at the dev site, never at live');
+      const url = `${base}/client-portal.html?token=${lnk.token}&report=${shared.id}`;
       const label = `${proj.name}: Project Team PI Update #7, September 19 – October 2, 2026 (PDF)`;
       t.eq(clip.c && clip.c['text/html'], `<a href="${url.replace('&', '&amp;')}">${label}</a>`, 'rich text: the report name links to the report');
       t.eq(clip.c && clip.c['text/plain'], `${label}: ${url}`, 'plain text: name then link');

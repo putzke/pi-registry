@@ -417,12 +417,41 @@
 </div>
 
 <script>
-const SUPA_URL  = 'https://ncfbblhlsiglxkoiounv.supabase.co';
-const SUPA_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5jZmJibGhsc2lnbHhrb2lvdW52Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0MTUzOTMsImV4cCI6MjA5NDk5MTM5M30.-fRI1QGkr1teN0sFvl25Uq7U38Jq1SAc6heIJvOud2Q';
+// ── ENVIRONMENT (begin) ─────────────────────────────────────────────
+// Byte-identical in index.html, mobile.html, importer.html and
+// client-portal.html (test 81 asserts it). The LIVE database is used ONLY on
+// the exact live addresses; every other address (dev.cirruscc.com, a
+// Cloudflare preview link, a file opened from disk) gets the DEV database,
+// so an unfamiliar address can never read or write real data.
+const CC_LIVE_BASE = 'https://app.cirruscc.com';
+const CC_ENV = /^(app\.cirruscc\.com|putzke\.github\.io)$/.test(location.hostname) ? 'live' : 'dev';
+const CC_SUPA = CC_ENV === 'live'
+  ? { url: 'https://ncfbblhlsiglxkoiounv.supabase.co', key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5jZmJibGhsc2lnbHhrb2lvdW52Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0MTUzOTMsImV4cCI6MjA5NDk5MTM5M30.-fRI1QGkr1teN0sFvl25Uq7U38Jq1SAc6heIJvOud2Q' }
+  : { url: 'https://oxbonrnilvadszgfctfl.supabase.co', key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im94Ym9ucm5pbHZhZHN6Z2ZjdGZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE2NTkwMDcsImV4cCI6MjEwNzIzNTAwN30.AqszI-LKMN-ofo-Y4SYCCSOZQY3hrNl9HLSg_SyMlL0' };
+// Where this copy of the apps is served: portal share links and the
+// sign-in email's return address are built from it.
+const CC_BASE = CC_ENV === 'live' ? CC_LIVE_BASE
+  : (/^https?:$/.test(location.protocol) ? location.origin : 'https://dev.cirruscc.com');
+if (CC_ENV === 'dev') (function () {
+  function show() {
+    if (document.getElementById('cc-env-banner')) return;
+    var b = document.createElement('div');
+    b.id = 'cc-env-banner';
+    b.textContent = 'DEV \u00b7 test copy \u00b7 not the live app';
+    b.style.cssText = 'position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:2147483647;'
+      + 'background:#f59e0b;color:#111;font:700 11px/18px system-ui,sans-serif;letter-spacing:.06em;'
+      + 'padding:0 12px;border-radius:0 0 6px 6px;pointer-events:none';
+    document.body.appendChild(b);
+  }
+  if (document.body) show(); else document.addEventListener('DOMContentLoaded', show);
+})();
+// ── ENVIRONMENT (end) ───────────────────────────────────────────────
+const SUPA_URL  = CC_SUPA.url;
+const SUPA_KEY  = CC_SUPA.key;
 // Where the apps are served (same constant as index.html). PORTAL_URL is the
 // redirect a sign-in email sends the client to, so it must be in Supabase's
 // allowed redirect URLs (Authentication → URL Configuration).
-const APP_BASE_URL = 'https://app.cirruscc.com';
+const APP_BASE_URL = CC_BASE;
 const PORTAL_URL = APP_BASE_URL + '/client-portal.html';
 // Client-facing support contact shown on the "no access yet" screen. Change to
 // your business/client-facing email.

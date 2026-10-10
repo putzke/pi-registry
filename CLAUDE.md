@@ -1774,8 +1774,11 @@ ROW agents read that before negotiating.
   node -e "const fs=require('fs'),html=fs.readFileSync('index.html','utf8');const s=[];let m,r=/<script>([\s\S]*?)<\/script>/g;while((m=r.exec(html)))s.push(m[1]);try{new Function(s.join('\n'));console.log('OK');}catch(e){console.log('ERROR:',e.message);}"
   ```
 - After every edit, run the syntax check before committing
-- Push to `main` branch: `git push origin HEAD:main`
-- Working branch also: `claude/pi-registry-scroll-fixes-c2i1cc`
+- **Push to `develop`, never straight to `main` (Oct 2026).** `develop` deploys
+  to dev.cirruscc.com (Cloudflare Pages, dev database); `main` is the live app
+  (GitHub Pages, app.cirruscc.com). Work lands on `develop`, Jeff tries it on
+  dev, and only his explicit "release" moves it to `main`
+  (`git push origin develop:main`, a fast-forward). See "Dev and live" below.
 - **Shared lists live in 4 places — update all together.** `index.html`,
   `mobile.html`, and `importer.html` are standalone; none imports the others,
   so any list a user picks from is duplicated — and the importer's embedded
@@ -3823,6 +3826,25 @@ Crawl-specific rules learned the hard way:
 - URL: `https://ncfbblhlsiglxkoiounv.supabase.co`
 - Anon key in `index.html` line ~505 (`SUPA_KEY`)
 - Tables use Row Level Security (anon key has read/write via policy)
+
+## Dev and live (Oct 2026)
+| | Live | Dev |
+|---|---|---|
+| Address | app.cirruscc.com (GitHub Pages, `main`) | dev.cirruscc.com + `*.cirruscc-dev.pages.dev` previews (Cloudflare Pages, `develop`) |
+| Supabase | `cirruscc-live` · `ncfbblhlsiglxkoiounv` | `cirruscc-dev` · `oxbonrnilvadszgfctfl` (same org, us-west-1) |
+| Data | real projects only | demo seed only — never a copy of live rows |
+- **The switch is ONE block, byte-identical in all four apps** —
+  `// ── ENVIRONMENT (begin)` … `(end)`: `CC_ENV`, `CC_SUPA {url,key}`,
+  `CC_BASE` (where share links / sign-in redirects point), `CC_LIVE_BASE`, and
+  an amber "DEV" tab on every dev page. **Only `app.cirruscc.com` and
+  `putzke.github.io` are live; EVERY other hostname is dev** (previews, files,
+  localhost, look-alikes) — an unfamiliar address can never touch real data.
+  `SUPA_URL`/`SUPA_KEY`/`APP_BASE_URL` read from it. CSP `connect-src` lists
+  both projects. The harness opens files, so tests run as dev.
+  Guarded by `test/tests/81-dev-live-switch.test.js` (hostname table, key↔project
+  match, identical copies; verified to fail with a loosened rule).
+- **Database changes go to dev first**, then to live at release. Sign-ins are
+  separate per database (and browser storage is per address).
 
 ## Backups (Oct 2026)
 - **Supabase Pro** (upgraded 2026-10-10): daily backups kept 7 days, restored

@@ -65,13 +65,14 @@ module.exports = {
     // report letterhead choice, and break every portal link already sent.
     t.ok(src['index.html'].includes("'compass_claude_api_key_v2'"), 'the saved-API-key localStorage key is unchanged');
     t.ok(src['index.html'].includes("'compass_report_branding'"), 'the letterhead-choice localStorage key is unchanged');
-    // The app address lives in ONE constant per app, so the move to
-    // app.cirruscc.com is a one-line change made the day DNS is live.
-    const base = a => (src[a].match(/const APP_BASE_URL = '([^']+)'/) || [])[1];
-    t.ok(base('index.html') && base('index.html') === base('client-portal.html'), 'index.html and the portal agree on APP_BASE_URL');
-    t.eq(base('index.html'), 'https://app.cirruscc.com', 'the apps live at app.cirruscc.com');
+    // The live address lives in ONE constant, CC_LIVE_BASE, inside the
+    // environment block every app shares (test 81). APP_BASE_URL follows it on
+    // the live site and the serving address everywhere else (dev, previews).
+    for (const a of ['index.html', 'client-portal.html'])
+      t.ok(/const APP_BASE_URL = CC_BASE;/.test(src[a]), `${a}: APP_BASE_URL comes from the environment block`);
+    t.eq((src['index.html'].match(/const CC_LIVE_BASE = '([^']+)'/) || [])[1], 'https://app.cirruscc.com', 'the live apps are at app.cirruscc.com');
     t.eq(fs.readFileSync(path.join(root, 'CNAME'), 'utf8').trim(), 'app.cirruscc.com', 'and GitHub Pages serves that domain (CNAME file)');
-    for (const a of apps) t.eq((src[a].match(/putzke\.github\.io|app\.cirruscc\.com/g) || []).length, a === 'index.html' || a === 'client-portal.html' ? 1 : 0, `${a}: the address appears only in APP_BASE_URL`);
+    for (const a of apps) t.eq((src[a].match(/putzke\.github\.io|app\.cirruscc\.com/g) || []).length, 1, `${a}: the address appears only in CC_LIVE_BASE`);
 
     // ── the .docx letterheads ────────────────────────────────────────────
     const app = await t.open('index.html', { email: 'putzke@demo.test' });

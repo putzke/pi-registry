@@ -3,7 +3,7 @@
 <head>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHJvbGU9ImltZyIgYXJpYS1sYWJlbD0iQ2lycnVzIENjIHN5bWJvbCIgdmlld0JveD0iMCAwIDMyIDMyIj48cmVjdCB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHJ4PSI3IiBmaWxsPSIjMTQxQTI0Ij48L3JlY3Q+CjxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDYuNSw2LjUpIHNjYWxlKDAuMTkpIj48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSIzNyIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjRkZGRkZGIiBzdHJva2Utd2lkdGg9IjciPjwvY2lyY2xlPgo8cGF0aCBkPSJNNTAgMTMgQTM3IDM3IDAgMCAxIDg0LjUgMzYuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMzVBNkM5IiBzdHJva2Utd2lkdGg9IjEzIiBzdHJva2UtbGluZWNhcD0icm91bmQiPjwvcGF0aD4KPHBvbHlnb24gcG9pbnRzPSI3MCwzMCA1NCw1NCA0Niw0NiIgZmlsbD0iI0MyNEE0MiI+PC9wb2x5Z29uPgo8Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI3IiBmaWxsPSIjRkZGRkZGIj48L2NpcmNsZT48L2c+Cjwvc3ZnPgo=">
   <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://ncfbblhlsiglxkoiounv.supabase.co; img-src 'self' data:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://ncfbblhlsiglxkoiounv.supabase.co https://oxbonrnilvadszgfctfl.supabase.co; img-src 'self' data:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cirrus Cc — Stakeholder Import Tool</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -667,9 +667,38 @@ function navNext() {
 }
 
 // ── SUPABASE CONFIG ────────────────────────────────────────────
-const SUPA_URL = 'https://ncfbblhlsiglxkoiounv.supabase.co';
+// ── ENVIRONMENT (begin) ─────────────────────────────────────────────
+// Byte-identical in index.html, mobile.html, importer.html and
+// client-portal.html (test 81 asserts it). The LIVE database is used ONLY on
+// the exact live addresses; every other address (dev.cirruscc.com, a
+// Cloudflare preview link, a file opened from disk) gets the DEV database,
+// so an unfamiliar address can never read or write real data.
+const CC_LIVE_BASE = 'https://app.cirruscc.com';
+const CC_ENV = /^(app\.cirruscc\.com|putzke\.github\.io)$/.test(location.hostname) ? 'live' : 'dev';
+const CC_SUPA = CC_ENV === 'live'
+  ? { url: 'https://ncfbblhlsiglxkoiounv.supabase.co', key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5jZmJibGhsc2lnbHhrb2lvdW52Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0MTUzOTMsImV4cCI6MjA5NDk5MTM5M30.-fRI1QGkr1teN0sFvl25Uq7U38Jq1SAc6heIJvOud2Q' }
+  : { url: 'https://oxbonrnilvadszgfctfl.supabase.co', key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im94Ym9ucm5pbHZhZHN6Z2ZjdGZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE2NTkwMDcsImV4cCI6MjEwNzIzNTAwN30.AqszI-LKMN-ofo-Y4SYCCSOZQY3hrNl9HLSg_SyMlL0' };
+// Where this copy of the apps is served: portal share links and the
+// sign-in email's return address are built from it.
+const CC_BASE = CC_ENV === 'live' ? CC_LIVE_BASE
+  : (/^https?:$/.test(location.protocol) ? location.origin : 'https://dev.cirruscc.com');
+if (CC_ENV === 'dev') (function () {
+  function show() {
+    if (document.getElementById('cc-env-banner')) return;
+    var b = document.createElement('div');
+    b.id = 'cc-env-banner';
+    b.textContent = 'DEV \u00b7 test copy \u00b7 not the live app';
+    b.style.cssText = 'position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:2147483647;'
+      + 'background:#f59e0b;color:#111;font:700 11px/18px system-ui,sans-serif;letter-spacing:.06em;'
+      + 'padding:0 12px;border-radius:0 0 6px 6px;pointer-events:none';
+    document.body.appendChild(b);
+  }
+  if (document.body) show(); else document.addEventListener('DOMContentLoaded', show);
+})();
+// ── ENVIRONMENT (end) ───────────────────────────────────────────────
+const SUPA_URL = CC_SUPA.url;
 const SUPA_REST = SUPA_URL + '/rest/v1';
-const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5jZmJibGhsc2lnbHhrb2lvdW52Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0MTUzOTMsImV4cCI6MjA5NDk5MTM5M30.-fRI1QGkr1teN0sFvl25Uq7U38Jq1SAc6heIJvOud2Q';
+const SUPA_KEY = CC_SUPA.key;
 
 // ── AUTH: read token from URL param (passed by parent app) ──────
 function sanitizeHTML(str) {

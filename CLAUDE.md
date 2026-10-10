@@ -3823,3 +3823,23 @@ Crawl-specific rules learned the hard way:
 - URL: `https://ncfbblhlsiglxkoiounv.supabase.co`
 - Anon key in `index.html` line ~505 (`SUPA_KEY`)
 - Tables use Row Level Security (anon key has read/write via policy)
+
+## Backups (Oct 2026)
+- **Supabase Pro** (upgraded 2026-10-10): daily backups kept 7 days, restored
+  from the dashboard (Database → Backups). First thing to reach for.
+- **Off-site nightly copy — `putzke/cirruscc-backups` (PRIVATE repo).** A GitHub
+  Action at 09:17 UTC dumps `public` (schema, data, policies, grants),
+  `auth.users`/`identities`/`mfa_factors` and `storage.buckets`/`objects` rows,
+  downloads every `report-files` object, encrypts all of it with
+  `BACKUP_PASSPHRASE` (gpg AES256), then **restores it into a scratch
+  Postgres 17 and fails unless every public table's row count and every file
+  match** — each night's backup is proven restorable. Kept 35 days as an
+  Actions artifact. Secrets: `SUPABASE_DB_URL` (session pooler, port 5432 —
+  GitHub runners are IPv4-only, the direct host is IPv6),
+  `SUPABASE_SERVICE_ROLE_KEY`, `BACKUP_PASSPHRASE` (Jeff holds it; without it
+  no backup opens). First live run 2026-10-10: 26 tables, 7 files, 3.9 MB.
+- **Never put backup tooling or output in THIS repo** — it is public, and so
+  are its Actions logs and artifacts.
+- A failed night emails the repo owner. A table added to `public` is picked
+  up automatically; a new Storage bucket is NOT (the script reads
+  `report-files` only) — add it to `backup.sh` there.

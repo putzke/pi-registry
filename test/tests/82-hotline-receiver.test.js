@@ -44,7 +44,10 @@ module.exports = {
     const [h3] = await t.sql(`insert into pi_hotlines (name, phone_number, project_id, spanish_enabled, greeting_mode, greeting_audio_path) values ('Recorded One','+18015550103',$1,true,'recording','greetings/x-en.mp3') returning id`, [String(pC.id)]);
 
     // ── fakes ─────────────────────────────────────────────────────────────
-    const log = { storage: [], twilioDeletes: [], emails: [], downloads: [] };
+    const log = { storage: [], twilioDeletes: [], emails: [], downloads: [], twilioLookups: [] };
+    // Twilio's REST API, as the fallback check for unsigned requests sees it.
+    const TW_API = `https://api.twilio.com/2010-04-01/Accounts/${ACCT}`;
+    const twilioApi = {};
     const fetchFn = async (url, opts = {}) => {
       const u = String(url);
       if (u.startsWith(SB + '/rest/v1/')) {
@@ -59,9 +62,14 @@ module.exports = {
         return new Response('{}', { status: 401 });
       }
       if (u.startsWith('https://api.twilio.com/') && opts.method === 'DELETE') { log.twilioDeletes.push(u); return new Response('', { status: 204 }); }
-      if (u.startsWith('https://recordings.example/')) {
+      if (u.startsWith(TW_API + '/Recordings/') && u.endsWith('.mp3')) {
         log.downloads.push({ url: u, auth: opts.headers.Authorization });
         return new Response(new Uint8Array([1, 2, 3, 4]), { status: 200 });
+      }
+      if (u.startsWith(TW_API + '/')) {
+        log.twilioLookups.push(u);
+        const k = u.slice(TW_API.length + 1);
+        return twilioApi[k] ? new Response(JSON.stringify(twilioApi[k]), { status: 200 }) : new Response('{}', { status: 404 });
       }
       if (u === 'https://api.resend.com/emails') { log.emails.push(JSON.parse(opts.body)); return new Response('{"id":"e1"}', { status: 200 }); }
       throw new Error('unexpected fetch ' + u);
@@ -70,10 +78,11 @@ module.exports = {
                   RESEND_API_KEY: 're_test', APP_BASE_URL: 'https://dev.cirruscc.com' };
     const handler = L.createHandler({ env, fetchFn });
     const base = SB + '/functions/v1/hotline';
-    const call = async (sub, params, { signed = true, h = handler, badSig = false } = {}) => {
+    const call = async (sub, params, { signed = true, h = handler, badSig = false, extraHeaders = {} } = {}) => {
       const url = base + sub;
       const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
       if (signed) headers['X-Twilio-Signature'] = badSig ? sign(url, { ...params, extra: '1' }) : sign(url, params);
+      Object.assign(headers, extraHeaders);
       // Supabase hands the function an internal address; the signature is over the public one.
       const internal = 'http://localhost:9000/hotline' + sub;
       const r = await h(new Request(internal, { method: 'POST', headers, body: new URLSearchParams(params).toString() }));
@@ -87,6 +96,38 @@ module.exports = {
     const noSecrets = L.createHandler({ env: { ...env, TWILIO_AUTH_TOKEN: '' }, fetchFn });
     t.eq((await call('/voice', inbound, { h: noSecrets })).status, 503, 'with no Twilio secrets set, nothing is accepted');
     t.ok(await L.validSignature(TOKEN, 'https://x/y', { a: '1' }, sign('https://x/y', { a: '1' })), 'the signature check accepts Twilio’s own scheme');
+
+    // ── unsigned requests: accepted only when Twilio's API confirms them ──
+    // (a new trial number's "Receive a call" set-up posts without a signature)
+    const CS = 'CA' + 'a'.repeat(32), RS = 'RE' + 'b'.repeat(32);
+    const live = { CallSid: CS, AccountSid: ACCT, From: '+13855550177', To: '+18015550102' };
+    const nowIso = new Date().toUTCString();
+    const lookupsBefore = log.twilioLookups.length;
+    t.eq((await call('/voice', { ...live, AccountSid: 'ACother' }, { signed: false })).status, 403, 'unsigned: another account’s SID is refused before any lookup');
+    t.eq(log.twilioLookups.length, lookupsBefore, '…without asking Twilio');
+    t.eq((await call('/voice', live, { signed: false })).status, 403, 'unsigned: a call Twilio does not know is refused');
+    twilioApi[`Calls/${CS}.json`] = { sid: CS, account_sid: ACCT, direction: 'inbound', to: '+18015550102', status: 'in-progress', date_created: nowIso };
+    const r0 = await call('/voice', live, { signed: false });
+    t.ok(r0.status === 200 && /<Record /.test(r0.body), 'unsigned: a live inbound call Twilio confirms is answered');
+    t.eq((await call('/voice', { ...live, To: '+18015550101' }, { signed: false })).status, 403, 'unsigned: a To that differs from Twilio’s record is refused');
+    t.eq((await call('/voice', live, { signed: false, extraHeaders: { 'X-Twilio-Signature': 'bogus' } })).status, 403, 'a WRONG signature is refused outright (no fallback)');
+    twilioApi[`Calls/${CS}.json`].status = 'completed';
+    t.eq((await call('/voice', live, { signed: false })).status, 403, 'unsigned: a call that has ended cannot be replayed into the menu');
+    // The recording callback for that call.
+    const recLive = { ...live, RecordingSid: RS, RecordingDuration: '12', RecordingStatus: 'completed', RecordingUrl: 'https://evil.example/steal' };
+    const qLive = `h=${h2.id}&l=en&d=&p=${pC.id}`;
+    t.eq((await call('/recording?' + qLive, recLive, { signed: false })).status, 403, 'unsigned recording: refused until Twilio confirms the recording belongs to the call');
+    twilioApi[`Recordings/${RS}.json`] = { sid: RS, call_sid: 'CA' + 'c'.repeat(32) };
+    t.eq((await call('/recording?' + qLive, recLive, { signed: false })).status, 403, 'unsigned recording: a recording from another call is refused');
+    twilioApi[`Recordings/${RS}.json`].call_sid = CS;
+    t.eq((await call('/recording?' + qLive, recLive, { signed: false })).status, 200, 'unsigned recording: confirmed → saved');
+    t.ok(log.downloads.some(d => d.url === TW_API + `/Recordings/${RS}.mp3`), '…the audio is fetched from api.twilio.com by SID — never from the RecordingUrl the request named');
+    const [mLive] = await t.sql(`select * from pi_hotline_messages where call_sid=$1`, [CS]);
+    t.ok(mLive && mLive.status === 'pending', '…as a pending voicemail');
+    twilioApi[`Calls/${CS}.json`].date_created = new Date(Date.now() - 2 * 86400000).toUTCString();
+    t.eq((await call('/recording?' + qLive, { ...recLive, RecordingSid: 'RE' + 'd'.repeat(32) }, { signed: false })).status, 403, 'unsigned recording: a call older than a day is refused');
+    await t.sql(`delete from pi_hotline_messages where call_sid=$1`, [CS]);
+    log.downloads.length = 0; log.storage.length = 0; log.emails.length = 0; log.twilioDeletes.length = 0;
 
     // ── greeting + menu ───────────────────────────────────────────────────
     let r = await call('/voice', inbound);
@@ -141,7 +182,7 @@ module.exports = {
     t.eq(m.assigned_to, 'JP', 'assigned to the project’s PI Lead');
     t.eq(m.recording_path, `messages/${m.id}.mp3`, 'the audio was copied into our storage');
     t.ok(log.storage.some(s => s.url.endsWith(`/hotline-audio/messages/${m.id}.mp3`) && s.type === 'audio/mpeg'), '…in the private hotline-audio bucket');
-    t.ok(log.downloads[0] && log.downloads[0].url === 'https://recordings.example/RE100.mp3' && /^Basic /.test(log.downloads[0].auth), 'downloaded from Twilio with the account’s credentials');
+    t.ok(log.downloads[0] && log.downloads[0].url === TW_API + '/Recordings/RE100.mp3' && /^Basic /.test(log.downloads[0].auth), 'downloaded from Twilio with the account’s credentials');
     t.eq(log.twilioDeletes.length, 0, 'Twilio’s copy is kept until the transcript is in');
     t.eq((await t.sql(`select count(*)::int n from pi_interactions`))[0].n, intsBefore, 'no interaction is created — a person logs it');
     t.ok(log.emails.length === 1 && log.emails[0].to[0] === 'lead@example.test' && /400 North/.test(log.emails[0].subject)

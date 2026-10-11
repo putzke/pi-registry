@@ -7,8 +7,9 @@
 //   POST /hotline/recorded     the recording ended   → "thank you", hang up
 //   POST /hotline/recording    the recording is ready → save the voicemail
 //   POST /hotline/transcription  the transcript is ready
-// Every Twilio request must carry a valid X-Twilio-Signature; anything else is
-// refused. The app calls one route, with the signed-in user's token:
+// Every Twilio request must carry a valid X-Twilio-Signature, or — when it
+// carries none at all — be confirmed call-by-call against Twilio's own API
+// (confirmWithTwilio). Anything else is refused. The app calls one route, with the signed-in user's token:
 //   POST /hotline/notify       {messageId} → email the person it is assigned to
 //
 // Nothing here creates an interaction. A voicemail lands as a PENDING row in
@@ -233,11 +234,47 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
     } catch (_) { return ''; }        // fall back to the computer voice
   }
 
-  const twilioAuth = () => 'Basic ' + btoa(String(env.TWILIO_ACCOUNT_SID).trim() + ':' + TOKEN);
+  const SID = String(env.TWILIO_ACCOUNT_SID || '').trim();
+  const API = `https://api.twilio.com/2010-04-01/Accounts/${SID}`;
+  const twilioAuth = () => 'Basic ' + btoa(SID + ':' + TOKEN);
+  async function twilioGet(path) {
+    const r = await fetchFn(`${API}/${path}`, { headers: { Authorization: twilioAuth() } });
+    if (r.status === 404) return null;
+    if (!r.ok) throw new Error('twilio ' + r.status);
+    return r.json();
+  }
+
+  // Some Twilio numbers (seen on a new trial account's "Receive a call" set-up)
+  // post webhooks with NO X-Twilio-Signature at all. Such a request is only
+  // accepted if Twilio's own API, asked with our credentials, confirms it: the
+  // call exists on our account, came IN to one of our hotline numbers, and is
+  // still live (or, for the recording callbacks, began within the last day and
+  // the recording belongs to it). Returns '' when confirmed, else the reason.
+  async function confirmWithTwilio(sub, params) {
+    if (params.AccountSid !== SID) return 'account';
+    if (!/^CA[0-9a-f]{32}$/i.test(params.CallSid || '')) return 'call sid';
+    const c = await twilioGet(`Calls/${params.CallSid}.json`);
+    if (!c) return 'no such call';
+    if (c.account_sid !== SID) return 'account';
+    if (c.direction !== 'inbound') return 'direction';
+    if (params.To && normPhone(params.To) !== normPhone(c.to)) return 'to';
+    if (!(await one(`pi_hotlines?phone_number=eq.${encodeURIComponent(normPhone(c.to))}&select=id`))) return 'not a hotline';
+    if (['/voice', '/menu', '/recorded'].includes(sub)) {
+      if (!['queued', 'ringing', 'in-progress'].includes(c.status)) return 'call over';
+    } else {
+      const age = now().getTime() - new Date(c.date_created || c.start_time).getTime();
+      if (!(age >= 0 && age < 86400000)) return 'too old';
+      if (!/^RE[0-9a-f]{32}$/i.test(params.RecordingSid || '')) return 'recording sid';
+      const rec = await twilioGet(`Recordings/${params.RecordingSid}.json`);
+      if (!rec || rec.call_sid !== params.CallSid) return 'recording';
+    }
+    return '';
+  }
+
   async function deleteTwilioRecording(sid) {
     if (!sid) return;
     try {
-      await fetchFn(`https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Recordings/${sid}.json`,
+      await fetchFn(`${API}/Recordings/${encodeURIComponent(sid)}.json`,
         { method: 'DELETE', headers: { Authorization: twilioAuth() } });
     } catch (_) { /* best effort — Twilio keeps it until deleted by hand */ }
   }
@@ -327,9 +364,11 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
 
       // Copy the audio into our own storage, then drop Twilio's copy (a
       // Spanish message now; an English one once its transcript is in).
-      if (saved && params.RecordingUrl) {
+      if (saved && params.RecordingSid) {
         try {
-          const a = await fetchFn(params.RecordingUrl + '.mp3', { headers: { Authorization: twilioAuth() } });
+          // Built from the SID, never from RecordingUrl: our credentials go to
+          // api.twilio.com and nowhere a request could name.
+          const a = await fetchFn(`${API}/Recordings/${encodeURIComponent(params.RecordingSid)}.mp3`, { headers: { Authorization: twilioAuth() } });
           if (!a.ok) throw new Error('download ' + a.status);
           const bytes = new Uint8Array(await a.arrayBuffer());
           const path = `messages/${saved.id}.mp3`;
@@ -395,21 +434,15 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
       // Validate against the PUBLIC address Twilio called, not the internal one.
       const publicUrl = base + sub + url.search;
       const sig = req.headers.get('x-twilio-signature');
-      if (!(await validSignature(TOKEN, publicUrl, params, sig))) {
-        // Say WHY, without logging the token, the signature or any caller
-        // detail: which checks pass, and the shape of what arrived.
-        const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || '';
-        const alt = host ? 'https://' + host + url.pathname + url.search : '';
-        console.error('hotline: bad signature', JSON.stringify({
-          sub, contentType: req.headers.get('content-type'), hasSignature: !!sig,
-          headerNames: [...req.headers.keys()].sort(), userAgent: req.headers.get('user-agent'),
-          bodyBytes: raw.length, paramKeys: Object.keys(params).sort(),
-          accountMatches: params.AccountSid ? params.AccountSid === String(env.TWILIO_ACCOUNT_SID).trim() : null,
-          tokenLength: TOKEN.length, sidLength: String(env.TWILIO_ACCOUNT_SID).trim().length,
-          publicUrl, internalUrl: req.url,
-          matchesInternalUrl: await validSignature(TOKEN, req.url, params, sig),
-          matchesHostUrl: alt ? await validSignature(TOKEN, alt, params, sig) : null,
-        }));
+      let ok = await validSignature(TOKEN, publicUrl, params, sig);
+      if (!ok && !sig) {
+        const why = await confirmWithTwilio(sub, params);
+        ok = !why;
+        if (!ok) console.error('hotline: unsigned request not confirmed by Twilio', JSON.stringify({ sub, why }));
+      }
+      if (!ok) {
+        // Nothing about the caller or the token is logged — only which check failed.
+        if (sig) console.error('hotline: bad signature', JSON.stringify({ sub }));
         return json({ error: 'bad signature' }, 403);
       }
       return await handleTwilio(sub, new URL(publicUrl), params);

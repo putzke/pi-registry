@@ -3021,7 +3021,17 @@ a Twilio trial + one number on DEV for a real call, then release.
   `Deno.serve(createHandler(...))`. Deployed to DEV with **verify_jwt OFF**
   (Twilio can't send a Supabase token); every Twilio request must carry a
   valid `X-Twilio-Signature`, computed over the PUBLIC URL
-  (`SUPABASE_URL/functions/v1/hotline/...`), not the internal one. With no
+  (`SUPABASE_URL/functions/v1/hotline/...`), not the internal one.
+  **Unsigned requests (Oct 2026, Jeff's call):** the trial number set up via
+  Voice → Overview → "Receive a call" posts with NO signature header at all.
+  Such a request is accepted only if `confirmWithTwilio()` confirms it through
+  Twilio's REST API with our credentials: our AccountSid, a real call, inbound,
+  To = an active hotline, still live for /voice·/menu·/recorded; for
+  /recording·/transcription begun within 24 h and the recording belonging to
+  that call. A PRESENT but wrong signature is refused outright. Recordings are
+  downloaded from `api.twilio.com/…/Recordings/<RecordingSid>.mp3`, never from
+  the request's `RecordingUrl`. A trial account refuses `<Record>` ("not
+  available on trial accounts") — the voicemail test needs an upgraded account. With no
   `TWILIO_AUTH_TOKEN`/`TWILIO_ACCOUNT_SID` secret it answers 503 to
   everything. Routes: `/voice` (greeting + menu TwiML, looked up by the `To`
   number), `/menu` (key → project; 0 / none → general; a wrong key → menu once

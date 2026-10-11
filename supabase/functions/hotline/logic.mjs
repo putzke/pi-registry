@@ -402,6 +402,7 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
         const alt = host ? 'https://' + host + url.pathname + url.search : '';
         console.error('hotline: bad signature', JSON.stringify({
           sub, contentType: req.headers.get('content-type'), hasSignature: !!sig,
+          headerNames: [...req.headers.keys()].sort(), userAgent: req.headers.get('user-agent'),
           bodyBytes: raw.length, paramKeys: Object.keys(params).sort(),
           accountMatches: params.AccountSid ? params.AccountSid === String(env.TWILIO_ACCOUNT_SID).trim() : null,
           tokenLength: TOKEN.length, sidLength: String(env.TWILIO_ACCOUNT_SID).trim().length,

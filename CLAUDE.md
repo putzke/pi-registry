@@ -3068,6 +3068,14 @@ a Twilio trial + one number on DEV for a real call, then release.
   one, which can resolve its open follow-up ("See the related phone on …");
   the dialog lists the thread (`_intThread` / `_intThreadHTML`). Each
   interaction still counts once.
+- **Go-live checklist (before release to LIVE):** (1) the new-voicemail
+  email — a Resend key `RESEND_API_KEY` in the function secrets, and every PI
+  Lead's email on the team list (Jeff, 2026-10-12: leave it off for the DEV
+  trial, but it must be on before live); (2) confirm Spanish transcription
+  with Twilio; (3) decide whether `hotline-audio` joins the nightly backup;
+  (4) paste `sql/2026-10-12_hotlines.sql` on LIVE, set the LIVE secrets and
+  point the real number(s) at the LIVE function; (5) add Twilio to "Outside
+  services" and the Service Map.
 - Not on mobile or in the portal (hotline data is staff-only). The nightly
   off-site backup reads `report-files` only — decide whether `hotline-audio`
   should be added (`backup.sh` in cirruscc-backups).

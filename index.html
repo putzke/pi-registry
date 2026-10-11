@@ -6631,23 +6631,6 @@ function adjDel(id,delta){
   all[i]={...all[i], deliveredCount:newCount, status:newStatus};
   DB.set('deliverables',all);renderDeliverables(document.getElementById('main'));
 }
-function markDelDone(id){
-  const all=DB.get('deliverables');
-  const i=all.findIndex(x=>x.id===id);if(i<0)return;
-  all[i]={...all[i], status:'Complete', deliveredCount:all[i].contractedQty||all[i].deliveredCount};
-  DB.set('deliverables',all);renderDeliverables(document.getElementById('main'));
-}
-function cycleDelStatus(id){
-  const all=DB.get('deliverables');
-  const i=all.findIndex(x=>x.id===id);if(i<0)return;
-  const cycle=['Not started','In progress','Complete','On hold','Cancelled'];
-  const cur=all[i].status||'Not started';
-  const next=cycle[(cycle.indexOf(cur)+1)%cycle.length];
-  const updates={status:next};
-  if(next==='Complete'){updates.deliveredCount=all[i].contractedQty||all[i].deliveredCount;}
-  all[i]={...all[i],...updates};
-  DB.set('deliverables',all);renderDeliverables(document.getElementById('main'));
-}
 
 // ── PROJECTS VIEW ─────────────────────────────
 function renderProjects(el){
@@ -18515,7 +18498,6 @@ function renderMeetings(el){
       <tbody>
       ${meetings.map(m=>{
         const statusColor=m.status==='Completed'?'b-green':m.status==='Planned'?'b-sky':m.status==='Cancelled'?'b-red':'b-gray';
-        const actionItems=(DB.get('interactions')||[]).filter(i=>i.meetingId===m.id&&i.followUp&&!i.followUpDone).length;
         const mAttIds=Array.isArray(m.attendeeIds)?m.attendeeIds:[];
         const allSt=DB.getActive('stakeholders')||[];
         const namedAtt=mAttIds.map(function(id){return allSt.find(function(x){return String(x.id)===String(id);});}).filter(Boolean);
@@ -18538,7 +18520,6 @@ function renderMeetings(el){
               : (namedAtt.length>0?`<div style="margin-top:3px">${attChips}${extraChip}</div>`:'')}
             ${addAtt?`<div style="font-size:11px;color:var(--mist);margin-top:2px">${addAtt}</div>`:''}
             ${!hasAnyAtt?`<div style="font-size:11px;color:var(--fog);font-style:italic;margin-top:2px">Named attendees not recorded</div>`:''}
-            ${actionItems>0?`<div style="margin-top:3px"><span class="badge b-amber" style="font-size:10px">${actionItems} open action${actionItems!==1?'s':''}</span></div>`:''}
             ${m.equityFormSubmitted?`<div style="margin-top:3px"><span class="badge" style="font-size:10px;background:rgba(40,168,112,.15);color:var(--green);border:1px solid rgba(40,168,112,.3)">✓ Equity form</span></div>`:''}
           </td>
           <td><span class="badge b-dark" style="font-size:11px">${m.type||'—'}</span></td>
@@ -18775,8 +18756,8 @@ async function saveMeeting(){
 async function delMeeting(id){
   if(!confirm('Delete this event? This cannot be undone.')) return;
   await DB.set('meetings', DB.get('meetings').filter(x=>x.id!==id));
-  // Also remove any auto-created follow-up interactions linked to this event
-  DB.set('interactions', DB.get('interactions').filter(x=>x.meetingId!==id));
+  // Interactions are never deleted with an event: nothing links them to one any
+  // more, and a cascade here once wiped hand-logged contacts (see saveMeeting).
   closeM();
   renderMeetings(document.getElementById('main'));
 }

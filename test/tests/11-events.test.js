@@ -80,6 +80,18 @@ module.exports = {
         'select action_items from pi_meetings where id::text=$1', [String(saved.id)]))[0];
       t.eq((reworded.action_items || '').trim(), 'Reworded action item', 'the edit saved');
 
+      // Deleting the event must leave the linked interactions alone too — the
+      // old delMeeting cascaded over meetingId.
+      await app.page.evaluate(async id => {
+        window.confirm = () => true;
+        await delMeeting(id);
+      }, String(saved.id));
+      await app.page.waitForTimeout(1200);
+      const afterDel = Number((await t.sql(
+        'select count(*) c from pi_interactions where meeting_id::text=$1', [String(saved.id)]))[0].c);
+      t.eq(afterDel, 2, 'deleting the event kept its linked interactions');
+      t.eq(await countInts(), before, 'deleting the event removed no interactions');
+
       // No row anywhere should carry the old invalid direction.
       const bad = Number((await t.sql(
         `select count(*) c from pi_interactions where direction='Inbound'`))[0].c);

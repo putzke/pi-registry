@@ -1,7 +1,7 @@
 # Cirrus Cc (formerly Horizon COMPASS) — Claude Code Context
 
 ## What this app is
-Single-file FHWA/NEPA public involvement (PI) compliance platform. All code lives in **`index.html`** (~13,600 lines). No build step. Deployed on **GitHub Pages** at `https://app.cirruscc.com/` (custom domain since Oct 2026; the old `putzke.github.io/pi-registry/` address forwards). Backend is **Supabase** (REST API, no Supabase JS client).
+Single-file FHWA/NEPA public involvement (PI) compliance platform. All code lives in **`index.html`** (~24,700 lines). No build step. Deployed on **GitHub Pages** at `https://app.cirruscc.com/` (custom domain since Oct 2026; the old `putzke.github.io/pi-registry/` address forwards). Backend is **Supabase** (REST API, no Supabase JS client).
 
 Other files: `mobile.html` (mobile companion), `importer.html` (bulk data import), `seed-sample-data.js` (seed script run from browser console).
 
@@ -11,8 +11,8 @@ Other files: `mobile.html` (mobile companion), `importer.html` (bulk data import
 - `DB.get('table')` / `DB.getActive('table')` — reads from `_syncCache[k]`
 - `DB.set('table', arr)` — writes cache and triggers `DB._sync()` to push to Supabase
 - `_syncCache` is populated at startup via `loadAllData()`
-- `SB_TABLES` (line ~657) maps internal names → Supabase table names
-- `SB_TO_INT` (line ~678) maps Supabase column names → internal field names (used in `fromSB()`)
+- `SB_TABLES` maps internal names → Supabase table names
+- `SB_TO_INT` maps Supabase column names → internal field names (used in `fromSB()`)
 - `toSB(table, obj)` / `fromSB(table, row)` — serialization helpers
 - `sbGet()`, `sbAdd()`, `sbUpdate()`, `sbDelete()` — Supabase REST helpers
 - `DATE_FIELDS` Set — columns that must be `null` (not `''`) when empty
@@ -294,8 +294,7 @@ and `'Cancelled'` both surviving an `adjDel` call that leaves the count at
 zero; and a multi-step count-up/count-down sequence (`Complete` → `In
 progress` → `Not started`) landing on the correct status at every step, not
 just the two endpoints. `markDelDone`/`cycleDelStatus`, two adjacent-looking
-functions, are dead code — grepped and confirmed called from no `onclick`
-anywhere — and were left untouched; they were not implicated in this bug.
+functions called from nowhere, were removed in the Oct 2026 cleanup.
 
 ### A deliverable with no contracted quantity has no percentage (Oct 2026)
 Reported live on SR-201: "Website update" (no contracted qty, 6 delivered) read
@@ -473,11 +472,11 @@ zero rows match `summary like 'Event action item:%'`, `direction='Inbound'`, or
 the seed, which writes `action_items` straight into `pi_meetings` and never runs
 `saveMeeting()` — so the modal promised a follow-up that never materialised,
 which is the likeliest source of the staff confusion that prompted the removal.
-`meetingId` is still mapped and still read (the "N open actions" event-card badge
-and `delMeeting`'s cascade), but since nothing writes it and no row carries it,
-**both of those are dead paths** — remove them if you touch this area. Do not
-re-introduce the cascade without checking it first: `delMeeting` deletes every
-interaction sharing the meeting id.
+`meetingId` is still MAPPED (the column exists) but nothing writes or reads it.
+The "N open actions" event-card badge and `delMeeting`'s interaction cascade
+were removed in the Oct 2026 cleanup (live had 0 linked rows on 2026-10-11).
+Never re-add a cascade: deleting an event must not delete interactions —
+`test/tests/11-events.test.js` now asserts it.
 
 ### Parcel ID (`pi_stakeholders.parcel_id` → `parcelId`)
 The field a ROW/property-owner campaign is tracked by. Mobile (`#add-parcel`) and
@@ -761,20 +760,20 @@ give it a selector and wire it to `S.projectFilter` — nothing else.
 ### Navigation views
 `dashboard | projects | master | stakeholders | interactions | followups | commitments | comments | tribal | deliverables | meetings | issues | map | reports | settings`
 
-### Key functions (by line)
-- `render()` — 1480: main dispatch
-- `renderDash()` — 1501
-- `renderMaster()` — 2994: stakeholder master list
-- `renderStakeholders()` — 3127
-- `renderInteractions()` — 4494
-- `renderReports()` — 6652: Reports view with 3-tab layout (Quick Reports / PI Report Editor / Archive)
-- `openPIReport()` — 8311: replaces main area with split-pane PI report editor
-- `exportPIDocx()` — 8848: async, exports the Word file. Does NOT archive —
+### Key functions (search `function <name>(` — line numbers drift with every edit, so none are kept here)
+- `render()` — main dispatch
+- `renderDash()`
+- `renderMaster()` — stakeholder master list
+- `renderStakeholders()`
+- `renderInteractions()`
+- `renderReports()` — Reports view with 3-tab layout (Quick Reports / PI Report Editor / Archive)
+- `openPIReport()` — replaces main area with split-pane PI report editor
+- `exportPIDocx()` — async, exports the Word file. Does NOT archive —
   archiving is deliberate, via "Save to archive" (`manualArchiveReport()`).
-- `renderMeetings()` — 10308
-- `renderTribal()` — 11827
-- `renderComments()` — 12183
-- `renderSettings()` — 13067
+- `renderMeetings()`
+- `renderTribal()`
+- `renderComments()`
+- `renderSettings()`
 
 ## Reports module (most recently worked on)
 
@@ -1768,7 +1767,7 @@ ROW agents read that before negotiating.
 - Confirmation dialog required before bulk AI calls (cost estimate shown)
 
 ## Important conventions
-- **No `fmtDate()`** — use `fmt(d)` (defined ~line 1311)
+- **No `fmtDate()`** — use `fmt(d)`
 - **No build step** — edit `index.html` directly, syntax-check with:
   ```bash
   node -e "const fs=require('fs'),html=fs.readFileSync('index.html','utf8');const s=[];let m,r=/<script>([\s\S]*?)<\/script>/g;while((m=r.exec(html)))s.push(m[1]);try{new Function(s.join('\n'));console.log('OK');}catch(e){console.log('ERROR:',e.message);}"
@@ -1824,7 +1823,7 @@ ROW agents read that before negotiating.
     input unchanged, which let `Nonprofit` or `Contracting` into the database as
     stakeholder types nothing could filter on.
 
-## CSP (line 6)
+## CSP (the `<meta http-equiv="Content-Security-Policy">` near the top)
 ```
 connect-src https://ncfbblhlsiglxkoiounv.supabase.co https://maps.googleapis.com https://places.googleapis.com https://api.anthropic.com https://cdnjs.cloudflare.com https://services1.arcgis.com;
 ```
@@ -1832,7 +1831,7 @@ connect-src https://ncfbblhlsiglxkoiounv.supabase.co https://maps.googleapis.com
 Polygon Phase 2a section.)
 
 ## Mobile app (`mobile.html`)
-Field companion for logging interactions, managing contacts, follow-ups, and issues. ~2,420 lines.
+Field companion for logging interactions, managing contacts, follow-ups, and issues. ~3,000 lines.
 - **Status: current** — LEP, EJ (`underserved`), and `equityFormSubmitted` fields are all implemented
 - Has its own `SB_TABLES`, `SB_TO_INT`, `toSB()`, `fromSB()`, `sbGet/Add/Update/Delete()`, `loadAllData()`
 - Does NOT have the reports module — reports are desktop-only
@@ -1911,7 +1910,7 @@ Field companion for logging interactions, managing contacts, follow-ups, and iss
   - The harness's `openApp` now takes `userAgent` and `query`.
 
 ## Importer app (`importer.html`)
-Bulk CSV import wizard for stakeholders and interactions. ~2,420 lines.
+Bulk CSV import wizard for stakeholders and interactions. ~3,200 lines.
 - **Updated this session**: added LEP and EJ/underserved field support:
   - `SB_TO_INT` pi_stakeholders: `lep` and `underserved` mappings added
   - `APP_FIELDS`: LEP and EJ appear in the column-mapping dropdown
@@ -1998,6 +1997,27 @@ for its own scenario.
 **⚠ This list drifts — VERIFY in code before treating anything as "not built."**
 On 2026-07-24 a reconciliation found four items marked pending were already
 shipped. Grep the actual functions before planning work off this list.
+
+### Roadmap — agreed with Jeff, 2026-10-11 (this order; supersedes older lists below)
+**Now — foundation:**
+1. ✅ Dev/live switch released to live (2026-10-11).
+2. ✅ Cleanup (2026-10-11): dead deliverable/event code removed; stale line
+   numbers dropped from this file; `pi_report_archive_require_docx` search_path
+   pinned (`sql/2026-10-11_…`); leaked-password protection is a dashboard
+   toggle on BOTH projects (Authentication → Sign In / Providers → Email).
+3. Two-step sign-in rollout — staff enroll on LIVE → `MFA_REQUIRED = true` →
+   `sql/pending/2026-10-06_staff_require_aal2.sql` (see the two-step section).
+4. Client email sign-in readiness — custom SMTP on live (and dev);
+   `SUPPORT_CONTACT` in `client-portal.html`.
+
+**Next:** Twilio phone hotline → interactions (design session first) ·
+Survey123 ingestion (blocked on a sample export) · ROW close-out TYPE.
+
+**Later:** county assessor owner lookup (Phase 3) · Google Sheets push ·
+parcel-number uniqueness normalized in the DB index · tribal stays parked.
+
+**2027:** talk to 3–5 PI managers at other firms first, then multi-tenant
+(`org_id`, AI gateway, metering).
 
 **Recently completed (verified in code, 2026-07-24):**
 - ✅ **Manual "Save to archive" button** — `manualArchiveReport()` → `_archiveReport()`.
@@ -2285,7 +2305,7 @@ group/coalition management. Do NOT build mass public engagement tooling
 that's PublicInput/Granicus/EngagementHQ territory; Cirrus Cc stays
 internal-facing.
 
-## PI Client Portal — BUILT (`client-portal.html`, ~1,470 lines)
+## PI Client Portal — BUILT (`client-portal.html`, ~2,100 lines)
 
 **Status: shipped and working.** The strategic bet (the "third leg" no
 competitor has — keeping the PI firm's client continuously informed) is live.
@@ -3822,7 +3842,7 @@ Crawl-specific rules learned the hard way:
 
 ## Supabase project
 - URL: `https://ncfbblhlsiglxkoiounv.supabase.co`
-- Anon key in `index.html` line ~505 (`SUPA_KEY`)
+- Anon keys for both projects live in the ENVIRONMENT block of each app (`CC_SUPA`)
 - Tables use Row Level Security (anon key has read/write via policy)
 
 ## Dev and live (Oct 2026)
@@ -3884,6 +3904,20 @@ Crawl-specific rules learned the hard way:
 - **Releases:** fixes whenever Jeff approves; larger changes bundled roughly
   weekly so staff aren't surprised mid-task. Each release with a database
   change lists the live SQL to paste, in order, BEFORE the code push.
+- **Coach dev vs. live in every instruction.** Jeff and staff work on LIVE.
+  Every step given to Jeff names where it happens — "on LIVE
+  (app.cirruscc.com / the pi-registry Supabase project)" or "on DEV
+  (dev.cirruscc.com / cirruscc-dev)". New features are tried on DEV; real
+  work, staff set-up (two-step sign-in, team list) and client access on LIVE.
+- **The connector writes to DEV fine** (only live writes time out), so dev
+  migrations are applied directly; live SQL still goes to Jeff to paste.
+- **Supabase advisor warnings that are deliberate** — leave them:
+  "SECURITY DEFINER function executable by anon/authenticated" on
+  `pi_is_staff`, `pi_is_portal_client`, `pi_portal_project_ids`,
+  `pi_resolve_portal_token`, `pi_portal_contact`. RLS policies call the first
+  three as the requesting role (revoking EXECUTE would break every policy),
+  and the portal calls the last two by RPC. Each only answers about the caller
+  or the token the caller holds.
 
 ## Backups (Oct 2026)
 - **Supabase Pro** (upgraded 2026-10-10): daily backups kept 7 days, restored

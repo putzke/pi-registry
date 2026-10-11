@@ -17,7 +17,10 @@ const PGBIN = '/usr/lib/postgresql/16/bin';
 // and lives outside the repo (it also must be readable by that user).
 const RUN_AS_POSTGRES = process.getuid && process.getuid() === 0;
 
+// Every client command connects as the cluster's superuser, "postgres" — not as
+// the OS user, which is "runner" on GitHub Actions and has no role here.
 function sh(cmd) {
+  cmd = `export PGUSER=postgres; ${cmd}`;
   const r = RUN_AS_POSTGRES
     ? spawnSync('su', ['postgres', '-c', cmd], { encoding: 'utf8' })
     : spawnSync('bash', ['-c', cmd], { encoding: 'utf8' });

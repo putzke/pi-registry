@@ -344,10 +344,14 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
       if (params.RecordingStatus && params.RecordingStatus !== 'completed') return json({ ok: true, skipped: params.RecordingStatus });
       const projectId = url.searchParams.get('p') || null;
       let assignee = null;
+      // Who it goes to is a convenience; a failed lookup must never lose the
+      // voicemail itself — it lands unassigned instead.
       if (projectId) {
-        const proj = await one(`pi_projects?id=eq.${encodeURIComponent(projectId)}&select=id,lead`);
-        const team = await rest('pi_team_members?select=initials,active');
-        assignee = pickAssignee(proj, team);
+        try {
+          const proj = await one(`pi_projects?id=eq.${encodeURIComponent(projectId)}&select=id,lead`);
+          const team = await rest('pi_team_members?select=initials,active');
+          assignee = pickAssignee(proj, team);
+        } catch (e) { console.error('hotline: assignee lookup failed', e.message); }
       }
       // Twilio's two callbacks (this one and /transcription) can arrive in
       // either order, so each UPSERTS on call_sid and sends only its own

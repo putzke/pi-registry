@@ -115,6 +115,15 @@ begin
   end loop;
 end $$;
 grant usage, select on all sequences in schema public to authenticated;
+-- The hotline receiver (an Edge Function) runs as service_role: it reads the
+-- hotline tables, the project's lead and the team list. Live and dev rebuilt
+-- from live carry no service_role grant on pi_team_members / pi_staff.
+do $$ begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    grant select, insert, update on public.pi_hotlines, public.pi_hotline_extensions, public.pi_hotline_messages to service_role;
+    grant select on public.pi_projects, public.pi_team_members, public.pi_staff to service_role;
+  end if;
+end $$;
 
 -- ── Storage: private bucket, staff only ──────────────────────────────────────
 insert into storage.buckets (id, name, public)

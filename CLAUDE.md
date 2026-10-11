@@ -2349,6 +2349,12 @@ competitor has — keeping the PI firm's client continuously informed) is live.
     template; test at Gmail (UDOT is Google Workspace); **~2026-11-01 tighten
     DMARC to `p=quarantine`** if Resend shows clean sending. DEV still uses
     Supabase's built-in sender (no client logins there).
+  - **Sign-in email template: `email-templates/client-sign-in.html`** — the
+    copy of record for Supabase LIVE → Authentication → Emails → Templates,
+    pasted into BOTH "Magic Link" and "Confirm signup" (a client's first
+    sign-in uses the latter). Subject: "Your Cirrus Cc sign-in link". Logo
+    loads from `app.cirruscc.com/brand/png/cirrus-cc-lockup-horizontal-light.png`
+    — never move or rename that file. Edit here first, then re-paste.
   - **`SUPPORT_CONTACT`** in `client-portal.html` sets the client-facing email
     shown on the "no access yet" screen (`_noAccessHTML`) — update it from the
     default before onboarding.

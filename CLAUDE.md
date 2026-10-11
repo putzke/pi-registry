@@ -1774,11 +1774,9 @@ ROW agents read that before negotiating.
   node -e "const fs=require('fs'),html=fs.readFileSync('index.html','utf8');const s=[];let m,r=/<script>([\s\S]*?)<\/script>/g;while((m=r.exec(html)))s.push(m[1]);try{new Function(s.join('\n'));console.log('OK');}catch(e){console.log('ERROR:',e.message);}"
   ```
 - After every edit, run the syntax check before committing
-- **Push to `develop`, never straight to `main` (Oct 2026).** `develop` deploys
-  to dev.cirruscc.com (Cloudflare Pages, dev database); `main` is the live app
-  (GitHub Pages, app.cirruscc.com). Work lands on `develop`, Jeff tries it on
-  dev, and only his explicit "release" moves it to `main`
-  (`git push origin develop:main`, a fast-forward). See "Dev and live" below.
+- **Small fixes go straight to live; bigger changes wait (Jeff's rule, Oct 2026).**
+  Jeff is the only developer — commit and push without asking. `develop` →
+  dev.cirruscc.com; `main` → the live app. See "How we work" under Dev and live.
 - **Shared lists live in 4 places — update all together.** `index.html`,
   `mobile.html`, and `importer.html` are standalone; none imports the others,
   so any list a user picks from is duplicated — and the importer's embedded
@@ -3864,11 +3862,22 @@ Crawl-specific rules learned the hard way:
 - **Bug reports come in a session** — where (live/dev + screen), the clicks,
   expected vs. actual, a screenshot, urgent or normal. NOT as GitHub Issues on
   this repo: it is public and a screenshot can carry a stakeholder's name.
-- **Fix loop:** look at live READ-ONLY via the Supabase connector first →
-  reproduce on dev/the harness → a test that fails for the bug → fix on
-  `develop` → CI green → tell Jeff exactly what to click on dev.cirruscc.com →
-  only his explicit "release" pushes `develop` to `main`. Urgent bugs: same
-  steps, one sitting.
+- **Small vs. big — decide by this table, never by feel; unsure = big.**
+  SMALL (straight to live): fixes something plainly broken, screens and steps
+  unchanged for staff, NO database change. BIG (dev first, waits for Jeff's
+  "release"): new features; a changed screen or workflow; ANY database change;
+  anything changing what clients see in the portal or reports.
+- **Fix loop:** look at live READ-ONLY via the Supabase connector → reproduce
+  in the harness → a test that fails for the bug → fix → full suite green.
+  SMALL: push the same commit to `develop` AND `main`. If `develop` carries
+  unreleased big work, branch the fix from `main`, push it to `main`, then
+  merge `main` back into `develop` — never let unreleased work ride out on a
+  hotfix. BIG: `develop` only; tell Jeff what to click on dev.cirruscc.com;
+  release = `git push origin develop:main` on his word.
+- **Every finished piece of work ends with a status block**, in plain words:
+  **Live:** what changed for staff (or "nothing") · **Dev only (waiting for
+  release):** what to try and where · **Needs you:** SQL to paste / a check /
+  nothing.
 - **Live data repairs:** write the SQL (into `sql/fixes/`) for Jeff to paste in
   the live SQL Editor — the connector times out on writes, and a human check on
   anything that changes real data is the point. Confirm counts before/after.

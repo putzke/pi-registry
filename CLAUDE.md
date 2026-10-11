@@ -2008,8 +2008,10 @@ shipped. Grep the actual functions before planning work off this list.
 3. Two-step sign-in rollout — staff enroll on LIVE → `MFA_REQUIRED = true` →
    `sql/pending/2026-10-06_staff_require_aal2.sql` (see the two-step section).
 4. Client email sign-in readiness — ✅ custom SMTP on live (Resend, see the
-   portal section); open: better sign-in email template, DMARC tightening,
-   `SUPPORT_CONTACT` → support@cirruscc.com once a forward exists.
+   portal section); ✅ branded sign-in email (both templates); ✅
+   support@cirruscc.com forward + `SUPPORT_CONTACT`. Open: tighten DMARC to
+   `p=quarantine` ~2026-11-01; an automatic invite email on grant (needs an
+   Edge Function) is a candidate, not started.
 
 **Next:** Twilio phone hotline → interactions (design session first) ·
 Survey123 ingestion (blocked on a sample export) · ROW close-out TYPE.
@@ -2355,9 +2357,14 @@ competitor has — keeping the PI firm's client continuously informed) is live.
     sign-in uses the latter). Subject: "Your Cirrus Cc sign-in link". Logo
     loads from `app.cirruscc.com/brand/png/cirrus-cc-lockup-horizontal-light.png`
     — never move or rename that file. Edit here first, then re-paste.
-  - **`SUPPORT_CONTACT`** in `client-portal.html` sets the client-facing email
-    shown on the "no access yet" screen (`_noAccessHTML`) — update it from the
-    default before onboarding.
+  - **`SUPPORT_CONTACT` = `support@cirruscc.com`** (Oct 2026) — the
+    client-facing email on the "no access yet" screen (`_noAccessHTML`).
+    It is a FORWARD, not a mailbox: ImprovMX (free; Jeff's account) forwards
+    `support@` to Jeff's work inbox — change the destination there, never in
+    code. Wix DNS root: `MX 10 mx1.improvmx.com` / `20 mx2.improvmx.com`, TXT
+    `v=spf1 include:spf.improvmx.com ~all`. Replies go out from the
+    destination inbox (sending AS support@ needs a paid plan). Test 65 asserts
+    the address and that no @hotmail.com appears in the portal.
 
 **Portal sections (NAV):** Overview (stats + "Needs Attention" panel),
 Deliverables, Engagement (date-ranged), Issues, Commitments, Comment Periods,

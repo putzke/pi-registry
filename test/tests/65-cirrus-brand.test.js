@@ -73,6 +73,9 @@ module.exports = {
     t.eq((src['index.html'].match(/const CC_LIVE_BASE = '([^']+)'/) || [])[1], 'https://app.cirruscc.com', 'the live apps are at app.cirruscc.com');
     t.eq(fs.readFileSync(path.join(root, 'CNAME'), 'utf8').trim(), 'app.cirruscc.com', 'and GitHub Pages serves that domain (CNAME file)');
     for (const a of apps) t.eq((src[a].match(/putzke\.github\.io|app\.cirruscc\.com/g) || []).length, 1, `${a}: the address appears only in CC_LIVE_BASE`);
+    // Clients see the product's support address, never a personal one.
+    t.eq((src['client-portal.html'].match(/const SUPPORT_CONTACT = '([^']+)'/) || [])[1], 'support@cirruscc.com', 'the portal support contact is support@cirruscc.com');
+    t.ok(!/@hotmail\.com/i.test(src['client-portal.html']), 'no personal email address in the client portal');
 
     // ── the .docx letterheads ────────────────────────────────────────────
     const app = await t.open('index.html', { email: 'putzke@demo.test' });

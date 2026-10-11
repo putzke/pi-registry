@@ -3845,6 +3845,36 @@ Crawl-specific rules learned the hard way:
   match, identical copies; verified to fail with a loosened rule).
 - **Database changes go to dev first**, then to live at release. Sign-ins are
   separate per database (and browser storage is per address).
+- **Reset dev** (`putzke/cirruscc-backups` → Actions → Reset dev, type
+  `RESET DEV`): wipes dev and rebuilds it from live's STRUCTURE (pg_dump
+  --schema-only — never live rows), copies `pi_staff` + `pi_team_members`, loads
+  the demo seed from `develop`, recreates the report-files bucket and its
+  storage rules, then FAILS unless every column and every table/function
+  permission matches live. (New dev tables inherit Supabase's "expose new
+  tables" grants; the script revokes the API roles' rights and re-applies
+  live's, because pg_dump records grants, not removals.) Refuses unless
+  `DEV_DB_URL` is the dev project. Dev auth users survive resets. A migration
+  not yet on live is wiped by a reset — re-apply it to dev afterwards.
+- **CI:** `.github/workflows/tests.yml` runs the full `test/run.js` suite on
+  every push to `develop`, `main` and `claude/**` (Postgres 16 + Playwright
+  Chromium on the runner; `test/lib/app.js` uses `/opt/pw-browsers/chromium`
+  only where it exists). **A red run on `develop` means: do not release.**
+
+### How we work (agreed with Jeff, Oct 2026)
+- **Bug reports come in a session** — where (live/dev + screen), the clicks,
+  expected vs. actual, a screenshot, urgent or normal. NOT as GitHub Issues on
+  this repo: it is public and a screenshot can carry a stakeholder's name.
+- **Fix loop:** look at live READ-ONLY via the Supabase connector first →
+  reproduce on dev/the harness → a test that fails for the bug → fix on
+  `develop` → CI green → tell Jeff exactly what to click on dev.cirruscc.com →
+  only his explicit "release" pushes `develop` to `main`. Urgent bugs: same
+  steps, one sitting.
+- **Live data repairs:** write the SQL (into `sql/fixes/`) for Jeff to paste in
+  the live SQL Editor — the connector times out on writes, and a human check on
+  anything that changes real data is the point. Confirm counts before/after.
+- **Releases:** fixes whenever Jeff approves; larger changes bundled roughly
+  weekly so staff aren't surprised mid-task. Each release with a database
+  change lists the live SQL to paste, in order, BEFORE the code push.
 
 ## Backups (Oct 2026)
 - **Supabase Pro** (upgraded 2026-10-10): daily backups kept 7 days, restored

@@ -8,7 +8,10 @@ const fs = require('fs');
 const path = require('path');
 
 const REPO = path.join(__dirname, '..', '..');
-const CHROME = '/opt/pw-browsers/chromium';
+// The dev container ships Chromium at a fixed path; on GitHub Actions the
+// browser comes from `npx playwright install` and Playwright finds it itself.
+const CHROME = process.env.CHROME_PATH
+  || (fs.existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined);
 const CHARTJS = path.join(__dirname, '..', 'node_modules', 'chart.js', 'dist', 'chart.umd.js');
 
 async function openApp(file, { shimOrigin, email = 'putzke@demo.test', viewport, userAgent, query, portalToken, auth, session: withSession = true } = {}) {

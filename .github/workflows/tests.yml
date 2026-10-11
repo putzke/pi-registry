@@ -1,0 +1,46 @@
+name: Tests
+
+# The full suite (test/run.js): every app opened in headless Chromium against
+# a real Postgres with every migration applied. Runs on every push to develop
+# (and main, and working branches) so a broken change is visible before it can
+# be released. A red run on develop means: do not release.
+on:
+  push:
+    branches: [develop, main, 'claude/**']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  suite:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: PostgreSQL 16 (the harness starts its own throwaway cluster)
+        run: |
+          if [ ! -x /usr/lib/postgresql/16/bin/initdb ]; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq postgresql-16
+          fi
+          /usr/lib/postgresql/16/bin/initdb --version
+
+      - name: Install the harness and its browser
+        working-directory: test
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Run the suite
+        working-directory: test
+        run: node run.js

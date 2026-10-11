@@ -195,6 +195,8 @@ export function pickAssignee(project, team) {
 // fetchFn is injected so the harness can stand in for Supabase/Twilio/Resend.
 export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) {
   const SB = String(env.SUPABASE_URL || '').replace(/\/$/, '');
+  // A pasted secret often carries a stray space or newline.
+  const TOKEN = String(env.TWILIO_AUTH_TOKEN || '').trim();
   const KEY = env.SUPABASE_SERVICE_ROLE_KEY || '';
   const base = SB + '/functions/v1/hotline';
   const sbH = (extra = {}) => ({ apikey: KEY, Authorization: 'Bearer ' + KEY, ...extra });
@@ -231,7 +233,7 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
     } catch (_) { return ''; }        // fall back to the computer voice
   }
 
-  const twilioAuth = () => 'Basic ' + btoa(env.TWILIO_ACCOUNT_SID + ':' + env.TWILIO_AUTH_TOKEN);
+  const twilioAuth = () => 'Basic ' + btoa(String(env.TWILIO_ACCOUNT_SID).trim() + ':' + TOKEN);
   async function deleteTwilioRecording(sid) {
     if (!sid) return;
     try {
@@ -386,12 +388,27 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
     if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
     try {
       if (sub === '/notify') return await handleNotify(req);
-      if (!env.TWILIO_AUTH_TOKEN || !env.TWILIO_ACCOUNT_SID) return json({ error: 'hotline not configured' }, 503);
-      const form = new URLSearchParams(await req.text());
+      if (!TOKEN || !env.TWILIO_ACCOUNT_SID) return json({ error: 'hotline not configured' }, 503);
+      const raw = await req.text();
+      const form = new URLSearchParams(raw);
       const params = Object.fromEntries(form.entries());
       // Validate against the PUBLIC address Twilio called, not the internal one.
       const publicUrl = base + sub + url.search;
-      if (!(await validSignature(env.TWILIO_AUTH_TOKEN, publicUrl, params, req.headers.get('x-twilio-signature')))) {
+      const sig = req.headers.get('x-twilio-signature');
+      if (!(await validSignature(TOKEN, publicUrl, params, sig))) {
+        // Say WHY, without logging the token, the signature or any caller
+        // detail: which checks pass, and the shape of what arrived.
+        const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || '';
+        const alt = host ? 'https://' + host + url.pathname + url.search : '';
+        console.error('hotline: bad signature', JSON.stringify({
+          sub, contentType: req.headers.get('content-type'), hasSignature: !!sig,
+          bodyBytes: raw.length, paramKeys: Object.keys(params).sort(),
+          accountMatches: params.AccountSid ? params.AccountSid === String(env.TWILIO_ACCOUNT_SID).trim() : null,
+          tokenLength: TOKEN.length, sidLength: String(env.TWILIO_ACCOUNT_SID).trim().length,
+          publicUrl, internalUrl: req.url,
+          matchesInternalUrl: await validSignature(TOKEN, req.url, params, sig),
+          matchesHostUrl: alt ? await validSignature(TOKEN, alt, params, sig) : null,
+        }));
         return json({ error: 'bad signature' }, 403);
       }
       return await handleTwilio(sub, new URL(publicUrl), params);

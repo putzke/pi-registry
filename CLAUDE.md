@@ -2007,8 +2007,9 @@ shipped. Grep the actual functions before planning work off this list.
    toggle on BOTH projects (Authentication → Sign In / Providers → Email).
 3. Two-step sign-in rollout — staff enroll on LIVE → `MFA_REQUIRED = true` →
    `sql/pending/2026-10-06_staff_require_aal2.sql` (see the two-step section).
-4. Client email sign-in readiness — custom SMTP on live (and dev);
-   `SUPPORT_CONTACT` in `client-portal.html`.
+4. Client email sign-in readiness — ✅ custom SMTP on live (Resend, see the
+   portal section); open: better sign-in email template, DMARC tightening,
+   `SUPPORT_CONTACT` → support@cirruscc.com once a forward exists.
 
 **Next:** Twilio phone hotline → interactions (design session first) ·
 Survey123 ingestion (blocked on a sample export) · ROW close-out TYPE.
@@ -2338,13 +2339,16 @@ competitor has — keeping the PI firm's client continuously informed) is live.
     `localStorage` with refresh-token renewal (survives browser close / ~1h
     token expiry); last email is prefilled; a one-time "bookmark this page" tip
     shows after login.
-  - **⚠ Configure custom SMTP before onboarding real clients.** Supabase's
-    built-in auth email sender is rate-limited (~few/hour + ~60s per-address
-    cooldown → "email rate limit exceeded") and has poor deliverability (login
-    links land in spam). Set Authentication → Emails → SMTP to a provider
-    (Resend / Postmark / SendGrid / SES) before any real client logs in.
-    **This is a Supabase-dashboard setting only — no app code changes and
-    nothing to remove once configured; delete this reminder line when done.**
+  - **Custom SMTP — DONE on LIVE 2026-10-11 (Resend).** Sender
+    `Cirrus Cc <no-reply@cirruscc.com>`, host `smtp.resend.com:465`, user
+    `resend`, password = a Resend API key Jeff holds (never in the repo or a
+    chat). Wix DNS on cirruscc.com: TXT `resend._domainkey` (DKIM), CNAMEs
+    `send`/`rsend` → `*.forge.rmta.net`, TXT `_dmarc` = `v=DMARC1; p=none;`.
+    Tested live: sign-in email arrived and the link worked, but in Hotmail's
+    JUNK (new domain, bare default template). Open: a fuller Magic Link
+    template; test at Gmail (UDOT is Google Workspace); **~2026-11-01 tighten
+    DMARC to `p=quarantine`** if Resend shows clean sending. DEV still uses
+    Supabase's built-in sender (no client logins there).
   - **`SUPPORT_CONTACT`** in `client-portal.html` sets the client-facing email
     shown on the "no access yet" screen (`_noAccessHTML`) — update it from the
     default before onboarding.

@@ -2681,6 +2681,10 @@ code ("Other account"); push approval would need Entra ID SSO — not used.
   phone (new one verified FIRST, then the old factor deleted — never a moment
   with no way in), Turn off (hidden once required). GoTrue needs aal2 to delete
   a verified factor; the user has it after signing in with the code.
+- **The QR code (fixed 2026-10-11):** live GoTrue sends `<?xml …?>` and an SVGo
+  comment BEFORE `<svg>`; the escape step only matched a bare `<svg`, so the raw
+  SVG went into `src` and drew nothing (Jeff typed the key by hand). Test 66's
+  fake now uses the real shape.
 - `friendly_name` must be unique per user (GoTrue 422s otherwise) — it carries
   a seconds timestamp; test 66 caught a per-minute one colliding.
 - If Supabase Auth can't be reached at boot the gate opens as before — the

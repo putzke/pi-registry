@@ -824,7 +824,8 @@ async function mfaEnroll(token) {
   let qr = (d.totp && d.totp.qr_code) || '';
   // GoTrue returns "data:image/svg+xml;utf-8,<svg…>" with the SVG unescaped.
   const svg = qr.replace(/^data:image\/svg\+xml;[^,]*,/, '');
-  if (/^\s*<svg/i.test(svg)) qr = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  // It may start with an <?xml …?> line and a comment before the <svg> tag.
+  if (/^\s*(<\?xml[\s\S]*?\?>\s*)?(<!--[\s\S]*?-->\s*)*<svg/i.test(svg)) qr = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   return { id: d.id, qr, secret: (d.totp && d.totp.secret) || '', uri: (d.totp && d.totp.uri) || '' };
 }
 

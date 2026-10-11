@@ -474,6 +474,11 @@ window.gm_authFailure = function() {
       Follow-ups
       <span class="nav-badge warn hide" id="nb-fu">0</span>
     </button>
+    <button class="nav-btn" id="nav-hotline" onclick="setView('hotline')" style="display:none">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2h2.5l1.2 3-1.5 1a8 8 0 0 0 4.3 4.3l1-1.5 3 1.2V12.5A1.5 1.5 0 0 1 12 14 11 11 0 0 1 2 4 1.5 1.5 0 0 1 3 2z"/></svg>
+      Hotline
+      <span class="nav-badge warn hide" id="nb-hot">0</span>
+    </button>
     <button class="nav-btn" id="nav-commitments" onclick="setView('commitments')">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4z"/><path d="M2 4l2-3h8l2 3"/><path d="M6 8l2 2 4-4"/></svg>
       Commitments
@@ -1018,7 +1023,10 @@ const SB_TABLES = {
   parcel_owners:        'pi_parcel_owners',
   closeouts:            'pi_closeouts',
   parcel_outreach:      'pi_parcel_outreach',
-  team_members:         'pi_team_members'
+  team_members:         'pi_team_members',
+  hotlines:             'pi_hotlines',
+  hotline_extensions:   'pi_hotline_extensions',
+  hotline_messages:     'pi_hotline_messages'
 };
 
 // Map our internal field names to Supabase column names
@@ -1054,7 +1062,10 @@ const SB_TO_INT = {
     nature:'nature', direction:'direction', summary:'summary',
     loggedBy:'logged_by', followUp:'follow_up', followUpDue:'follow_up_due',
     followUpAssignedTo:'follow_up_assigned_to',
-    followUpNote:'follow_up_note', followUpDone:'follow_up_done', followUpResolved:'follow_up_resolved', followUpResolution:'follow_up_resolution', meetingId:'meeting_id'
+    followUpNote:'follow_up_note', followUpDone:'follow_up_done', followUpResolved:'follow_up_resolved', followUpResolution:'follow_up_resolution', meetingId:'meeting_id',
+    // The interaction this one came out of (sql/2026-10-12_hotlines.sql) — a
+    // voicemail, its callback and the calls that follow read as one thread.
+    relatedTo:'related_to'
   },
   pi_deliverables: {
     id:'id', projectId:'project_id', title:'title', type:'deliverable_type', scopeType:'scope_type',
@@ -1194,6 +1205,28 @@ const SB_TO_INT = {
   pi_team_members: {
     id:'id', name:'name', initials:'initials', title:'title', phone:'phone',
     email:'email', active:'active', showOnPortal:'show_on_portal', updatedBy:'updated_by'
+  },
+  // Project hotlines (sql/2026-10-12_hotlines.sql). Messages are written by the
+  // Twilio receiver (supabase/functions/hotline); the app reads them, logs or
+  // dismisses them, and reassigns them.
+  pi_hotlines: {
+    id:'id', name:'name', phoneNumber:'phone_number', projectId:'project_id',
+    greetingMode:'greeting_mode', greetingText:'greeting_text', greetingAudioPath:'greeting_audio_path',
+    spanishEnabled:'spanish_enabled', spanishGreetingText:'spanish_greeting_text',
+    spanishGreetingAudioPath:'spanish_greeting_audio_path', active:'active', updatedBy:'updated_by'
+  },
+  pi_hotline_extensions: {
+    id:'id', hotlineId:'hotline_id', digit:'digit', projectId:'project_id',
+    label:'label', labelEs:'label_es', active:'active'
+  },
+  pi_hotline_messages: {
+    id:'id', hotlineId:'hotline_id', extensionDigit:'extension_digit', projectId:'project_id',
+    language:'language', callerNumber:'caller_number', callSid:'call_sid',
+    recordingSid:'recording_sid', recordingPath:'recording_path', recordingSeconds:'recording_seconds',
+    transcript:'transcript', transcriptStatus:'transcript_status', status:'status',
+    assignedTo:'assigned_to', assignedBy:'assigned_by', assignedAt:'assigned_at', receivedAt:'received_at',
+    loggedInteractionId:'logged_interaction_id', closedAt:'closed_at', closedBy:'closed_by',
+    dismissReason:'dismiss_reason', audioPurgeAfter:'audio_purge_after', audioDeletedAt:'audio_deleted_at'
   }
 };
 
@@ -1229,7 +1262,7 @@ function localToday(){
 const DATE_FIELDS = new Set(['legal_desc_shared','exhibit_shared','interaction_date','follow_up_due','follow_up_resolved','due_date','start_date','end_date','precon_date','added_date','meeting_date','date_raised','date_resolved','date_made','fulfilled_date','last_exported','comment_date','response_date','notification_date','response_deadline','ura_notice_date','follow_up_date','period_start','period_end','hearing_date','first_ad_date','second_ad_date','federal_register_date','notice_date']);
 
 // Integer FK columns that Supabase expects as numbers
-const SB_INT_FIELDS = new Set(['project_id','stakeholder_id','issue_id','interaction_id','meeting_id']);
+const SB_INT_FIELDS = new Set(['project_id','stakeholder_id','issue_id','interaction_id','meeting_id','related_to','hotline_id','logged_interaction_id']);
 
 // Tables guarded by optimistic concurrency (OCC): every UPDATE is conditional
 // on the row's updated_at matching the value we loaded, so a second user who
@@ -1279,6 +1312,8 @@ function toSB(table, obj) {
   if (sbTable === 'pi_team_members' && !window._teamPortalCol) delete result.show_on_portal;
   // And for sql/2026-10-11_followup_resolution_note.sql's column.
   if (sbTable === 'pi_interactions' && !window._fuResCol) delete result.follow_up_resolution;
+  // And for sql/2026-10-12_hotlines.sql's thread link.
+  if (sbTable === 'pi_interactions' && !window._relCol) delete result.related_to;
   return result;
 }
 
@@ -1306,11 +1341,12 @@ function fromSB(table, row) {
   if (sbTable === 'pi_projects' && row && row.lead !== undefined) window._leadCols = true;
   if (sbTable === 'pi_projects' && !Array.isArray(result.leadHistory)) result.leadHistory = [];
   if (sbTable === 'pi_interactions' && row && row.follow_up_resolution !== undefined) window._fuResCol = true;
+  if (sbTable === 'pi_interactions' && row && row.related_to !== undefined) window._relCol = true;
   if (sbTable === 'pi_team_members') {
     if (row && row.show_on_portal !== undefined) window._teamPortalCol = true;
     result.showOnPortal = row ? row.show_on_portal !== false : true;   // default on, as the column is
   }
-  ['isMaster','isAnonymous','followUp','followUpDone','isArchived','equityFormSubmitted','lep','underserved','needsReview','authorizedSigner','active'].forEach(f => {
+  ['isMaster','isAnonymous','followUp','followUpDone','isArchived','equityFormSubmitted','lep','underserved','needsReview','authorizedSigner','active','spanishEnabled'].forEach(f => {
     if (result[f] !== undefined) result[f] = result[f] === true || result[f] === 1;
   });
   // OCC baseline: carry updated_at/updated_by into the cache record so the next
@@ -1597,7 +1633,7 @@ function cacheClear(k) { delete _cache[k]; delete _cacheTime[k]; }
 const _syncCache = {};
 
 async function loadAllData() {
-  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments','comment_periods','tribal_consultations','reports','report_archive','client_summaries','parcels','parcel_owners','parcel_outreach','closeouts','team_members'];
+  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments','comment_periods','tribal_consultations','reports','report_archive','client_summaries','parcels','parcel_owners','parcel_outreach','closeouts','team_members','hotlines','hotline_extensions','hotline_messages'];
   // Boot stays tolerant — one unreachable table should not lock the app — but a
   // table that FAILED must not be presented as an empty one. An empty Master
   // List that is really a 401 is worse than an error message.
@@ -1647,7 +1683,8 @@ function _viewTables(v){
     deliverables: ['deliverables','projects'],
     meetings:     ['meetings','projects','stakeholders'],
     issues:       ['issues','interactions','projects'],
-    team:         ['projects','interactions','team_members','client_summaries','report_archive']
+    team:         ['projects','interactions','team_members','client_summaries','report_archive'],
+    hotline:      ['hotline_messages','hotlines','hotline_extensions','team_members','stakeholders','project_stakeholders']
   };
   return m[v] || [];   // views not listed (settings, map, reports) don't auto-refresh
 }
@@ -2426,6 +2463,16 @@ function refreshBadges(){
   const pendingTribal=(DB.get('tribal_consultations')||[]).filter(c=>c.phase!=='Closed'&&c.phase!=='Concurrence received'&&c.responseDeadline&&c.responseDeadline<today2&&!c.responseDate).length;
   const tribalEl=document.getElementById('nb-tribal');
   if(tribalEl){tribalEl.textContent=pendingTribal;tribalEl.classList.toggle('hide',pendingTribal===0);}
+  // Hotline: the nav item appears once a hotline is set up (Settings); the
+  // badge counts voicemails waiting on you plus the unassigned ones.
+  const hotNav=document.getElementById('nav-hotline');
+  if(hotNav) hotNav.style.display=(DB.get('hotlines')||[]).length||(DB.get('hotline_messages')||[]).length?'':'none';
+  const hotEl=document.getElementById('nb-hot');
+  if(hotEl){
+    const n=_hotWaitingForMe().length;
+    hotEl.textContent=n; hotEl.classList.toggle('hide',n===0);
+    hotEl.title='Hotline voicemails waiting for you, plus any not assigned to anyone yet.';
+  }
 }
 
 // ── RENDER ────────────────────────────────────
@@ -2448,6 +2495,7 @@ function render(){
   else if(S.view==='tribal')renderTribal(m);
   else if(S.view==='settings')renderSettings(m);
   else if(S.view==='team')renderTeam(m);
+  else if(S.view==='hotline')renderHotline(m);
   else if(S.view==='projects')renderProjects(m);
 }
 
@@ -7935,11 +7983,28 @@ async function saveQuickLog(){
   render();
 }
 
-function openIntModal(preStake){
+// opts (optional): {projectId, date, channel, direction, summary,
+//   followUp:{note,due,assignee}, relatedTo, parentFollowUpOpen,
+//   hotlineMsgId, callerNumber, spanish, suggest:[stakeholder ids]}
+// — set when the dialog is opened from the Hotline inbox or "+ Related call".
+function openIntModal(preStake, opts){
   S.editId=null;
+  opts=opts||{};
+  S.intOpts=opts;
   const projs=DB.get('projects'),stakes=DB.getActive('stakeholders');
-  openM('Log interaction',
-  `<div class="fgrid fg2f">
+  const _sug=(opts.suggest||[]).map(id=>stakes.find(s=>String(s.id)===String(id))).filter(Boolean);
+  const _parent=opts.relatedTo?(DB.get('interactions')||[]).find(x=>String(x.id)===String(opts.relatedTo)):null;
+  const _banner=opts.hotlineMsgId?`<div style="margin:0 0 12px;border:1px solid rgba(74,155,232,.35);background:rgba(74,155,232,.07);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--mist)">
+      <b style="color:var(--sky-lt)">From the hotline.</b> Pick the contact (or leave it anonymous), check the summary, then save — the voicemail is closed out against this interaction.
+      ${_sug.length?`<div style="margin-top:6px">Number matches: ${_sug.map(s=>`<button class="btn btn-sm" style="margin:2px 4px 0 0" onclick="_intSetStake('${escHtml(s.id)}')">Use ${escHtml(dispName(s))}</button>`).join('')}</div>`:''}
+      ${opts.spanish?`<div class="fcheck" style="margin-top:6px"><input type="checkbox" id="f-ihot-lep" checked><label for="f-ihot-lep">Spanish voicemail — mark the contact as LEP (limited English proficiency)</label></div>`:''}
+    </div>`
+    :_parent?`<div style="margin:0 0 12px;border:1px solid rgba(74,155,232,.35);background:rgba(74,155,232,.07);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--mist)">
+      <b style="color:var(--sky-lt)">Related to</b> the ${escHtml(fmt(_parent.date))} ${escHtml((_parent.channel||'').toLowerCase())} contact: ${escHtml(String(_parent.summary||'').slice(0,120))}
+      ${opts.parentFollowUpOpen?`<div class="fcheck" style="margin-top:6px"><input type="checkbox" id="f-irelres" checked><label for="f-irelres">This resolves its follow-up (“${escHtml(_parent.followUpNote||'follow-up')}”)</label></div>`:''}
+    </div>`:'';
+  openM(opts.hotlineMsgId?'Log hotline voicemail':_parent?'Log related contact':'Log interaction',
+  `${_banner}<div class="fgrid fg2f">
     <div class="fr"><label>Project *</label><select id="f-ip" onchange="updateIntStakeholders();updateIntIssues();updateIntNepaStage();_fuDefaultToLead()"><option value="">— Select project —</option>${projs.map(p=>`<option value="${p.id}"${S.projectFilter===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
     <div class="fr" style="position:relative"><label>Stakeholder</label>
       <input id="f-is-search" autocomplete="off" placeholder="Search by name or org..." oninput="filterIntStakeList()" onfocus="filterIntStakeList()" style="width:100%;box-sizing:border-box">
@@ -8006,6 +8071,18 @@ function openIntModal(preStake){
   // detail pane, which passes the id, opened with an empty picker and made you
   // search for the person you were already looking at.
   if(preStake) _intSetStake(preStake);
+  // Prefill from the hotline / related-call context.
+  if(opts.projectId){
+    const ps=document.getElementById('f-ip');
+    if(ps&&[...ps.options].some(o=>String(o.value)===String(opts.projectId))){ ps.value=String(opts.projectId); updateIntStakeholders(); updateIntIssues(); }
+  }
+  const _setV=(id,v)=>{ const el=document.getElementById(id); if(el&&v!=null&&v!=='') el.value=v; };
+  _setV('f-id',opts.date); _setV('f-ic',opts.channel); _setV('f-idr',opts.direction); _setV('f-isu',opts.summary);
+  if(opts.callerNumber) _setV('nc-ph',_hotFmtPhone(opts.callerNumber));
+  if(opts.followUp){
+    const cb=document.getElementById('f-ifu'); if(cb){ cb.checked=true; document.getElementById('fu-f').style.display=''; }
+    _setV('f-ifun',opts.followUp.note); _setV('f-ifud',opts.followUp.due);
+  }
   // Set placeholder to next anonymous label for this project — but never over a
   // pre-selected contact, or the field reads "Anonymous" for a named person.
   setTimeout(function(){
@@ -8019,6 +8096,19 @@ function openIntModal(preStake){
   // Auto-populate NEPA stage from selected project
   updateIntNepaStage();
   _fuDefaultToLead();
+  // A voicemail's call-back goes to whoever the voicemail is assigned to.
+  if(opts.followUp&&opts.followUp.assignee){
+    const sel=document.getElementById('f-ifua'), a=String(opts.followUp.assignee).toUpperCase();
+    if(sel){
+      if(a===getLoggedBy()) sel.value='';
+      else {
+        if(![...sel.options].some(o=>o.value===a)){ const o=document.createElement('option'); o.value=a; o.textContent=a; sel.insertBefore(o, sel.lastElementChild); }
+        sel.value=a;
+      }
+      sel.dataset.touched='1';
+      const hint=document.getElementById('f-ifua-hint'); if(hint) hint.textContent='(the voicemail is assigned to '+(_leadName(a)||a)+')';
+    }
+  }
 }
 // A new follow-up starts assigned to the project's PI Lead, so a call taken by
 // anyone on the team lands with the person who owns the project. Visible and
@@ -8053,6 +8143,7 @@ function updateIntNepaStage(){
 }
 async function openEditIntModal(id){
   S.editId=id;
+  S.intOpts={};
   // Pull the latest from the server first so a concurrent user's saved change
   // shows immediately (the local cache isn't auto-refreshed after startup).
   await _occRefreshRow('interactions', id);
@@ -8094,8 +8185,10 @@ async function openEditIntModal(id){
   </div>
   ${_fuResNoteHTML(i.followUpResolution||'',!!i.followUpDone)}
   <div class="fr"><label>Assign to <span style="font-weight:400;color:var(--fog)">(defaults to whoever logged it)</span></label><select id="f-ifua" onchange="_fuAssignPick(this)">${_fuAssignOptions(i.followUpAssignedTo, i.loggedBy)}</select></div>
-  </div>`,
+  </div>
+  ${_intThreadHTML(id)}`,
   `<button class="btn btn-danger" onclick="delInt('${id}')">Delete</button>
+  <button class="btn" onclick="logRelatedInt('${id}')" title="Log a callback, or a call to someone else, that came out of this one">+ Related contact</button>
   <button class="btn" onclick="closeM()">Cancel</button>
   <button class="btn btn-primary" onclick="saveInt()">Save changes</button>`,true);
 }
@@ -8118,6 +8211,11 @@ async function saveInt(){
     // Clearing the follow-up clears its owner too — an assignment on a
     // non-follow-up would be invisible and unresolvable.
     followUpAssignedTo:_fuOn?((v('f-ifua')==='__new'?'':v('f-ifua'))||''):''};
+  // The thread link is kept on edit and set once, from "+ Related contact".
+  const _opts=S.editId?{}:(S.intOpts||{});
+  const _relTo=S.editId?(_existingInt&&_existingInt.relatedTo):_opts.relatedTo;
+  if(_relTo) data.relatedTo=_relTo;
+  const _relRes=!S.editId&&_relTo&&!!document.getElementById('f-irelres')?.checked;
   const psAll=DB.get('project_stakeholders');
   if(stakeId&&!psAll.find(x=>x.projectId===projId&&x.stakeholderId===stakeId)){
     psAll.push({id:DB.uid(),projectId:projId,stakeholderId:stakeId,support:'Neutral',issueTags:'',addedDate:data.date,notes:'Auto-linked via interaction log.',distributionGroups:'',stakeholderRole:'External'});
@@ -8140,6 +8238,18 @@ async function saveInt(){
   }
   await DB.set('issue_interactions',cleanedLinks);
 
+  // "+ Related contact" can close the earlier contact's follow-up.
+  if(_relRes){
+    const all2=DB.get('interactions'); const pi=all2.findIndex(x=>String(x.id)===String(_relTo));
+    if(pi>-1&&all2[pi].followUp&&!all2[pi].followUpDone){
+      all2[pi]={...all2[pi],followUpDone:true,followUpResolved:data.date||localToday(),
+        followUpResolution:all2[pi].followUpResolution||('See the related '+String(data.channel||'contact').toLowerCase()+' on '+fmt(data.date)+'.')};
+      await DB.set('interactions',all2);
+    }
+  }
+  // Opened from the Hotline inbox: close the voicemail out against this interaction.
+  if(_opts.hotlineMsgId) await _hotAfterLog(_opts, data.id, stakeId);
+  S.intOpts={};
   closeM();refreshBadges();render();
 }
 function delInt(id){
@@ -8467,6 +8577,463 @@ async function saveTeamMember(){
   closeM(); S.editTeamId=null;
   showToast(id?'Team member updated':'Team member added','info',2000);
   renderTeamCard();
+}
+
+
+// ── PROJECT HOTLINES (sql/2026-10-12_hotlines.sql) ─────────────────────────
+// Twilio answers each hotline number and the receiver Edge Function
+// (supabase/functions/hotline) saves every voicemail as a PENDING row in
+// pi_hotline_messages: never an interaction. A person reads or listens to it
+// here, picks the contact, edits the summary and LOGS it (the ordinary Log
+// interaction dialog, prefilled) — or dismisses it. Only a logged voicemail
+// counts anywhere in a report. That is the locked rule: interactions are
+// compliance claims and are entered deliberately.
+//
+// What callers hear is built by the receiver; _hotMenuText mirrors its
+// menuText() so Settings can show it (test 83 asserts the two agree).
+const HOT_DISMISS_REASONS=['Hang-up / no message','Wrong number','Spam / robocall','Duplicate of another message','Other'];
+const HOT_AUDIO_BUCKET='hotline-audio';
+const HOT_AUDIO_KEEP_DAYS=90;
+const HOT_FN_URL=SUPA_URL+'/functions/v1/hotline';
+
+function _hotNormPhone(p){
+  const s=String(p||'').trim(), d=s.replace(/\D/g,'');
+  if(!d) return '';
+  if(s.startsWith('+')) return '+'+d;
+  if(d.length===10) return '+1'+d;
+  return '+'+d;
+}
+function _hotFmtPhone(p){
+  const d=String(p||'').replace(/\D/g,'');
+  if(d.length===11&&d[0]==='1') return '('+d.slice(1,4)+') '+d.slice(4,7)+'-'+d.slice(7);
+  if(d.length===10) return '('+d.slice(0,3)+') '+d.slice(3,6)+'-'+d.slice(6);
+  return p||'';
+}
+function _hotExts(hotlineId){
+  return (DB.get('hotline_extensions')||[])
+    .filter(e=>e.active!==false&&String(e.hotlineId)===String(hotlineId)&&/^[1-8]$/.test(e.digit))
+    .sort((a,b)=>String(a.digit).localeCompare(String(b.digit)));
+}
+function _hotMenuText(h, exts, lang){
+  const es=lang==='es', lines=[];
+  if(exts.length){
+    exts.forEach(e=>{
+      const label=(es&&e.labelEs)||e.label||('project '+e.digit);
+      lines.push(es?'Para '+label+', oprima '+e.digit+'.':'For '+label+', press '+e.digit+'.');
+    });
+    lines.push(es?'Para dejar un mensaje general, oprima 0.':'To leave a general message, press 0.');
+  }
+  if(!es&&h.spanishEnabled) lines.push('Para español, oprima 9.');
+  return lines.join(' ');
+}
+function _hotGreeting(h, lang){
+  if(lang==='es') return h.spanishGreetingText||('Gracias por llamar a la línea de información del proyecto '+h.name+'.');
+  return h.greetingText||('Thank you for calling the '+h.name+' hotline.');
+}
+function _hotProjName(id){
+  const p=(DB.get('projects')||[]).find(x=>String(x.id)===String(id));
+  return p?((p.pid?p.pid+' — ':'')+p.name):'';
+}
+function _hotIsMine(m){ const me=_myInitials(); return !!me&&String(m.assignedTo||'').toUpperCase()===me; }
+function _hotWaitingForMe(){
+  return (DB.get('hotline_messages')||[]).filter(m=>m.status==='pending'&&(!m.assignedTo||_hotIsMine(m)));
+}
+// Contacts whose phone matches the caller's. Suggested, never attached: a
+// shared household or office line is a different person half the time.
+function _hotPhoneMatches(m){
+  const want=String(m.callerNumber||'').replace(/\D/g,'').slice(-10);
+  if(want.length<10) return [];
+  const linked=new Set((DB.get('project_stakeholders')||[])
+    .filter(l=>!m.projectId||String(l.projectId)===String(m.projectId)).map(l=>String(l.stakeholderId)));
+  return DB.getActive('stakeholders').filter(s=>linked.has(String(s.id))
+    &&String(s.phone||'').replace(/\D/g,'').slice(-10)===want);
+}
+function _hotWhen(ts){
+  if(!ts) return '';
+  const d=new Date(ts);
+  return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+' · '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+}
+function _hotLocalDate(ts){
+  const d=ts?new Date(ts):new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function _hotDur(sec){ sec=Number(sec)||0; return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0'); }
+// Two working days out — a reasonable "call back by" default; staff change it.
+function _hotCallbackDue(ts){
+  const d=ts?new Date(ts):new Date(); let n=0;
+  while(n<2){ d.setDate(d.getDate()+1); const w=d.getDay(); if(w!==0&&w!==6) n++; }
+  return _hotLocalDate(d.toISOString());
+}
+
+async function _hotReload(){
+  for(const t of ['hotlines','hotline_extensions','hotline_messages']){
+    try{ cacheClear(t); _syncCache[t]=await sbGet(t,{strict:true}); }catch(e){ console.error('Hotline reload failed', t, e.message); }
+  }
+}
+
+// ── Settings → Project hotlines ─────────────────────────────────────────────
+function renderHotlineCard(){
+  const el=document.getElementById('hotline-card-body'); if(!el) return;
+  const hs=(DB.get('hotlines')||[]).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+  const rows=hs.map(h=>{
+    const ex=_hotExts(h.id);
+    const where=ex.length?ex.length+' extension'+(ex.length===1?'':'s')+': '+ex.map(e=>e.digit+' → '+escHtml(_hotProjName(e.projectId)||'?')).join(', ')
+      :(h.projectId?escHtml(_hotProjName(h.projectId)||'?'):'<span style="color:var(--amber,#e8a020)">No project set</span>');
+    return `<tr style="${h.active===false?'opacity:.5':''}">
+      <td style="padding:6px 8px;color:var(--white)">${escHtml(h.name||'')}</td>
+      <td style="padding:6px 8px;font-family:var(--mono)">${escHtml(_hotFmtPhone(h.phoneNumber))}</td>
+      <td style="padding:6px 8px">${where}</td>
+      <td style="padding:6px 8px">${h.spanishEnabled?'Español (9)':'English only'}</td>
+      <td style="padding:6px 8px;text-align:right"><button class="btn btn-sm" onclick="openHotlineModal('${escHtml(h.id)}')">Edit</button></td>
+    </tr>`;}).join('');
+  el.innerHTML=`${hs.length?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;color:var(--fog)">
+      <thead><tr style="text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em"><th style="padding:4px 8px">Hotline</th><th style="padding:4px 8px">Number</th><th style="padding:4px 8px">Goes to</th><th style="padding:4px 8px">Language</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`:'<div style="font-size:12px;color:var(--fog)">No hotlines yet.</div>'}
+    <div style="margin-top:12px"><button class="btn btn-primary btn-sm" onclick="openHotlineModal()">+ Add hotline</button></div>`;
+}
+
+function _hotProjOptions(cur){
+  return '<option value="">— Select project —</option>'+(DB.get('projects')||[])
+    .filter(p=>p.status!=='Complete'||String(p.id)===String(cur))
+    .map(p=>`<option value="${escHtml(p.id)}"${String(p.id)===String(cur)?' selected':''}>${escHtml((p.pid?p.pid+' — ':'')+p.name)}</option>`).join('');
+}
+function _hotExtRowHTML(e){
+  e=e||{};
+  return `<div class="hot-ext-row" data-id="${escHtml(e.id||'')}" style="display:grid;grid-template-columns:70px 1fr 1fr 1fr 28px;gap:6px;align-items:center;margin-bottom:6px">
+    <select class="hx-digit">${['1','2','3','4','5','6','7','8'].map(d=>`<option${String(e.digit)===d?' selected':''}>${d}</option>`).join('')}</select>
+    <select class="hx-proj" onchange="_hotPreview()">${_hotProjOptions(e.projectId)}</select>
+    <input class="hx-label" value="${escHtml(e.label||'')}" placeholder="Menu says: For ___, press N" oninput="_hotPreview()">
+    <input class="hx-label-es" value="${escHtml(e.labelEs||'')}" placeholder="Spanish (optional)" oninput="_hotPreview()">
+    <button class="btn btn-sm" title="Remove" onclick="this.parentElement.remove();_hotPreview()">×</button>
+  </div>`;
+}
+function openHotlineModal(id){
+  S.editHotlineId=id||null;
+  const h=id?(DB.get('hotlines')||[]).find(x=>String(x.id)===String(id))||{}:{spanishEnabled:true,greetingMode:'voice',active:true};
+  const ex=id?_hotExts(id):[];
+  const menu=ex.length>0;
+  const lbl='font-weight:400;text-transform:none;letter-spacing:0;color:var(--fog)';
+  openM(id?'Edit hotline':'Add hotline',
+  `<div class="fgrid fg2f">
+    <div class="fr"><label>Name *</label><input id="f-hl-name" value="${escHtml(h.name||'')}" maxlength="80" placeholder="e.g. UDOT Region One" oninput="_hotPreview()"></div>
+    <div class="fr"><label>Twilio phone number *</label><input id="f-hl-num" value="${escHtml(_hotFmtPhone(h.phoneNumber||''))}" maxlength="20" placeholder="(801) 555-0123"></div>
+  </div>
+  <div class="fr"><label>Callers go to</label>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--mist)">
+      <label style="display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0;font-weight:400"><input type="radio" name="f-hl-mode" value="one"${menu?'':' checked'} onchange="_hotModeChanged()"> One project</label>
+      <label style="display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0;font-weight:400"><input type="radio" name="f-hl-mode" value="menu"${menu?' checked':''} onchange="_hotModeChanged()"> A menu: press 1, 2, 3… for each project</label>
+    </div>
+  </div>
+  <div id="f-hl-one" class="fr" style="${menu?'display:none':''}"><label>Project</label><select id="f-hl-proj" onchange="_hotPreview()">${_hotProjOptions(h.projectId)}</select></div>
+  <div id="f-hl-menu" style="${menu?'':'display:none'}">
+    <div style="font-size:11px;color:var(--fog);margin-bottom:6px">Key · project · what the menu says (“For <i>the 400 North project</i>, press 1”). 0 is always the general mailbox and 9 is Spanish, so keys 1–8 are available.</div>
+    <div id="f-hl-exts">${ex.map(_hotExtRowHTML).join('')}</div>
+    <button class="btn btn-sm" onclick="_hotAddExt()">+ Add extension</button>
+  </div>
+  <div class="fsec">Greeting</div>
+  <div class="fr"><label>Voice</label><select id="f-hl-gmode" onchange="_hotPreview()">
+    <option value="voice"${h.greetingMode!=='recording'?' selected':''}>Computer voice reads the greeting below</option>
+    <option value="recording"${h.greetingMode==='recording'?' selected':''}>Play a recording I upload</option></select></div>
+  <div class="fr"><label>Greeting <span style="${lbl}">(the menu is added after it automatically)</span></label><textarea id="f-hl-gtext" rows="2" placeholder="${escHtml('Thank you for calling the '+(h.name||'…')+' hotline.')}" oninput="_hotPreview()">${escHtml(h.greetingText||'')}</textarea></div>
+  <div class="fr"><label>Recording <span style="${lbl}">(MP3 or WAV)${h.greetingAudioPath?' — one is uploaded':''}</span></label><input type="file" id="f-hl-gfile" accept="audio/mpeg,audio/mp3,audio/wav,audio/x-wav"></div>
+  <div class="fr"><div class="fcheck"><input type="checkbox" id="f-hl-es"${h.spanishEnabled?' checked':''} onchange="_hotPreview();document.getElementById('f-hl-es-wrap').style.display=this.checked?'':'none'"><label for="f-hl-es">Offer Spanish — “Para español, oprima 9.” Spanish voicemails are flagged LEP.</label></div></div>
+  <div id="f-hl-es-wrap" style="${h.spanishEnabled?'':'display:none'}">
+    <div class="fr"><label>Spanish greeting</label><textarea id="f-hl-gtext-es" rows="2" placeholder="${escHtml('Gracias por llamar a la línea de información del proyecto '+(h.name||'…')+'.')}" oninput="_hotPreview()">${escHtml(h.spanishGreetingText||'')}</textarea></div>
+    <div class="fr"><label>Spanish recording <span style="${lbl}">(optional)${h.spanishGreetingAudioPath?' — one is uploaded':''}</span></label><input type="file" id="f-hl-gfile-es" accept="audio/mpeg,audio/mp3,audio/wav,audio/x-wav"></div>
+  </div>
+  <div class="fr"><label>Status</label><select id="f-hl-active"><option value="1"${h.active!==false?' selected':''}>Active</option><option value="0"${h.active===false?' selected':''}>Off — callers hear “not in service”</option></select></div>
+  <div class="fsec">What callers hear</div>
+  <div id="f-hl-preview" style="font-size:12px;line-height:1.6;color:var(--mist);background:rgba(255,255,255,.04);border-radius:8px;padding:10px 12px"></div>
+  <div style="font-size:11px;color:var(--fog);line-height:1.5;margin-top:10px">In Twilio, set this number's <b>A call comes in</b> webhook to <span style="font-family:var(--mono);color:var(--slate)">${escHtml(HOT_FN_URL)}/voice</span> (HTTP POST).</div>`,
+  `${id?`<button class="btn btn-danger" onclick="deleteHotline('${escHtml(id)}')">Delete</button>`:''}
+   <button class="btn" onclick="closeM()">Cancel</button>
+   <button class="btn btn-primary" onclick="saveHotline()">Save</button>`,true);
+  _hotPreview();
+}
+function _hotModeChanged(){
+  const menu=document.querySelector('input[name="f-hl-mode"]:checked')?.value==='menu';
+  document.getElementById('f-hl-one').style.display=menu?'none':'';
+  document.getElementById('f-hl-menu').style.display=menu?'':'none';
+  if(menu&&!document.querySelector('#f-hl-exts .hot-ext-row')) _hotAddExt();
+  _hotPreview();
+}
+function _hotAddExt(){
+  const box=document.getElementById('f-hl-exts'); if(!box) return;
+  const used=new Set([...box.querySelectorAll('.hx-digit')].map(s=>s.value));
+  const next=['1','2','3','4','5','6','7','8'].find(d=>!used.has(d))||'8';
+  box.insertAdjacentHTML('beforeend',_hotExtRowHTML({digit:next}));
+  _hotPreview();
+}
+function _hotFormExts(){
+  return [...document.querySelectorAll('#f-hl-exts .hot-ext-row')].map(r=>({
+    id:r.dataset.id||'', digit:r.querySelector('.hx-digit').value, projectId:r.querySelector('.hx-proj').value,
+    label:r.querySelector('.hx-label').value.trim(), labelEs:r.querySelector('.hx-label-es').value.trim()}));
+}
+function _hotPreview(){
+  const out=document.getElementById('f-hl-preview'); if(!out) return;
+  const v=id=>(document.getElementById(id)?.value||'').trim();
+  const menu=document.querySelector('input[name="f-hl-mode"]:checked')?.value==='menu';
+  const h={name:v('f-hl-name')||'…', greetingText:v('f-hl-gtext'), spanishGreetingText:v('f-hl-gtext-es'),
+           spanishEnabled:!!document.getElementById('f-hl-es')?.checked};
+  const ex=menu?_hotFormExts().filter(e=>e.projectId).sort((a,b)=>a.digit.localeCompare(b.digit)):[];
+  const rec=v('f-hl-gmode')==='recording';
+  const greet=rec?'<i>[your recording]</i>':escHtml(_hotGreeting(h,'en'));
+  const m=_hotMenuText(h,ex,'en');
+  let html=greet+(m?' '+escHtml(m):'');
+  html+='<br><span style="color:var(--fog)">Then:</span> '+escHtml('Please leave your name, your phone number and your message after the tone. You have two minutes.');
+  if(h.spanishEnabled) html+='<br><span style="color:var(--fog)">Press 9:</span> '+(rec?'<i>[your Spanish recording, or the text]</i> ':escHtml(_hotGreeting(h,'es'))+' ')+escHtml(_hotMenuText(h,ex,'es'));
+  out.innerHTML=html;
+}
+async function _hotUploadGreeting(hotlineId, fileInput, lang){
+  const f=fileInput&&fileInput.files&&fileInput.files[0]; if(!f) return null;
+  if(!/^audio\/(mpeg|mp3|wav|x-wav)$/.test(f.type)){ alert('Please choose an MP3 or WAV file.'); return false; }
+  if(f.size>5*1024*1024){ alert('That recording is over 5 MB. A greeting should be well under a minute.'); return false; }
+  const path='greetings/'+hotlineId+'-'+lang+(/wav/.test(f.type)?'.wav':'.mp3');
+  const h=getAuthHeaders(); delete h['Prefer'];
+  const r=await fetch(SUPA_URL+'/storage/v1/object/'+HOT_AUDIO_BUCKET+'/'+path,{method:'POST',
+    headers:{...h,'Content-Type':f.type,'x-upsert':'true'},body:f});
+  if(!r.ok){ showToast('The greeting recording could not be uploaded.','error',6000); return false; }
+  return path;
+}
+async function saveHotline(){
+  const v=id=>(document.getElementById(id)?.value||'').trim();
+  const id=S.editHotlineId;
+  const menu=document.querySelector('input[name="f-hl-mode"]:checked')?.value==='menu';
+  const num=_hotNormPhone(v('f-hl-num'));
+  const rec={name:v('f-hl-name'), phoneNumber:num, projectId:menu?'':v('f-hl-proj'),
+    greetingMode:v('f-hl-gmode')||'voice', greetingText:v('f-hl-gtext'),
+    spanishEnabled:!!document.getElementById('f-hl-es')?.checked, spanishGreetingText:v('f-hl-gtext-es'),
+    active:v('f-hl-active')!=='0', updatedBy:getLoggedBy()||''};
+  if(!rec.name){alert('Name is required.');return}
+  if(!/^\+1\d{10}$/.test(num)){alert('Enter the hotline’s 10-digit phone number.');return}
+  if((DB.get('hotlines')||[]).some(x=>String(x.id)!==String(id)&&x.phoneNumber===num)){alert('Another hotline already uses that number.');return}
+  const ex=menu?_hotFormExts():[];
+  if(menu){
+    if(!ex.length){alert('Add at least one extension, or choose “One project”.');return}
+    if(ex.some(e=>!e.projectId)){alert('Pick a project for every extension.');return}
+    const ds=ex.map(e=>e.digit); if(new Set(ds).size!==ds.length){alert('Two extensions use the same key.');return}
+  } else if(!rec.projectId){alert('Pick the project this number is for.');return}
+  let hid=id;
+  if(id){ if(!await sbUpdate('hotlines',id,rec)){showToast('Couldn’t save the hotline. Has sql/2026-10-12_hotlines.sql been run?','error',7000);return} }
+  else { hid=await sbAdd('hotlines',rec); if(!hid){showToast('Couldn’t save the hotline. Has sql/2026-10-12_hotlines.sql been run?','error',7000);return} }
+  // Greeting recordings, once the hotline has an id to name them by.
+  const gp=await _hotUploadGreeting(hid,document.getElementById('f-hl-gfile'),'en');
+  const gpEs=await _hotUploadGreeting(hid,document.getElementById('f-hl-gfile-es'),'es');
+  if(gp||gpEs) await sbUpdate('hotlines',hid,{...(gp?{greetingAudioPath:gp}:{}),...(gpEs?{spanishGreetingAudioPath:gpEs}:{})});
+  // Extensions: a removed one is switched off, never deleted — old voicemails
+  // still name the key that was pressed.
+  const old=(DB.get('hotline_extensions')||[]).filter(e=>String(e.hotlineId)===String(hid)&&e.active!==false);
+  const keep=new Set(ex.map(e=>e.id).filter(Boolean));
+  for(const o of old) if(!keep.has(String(o.id))) await sbUpdate('hotline_extensions',o.id,{active:false});
+  for(const e of ex){
+    const row={hotlineId:hid,digit:e.digit,projectId:e.projectId,label:e.label,labelEs:e.labelEs,active:true};
+    if(e.id) await sbUpdate('hotline_extensions',e.id,row); else await sbAdd('hotline_extensions',row);
+  }
+  await _hotReload();
+  closeM(); S.editHotlineId=null;
+  showToast(id?'Hotline updated':'Hotline added','info',2000);
+  renderHotlineCard(); refreshBadges();
+}
+async function deleteHotline(id){
+  const n=(DB.get('hotline_messages')||[]).filter(m=>String(m.hotlineId)===String(id)).length;
+  if(!confirm(n?'This hotline has '+n+' voicemail'+(n===1?'':'s')+'. They stay in the Hotline inbox. Delete the hotline? Callers to the number will hear “not in service”.':'Delete this hotline? Callers to the number will hear “not in service”.')) return;
+  if(!await sbDelete('hotlines',id)){showToast('Couldn’t delete the hotline.','error',5000);return}
+  await _hotReload(); closeM(); renderHotlineCard(); refreshBadges();
+}
+
+// ── The Hotline inbox ───────────────────────────────────────────────────────
+function setHotFilter(k,v){ S[k]=v; render(); }
+function renderHotline(el){
+  _hotPurgeExpired();
+  const all=DB.get('hotline_messages')||[];
+  const pf=S.projectFilter;
+  // A general-mailbox message has no project yet, so it shows whatever the scope.
+  const inScope=m=>!pf||!m.projectId||String(m.projectId)===String(pf);
+  const tab=S.hotTab||'pending';
+  const pending=all.filter(m=>m.status==='pending'&&inScope(m));
+  const mine=pending.filter(_hotIsMine), unassigned=pending.filter(m=>!m.assignedTo);
+  let who=S.hotWho||(mine.length?'mine':'all');
+  const shown=tab==='pending'
+    ?(who==='mine'?mine:who==='unassigned'?unassigned:pending).slice().sort((a,b)=>String(a.receivedAt).localeCompare(String(b.receivedAt)))
+    :all.filter(m=>m.status!=='pending'&&inScope(m)).sort((a,b)=>String(b.closedAt||b.receivedAt).localeCompare(String(a.closedAt||a.receivedAt))).slice(0,200);
+  const projs=DB.get('projects')||[];
+  const chip=(k,label,n)=>`<button class="btn btn-sm${who===k?' btn-primary':''}" onclick="setHotFilter('hotWho','${k}')">${label} (${n})</button>`;
+  el.innerHTML=`<div class="topbar"><div class="topbar-title">Hotline inbox</div><div class="topbar-sp"></div>
+      <select id="hot-proj" onchange="S.projectFilter=this.value||null;render()" style="max-width:260px"><option value="">All projects</option>${projs.map(p=>`<option value="${escHtml(p.id)}"${String(pf)===String(p.id)?' selected':''}>${escHtml((p.pid?p.pid+' — ':'')+p.name)}</option>`).join('')}</select>
+    </div>
+    <div class="content" style="display:block;overflow-y:auto"><div style="padding:18px 24px;max-width:980px">
+      <div style="font-size:12px;color:var(--fog);margin-bottom:12px">Voicemails from the project hotlines. Nothing counts as an interaction until you log it.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+        <button class="btn btn-sm${tab==='pending'?' btn-primary':''}" onclick="setHotFilter('hotTab','pending')">Waiting (${pending.length})</button>
+        <button class="btn btn-sm${tab==='closed'?' btn-primary':''}" onclick="setHotFilter('hotTab','closed')">Logged &amp; dismissed</button>
+        ${tab==='pending'?`<span style="width:1px;height:20px;background:rgba(255,255,255,.15);margin:0 6px"></span>${chip('mine','Mine',mine.length)}${chip('unassigned','Unassigned',unassigned.length)}${chip('all','All',pending.length)}<span style="font-size:11px;color:var(--fog);margin-left:6px">Oldest first</span>`:''}
+      </div>
+      <div id="hot-list">${shown.length?shown.map(m=>tab==='pending'?_hotCardHTML(m):_hotClosedRowHTML(m)).join('')
+        :`<div style="font-size:13px;color:var(--fog);padding:24px 0">${tab==='pending'?'Nothing waiting'+(who==='mine'?' for you':'')+'.':'No logged or dismissed voicemails yet.'}</div>`}</div>
+    </div></div>`;
+}
+function _hotCardHTML(m){
+  const h=(DB.get('hotlines')||[]).find(x=>String(x.id)===String(m.hotlineId));
+  const ext=m.extensionDigit&&m.extensionDigit!=='0'?' · pressed '+escHtml(m.extensionDigit):'';
+  const proj=m.projectId?escHtml(_hotProjName(m.projectId)||'Project '+m.projectId)
+    :'<span style="color:var(--amber,#e8a020)">General mailbox — choose the project when you log it</span>';
+  const es=m.language==='es';
+  const tr=m.transcriptStatus==='done'&&m.transcript?`<div style="font-size:13px;color:var(--mist);line-height:1.5;margin-top:8px;white-space:pre-wrap">${escHtml(m.transcript)}</div>`
+    :`<div style="font-size:12px;color:var(--fog);font-style:italic;margin-top:8px">${es?'Spanish message — listen to the recording (no automatic transcript).'
+      :m.transcriptStatus==='pending'?'The transcript is on its way — or listen now.':'No transcript for this one — listen to the recording.'}</div>`;
+  const audio=m.recordingPath&&!m.audioDeletedAt
+    ?`<div id="hot-audio-${escHtml(m.id)}" style="margin-top:8px"><button class="btn btn-sm" onclick="hotPlay('${escHtml(m.id)}')">▶ Play recording${m.recordingSeconds?' ('+_hotDur(m.recordingSeconds)+')':''}</button></div>`
+    :`<div style="font-size:11px;color:var(--fog);margin-top:8px">${m.audioDeletedAt?'Recording removed after '+HOT_AUDIO_KEEP_DAYS+' days.':'The recording could not be saved — the transcript is what we have.'}</div>`;
+  const matches=_hotPhoneMatches(m);
+  const team=_team(true);
+  const cur=String(m.assignedTo||'').toUpperCase();
+  const opts='<option value="">— Unassigned —</option>'+team.map(t=>`<option value="${escHtml(t.initials)}"${String(t.initials).toUpperCase()===cur?' selected':''}>${escHtml(t.name)} (${escHtml(t.initials)})</option>`).join('')
+    +(cur&&!team.some(t=>String(t.initials).toUpperCase()===cur)?`<option value="${escHtml(cur)}" selected>${escHtml(cur)}</option>`:'');
+  return `<div class="hot-card" data-id="${escHtml(m.id)}" style="background:var(--navy-mid);border:1px solid rgba(74,155,232,.25);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:14px;font-weight:700;color:var(--white)">${escHtml(_hotFmtPhone(m.callerNumber)||'Unknown caller')}${es?' <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:9px;background:rgba(232,160,32,.18);color:var(--amber,#e8a020);margin-left:6px">Español · LEP</span>':''}</div>
+        <div style="font-size:11px;color:var(--fog);margin-top:2px">${escHtml(_hotWhen(m.receivedAt))} · ${escHtml(h?h.name:'Hotline')}${ext}</div>
+        <div style="font-size:12px;color:var(--slate);margin-top:4px">${proj}</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap">
+        <label style="font-size:11px;color:var(--fog);display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0">Assigned to <select onchange="hotReassign('${escHtml(m.id)}',this.value)" style="font-size:12px">${opts}</select></label>
+      </div>
+    </div>
+    ${matches.length?`<div style="font-size:12px;color:var(--sky-lt);margin-top:8px">Number matches ${matches.map(s=>escHtml(dispName(s))+(s.org&&(s.firstName||s.lastName)?' ('+escHtml(s.org)+')':'')).join(', ')} — suggested when you log it.</div>`:''}
+    ${tr}${audio}
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn btn-primary btn-sm" onclick="hotLog('${escHtml(m.id)}')">Log as interaction</button>
+      <button class="btn btn-sm" onclick="hotDismiss('${escHtml(m.id)}')">Dismiss…</button>
+    </div>
+  </div>`;
+}
+function _hotClosedRowHTML(m){
+  const logged=m.status==='logged';
+  const proj=m.projectId?escHtml(_hotProjName(m.projectId)):'General mailbox';
+  return `<div style="display:flex;justify-content:space-between;gap:12px;padding:10px 4px;border-bottom:1px solid rgba(255,255,255,.07);font-size:12px;color:var(--fog)">
+    <div><span style="color:var(--white)">${escHtml(_hotFmtPhone(m.callerNumber)||'Unknown caller')}</span> · ${escHtml(_hotWhen(m.receivedAt))} · ${proj}${m.language==='es'?' · Español':''}
+      <div style="margin-top:2px">${logged?'Logged':'Dismissed — '+escHtml(m.dismissReason||'')}${m.closedBy?' by '+escHtml(m.closedBy):''}${m.closedAt?' on '+escHtml(_hotWhen(m.closedAt)):''}</div></div>
+    <div>${logged&&m.loggedInteractionId?`<button class="btn btn-sm" onclick="openEditIntModal('${escHtml(m.loggedInteractionId)}')">Open interaction</button>`:''}</div>
+  </div>`;
+}
+async function hotPlay(id){
+  const m=(DB.get('hotline_messages')||[]).find(x=>String(x.id)===String(id)); if(!m||!m.recordingPath) return;
+  const box=document.getElementById('hot-audio-'+id); if(!box) return;
+  box.innerHTML='<span style="font-size:11px;color:var(--fog)">Loading…</span>';
+  try{
+    const h=getAuthHeaders(); delete h['Prefer'];
+    const r=await fetch(SUPA_URL+'/storage/v1/object/sign/'+HOT_AUDIO_BUCKET+'/'+m.recordingPath,{method:'POST',headers:h,body:JSON.stringify({expiresIn:600})});
+    if(!r.ok) throw new Error(r.status);
+    const j=await r.json();
+    box.innerHTML='<audio controls autoplay style="width:100%;max-width:420px" src="'+escHtml(SUPA_URL+'/storage/v1'+j.signedURL)+'"></audio>';
+  }catch(e){ box.innerHTML='<span style="font-size:11px;color:var(--fog)">The recording could not be opened.</span>'; }
+}
+async function hotReassign(id, ini){
+  const ok=await sbUpdate('hotline_messages',id,{assignedTo:ini||null,assignedBy:getLoggedBy()||null,assignedAt:new Date().toISOString()});
+  if(!ok){ showToast('Couldn’t reassign the voicemail.','error',5000); return; }
+  const m=(DB.get('hotline_messages')||[]).find(x=>String(x.id)===String(id));
+  if(m){ m.assignedTo=ini||''; m.assignedBy=getLoggedBy(); }
+  let sent=false;
+  if(ini){
+    try{
+      const sess=getSession();
+      const r=await fetch(HOT_FN_URL+'/notify',{method:'POST',headers:{'Content-Type':'application/json',apikey:SUPA_KEY,Authorization:'Bearer '+(sess?sess.access_token:SUPA_KEY)},body:JSON.stringify({messageId:Number(id)})});
+      sent=r.ok&&!!(await r.json()).sent;
+    }catch(e){ console.warn('Hotline notify failed', e.message); }
+  }
+  const who=ini?(_leadName(ini)||ini):'';
+  showToast(ini?('Assigned to '+who+(sent?' — they’ve been emailed.':' (no email sent: they may have no email on the team list).')):'Unassigned','info',4000);
+  render();
+}
+function hotDismiss(id){
+  S.hotDismissId=id;
+  openM('Dismiss voicemail',`<div style="font-size:13px;color:var(--mist);margin-bottom:10px">A dismissed voicemail never becomes an interaction. It stays in “Logged &amp; dismissed” with the reason.</div>
+    <div class="fr"><label>Reason</label><select id="f-hd-reason">${HOT_DISMISS_REASONS.map(r=>`<option>${escHtml(r)}</option>`).join('')}</select></div>
+    <div class="fr"><label>Note <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--fog)">(optional)</span></label><input id="f-hd-note" maxlength="200"></div>`,
+  `<button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-primary" onclick="saveHotDismiss()">Dismiss</button>`);
+}
+async function saveHotDismiss(){
+  const id=S.hotDismissId; if(!id) return;
+  const reason=document.getElementById('f-hd-reason').value, note=(document.getElementById('f-hd-note').value||'').trim();
+  const ok=await sbUpdate('hotline_messages',id,{status:'dismissed',dismissReason:note?reason+' — '+note:reason,
+    closedAt:new Date().toISOString(),closedBy:getLoggedBy()||null,audioPurgeAfter:new Date(Date.now()+HOT_AUDIO_KEEP_DAYS*864e5).toISOString()});
+  if(!ok){ showToast('Couldn’t dismiss the voicemail.','error',5000); return; }
+  await _hotReload(); closeM(); S.hotDismissId=null; refreshBadges(); render();
+}
+// Opens the ordinary Log interaction dialog, prefilled from the voicemail.
+function hotLog(id){
+  const m=(DB.get('hotline_messages')||[]).find(x=>String(x.id)===String(id)); if(!m) return;
+  const h=(DB.get('hotlines')||[]).find(x=>String(x.id)===String(m.hotlineId));
+  const head='Hotline voicemail'+(h?' ('+h.name+(m.extensionDigit&&m.extensionDigit!=='0'?', pressed '+m.extensionDigit:'')+')':'')
+    +(m.recordingSeconds?', '+_hotDur(m.recordingSeconds):'')+(m.language==='es'?', in Spanish':'')+'.';
+  const body=m.transcriptStatus==='done'&&m.transcript?' '+m.transcript:'';
+  openIntModal(null,{
+    hotlineMsgId:String(m.id), projectId:m.projectId||S.projectFilter||'', date:_hotLocalDate(m.receivedAt),
+    channel:'Phone', direction:'Incoming', summary:head+body,
+    followUp:{note:'Call back'+(m.callerNumber?' at '+_hotFmtPhone(m.callerNumber):''), due:_hotCallbackDue(m.receivedAt), assignee:m.assignedTo||''},
+    callerNumber:m.callerNumber||'', spanish:m.language==='es', suggest:_hotPhoneMatches(m).map(s=>String(s.id))
+  });
+}
+// After the dialog saves: close the voicemail out against the interaction.
+async function _hotAfterLog(opts, interactionId, stakeId){
+  if(!opts||!opts.hotlineMsgId) return;
+  if(!interactionId||String(interactionId).startsWith('tmp_')){
+    showToast('The interaction was not saved, so the voicemail is still waiting in the inbox.','error',7000); return;
+  }
+  await sbUpdate('hotline_messages',opts.hotlineMsgId,{status:'logged',loggedInteractionId:interactionId,
+    closedAt:new Date().toISOString(),closedBy:getLoggedBy()||null,audioPurgeAfter:new Date(Date.now()+HOT_AUDIO_KEEP_DAYS*864e5).toISOString()});
+  // A Spanish voicemail: mark the contact LEP if the box was left ticked.
+  if(opts.spanish&&stakeId&&document.getElementById('f-ihot-lep')?.checked){
+    const all=DB.get('stakeholders'); const i=all.findIndex(s=>String(s.id)===String(stakeId));
+    if(i>-1&&!all[i].lep){ all[i]={...all[i],lep:true}; await DB.set('stakeholders',all); }
+  }
+  await _hotReload();
+}
+// Recordings are kept HOT_AUDIO_KEEP_DAYS after a voicemail is logged or
+// dismissed; the transcript and the interaction are the record. Removed here,
+// by whoever opens the inbox (staff can delete in the bucket), at most hourly.
+let _hotPurgedAt=0;
+async function _hotPurgeExpired(){
+  if(Date.now()-_hotPurgedAt<3600e3) return; _hotPurgedAt=Date.now();
+  const now=new Date().toISOString();
+  const due=(DB.get('hotline_messages')||[]).filter(m=>m.recordingPath&&!m.audioDeletedAt&&m.audioPurgeAfter&&m.audioPurgeAfter<now);
+  if(!due.length) return;
+  try{
+    const h=getAuthHeaders(); delete h['Prefer'];
+    const r=await fetch(SUPA_URL+'/storage/v1/object/'+HOT_AUDIO_BUCKET,{method:'DELETE',headers:h,body:JSON.stringify({prefixes:due.map(m=>m.recordingPath)})});
+    if(!r.ok) throw new Error(r.status);
+    for(const m of due){ await sbUpdate('hotline_messages',m.id,{audioDeletedAt:now}); m.audioDeletedAt=now; }
+  }catch(e){ console.warn('Hotline audio clean-up failed', e.message); }
+}
+
+// ── Threads: the calls that follow a voicemail ──────────────────────────────
+// Each interaction can name the one it came out of (relatedTo). A thread is
+// every interaction connected that way; each still counts once, as always.
+function _intThread(id){
+  const all=DB.get('interactions')||[];
+  const byId=new Map(all.map(i=>[String(i.id),i]));
+  let root=byId.get(String(id)); const seen=new Set();
+  while(root&&root.relatedTo&&byId.has(String(root.relatedTo))&&!seen.has(String(root.id))){ seen.add(String(root.id)); root=byId.get(String(root.relatedTo)); }
+  if(!root) return [];
+  const out=[root], q=[String(root.id)], have=new Set(q);
+  while(q.length){ const p=q.shift(); all.forEach(i=>{ if(String(i.relatedTo)===p&&!have.has(String(i.id))){ have.add(String(i.id)); out.push(i); q.push(String(i.id)); } }); }
+  return out.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))||String(a.id).localeCompare(String(b.id)));
+}
+function _intThreadHTML(id){
+  const th=_intThread(id); if(th.length<2) return '';
+  const stakes=DB.get('stakeholders')||[];
+  return `<div class="fsec">Thread · ${th.length} contacts</div><div style="font-size:12px;color:var(--fog);margin-bottom:8px">${th.map(i=>{
+    const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
+    const me=String(i.id)===String(id);
+    return `<div style="padding:4px 0;${me?'color:var(--white)':''}">${escHtml(fmt(i.date))} · ${escHtml(i.channel||'')} · ${escHtml(i.direction||'')} · ${escHtml(s?dispName(s):(i.anonLabel||'Anonymous'))}${me?' <b>(this one)</b>':` <a href="#" onclick="event.preventDefault();openEditIntModal('${escHtml(i.id)}')" style="color:var(--sky-lt)">open</a>`}<div style="color:var(--slate)">${escHtml(String(i.summary||'').slice(0,140))}</div></div>`;}).join('')}</div>`;
+}
+// "+ Related call": a new interaction that comes out of this one.
+function logRelatedInt(id){
+  const p=(DB.get('interactions')||[]).find(x=>String(x.id)===String(id)); if(!p) return;
+  closeM();
+  setTimeout(()=>openIntModal(null,{relatedTo:String(p.id),projectId:p.projectId,
+    parentFollowUpOpen:!!(p.followUp&&!p.followUpDone)}),0);
 }
 
 
@@ -23908,6 +24475,13 @@ function renderSettings(m) {
       <div id="team-card-body" style="font-size:13px;color:var(--fog)"></div>
     </div>
 
+    <!-- Project hotlines -->
+    <div style="background:var(--navy-mid);border:1px solid rgba(74,155,232,.25);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">
+      <div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:4px">Project hotlines</div>
+      <div style="font-size:12px;color:var(--fog);margin-bottom:14px;line-height:1.5">Phone numbers the public calls to leave a voicemail. One number can serve one project, or several with a menu (press 1, 2, 3…). Voicemails land in the Hotline inbox, assigned to the project's PI Lead, and only become interactions when someone logs them.</div>
+      <div id="hotline-card-body" style="font-size:13px;color:var(--fog)"></div>
+    </div>
+
     <!-- Claude AI -->
     <div style="background:var(--navy-mid);border:1px solid rgba(74,155,232,.25);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
@@ -23984,6 +24558,7 @@ function renderSettings(m) {
   setTimeout(function(){ if(document.getElementById('client-access-panel')) renderClientAccessPanel(); }, 0);
   setTimeout(function(){ if(document.getElementById('mfa-card-body')) renderMfaCard(); }, 0);
   renderTeamCard();
+  renderHotlineCard();
 }
 
 // Settings → Two-step sign-in. The sign-in side (mfaGate and friends) is the

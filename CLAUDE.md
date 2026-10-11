@@ -2013,7 +2013,7 @@ shipped. Grep the actual functions before planning work off this list.
    `p=quarantine` ~2026-11-01; an automatic invite email on grant (needs an
    Edge Function) is a candidate, not started.
 
-**Next:** Twilio project hotlines → interactions (design agreed 2026-10-11; build on DEV) ·
+**Next:** Twilio project hotlines — BUILT on DEV, waiting on a Twilio trial number for a real call, then release ·
 Survey123 ingestion (blocked on a sample export) · ROW close-out TYPE.
 
 **Later:** county assessor owner lookup (Phase 3) · Google Sheets push ·
@@ -3000,52 +3000,99 @@ prove it to FHWA". ESRI is the instrument; Cirrus Cc is the system of record.
 
 **Build order:** CSV ingestion → geometry + map layer → portal section → API pull.
 
-## FUTURE — Project hotlines (Twilio) — DESIGN AGREED 2026-10-11, not built
-Replaces the old "vendor TBD" note. Vendor: **Twilio**. Build on DEV first; no
-Twilio account is needed until the end-to-end check (free trial + one number),
-and a paid number only when a real project goes live. Decided with Jeff:
-- **Voicemail only** to start (live-call forwarding may come later; same design).
-- **Hotlines and extensions are configured in the app** (Settings → Hotlines):
-  a hotline = a number + greeting; extensions map a digit to a project. A
-  single-project hotline has no menu. 0 / no choice → the hotline's general
-  mailbox, project picked at review. UDOT runs four regional hotlines with
-  several projects each; other clients need one number per project — both fit.
-  Reassigning an extension to a new project leaves old voicemails on the
-  project they were left for.
-- **Spanish option** ("Para español, oprima 9") per hotline, switchable OFF.
-  Spanish voicemails are flagged LEP. Transcription must handle Spanish (check
-  what Twilio's transcription supports before building).
-- **Greeting:** Jeff's own recording preferred; a computer (neural) voice is
-  the fallback. Support both per hotline so it can be swapped after testing.
-- **Hotline inbox (staff review) — the locked rule holds:** a voicemail lands
-  as PENDING; staff read/listen, pick the contact (or anonymous), edit the
-  summary and click Log. Only then is it an interaction. Nothing counts in a
-  report until logged. Caller number matching EXACTLY one contact on that
-  project → suggested, never auto-attached.
-- **Assignment:** pending voicemail is assigned to the project's PI Lead (team
-  list), emailed on arrival; **Reassign** to any active member (they get the
-  email). No automatic vacation routing (revisit after testing).
-- **Logged voicemail = interaction with follow-up "call back" ticked by default.**
-- **Threads, not a separate follow-up table:** new column on `pi_interactions`
-  ("related to" — the interaction that started it). A callback, or a call to
-  someone else because of it, is its own interaction (own contact, owner,
-  follow-up) linked back. Each counts once, as today; the thread shows the
-  whole chain; reports can count hotline calls closed and time to close. A
-  thread that becomes an ongoing problem escalates to an Issue (existing).
-- **Recordings:** the audio file is copied to a private staff-only Supabase
-  Storage bucket, deleted from Twilio once copied, and deleted from Supabase
-  90 days after logging. Transcript + summary are kept as the record. Never
-  shown in the client portal. (Decide whether the nightly off-site backup
-  includes the bucket.)
-- **Numbers:** Sunrise's current hotlines are Microsoft Teams numbers. Teams
-  Calling Plan numbers CAN be ported out (porting PIN in Teams admin center →
-  Voice → Phone numbers; the receiving carrier files the port), and a Teams
-  auto attendant can forward to an external number instead (needs licensing /
-  a routing policy — IT's call). Plan: test on a NEW Twilio number; decide at
-  go-live between forwarding, porting or new numbers.
-- Plumbing: Twilio webhook → Supabase Edge Function (validates Twilio's
-  signature) → pending row + recording copy; email via Resend. Add Twilio to
-  "Outside services" and the Service Map when the account exists.
+## Project hotlines (Twilio) — BUILT on DEV (Oct 2026), not released; no Twilio account yet
+Design agreed with Jeff 2026-10-11 (the decisions are listed at the end). Built
+and tested end to end WITHOUT a Twilio account: the receiver is exercised in
+the harness with requests signed exactly as Twilio signs them. What remains:
+a Twilio trial + one number on DEV for a real call, then release.
+- **`sql/2026-10-12_hotlines.sql`** — `pi_hotlines` (number, greeting text or
+  uploaded recording, Spanish on/off, a project for a one-project number),
+  `pi_hotline_extensions` (digit 1–8 → project, menu label; 0 = general
+  mailbox and 9 = Spanish are reserved), `pi_hotline_messages` (one row per
+  voicemail: caller, project or none, language, recording path, transcript,
+  status pending | logged | dismissed, assigned_to initials, audio_purge_after),
+  `pi_interactions.related_to` (threads), private bucket `hotline-audio`.
+  All STAFF-ONLY (closeouts pattern + `pi_staff_or_client`; storage rule
+  `hotline_audio_staff_all` uses `pi_is_staff()`). Applied to DEV 2026-10-12.
+  `toSB` leaves `related_to` out until a fetched row carries it
+  (`window._relCol`, the `_fuResCol` pattern).
+- **Receiver: `supabase/functions/hotline/`** — `logic.mjs` holds everything
+  (Node-runnable; the harness imports it), `index.ts` only calls
+  `Deno.serve(createHandler(...))`. Deployed to DEV with **verify_jwt OFF**
+  (Twilio can't send a Supabase token); every Twilio request must carry a
+  valid `X-Twilio-Signature`, computed over the PUBLIC URL
+  (`SUPABASE_URL/functions/v1/hotline/...`), not the internal one. With no
+  `TWILIO_AUTH_TOKEN`/`TWILIO_ACCOUNT_SID` secret it answers 503 to
+  everything. Routes: `/voice` (greeting + menu TwiML, looked up by the `To`
+  number), `/menu` (key → project; 0 / none → general; a wrong key → menu once
+  more, then general; 9 → Spanish when on), `/recorded` (thanks, hang up),
+  `/recording` + `/transcription` (both UPSERT on `call_sid` with only their
+  own fields, so they work in either order), `/notify` (app → email the
+  assignee; checks the caller's session + `pi_staff`). Voices: Amazon Polly
+  neural via Twilio `<Say>` (Joanna / Lupe). Recording limit 120 s (Twilio's
+  transcription ceiling). English is transcribed by Twilio; **Spanish is not
+  transcribed** (Twilio's built-in transcription is treated as English-only —
+  confirm before go-live) — the inbox says "listen to the recording".
+  The audio is copied into `hotline-audio/messages/<id>.mp3`, then Twilio's
+  copy is DELETED (Spanish: at once; English: once the transcript is in).
+  The new-voicemail email (Resend API, `RESEND_API_KEY` secret, optional)
+  names the project only — no caller number or transcript.
+- **Secrets to add per project** (Supabase → Edge Functions → Secrets):
+  `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, optional `RESEND_API_KEY`,
+  `HOTLINE_FROM_EMAIL`, `APP_BASE_URL`. Twilio number webhook ("A call comes
+  in"): `<SUPABASE_URL>/functions/v1/hotline/voice`, HTTP POST. Settings shows
+  the exact URL.
+- **App (index.html):** Settings → **Project hotlines** (`renderHotlineCard`,
+  `openHotlineModal`, `saveHotline`; one project or a menu of extensions;
+  greeting text or upload; Spanish on/off; "What callers hear" preview built
+  by `_hotMenuText`, asserted equal to the receiver's `menuText`). A removed
+  extension is switched OFF, never deleted. Nav **Hotline** (shown once a
+  hotline or message exists; badge = pending mine + unassigned) →
+  `renderHotline`: Waiting (Mine / Unassigned / All, oldest first) and Logged
+  & dismissed. A general-mailbox message shows whatever the project scope.
+  - **Log as interaction** = `hotLog` → the ordinary `openIntModal(null, opts)`
+    PREFILLED (project, the day it was left, Phone, Incoming, transcript,
+    a "Call back at …" follow-up due two working days later, assigned to the
+    voicemail's assignee). A contact whose phone matches is offered as a
+    "Use …" button — never attached. Spanish: "mark the contact LEP" (ticked).
+    `saveInt` then calls `_hotAfterLog` (status logged, `logged_interaction_id`,
+    `audio_purge_after` = +90 days).
+  - **Dismiss…** (reason list + note) — no interaction. **Reassign** saves and
+    POSTs `/notify` with the user's session.
+  - Recordings play from a 10-minute signed URL. `_hotPurgeExpired` (on inbox
+    open, at most hourly) deletes recordings past `audio_purge_after` and sets
+    `audio_deleted_at` — so audio is only removed when someone opens the inbox.
+    A scheduled purge (pg_cron → function) is a possible later step.
+- **Threads (any interaction):** `relatedTo`. The edit dialog has
+  **+ Related contact** (`logRelatedInt`) — a new interaction linked to this
+  one, which can resolve its open follow-up ("See the related phone on …");
+  the dialog lists the thread (`_intThread` / `_intThreadHTML`). Each
+  interaction still counts once.
+- Not on mobile or in the portal (hotline data is staff-only). The nightly
+  off-site backup reads `report-files` only — decide whether `hotline-audio`
+  should be added (`backup.sh` in cirruscc-backups).
+- Guarded by `test/tests/82-hotline-receiver.test.js` (43 checks; fails if the
+  signature check is bypassed) and `test/tests/83-hotline-inbox.test.js`.
+- **Connector note:** on DEV, `execute_sql` / `apply_migration` time out on
+  statements the connector treats as destructive (`drop …`) and on large
+  multi-statement scripts — apply in small pieces. The DEV hotline tables were
+  briefly readable by anon between create and `revoke` (Supabase grants new
+  tables to the API roles); they were empty. Put `enable row level security`
+  + `revoke … from anon` in the SAME statement as the create next time.
+  DEV also carries a leftover partial index `pi_hotline_messages_call_uniq`
+  beside the real `pi_hotline_messages_call_sid_key` (harmless; a dev reset
+  clears it).
+
+Decided with Jeff (2026-10-11): voicemail only to start; extensions for
+multi-project numbers (UDOT runs four regional hotlines); Spanish option
+switchable; Jeff's own recorded greeting preferred, computer voice as
+fallback; review inbox, nothing counts until logged; phone match suggests
+only; assigned to the PI Lead, manual reassign (no automatic vacation cover
+for now); "call back" follow-up ticked by default; threads instead of a
+separate follow-up table; audio kept 90 days after logging, transcript kept;
+test on a NEW Twilio number — Sunrise's current hotlines are Microsoft Teams
+numbers, which can be ported out (porting PIN in Teams admin) or forwarded
+to Twilio; decide at go-live.
 
 ## FUTURE — Multi-tenant launch readiness (plan captured July 2026, not started)
 

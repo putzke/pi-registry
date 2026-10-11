@@ -3940,6 +3940,23 @@ Crawl-specific rules learned the hard way:
   and the portal calls the last two by RPC. Each only answers about the caller
   or the token the caller holds.
 
+## Outside services (keep this list current — Oct 2026)
+| Service | Role | Down = |
+|---|---|---|
+| GitHub (putzke) | repos `pi-registry` (public), `cirruscc-backups` (private), `cirruscc-website`; CI + nightly backup | can't ship; backups pause |
+| GitHub Pages | app.cirruscc.com, www.cirruscc.com | live app + site offline |
+| Supabase (org "Sunrise Engineering PI", Pro) | `cirruscc-live` / `cirruscc-dev`: DB, auth, storage | live app dead |
+| Cloudflare Pages | dev.cirruscc.com (`cirruscc-dev`) | dev only |
+| Wix | registrar + DNS for cirruscc.com | every cirruscc.com address |
+| Resend | client sign-in email (SMTP for Supabase LIVE) | client OTP links |
+| ImprovMX | support@cirruscc.com → Jeff's work inbox | support mail |
+| Google Cloud | Maps/Places key (map, autocomplete, geocode) | map features |
+| Anthropic | Claude API, per-user key in Settings | AI drafting |
+No account: Microsoft Authenticator (staff phones), UGRC ArcGIS parcels,
+jsDelivr / cdnjs / Google Fonts. Secrets only Jeff holds: backup passphrase,
+DB passwords (live ≠ dev), Resend key (in Supabase SMTP), account logins.
+Add a row whenever a new service is introduced (Twilio next).
+
 ## Backups (Oct 2026)
 - **Supabase Pro** (upgraded 2026-10-10): daily backups kept 7 days, restored
   from the dashboard (Database → Backups). First thing to reach for.

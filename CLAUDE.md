@@ -2013,7 +2013,7 @@ shipped. Grep the actual functions before planning work off this list.
    `p=quarantine` ~2026-11-01; an automatic invite email on grant (needs an
    Edge Function) is a candidate, not started.
 
-**Next:** Twilio phone hotline → interactions (design session first) ·
+**Next:** Twilio project hotlines → interactions (design agreed 2026-10-11; build on DEV) ·
 Survey123 ingestion (blocked on a sample export) · ROW close-out TYPE.
 
 **Later:** county assessor owner lookup (Phase 3) · Google Sheets push ·
@@ -3000,18 +3000,52 @@ prove it to FHWA". ESRI is the instrument; Cirrus Cc is the system of record.
 
 **Build order:** CSV ingestion → geometry + map layer → portal section → API pull.
 
-## FUTURE — Phone Hotline Voicemail Transcription (in development, vendor TBD)
-
-Automatically transcribe project phone hotline voicemails and log them as
-interaction records in Cirrus Cc. Construction-phase PI hotlines are
-often required by UDOT or the contractor; currently voicemails require
-manual transcription and re-entry into the PI log — a significant time drain.
-
-Architecture planned: webhook from hotline provider → Supabase Edge Function
-receiver → auto-create interaction record (anonLabel for unidentified callers,
-subject tagging, follow-up flag if needed). Specific hotline provider not yet
-selected — candidates include Dialpad, Twilio, or similar. Design session
-required before build; vendor selection pending.
+## FUTURE — Project hotlines (Twilio) — DESIGN AGREED 2026-10-11, not built
+Replaces the old "vendor TBD" note. Vendor: **Twilio**. Build on DEV first; no
+Twilio account is needed until the end-to-end check (free trial + one number),
+and a paid number only when a real project goes live. Decided with Jeff:
+- **Voicemail only** to start (live-call forwarding may come later; same design).
+- **Hotlines and extensions are configured in the app** (Settings → Hotlines):
+  a hotline = a number + greeting; extensions map a digit to a project. A
+  single-project hotline has no menu. 0 / no choice → the hotline's general
+  mailbox, project picked at review. UDOT runs four regional hotlines with
+  several projects each; other clients need one number per project — both fit.
+  Reassigning an extension to a new project leaves old voicemails on the
+  project they were left for.
+- **Spanish option** ("Para español, oprima 9") per hotline, switchable OFF.
+  Spanish voicemails are flagged LEP. Transcription must handle Spanish (check
+  what Twilio's transcription supports before building).
+- **Greeting:** Jeff's own recording preferred; a computer (neural) voice is
+  the fallback. Support both per hotline so it can be swapped after testing.
+- **Hotline inbox (staff review) — the locked rule holds:** a voicemail lands
+  as PENDING; staff read/listen, pick the contact (or anonymous), edit the
+  summary and click Log. Only then is it an interaction. Nothing counts in a
+  report until logged. Caller number matching EXACTLY one contact on that
+  project → suggested, never auto-attached.
+- **Assignment:** pending voicemail is assigned to the project's PI Lead (team
+  list), emailed on arrival; **Reassign** to any active member (they get the
+  email). No automatic vacation routing (revisit after testing).
+- **Logged voicemail = interaction with follow-up "call back" ticked by default.**
+- **Threads, not a separate follow-up table:** new column on `pi_interactions`
+  ("related to" — the interaction that started it). A callback, or a call to
+  someone else because of it, is its own interaction (own contact, owner,
+  follow-up) linked back. Each counts once, as today; the thread shows the
+  whole chain; reports can count hotline calls closed and time to close. A
+  thread that becomes an ongoing problem escalates to an Issue (existing).
+- **Recordings:** the audio file is copied to a private staff-only Supabase
+  Storage bucket, deleted from Twilio once copied, and deleted from Supabase
+  90 days after logging. Transcript + summary are kept as the record. Never
+  shown in the client portal. (Decide whether the nightly off-site backup
+  includes the bucket.)
+- **Numbers:** Sunrise's current hotlines are Microsoft Teams numbers. Teams
+  Calling Plan numbers CAN be ported out (porting PIN in Teams admin center →
+  Voice → Phone numbers; the receiving carrier files the port), and a Teams
+  auto attendant can forward to an external number instead (needs licensing /
+  a routing policy — IT's call). Plan: test on a NEW Twilio number; decide at
+  go-live between forwarding, porting or new numbers.
+- Plumbing: Twilio webhook → Supabase Edge Function (validates Twilio's
+  signature) → pending row + recording copy; email via Resend. Add Twilio to
+  "Outside services" and the Service Map when the account exists.
 
 ## FUTURE — Multi-tenant launch readiness (plan captured July 2026, not started)
 

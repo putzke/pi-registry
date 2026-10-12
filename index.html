@@ -1026,7 +1026,8 @@ const SB_TABLES = {
   team_members:         'pi_team_members',
   hotlines:             'pi_hotlines',
   hotline_extensions:   'pi_hotline_extensions',
-  hotline_messages:     'pi_hotline_messages'
+  hotline_messages:     'pi_hotline_messages',
+  hotline_calls:        'pi_hotline_calls'
 };
 
 // Map our internal field names to Supabase column names
@@ -1228,6 +1229,14 @@ const SB_TO_INT = {
     assignedTo:'assigned_to', assignedBy:'assigned_by', assignedAt:'assigned_at', receivedAt:'received_at',
     loggedInteractionId:'logged_interaction_id', closedAt:'closed_at', closedBy:'closed_by',
     dismissReason:'dismiss_reason', audioPurgeAfter:'audio_purge_after', audioDeletedAt:'audio_deleted_at'
+  },
+  // Calls placed from a hotline number with the dialpad. The receiver writes
+  // them; the app only records whether each one was logged.
+  pi_hotline_calls: {
+    id:'id', hotlineId:'hotline_id', projectId:'project_id', stakeholderId:'stakeholder_id',
+    toNumber:'to_number', ringNumber:'ring_number', placedBy:'placed_by', placedByEmail:'placed_by_email',
+    status:'status', outcome:'outcome', loggedInteractionId:'logged_interaction_id',
+    decidedAt:'decided_at', decidedBy:'decided_by', createdAt:'created_at'
   }
 };
 
@@ -1634,7 +1643,7 @@ function cacheClear(k) { delete _cache[k]; delete _cacheTime[k]; }
 const _syncCache = {};
 
 async function loadAllData() {
-  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments','comment_periods','tribal_consultations','reports','report_archive','client_summaries','parcels','parcel_owners','parcel_outreach','closeouts','team_members','hotlines','hotline_extensions','hotline_messages'];
+  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments','comment_periods','tribal_consultations','reports','report_archive','client_summaries','parcels','parcel_owners','parcel_outreach','closeouts','team_members','hotlines','hotline_extensions','hotline_messages','hotline_calls'];
   // Boot stays tolerant — one unreachable table should not lock the app — but a
   // table that FAILED must not be presented as an empty one. An empty Master
   // List that is really a 401 is worse than an error message.
@@ -1685,7 +1694,7 @@ function _viewTables(v){
     meetings:     ['meetings','projects','stakeholders'],
     issues:       ['issues','interactions','projects'],
     team:         ['projects','interactions','team_members','client_summaries','report_archive'],
-    hotline:      ['hotline_messages','hotlines','hotline_extensions','team_members','stakeholders','project_stakeholders']
+    hotline:      ['hotline_messages','hotline_calls','hotlines','hotline_extensions','team_members','stakeholders','project_stakeholders']
   };
   return m[v] || [];   // views not listed (settings, map, reports) don't auto-refresh
 }
@@ -2465,14 +2474,16 @@ function refreshBadges(){
   const tribalEl=document.getElementById('nb-tribal');
   if(tribalEl){tribalEl.textContent=pendingTribal;tribalEl.classList.toggle('hide',pendingTribal===0);}
   // Hotline: the nav item appears once a hotline is set up (Settings); the
-  // badge counts voicemails waiting on you plus the unassigned ones.
+  // badge counts voicemails waiting on you plus the unassigned ones, and calls
+  // you placed from a hotline that you haven't logged or skipped yet.
   const hotNav=document.getElementById('nav-hotline');
   if(hotNav) hotNav.style.display=(DB.get('hotlines')||[]).length||(DB.get('hotline_messages')||[]).length?'':'none';
   const hotEl=document.getElementById('nb-hot');
   if(hotEl){
-    const n=_hotWaitingForMe().length;
+    const me=getLoggedBy();
+    const n=_hotWaitingForMe().length+(me?_hotCallsToDecide().filter(c=>String(c.placedBy||'').toUpperCase()===me).length:0);
     hotEl.textContent=n; hotEl.classList.toggle('hide',n===0);
-    hotEl.title='Hotline voicemails waiting for you, plus any not assigned to anyone yet.';
+    hotEl.title='Hotline voicemails waiting for you (plus any not assigned to anyone yet), and calls you placed but haven’t logged or skipped.';
   }
 }
 
@@ -7986,7 +7997,7 @@ async function saveQuickLog(){
 
 // opts (optional): {projectId, date, channel, direction, summary,
 //   followUp:{note,due,assignee}, relatedTo, parentFollowUpOpen,
-//   hotlineMsgId, callerNumber, spanish, suggest:[stakeholder ids]}
+//   hotlineMsgId, hotlineCallId, callerNumber, spanish, suggest:[stakeholder ids]}
 // — set when the dialog is opened from the Hotline inbox or "+ Related call".
 function openIntModal(preStake, opts){
   S.editId=null;
@@ -8000,11 +8011,14 @@ function openIntModal(preStake, opts){
       ${_sug.length?`<div style="margin-top:6px">Number matches: ${_sug.map(s=>`<button class="btn btn-sm" style="margin:2px 4px 0 0" onclick="_intSetStake('${escHtml(s.id)}')">Use ${escHtml(dispName(s))}</button>`).join('')}</div>`:''}
       ${opts.spanish?`<div class="fcheck" style="margin-top:6px"><input type="checkbox" id="f-ihot-lep" checked><label for="f-ihot-lep">Spanish voicemail — mark the contact as LEP (limited English proficiency)</label></div>`:''}
     </div>`
+    :opts.hotlineCallId?`<div style="margin:0 0 12px;border:1px solid rgba(74,155,232,.35);background:rgba(74,155,232,.07);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--mist)">
+      <b style="color:var(--sky-lt)">A call from the hotline.</b> Pick the contact (or add a new one), write what was said, then save — the call is marked logged.
+    </div>`
     :_parent?`<div style="margin:0 0 12px;border:1px solid rgba(74,155,232,.35);background:rgba(74,155,232,.07);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--mist)">
       <b style="color:var(--sky-lt)">Related to</b> the ${escHtml(fmt(_parent.date))} ${escHtml((_parent.channel||'').toLowerCase())} contact: ${escHtml(String(_parent.summary||'').slice(0,120))}
       ${opts.parentFollowUpOpen?`<div class="fcheck" style="margin-top:6px"><input type="checkbox" id="f-irelres" checked><label for="f-irelres">This resolves its follow-up (“${escHtml(_parent.followUpNote||'follow-up')}”)</label></div>`:''}
     </div>`:'';
-  openM(opts.hotlineMsgId?'Log hotline voicemail':_parent?'Log related contact':'Log interaction',
+  openM(opts.hotlineMsgId?'Log hotline voicemail':opts.hotlineCallId?'Log hotline call':_parent?'Log related contact':'Log interaction',
   `${_banner}<div class="fgrid fg2f">
     <div class="fr"><label>Project *</label><select id="f-ip" onchange="updateIntStakeholders();updateIntIssues();updateIntNepaStage();_fuDefaultToLead()"><option value="">— Select project —</option>${projs.map(p=>`<option value="${p.id}"${S.projectFilter===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
     <div class="fr" style="position:relative"><label>Stakeholder</label>
@@ -8076,6 +8090,8 @@ function openIntModal(preStake, opts){
   if(opts.projectId){
     const ps=document.getElementById('f-ip');
     if(ps&&[...ps.options].some(o=>String(o.value)===String(opts.projectId))){ ps.value=String(opts.projectId); updateIntStakeholders(); updateIntIssues(); }
+    // Changing the project blanks the contact (see above) — put it back.
+    if(preStake) _intSetStake(preStake);
   }
   const _setV=(id,v)=>{ const el=document.getElementById(id); if(el&&v!=null&&v!=='') el.value=v; };
   _setV('f-id',opts.date); _setV('f-ic',opts.channel); _setV('f-idr',opts.direction); _setV('f-isu',opts.summary);
@@ -8250,6 +8266,7 @@ async function saveInt(){
   }
   // Opened from the Hotline inbox: close the voicemail out against this interaction.
   if(_opts.hotlineMsgId) await _hotAfterLog(_opts, data.id, stakeId);
+  if(_opts.hotlineCallId) await _hotCallAfterLog(_opts, data.id);
   S.intOpts={};
   closeM();refreshBadges();render();
 }
@@ -8669,7 +8686,7 @@ function _hotCallbackDue(ts){
 }
 
 async function _hotReload(){
-  for(const t of ['hotlines','hotline_extensions','hotline_messages']){
+  for(const t of ['hotlines','hotline_extensions','hotline_messages','hotline_calls']){
     try{ cacheClear(t); _syncCache[t]=await sbGet(t,{strict:true}); }catch(e){ console.error('Hotline reload failed', t, e.message); }
   }
 }
@@ -8856,24 +8873,30 @@ function renderHotline(el){
   const inScope=m=>!pf||!m.projectId||String(m.projectId)===String(pf);
   const tab=S.hotTab||'pending';
   const pending=all.filter(m=>m.status==='pending'&&inScope(m));
+  const calls=(DB.get('hotline_calls')||[]).filter(inScope).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+  const toDecide=calls.filter(c=>!c.outcome&&!['cancelled','failed'].includes(c.status));
   const mine=pending.filter(_hotIsMine), unassigned=pending.filter(m=>!m.assignedTo);
   let who=S.hotWho||(mine.length?'mine':'all');
-  const shown=tab==='pending'
+  const shown=tab==='calls'?[]:tab==='pending'
     ?(who==='mine'?mine:who==='unassigned'?unassigned:pending).slice().sort((a,b)=>String(a.receivedAt).localeCompare(String(b.receivedAt)))
     :all.filter(m=>m.status!=='pending'&&inScope(m)).sort((a,b)=>String(b.closedAt||b.receivedAt).localeCompare(String(a.closedAt||a.receivedAt))).slice(0,200);
   const projs=DB.get('projects')||[];
   const chip=(k,label,n)=>`<button class="btn btn-sm${who===k?' btn-primary':''}" onclick="setHotFilter('hotWho','${k}')">${label} (${n})</button>`;
   el.innerHTML=`<div class="topbar"><div class="topbar-title">Hotline inbox</div><div class="topbar-sp"></div>
+      ${_hotActiveLines().length?`<button class="btn btn-primary btn-sm" onclick="hotNewCall()" title="Call any number from a hotline — Twilio rings your phone first">📞 New call</button>`:''}
       <select id="hot-proj" onchange="S.projectFilter=this.value||null;render()" style="max-width:260px"><option value="">All projects</option>${projs.map(p=>`<option value="${escHtml(p.id)}"${String(pf)===String(p.id)?' selected':''}>${escHtml((p.pid?p.pid+' — ':'')+p.name)}</option>`).join('')}</select>
     </div>
     <div class="content" style="display:block;overflow-y:auto"><div style="padding:18px 24px;max-width:980px">
-      <div style="font-size:12px;color:var(--fog);margin-bottom:12px">Voicemails from the project hotlines. Nothing counts as an interaction until you log it.</div>
+      <div style="font-size:12px;color:var(--fog);margin-bottom:12px">Voicemails from the project hotlines, and calls placed from them. Nothing counts as an interaction until you log it.</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
         <button class="btn btn-sm${tab==='pending'?' btn-primary':''}" onclick="setHotFilter('hotTab','pending')">Waiting (${pending.length})</button>
         <button class="btn btn-sm${tab==='closed'?' btn-primary':''}" onclick="setHotFilter('hotTab','closed')">Logged &amp; dismissed</button>
+        <button class="btn btn-sm${tab==='calls'?' btn-primary':''}" onclick="setHotFilter('hotTab','calls')">Calls placed${toDecide.length?' ('+toDecide.length+' to decide)':''}</button>
         ${tab==='pending'?`<span style="width:1px;height:20px;background:rgba(255,255,255,.15);margin:0 6px"></span>${chip('mine','Mine',mine.length)}${chip('unassigned','Unassigned',unassigned.length)}${chip('all','All',pending.length)}<span style="font-size:11px;color:var(--fog);margin-left:6px">Oldest first</span>`:''}
       </div>
-      <div id="hot-list">${shown.length?shown.map(m=>tab==='pending'?_hotCardHTML(m):_hotClosedRowHTML(m)).join('')
+      <div id="hot-list">${tab==='calls'?(calls.length?calls.slice(0,200).map(_hotCallRowHTML).join('')
+          :'<div style="font-size:13px;color:var(--fog);padding:24px 0">No calls placed from a hotline yet. Use 📞 New call.</div>')
+        :shown.length?shown.map(m=>tab==='pending'?_hotCardHTML(m):_hotClosedRowHTML(m)).join('')
         :`<div style="font-size:13px;color:var(--fog);padding:24px 0">${tab==='pending'?'Nothing waiting'+(who==='mine'?' for you':'')+'.':'No logged or dismissed voicemails yet.'}</div>`}</div>
     </div></div>`;
 }
@@ -8998,6 +9021,152 @@ async function hotCallBackGo(){
   }catch(e){ msg='The call could not be placed — the hotline service did not answer.'; }
   if(btn){ btn.disabled=false; btn.textContent='📞 Call me now'; }
   showToast(msg,'error',8000);
+}
+// ── New call from a hotline number — the dialpad (not recorded) ─────────────
+// Same bridge as Call back: Twilio rings the staff member's own phone FROM the
+// chosen hotline, they press 1, then the number is dialled — both sides see
+// only the hotline number. The receiver writes each call to pi_hotline_calls
+// first (who placed it, to which number) and caps fresh calls per person per
+// day. Nothing is logged automatically: afterwards it is "Log this call" or
+// "Don't log", and a call not decided yet waits under the Calls tab.
+const HOT_CALL_STATUS={placing:'Placing',ringing:'Ringing you',answered:'You answered',connected:'Connected',cancelled:'Cancelled — nobody was dialled',failed:'Could not be placed'};
+function _hotActiveLines(){
+  return (DB.get('hotlines')||[]).filter(h=>h.active!==false).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+}
+// The projects a call from this hotline can be for: its own, or its menu's.
+function _hotLineProjects(h){
+  if(!h) return [];
+  if(h.projectId) return [String(h.projectId)];
+  return [...new Set(_hotExts(h.id).map(e=>String(e.projectId)))];
+}
+function _hotProjPhoneContacts(projId){
+  if(!projId) return [];
+  const ids=new Set((DB.get('project_stakeholders')||[]).filter(l=>String(l.projectId)===String(projId)).map(l=>String(l.stakeholderId)));
+  return DB.getActive('stakeholders').filter(s=>ids.has(String(s.id))&&/^1?[2-9]\d{9}$/.test(String(s.phone||'').replace(/\D/g,'')))
+    .sort((a,b)=>dispName(a).localeCompare(dispName(b)));
+}
+function _hotCallsToDecide(){
+  return (DB.get('hotline_calls')||[]).filter(c=>!c.outcome&&!['cancelled','failed'].includes(c.status));
+}
+function hotNewCall(preStake){
+  const lines=_hotActiveLines();
+  if(!lines.length){ showToast('No hotline is switched on. Add one in Settings → Project hotlines.','error',6000); return; }
+  // Start on a line that serves the project in scope, if one does.
+  const pf=S.projectFilter?String(S.projectFilter):'';
+  const start=(pf&&lines.find(h=>_hotLineProjects(h).includes(pf)))||lines[0];
+  openM('New call from a hotline',`<div style="font-size:13px;color:var(--mist);line-height:1.6;margin-bottom:12px">
+      Twilio rings <b>your phone</b>, showing the hotline number. Answer and <b>press 1</b> — then it dials the number below,
+      who also sees the hotline number, never yours.</div>
+    <div class="fgrid fg2f">
+      <div class="fr"><label>Call from</label><select id="f-hnc-line" onchange="_hotNcLineChanged()">${lines.map(h=>`<option value="${escHtml(h.id)}"${h===start?' selected':''}>${escHtml(h.name)} · ${escHtml(_hotFmtPhone(h.phoneNumber))}</option>`).join('')}</select></div>
+      <div class="fr"><label>Project</label><select id="f-hnc-proj" onchange="_hotNcProjChanged()"></select></div>
+    </div>
+    <div class="fgrid fg2f">
+      <div class="fr"><label>Contact <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--fog)">(optional — fills the number)</span></label><select id="f-hnc-stake" onchange="_hotNcStakeChanged()"></select></div>
+      <div class="fr"><label>Number to call</label><input id="f-hnc-to" placeholder="(801) 555-0123" maxlength="20" oninput="_hotNcKeyed()"></div>
+    </div>
+    <div class="fr"><label>Ring me at</label><input id="f-hnc-me" value="${escHtml(_hotFmtPhone(_hotMyPhone()))}" placeholder="Your own phone" maxlength="20"></div>
+    <div style="font-size:11px;color:var(--fog);line-height:1.5">The call is <b>not recorded</b>. When you hang up you choose whether to log it as an interaction. US numbers only; 900 and 976 numbers can’t be dialled.</div>`,
+  `<button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-primary" id="hnc-go" onclick="hotNewCallGo()">📞 Call me now</button>`);
+  _hotNcLineChanged(pf, preStake);
+}
+function _hotNcLineChanged(wantProj, wantStake){
+  const h=(DB.get('hotlines')||[]).find(x=>String(x.id)===document.getElementById('f-hnc-line')?.value);
+  const sel=document.getElementById('f-hnc-proj'); if(!sel) return;
+  const ps=_hotLineProjects(h);
+  sel.innerHTML=(ps.length===1?'':'<option value="">— No project —</option>')+ps.map(id=>`<option value="${escHtml(id)}">${escHtml(_hotProjName(id)||'Project '+id)}</option>`).join('');
+  if(wantProj&&ps.includes(String(wantProj))) sel.value=String(wantProj);
+  _hotNcProjChanged(wantStake);
+}
+function _hotNcProjChanged(wantStake){
+  const sel=document.getElementById('f-hnc-stake'); if(!sel) return;
+  const cs=_hotProjPhoneContacts(document.getElementById('f-hnc-proj')?.value);
+  sel.innerHTML='<option value="">— None / not in the list —</option>'+cs.map(c=>`<option value="${escHtml(c.id)}">${escHtml(dispName(c))}${c.org&&(c.firstName||c.lastName)?' ('+escHtml(c.org)+')':''} · ${escHtml(_hotFmtPhone(c.phone))}</option>`).join('');
+  sel.disabled=!cs.length;
+  if(wantStake&&cs.some(c=>String(c.id)===String(wantStake))){ sel.value=String(wantStake); _hotNcStakeChanged(); }
+}
+function _hotNcStakeChanged(){
+  const id=document.getElementById('f-hnc-stake')?.value;
+  const c=id&&(DB.get('stakeholders')||[]).find(x=>String(x.id)===String(id));
+  if(c){ const to=document.getElementById('f-hnc-to'); if(to) to.value=_hotFmtPhone(c.phone); }
+}
+// Typing a different number drops a picked contact, so the log never names the wrong person.
+function _hotNcKeyed(){
+  const sel=document.getElementById('f-hnc-stake'); if(!sel||!sel.value) return;
+  const c=(DB.get('stakeholders')||[]).find(x=>String(x.id)===String(sel.value));
+  const typed=String(document.getElementById('f-hnc-to').value||'').replace(/\D/g,'').slice(-10);
+  if(!c||String(c.phone||'').replace(/\D/g,'').slice(-10)!==typed) sel.value='';
+}
+async function hotNewCallGo(){
+  const line=document.getElementById('f-hnc-line')?.value, proj=document.getElementById('f-hnc-proj')?.value||'';
+  const stake=document.getElementById('f-hnc-stake')?.value||'';
+  const toRaw=(document.getElementById('f-hnc-to')?.value||'').trim(), meRaw=(document.getElementById('f-hnc-me')?.value||'').trim();
+  const to=_hotNormPhone(toRaw), me=_hotNormPhone(meRaw);
+  if(!/^\+1[2-9]\d{9}$/.test(to)){ alert('Enter the 10-digit number to call.'); return; }
+  if(!/^\+1[2-9]\d{9}$/.test(me)){ alert('Enter your own 10-digit phone number.'); return; }
+  if(to===me){ alert('The number to call and your own phone must be different.'); return; }
+  try{ localStorage.setItem(HOT_RING_ME_KEY, meRaw); }catch(e){}
+  const btn=document.getElementById('hnc-go'); if(btn){ btn.disabled=true; btn.textContent='Calling…'; }
+  let msg='';
+  try{
+    const sess=getSession();
+    const r=await fetch(HOT_FN_URL+'/dial',{method:'POST',headers:{'Content-Type':'application/json',apikey:SUPA_KEY,Authorization:'Bearer '+(sess?sess.access_token:SUPA_KEY)},
+      body:JSON.stringify({hotlineId:Number(line),to,ringMe:me,projectId:proj||null,stakeholderId:stake||null,placedBy:getLoggedBy()||null})});
+    const j=await r.json().catch(()=>({}));
+    if(r.ok&&j.ok){
+      await _hotReload();
+      _hotCallPlaced(j.callId);
+      return;
+    }
+    msg=j.error||('The call could not be placed ('+r.status+').');
+  }catch(e){ msg='The call could not be placed — the hotline service did not answer.'; }
+  if(btn){ btn.disabled=false; btn.textContent='📞 Call me now'; }
+  showToast(msg,'error',8000);
+}
+// While the call is on: the choice for afterwards, right there.
+function _hotCallPlaced(callId){
+  const c=(DB.get('hotline_calls')||[]).find(x=>String(x.id)===String(callId));
+  openM('Calling…',`<div style="font-size:14px;color:var(--white);margin-bottom:8px">📞 Your phone will ring in a few seconds — answer and <b>press 1</b>.</div>
+    <div style="font-size:13px;color:var(--mist);line-height:1.6">Then it dials <b>${escHtml(_hotFmtPhone(c&&c.toNumber))}</b>. When you hang up, log the call — or don’t.
+    If you close this, the call waits under <b>Calls</b> in the Hotline view until you decide.</div>`,
+  `<button class="btn" onclick="closeM();render()">Decide later</button><button class="btn" onclick="hotCallSkip('${escHtml(callId)}')">Don’t log</button><button class="btn btn-primary" onclick="hotCallLog('${escHtml(callId)}')">Log this call</button>`);
+}
+function hotCallLog(id){
+  const c=(DB.get('hotline_calls')||[]).find(x=>String(x.id)===String(id)); if(!c){ closeM(); return; }
+  const h=(DB.get('hotlines')||[]).find(x=>String(x.id)===String(c.hotlineId));
+  const stake=c.stakeholderId&&(DB.get('stakeholders')||[]).find(x=>String(x.id)===String(c.stakeholderId));
+  closeM();
+  openIntModal(stake?String(stake.id):null,{
+    hotlineCallId:String(c.id), projectId:c.projectId||S.projectFilter||'', date:_hotLocalDate(c.createdAt),
+    channel:'Phone', direction:'Outgoing',
+    summary:'Called '+_hotFmtPhone(c.toNumber)+' from the '+(h?_hotName(h.name)+' ':'')+'hotline. ',
+    callerNumber:stake?'':c.toNumber
+  });
+}
+async function hotCallSkip(id){
+  const ok=await sbUpdate('hotline_calls',id,{outcome:'not_logged',decidedAt:new Date().toISOString(),decidedBy:getLoggedBy()||null});
+  if(!ok){ showToast('Couldn’t save that choice.','error',5000); return; }
+  await _hotReload(); closeM(); refreshBadges(); render();
+}
+// After the Log dialog saves a call: mark it logged against the interaction.
+async function _hotCallAfterLog(opts, interactionId){
+  if(!opts||!opts.hotlineCallId) return;
+  if(!interactionId||String(interactionId).startsWith('tmp_')){
+    showToast('The interaction was not saved, so the call is still waiting under Calls.','error',7000); return;
+  }
+  await sbUpdate('hotline_calls',opts.hotlineCallId,{outcome:'logged',loggedInteractionId:interactionId,decidedAt:new Date().toISOString(),decidedBy:getLoggedBy()||null});
+  await _hotReload();
+}
+function _hotCallRowHTML(c){
+  const h=(DB.get('hotlines')||[]).find(x=>String(x.id)===String(c.hotlineId));
+  const st=c.stakeholderId&&(DB.get('stakeholders')||[]).find(x=>String(x.id)===String(c.stakeholderId));
+  const decide=!c.outcome&&!['cancelled','failed'].includes(c.status);
+  const out=c.outcome==='logged'?'Logged':c.outcome==='not_logged'?'Not logged':decide?'<span style="color:var(--amber,#e8a020)">Not decided yet</span>':'';
+  return `<div class="hot-call" data-id="${escHtml(c.id)}" style="display:flex;justify-content:space-between;gap:12px;padding:10px 4px;border-bottom:1px solid rgba(255,255,255,.07);font-size:12px;color:var(--fog)">
+    <div><span style="color:var(--white)">${escHtml(_hotFmtPhone(c.toNumber))}</span>${st?' · '+escHtml(dispName(st)):''} · ${escHtml(_hotWhen(c.createdAt))}
+      <div style="margin-top:2px">From ${escHtml(h?h.name:'a hotline')}${c.projectId?' · '+escHtml(_hotProjName(c.projectId)):''} · by ${escHtml(c.placedBy||c.placedByEmail||'')} · ${escHtml(HOT_CALL_STATUS[c.status]||c.status||'')}${out?' · '+out:''}${c.decidedBy&&c.outcome?' by '+escHtml(c.decidedBy):''}</div></div>
+    <div style="display:flex;gap:6px;align-items:flex-start">${decide?`<button class="btn btn-primary btn-sm" onclick="hotCallLog('${escHtml(c.id)}')">Log this call</button><button class="btn btn-sm" onclick="hotCallSkip('${escHtml(c.id)}')">Don’t log</button>`:''}${c.outcome==='logged'&&c.loggedInteractionId?`<button class="btn btn-sm" onclick="openEditIntModal('${escHtml(c.loggedInteractionId)}')">Open interaction</button>`:''}</div>
+  </div>`;
 }
 function hotDismiss(id){
   S.hotDismissId=id;

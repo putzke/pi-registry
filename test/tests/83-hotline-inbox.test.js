@@ -13,6 +13,8 @@
 //  - Reassign saves and asks the receiver to email the new assignee.
 //  - Threads: "+ Related contact" links a new interaction to the earlier one,
 //    can resolve its follow-up, and the thread shows in the dialog.
+//  - New call (the dialpad): line + project + contact/number + my phone go to
+//    the receiver; afterwards Log this call (prefilled, Outgoing) or Don't log.
 //  - Settings: a menu hotline with extensions is saved; a removed extension is
 //    switched off, not deleted; "what callers hear" matches the receiver.
 const path = require('path');
@@ -51,6 +53,16 @@ module.exports = {
     await app.page.route('**/functions/v1/hotline/callback', async route => {
       callbacks.push(JSON.parse(route.request().postData() || '{}'));
       await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true,"sid":"CAx"}' });
+    });
+    const dials = [];
+    await app.page.route('**/functions/v1/hotline/dial', async route => {
+      const body = JSON.parse(route.request().postData() || '{}');
+      dials.push(body);
+      // What the receiver does: write the call row first, then ring.
+      const [c] = await t.sql(`insert into pi_hotline_calls (hotline_id, project_id, stakeholder_id, to_number, ring_number, placed_by, placed_by_email, status)
+                               values ($1,$2,$3,$4,$5,$6,'putzke@demo.test','ringing') returning id`,
+        [body.hotlineId, body.projectId, body.stakeholderId, body.to, body.ringMe, body.placedBy]);
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, callId: c.id }) });
     });
     try {
       await app.ready();
@@ -193,6 +205,55 @@ module.exports = {
       await app.page.waitForFunction(() => !S.hotCallId);
       t.ok(callbacks.length === 1 && String(callbacks[0].messageId) === m4 && callbacks[0].ringMe === '+18015550177', 'Call me now asks the receiver to ring my phone for that voicemail');
       t.eq(await app.page.evaluate(() => localStorage.getItem('cc_callback_phone')), '(801) 555-0177', 'my number is remembered for next time');
+
+      // ── New call — the dialpad ──────────────────────────────────────────
+      await app.page.evaluate(A => { S.projectFilter = A; S.hotTab = 'pending'; setView('hotline'); }, A);
+      t.ok(await app.page.evaluate(() => !!document.querySelector('.topbar button[onclick^="hotNewCall"]')), 'the Hotline view has a New call button');
+      await app.page.evaluate(() => hotNewCall());
+      const nc = await app.page.evaluate(() => ({
+        line: document.getElementById('f-hnc-line').value, proj: document.getElementById('f-hnc-proj').value,
+        projOpts: [...document.getElementById('f-hnc-proj').options].map(o => o.value),
+        stakes: [...document.getElementById('f-hnc-stake').options].map(o => o.value), me: document.getElementById('f-hnc-me').value }));
+      t.ok(nc.line === String(h.id) && nc.proj === A && nc.projOpts.includes(B) && !nc.projOpts.some(v => v && v !== A && v !== B),
+        'it opens on the hotline serving the project in scope, offering only that hotline’s projects');
+      t.ok(nc.stakes.includes(String(st.id)) && nc.me === '(801) 555-0177', 'the project’s contacts with a phone are offered; Ring me at is prefilled');
+      await app.page.evaluate(id => { const s = document.getElementById('f-hnc-stake'); s.value = id; s.onchange(); }, String(st.id));
+      t.eq(await app.page.evaluate(() => document.getElementById('f-hnc-to').value), '(801) 555-0142', 'picking a contact fills the number');
+      await app.page.evaluate(() => { const i = document.getElementById('f-hnc-to'); i.value = '(801) 555-0199'; i.oninput(); });
+      t.eq(await app.page.evaluate(() => document.getElementById('f-hnc-stake').value), '', 'typing another number drops the contact, so the log can’t name the wrong person');
+      await app.page.evaluate(id => { const s = document.getElementById('f-hnc-stake'); s.value = id; s.onchange(); }, String(st.id));
+      await app.page.evaluate(() => hotNewCallGo());
+      await app.page.waitForFunction(() => /Log this call/.test(document.body.textContent) && /press 1/.test(document.body.textContent));
+      t.ok(dials.length === 1 && dials[0].to === '+18015550142' && dials[0].ringMe === '+18015550177' && String(dials[0].hotlineId) === String(h.id)
+        && dials[0].projectId === A && String(dials[0].stakeholderId) === String(st.id) && dials[0].placedBy === 'PUT',
+        'Call me now asks the receiver to place the call: line, number, my phone, project, contact');
+      const [call1] = await t.sql(`select id from pi_hotline_calls order by id desc limit 1`);
+      await app.page.evaluate(() => refreshBadges());
+      const badgeWithCall = await app.page.evaluate(() => Number(document.getElementById('nb-hot').textContent));
+      // Log it: the ordinary dialog, prefilled.
+      await app.page.evaluate(id => hotCallLog(String(id)), call1.id);
+      const lf = await app.page.evaluate(() => ({ p: document.getElementById('f-ip').value, s: document.getElementById('f-is').value,
+        c: document.getElementById('f-ic').value, d: document.getElementById('f-idr').value, su: document.getElementById('f-isu').value,
+        title: document.getElementById('modal-ov').textContent }));
+      t.ok(/Log hotline call/.test(lf.title) && lf.p === A && lf.s === String(st.id) && lf.c === 'Phone' && lf.d === 'Outgoing' && /Called \(801\) 555-0142 from the Region One hotline/.test(lf.su),
+        'Log this call opens the dialog prefilled: project, contact, Phone, Outgoing');
+      await app.page.evaluate(() => { document.getElementById('f-isu').value += 'Explained the weekend closure.'; return saveInt(); });
+      const c1 = await t.until(async () => (await t.sql(`select outcome, logged_interaction_id, decided_by from pi_hotline_calls where id=$1 and outcome is not null`, [call1.id]))[0]) || {};
+      const [li] = c1.logged_interaction_id ? await t.sql(`select direction, summary from pi_interactions where id=$1`, [c1.logged_interaction_id]) : [{}];
+      t.ok(c1.outcome === 'logged' && li.direction === 'Outgoing' && /weekend closure/.test(li.summary) && c1.decided_by === 'PUT', 'saving marks the call logged against the new interaction');
+      t.eq(await app.page.evaluate(() => Number(document.getElementById('nb-hot').textContent)), badgeWithCall - 1, 'a call waiting on my decision counts on the badge until it is decided');
+      // A second call, not logged.
+      await app.page.evaluate(() => hotNewCall());
+      await app.page.evaluate(() => { document.getElementById('f-hnc-to').value = '435-555-0188'; return hotNewCallGo(); });
+      await app.page.waitForFunction(() => /Don’t log/.test(document.body.textContent));
+      const [call2] = await t.sql(`select id from pi_hotline_calls order by id desc limit 1`);
+      const ints2 = (await t.sql(`select count(*)::int n from pi_interactions`))[0].n;
+      await app.page.evaluate(id => hotCallSkip(String(id)), call2.id);
+      t.eq((await t.sql(`select outcome from pi_hotline_calls where id=$1`, [call2.id]))[0].outcome, 'not_logged', 'Don’t log records the choice');
+      t.eq((await t.sql(`select count(*)::int n from pi_interactions`))[0].n, ints2, '…and creates no interaction');
+      await app.page.evaluate(() => setHotFilter('hotTab', 'calls'));
+      const rows = await app.page.evaluate(() => [...document.querySelectorAll('.hot-call')].map(r => r.textContent));
+      t.ok(rows.length === 2 && /Not logged/.test(rows[0]) && /Logged/.test(rows[1]) && /by PUT/.test(rows[1]), 'the Calls tab lists each call, who placed it and what was decided');
       t.eq(app.errors, [], 'no page errors');
     } finally { await app.close(); }
   },

@@ -93,6 +93,29 @@ create unique index if not exists pi_hotline_messages_call_uniq
   on pi_hotline_messages (call_sid);
 create index if not exists pi_hotline_messages_status_idx on pi_hotline_messages (status);
 
+-- Calls placed FROM a hotline number with the dialpad (not recorded). Written
+-- by the receiver (service role) before Twilio is asked; staff read them and
+-- record afterwards whether the call was logged. Staff cannot insert or delete:
+-- every row is a call that was really placed, by whom, to which number.
+create table if not exists pi_hotline_calls (
+  id                    bigint generated always as identity primary key,
+  hotline_id            bigint references pi_hotlines(id) on delete set null,
+  project_id            text,
+  stakeholder_id        text,
+  to_number             text not null,
+  ring_number           text,                     -- the staff phone rung first
+  placed_by             text,                     -- initials
+  placed_by_email       text not null,
+  call_sid              text,
+  status                text not null default 'placing', -- placing | ringing | answered | connected | cancelled | failed
+  outcome               text,                     -- null = not decided | logged | not_logged
+  logged_interaction_id bigint references pi_interactions(id) on delete set null,
+  decided_at            timestamptz,
+  decided_by            text,
+  created_at            timestamptz not null default now()
+);
+create index if not exists pi_hotline_calls_by_email on pi_hotline_calls (placed_by_email, created_at);
+
 alter table pi_interactions add column if not exists related_to bigint
   references pi_interactions(id) on delete set null;
 
@@ -100,7 +123,7 @@ alter table pi_interactions add column if not exists related_to bigint
 do $$
 declare t text;
 begin
-  foreach t in array array['pi_hotlines','pi_hotline_extensions','pi_hotline_messages'] loop
+  foreach t in array array['pi_hotlines','pi_hotline_extensions','pi_hotline_messages','pi_hotline_calls'] loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists %I on public.%I', t || '_staff_all', t);
     execute format($p$create policy %I on public.%I for all to authenticated
@@ -117,12 +140,14 @@ begin
   end loop;
 end $$;
 grant usage, select on all sequences in schema public to authenticated;
+-- Calls are placed only through the receiver: staff read and mark them.
+revoke insert, delete on public.pi_hotline_calls from authenticated;
 -- The hotline receiver (an Edge Function) runs as service_role: it reads the
 -- hotline tables, the project's lead and the team list. Live and dev rebuilt
 -- from live carry no service_role grant on pi_team_members / pi_staff.
 do $$ begin
   if exists (select 1 from pg_roles where rolname = 'service_role') then
-    grant select, insert, update on public.pi_hotlines, public.pi_hotline_extensions, public.pi_hotline_messages to service_role;
+    grant select, insert, update on public.pi_hotlines, public.pi_hotline_extensions, public.pi_hotline_messages, public.pi_hotline_calls to service_role;
     grant select on public.pi_projects, public.pi_team_members, public.pi_staff to service_role;
   end if;
 end $$;
@@ -141,7 +166,7 @@ create policy hotline_audio_staff_all on storage.objects
 -- ── Verify (run after) ───────────────────────────────────────────────────────
 --   select tablename, policyname, permissive from pg_policies
 --    where tablename like 'pi_hotline%' order by 1, 2;
--- Expect *_staff_all (PERMISSIVE) and pi_staff_or_client (RESTRICTIVE) on all three.
+-- Expect *_staff_all (PERMISSIVE) and pi_staff_or_client (RESTRICTIVE) on all four.
 --   select has_table_privilege('anon', 'pi_hotline_messages', 'SELECT');   -- false
 --   select column_name from information_schema.columns
 --    where table_name = 'pi_interactions' and column_name = 'related_to';  -- one row

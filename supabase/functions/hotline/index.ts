@@ -2,8 +2,8 @@
 // All the logic is in logic.mjs (shared with the test harness, which runs it
 // under Node). Deployed with JWT verification OFF — Twilio cannot send a
 // Supabase token — and every Twilio request is checked against Twilio's own
-// signature instead. The one app-facing route (/notify) checks the caller's
-// Supabase session itself.
+// signature instead. The app-facing routes (/notify, /callback, /dial) check
+// the caller's Supabase session and the staff list themselves.
 //
 // Secrets (Supabase → Edge Functions → Secrets), per project:
 //   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN   required before any call is accepted

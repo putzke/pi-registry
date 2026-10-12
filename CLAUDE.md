@@ -3114,6 +3114,25 @@ a Twilio trial + one number on DEV for a real call, then release.
   refused); no `<Record>` anywhere. Unsigned bridge legs are confirmed as an
   `outbound-api` call FROM a hotline number. Nothing is logged — staff log it
   themselves (+ Related contact). Not on mobile yet.
+- **New call — the dialpad: release 1 BUILT on DEV (2026-10-12), NOT recorded.**
+  **📞 New call** in the Hotline topbar → `hotNewCall` (Call from = active
+  hotline · Project = that hotline's own or its menu's · Contact with a phone,
+  optional, fills the number; typing another number drops it · Ring me at) →
+  POST `/dial` (staff session + `pi_staff`). The receiver WRITES
+  `pi_hotline_calls` first (who, email, to which number, project, contact),
+  then rings the staff phone; `/bridge?c=<id>` reads the number from that row
+  (never from the request) and only within `DIAL_BRIDGE_MINUTES` (10), and
+  marks answered / connected / cancelled. `DIAL_DAILY_LIMIT` = 30 fresh calls
+  per person per 24 h (429). Staff can read and update call rows but never
+  insert or delete them. Afterwards: **Log this call** (`hotCallLog` → the
+  ordinary dialog prefilled: project, contact, Phone, Outgoing; save marks
+  `outcome='logged'` + `logged_interaction_id`) or **Don’t log**
+  (`outcome='not_logged'`); undecided calls wait under the **Calls placed**
+  tab and count on my badge. Release 2 (ON HOLD): a "Record this call" box
+  chosen BEFORE dialling, with an announcement — see the recorded call-back
+  note below; decide announcement wording, retention and AI summaries first.
+  Also fixed: `openIntModal(preStake, {projectId})` blanked the preselected
+  contact when it set the project.
 - **Fallback assignee (2026-10-12):** `pi_hotlines.default_assignee`
   (initials; "If the project has no PI Lead…" in the hotline dialog). The
   receiver assigns the project's active lead, else this person (also for the
@@ -3136,8 +3155,8 @@ a Twilio trial + one number on DEV for a real call, then release.
 - Not on mobile or in the portal (hotline data is staff-only). The nightly
   off-site backup reads `report-files` only — decide whether `hotline-audio`
   should be added (`backup.sh` in cirruscc-backups).
-- Guarded by `test/tests/82-hotline-receiver.test.js` (43 checks; fails if the
-  signature check is bypassed) and `test/tests/83-hotline-inbox.test.js`.
+- Guarded by `test/tests/82-hotline-receiver.test.js` (93 checks; fails if the
+  signature check is bypassed) and `test/tests/83-hotline-inbox.test.js` (58).
 - **Connector note:** on DEV, `execute_sql` / `apply_migration` time out on
   statements the connector treats as destructive (`drop …`) and on large
   multi-statement scripts — apply in small pieces. The DEV hotline tables were

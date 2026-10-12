@@ -273,5 +273,55 @@ module.exports = {
     t.eq((await call('/bridge?m=' + cm.id, { ...leg, CallSid: legSid }, { signed: false })).status, 200, 'unsigned bridge leg: accepted once Twilio confirms our outbound call');
     twilioApi[`Calls/${legSid}.json`].direction = 'inbound';
     t.eq((await call('/bridge?m=' + cm.id, { ...leg, CallSid: legSid }, { signed: false })).status, 403, 'unsigned bridge leg: an inbound call cannot pose as one');
+
+    // ── the dialpad: a fresh call from a hotline number (not recorded) ─────
+    const dial = async (auth, body) => {
+      const res = await handler(new Request('http://localhost:9000/hotline/dial', { method: 'POST',
+        headers: { Authorization: auth, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }));
+      return { status: res.status, body: await res.json() };
+    };
+    const callsBefore = log.calls.length;
+    const d0 = { hotlineId: h1.id, to: '(435) 555-0142', ringMe: '801-555-0177', projectId: String(pA.id), placedBy: 'jp' };
+    t.eq((await dial('', d0)).status, 401, 'dial: refused without a sign-in');
+    t.eq((await dial('Bearer stranger-token', d0)).status, 403, 'dial: refused for a non-staff sign-in');
+    t.eq((await dial('Bearer staff-token', { ...d0, to: '9765550100' })).status, 400, 'dial: a 976 number is refused');
+    t.eq((await dial('Bearer staff-token', { ...d0, to: '+442071234567' })).status, 400, 'dial: a non-US number is refused');
+    t.eq((await dial('Bearer staff-token', { ...d0, to: '8015550177' })).status, 400, 'dial: the number to call cannot be your own phone');
+    t.eq((await dial('Bearer staff-token', { ...d0, to: '8015550101' })).status, 400, 'dial: the number to call cannot be the hotline itself');
+    t.eq(log.calls.length, callsBefore, '…none of those reached Twilio');
+    t.eq((await t.sql(`select count(*)::int n from pi_hotline_calls`))[0].n, 0, '…and none was written as a call');
+    let d = await dial('Bearer staff-token', d0);
+    const [row] = await t.sql(`select * from pi_hotline_calls where id=$1`, [d.body.callId]);
+    const dPlaced = log.calls[log.calls.length - 1] || {};
+    t.ok(d.status === 200 && row && row.to_number === '+14355550142' && row.placed_by_email === 'staff@sunrise.example'
+      && row.placed_by === 'JP' && row.project_id === String(pA.id) && row.status === 'ringing' && row.call_sid,
+      'dial: the call is written first — who placed it, to which number, for which project');
+    t.ok(dPlaced.To === '+18015550177' && dPlaced.From === '+18015550101' && dPlaced.Url === base + '/bridge?c=' + row.id
+      && !/4355550142/.test(JSON.stringify(dPlaced)), 'dial: Twilio rings the staff phone from the hotline; the number to call is not in the request');
+    d = await dial('Bearer staff-token', { ...d0, projectId: String(pC.id) });
+    t.eq((await t.sql(`select project_id from pi_hotline_calls where id=$1`, [d.body.callId]))[0].project_id, null, 'dial: a project that is not on this hotline’s menu is not recorded against it');
+    d = await dial('Bearer staff-token', { ...d0, hotlineId: h2.id, projectId: String(pA.id) });
+    t.eq((await t.sql(`select project_id from pi_hotline_calls where id=$1`, [d.body.callId]))[0].project_id, String(pC.id), 'dial: a one-project hotline always records its own project');
+    // The staff leg.
+    const dleg = { CallSid: 'CA' + '2'.repeat(32), AccountSid: ACCT, From: '+18015550101', To: '+18015550177' };
+    r = await call('/bridge?c=' + row.id, dleg);
+    t.ok(/This is your call from the UDOT Region One hotline\. Press 1 to call 4 3 5, 5 5 5, 0 1 4 2/.test(r.body) && !/<Dial/.test(r.body), 'dial bridge: asks the staff member to press 1 — nobody is dialled yet');
+    t.eq((await t.sql(`select status from pi_hotline_calls where id=$1`, [row.id]))[0].status, 'answered', 'dial bridge: marked answered');
+    r = await call('/connect?c=' + row.id, { ...dleg, Digits: '1' });
+    t.ok(/<Dial callerId="\+18015550101"[^>]*><Number>\+14355550142<\/Number><\/Dial>/.test(r.body) && !/<Record/.test(r.body), 'dial press 1: the number is dialled from the hotline, not recorded');
+    t.eq((await t.sql(`select status from pi_hotline_calls where id=$1`, [row.id]))[0].status, 'connected', 'dial: marked connected');
+    await t.sql(`update pi_hotline_calls set created_at = now() - interval '20 minutes' where id=$1`, [row.id]);
+    r = await call('/connect?c=' + row.id, { ...dleg, Digits: '1' });
+    t.ok(!/<Dial/.test(r.body) && /no longer available/.test(r.body), 'dial: an old call cannot be re-dialled through its bridge');
+    // The daily cap.
+    await t.sql(`insert into pi_hotline_calls (hotline_id, to_number, placed_by_email, status) select $1, '+14355550142', 'staff@sunrise.example', 'connected' from generate_series(1, ${L.DIAL_DAILY_LIMIT})`, [h1.id]);
+    const capBefore = log.calls.length;
+    d = await dial('Bearer staff-token', d0);
+    t.ok(d.status === 429 && log.calls.length === capBefore, 'dial: over the daily limit, refused before Twilio is asked');
+    // Staff read calls but cannot invent one.
+    t.ok(/revoke insert, delete on public\.pi_hotline_calls from authenticated/.test(require('fs').readFileSync(path.join(__dirname, '..', '..', 'sql', '2026-10-12_hotlines.sql'), 'utf8')),
+      'staff cannot insert or delete call rows — only the receiver writes them');
+    const [g] = await t.sql(`select has_table_privilege('authenticated','pi_hotline_calls','INSERT') ins, has_table_privilege('authenticated','pi_hotline_calls','UPDATE') upd, has_table_privilege('anon','pi_hotline_calls','SELECT') anon`);
+    t.ok(!g.ins && g.upd && !g.anon, 'grants: staff update only; anon nothing');
   },
 };

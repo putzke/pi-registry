@@ -2013,7 +2013,7 @@ shipped. Grep the actual functions before planning work off this list.
    `p=quarantine` ~2026-11-01; an automatic invite email on grant (needs an
    Edge Function) is a candidate, not started.
 
-**Next:** Twilio project hotlines — BUILT on DEV, waiting on a Twilio trial number for a real call, then release ·
+**Next:** Twilio project hotlines — working end to end on DEV (2026-10-12); NOT for live until Jeff has tested it on DEV for a good while · outbound recorded call-back (planned) ·
 Survey123 ingestion (blocked on a sample export) · ROW close-out TYPE.
 
 **Later:** county assessor owner lookup (Phase 3) · Google Sheets push ·
@@ -3000,7 +3000,7 @@ prove it to FHWA". ESRI is the instrument; Cirrus Cc is the system of record.
 
 **Build order:** CSV ingestion → geometry + map layer → portal section → API pull.
 
-## Project hotlines (Twilio) — BUILT on DEV (Oct 2026), not released; no Twilio account yet
+## Project hotlines (Twilio) — WORKING on DEV (Oct 2026), not released
 Design agreed with Jeff 2026-10-11 (the decisions are listed at the end). Built
 and tested end to end WITHOUT a Twilio account: the receiver is exercised in
 the harness with requests signed exactly as Twilio signs them. What remains:
@@ -3085,7 +3085,36 @@ a Twilio trial + one number on DEV for a real call, then release.
   with Twilio; (3) decide whether `hotline-audio` joins the nightly backup;
   (4) paste `sql/2026-10-12_hotlines.sql` on LIVE, set the LIVE secrets and
   point the real number(s) at the LIVE function; (5) add Twilio to "Outside
-  services" and the Service Map.
+  services" and the Service Map; (6) **not before a long stretch of DEV
+  testing — Jeff, 2026-10-12: "we will want to test everything frequently in
+  dev first"**; (7) a **Sunrise-owned Twilio account with a Business
+  compliance profile** for the real numbers (the DEV test number,
+  (801) 683-1089, is on Jeff's personal account, Individual profile); (8) the
+  outgoing-call registrations (SHAKEN/STIR, Voice Integrity, CNAM) on that
+  account once the call-back below exists — skipped on DEV because the
+  number only receives.
+- **First real test, 2026-10-11/12 on DEV:** voicemail → transcript → inbox →
+  Log as interaction → thread all worked. Bugs found and fixed: the trial
+  number posts unsigned webhooks (see above); service_role had no read on
+  `pi_team_members`/`pi_staff` on DEV (now granted in the migration, and a
+  failed assignee lookup leaves the message unassigned instead of losing it);
+  the page CSP had no `media-src`, so the player loaded nothing (now both
+  Supabase projects). A trial account refuses `<Record>`; the account was
+  upgraded. Twilio's built-in transcript is rough on names — staff listen
+  before logging.
+- **PLANNED, not built — recorded call-back ("call me, then connect them"):**
+  staff press Call back; Twilio rings the staff member's own phone, then dials
+  the caller from the hotline number; the call is recorded (with a recording
+  announcement) and lands in the Hotline inbox for REVIEW, then Log as
+  interaction like a voicemail — never logged automatically. Twilio's `<Record
+  transcribe>` stops at 2 minutes, so long calls need a different
+  transcription (Twilio's Voice Intelligence, or another speech-to-text
+  service) — choose before building. Open with Jeff: the announcement wording,
+  retention of call recordings (GRAMA may apply; voicemails use 90 days), and
+  whether an AI-drafted summary may prefill the Log form for review. Audio
+  size: our voicemail was ~4 KB/s (~14 MB per hour) — storage is not a
+  constraint, but the receiver copies audio through memory, so stream it
+  rather than buffer it before supporting hour-long calls.
 - Not on mobile or in the portal (hotline data is staff-only). The nightly
   off-site backup reads `report-files` only — decide whether `hotline-audio`
   should be added (`backup.sh` in cirruscc-backups).

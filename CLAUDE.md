@@ -4134,13 +4134,16 @@ Crawl-specific rules learned the hard way:
 | Cloudflare Pages | dev.cirruscc.com (`cirruscc-dev`) | dev only |
 | Wix | registrar + DNS for cirruscc.com | every cirruscc.com address |
 | Resend | client sign-in email (SMTP for Supabase LIVE) | client OTP links |
-| ImprovMX | support@cirruscc.com → Jeff's work inbox | support mail |
+| ImprovMX | support@ and info@cirruscc.com → Jeff's work inbox (info@ alias added by Jeff in ImprovMX, 2026-10-12) | support/info mail |
+| Twilio | project hotlines (DEV only so far): numbers, voicemail + transcript, call-back, dialpad. Test number on Jeff's personal account; live needs a Sunrise-owned account | hotlines (dev only today) |
 | Google Cloud | Maps/Places key (map, autocomplete, geocode) | map features |
 | Anthropic | Claude API, per-user key in Settings | AI drafting |
 No account: Microsoft Authenticator (staff phones), UGRC ArcGIS parcels,
 jsDelivr / cdnjs / Google Fonts. Secrets only Jeff holds: backup passphrase,
-DB passwords (live ≠ dev), Resend key (in Supabase SMTP), account logins.
-Add a row whenever a new service is introduced (Twilio next).
+DB passwords (live ≠ dev), Resend key (in Supabase SMTP), Twilio Auth Token
+(in the hotline function's secrets), account logins.
+Add a row whenever a new service is introduced — and to the Service Map
+artifact (claude.ai/artifact/75xfp4KspXPBCKiSwipf5P).
 
 ## Backups (Oct 2026)
 - **Supabase Pro** (upgraded 2026-10-10): daily backups kept 7 days, restored

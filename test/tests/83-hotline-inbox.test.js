@@ -25,7 +25,7 @@ module.exports = {
     const L = await import(pathToFileURL(path.join(__dirname, '..', '..', 'supabase', 'functions', 'hotline', 'logic.mjs')).href);
     const [A, B] = (await t.sql(`select id from pi_projects where status='Active' order by id limit 2`)).map(r => String(r.id));
     await t.sql(`update pi_projects set lead='PUT' where id=$1`, [A]);
-    await t.sql(`insert into pi_team_members (name, initials, email, active) values ('Jeff P','PUT','putzke@demo.test',true),('Sam H','SHA','sha@demo.test',true)`);
+    await t.sql(`insert into pi_team_members (name, initials, email, phone, active) values ('Jeff P','PUT','putzke@demo.test','801-555-0177',true),('Sam H','SHA','sha@demo.test',null,true)`);
     // A contact on project A whose phone matches the first caller.
     const [st] = await t.sql(`select s.id from pi_stakeholders s join pi_project_stakeholders l on l.stakeholder_id = s.id::text
                                where l.project_id=$1 and coalesce(s.is_archived,false)=false order by s.id limit 1`, [A]);
@@ -46,6 +46,11 @@ module.exports = {
     await app.page.route('**/functions/v1/hotline/notify', async route => {
       notified.push({ auth: route.request().headers()['authorization'], body: JSON.parse(route.request().postData() || '{}') });
       await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true,"sent":true}' });
+    });
+    const callbacks = [];
+    await app.page.route('**/functions/v1/hotline/callback', async route => {
+      callbacks.push(JSON.parse(route.request().postData() || '{}'));
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true,"sid":"CAx"}' });
     });
     try {
       await app.ready();
@@ -153,7 +158,8 @@ module.exports = {
         const rows = document.querySelectorAll('#f-hl-exts .hot-ext-row');
         rows[0].querySelector('.hx-proj').value = A; rows[0].querySelector('.hx-label').value = 'the first project';
         rows[1].querySelector('.hx-proj').value = B; rows[1].querySelector('.hx-label').value = 'the second project';
-        document.getElementById('f-hl-es').checked = false; _hotPreview();
+        document.getElementById('f-hl-es').checked = false;
+        document.getElementById('f-hl-assignee').value = 'SHA'; _hotPreview();
       }, { A, B });
       const preview = await app.page.evaluate(() => document.getElementById('f-hl-preview').textContent);
       const want = L.menuText({ spanish_enabled: false }, [{ digit: '1', label: 'the first project' }, { digit: '2', label: 'the second project' }], 'en');
@@ -161,6 +167,9 @@ module.exports = {
       await app.page.evaluate(() => saveHotline());
       const [wh] = await t.sql(`select * from pi_hotlines where name='Weber County'`);
       t.ok(wh && wh.phone_number === '+18015550199' && wh.spanish_enabled === false && !wh.project_id, 'the hotline is saved, number in E.164');
+      t.eq(wh.default_assignee, 'SHA', 'the fallback person (no PI Lead / general mailbox) is saved');
+      const greet = await app.page.evaluate(() => _hotGreeting({ name: 'Test Hotline' }, 'en'));
+      t.ok(/the Test hotline\./.test(greet) && greet === L.greetingParts({ name: 'Test Hotline' }, 'en').replace(/<[^>]+>/g, ''), 'the greeting preview matches the receiver and never says “Hotline hotline”');
       t.eq((await t.sql(`select digit from pi_hotline_extensions where hotline_id=$1 and active order by digit`, [wh.id])).map(r => r.digit), ['1', '2'], 'two extensions');
       await app.page.evaluate(id => { openHotlineModal(id); document.querySelectorAll('#f-hl-exts .hot-ext-row')[1].remove(); }, String(wh.id));
       await app.page.evaluate(() => saveHotline());
@@ -174,6 +183,16 @@ module.exports = {
       const csp = require('fs').readFileSync(require('path').join(__dirname, '..', '..', 'index.html'), 'utf8').match(/Content-Security-Policy" content="([^"]*)"/)[1];
       const media = (csp.match(/media-src([^;]*)/) || [, ''])[1];
       t.ok(/ncfbblhlsiglxkoiounv\.supabase\.co/.test(media) && /oxbonrnilvadszgfctfl\.supabase\.co/.test(media), 'the CSP lets the recording player load audio from both Supabase projects');
+      // ── Call back from the hotline number ───────────────────────────────
+      await app.page.evaluate(() => { S.hotTab = 'pending'; S.hotWho = 'all'; S.projectFilter = null; setView('hotline'); });
+      t.ok(await app.page.evaluate(id => !!document.querySelector(`.hot-card[data-id="${id}"] button[onclick^="hotCallBack"]`), m4), 'a waiting voicemail has a Call back button');
+      await app.page.evaluate(id => hotCallBack(id), m4);
+      t.eq(await app.page.evaluate(() => document.getElementById('f-hcb-phone').value), '(801) 555-0177', '“Ring me at” is prefilled from my PI team entry');
+      t.ok(await app.page.evaluate(() => /not recorded/.test(document.getElementById('modal-body')?.textContent || document.body.textContent)), 'the dialog says the call is not recorded');
+      await app.page.evaluate(() => hotCallBackGo());
+      await app.page.waitForFunction(() => !S.hotCallId);
+      t.ok(callbacks.length === 1 && String(callbacks[0].messageId) === m4 && callbacks[0].ringMe === '+18015550177', 'Call me now asks the receiver to ring my phone for that voicemail');
+      t.eq(await app.page.evaluate(() => localStorage.getItem('cc_callback_phone')), '(801) 555-0177', 'my number is remembered for next time');
       t.eq(app.errors, [], 'no page errors');
     } finally { await app.close(); }
   },

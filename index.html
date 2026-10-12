@@ -1213,7 +1213,8 @@ const SB_TO_INT = {
     id:'id', name:'name', phoneNumber:'phone_number', projectId:'project_id',
     greetingMode:'greeting_mode', greetingText:'greeting_text', greetingAudioPath:'greeting_audio_path',
     spanishEnabled:'spanish_enabled', spanishGreetingText:'spanish_greeting_text',
-    spanishGreetingAudioPath:'spanish_greeting_audio_path', active:'active', updatedBy:'updated_by'
+    spanishGreetingAudioPath:'spanish_greeting_audio_path', active:'active',
+    defaultAssignee:'default_assignee', updatedBy:'updated_by'
   },
   pi_hotline_extensions: {
     id:'id', hotlineId:'hotline_id', digit:'digit', projectId:'project_id',
@@ -8626,9 +8627,11 @@ function _hotMenuText(h, exts, lang){
   if(!es&&h.spanishEnabled) lines.push('Para español, oprima 9.');
   return lines.join(' ');
 }
+// "Test Hotline" is read as "the Test hotline" — same rule as the receiver's hotName().
+function _hotName(name){ const n=String(name||'').trim(); return n.replace(/\s+hotline$/i,'').trim()||n; }
 function _hotGreeting(h, lang){
-  if(lang==='es') return h.spanishGreetingText||('Gracias por llamar a la línea de información del proyecto '+h.name+'.');
-  return h.greetingText||('Thank you for calling the '+h.name+' hotline.');
+  if(lang==='es') return h.spanishGreetingText||('Gracias por llamar a la línea de información del proyecto '+_hotName(h.name)+'.');
+  return h.greetingText||('Thank you for calling the '+_hotName(h.name)+' hotline.');
 }
 function _hotProjName(id){
   const p=(DB.get('projects')||[]).find(x=>String(x.id)===String(id));
@@ -8730,15 +8733,17 @@ function openHotlineModal(id){
     <div id="f-hl-exts">${ex.map(_hotExtRowHTML).join('')}</div>
     <button class="btn btn-sm" onclick="_hotAddExt()">+ Add extension</button>
   </div>
+  <div class="fr"><label>If the project has no PI Lead <span style="${lbl}">(and for the general mailbox), voicemails go to</span></label>
+    <select id="f-hl-assignee"><option value="">— Nobody: leave them unassigned —</option>${_team(true).map(t=>`<option value="${escHtml(t.initials)}"${String(t.initials).toUpperCase()===String(h.defaultAssignee||'').toUpperCase()?' selected':''}>${escHtml(t.name)} (${escHtml(t.initials)})</option>`).join('')}</select></div>
   <div class="fsec">Greeting</div>
   <div class="fr"><label>Voice</label><select id="f-hl-gmode" onchange="_hotPreview()">
     <option value="voice"${h.greetingMode!=='recording'?' selected':''}>Computer voice reads the greeting below</option>
     <option value="recording"${h.greetingMode==='recording'?' selected':''}>Play a recording I upload</option></select></div>
-  <div class="fr"><label>Greeting <span style="${lbl}">(the menu is added after it automatically)</span></label><textarea id="f-hl-gtext" rows="2" placeholder="${escHtml('Thank you for calling the '+(h.name||'…')+' hotline.')}" oninput="_hotPreview()">${escHtml(h.greetingText||'')}</textarea></div>
+  <div class="fr"><label>Greeting <span style="${lbl}">(the menu is added after it automatically)</span></label><textarea id="f-hl-gtext" rows="2" placeholder="${escHtml('Thank you for calling the '+(_hotName(h.name)||'…')+' hotline.')}" oninput="_hotPreview()">${escHtml(h.greetingText||'')}</textarea></div>
   <div class="fr"><label>Recording <span style="${lbl}">(MP3 or WAV)${h.greetingAudioPath?' — one is uploaded':''}</span></label><input type="file" id="f-hl-gfile" accept="audio/mpeg,audio/mp3,audio/wav,audio/x-wav"></div>
   <div class="fr"><div class="fcheck"><input type="checkbox" id="f-hl-es"${h.spanishEnabled?' checked':''} onchange="_hotPreview();document.getElementById('f-hl-es-wrap').style.display=this.checked?'':'none'"><label for="f-hl-es">Offer Spanish — “Para español, oprima 9.” Spanish voicemails are flagged LEP.</label></div></div>
   <div id="f-hl-es-wrap" style="${h.spanishEnabled?'':'display:none'}">
-    <div class="fr"><label>Spanish greeting</label><textarea id="f-hl-gtext-es" rows="2" placeholder="${escHtml('Gracias por llamar a la línea de información del proyecto '+(h.name||'…')+'.')}" oninput="_hotPreview()">${escHtml(h.spanishGreetingText||'')}</textarea></div>
+    <div class="fr"><label>Spanish greeting</label><textarea id="f-hl-gtext-es" rows="2" placeholder="${escHtml('Gracias por llamar a la línea de información del proyecto '+(_hotName(h.name)||'…')+'.')}" oninput="_hotPreview()">${escHtml(h.spanishGreetingText||'')}</textarea></div>
     <div class="fr"><label>Spanish recording <span style="${lbl}">(optional)${h.spanishGreetingAudioPath?' — one is uploaded':''}</span></label><input type="file" id="f-hl-gfile-es" accept="audio/mpeg,audio/mp3,audio/wav,audio/x-wav"></div>
   </div>
   <div class="fr"><label>Status</label><select id="f-hl-active"><option value="1"${h.active!==false?' selected':''}>Active</option><option value="0"${h.active===false?' selected':''}>Off — callers hear “not in service”</option></select></div>
@@ -8803,7 +8808,7 @@ async function saveHotline(){
   const rec={name:v('f-hl-name'), phoneNumber:num, projectId:menu?'':v('f-hl-proj'),
     greetingMode:v('f-hl-gmode')||'voice', greetingText:v('f-hl-gtext'),
     spanishEnabled:!!document.getElementById('f-hl-es')?.checked, spanishGreetingText:v('f-hl-gtext-es'),
-    active:v('f-hl-active')!=='0', updatedBy:getLoggedBy()||''};
+    active:v('f-hl-active')!=='0', defaultAssignee:v('f-hl-assignee')||null, updatedBy:getLoggedBy()||''};
   if(!rec.name){alert('Name is required.');return}
   if(!/^\+1\d{10}$/.test(num)){alert('Enter the hotline’s 10-digit phone number.');return}
   if((DB.get('hotlines')||[]).some(x=>String(x.id)!==String(id)&&x.phoneNumber===num)){alert('Another hotline already uses that number.');return}
@@ -8904,6 +8909,7 @@ function _hotCardHTML(m){
     ${tr}${audio}
     <div style="display:flex;gap:8px;margin-top:12px">
       <button class="btn btn-primary btn-sm" onclick="hotLog('${escHtml(m.id)}')">Log as interaction</button>
+      ${_hotCanCallBack(m)?`<button class="btn btn-sm" onclick="hotCallBack('${escHtml(m.id)}')" title="Twilio rings your phone, then connects you from the hotline number">📞 Call back</button>`:''}
       <button class="btn btn-sm" onclick="hotDismiss('${escHtml(m.id)}')">Dismiss…</button>
     </div>
   </div>`;
@@ -8914,7 +8920,7 @@ function _hotClosedRowHTML(m){
   return `<div style="display:flex;justify-content:space-between;gap:12px;padding:10px 4px;border-bottom:1px solid rgba(255,255,255,.07);font-size:12px;color:var(--fog)">
     <div><span style="color:var(--white)">${escHtml(_hotFmtPhone(m.callerNumber)||'Unknown caller')}</span> · ${escHtml(_hotWhen(m.receivedAt))} · ${proj}${m.language==='es'?' · Español':''}
       <div style="margin-top:2px">${logged?'Logged':'Dismissed — '+escHtml(m.dismissReason||'')}${m.closedBy?' by '+escHtml(m.closedBy):''}${m.closedAt?' on '+escHtml(_hotWhen(m.closedAt)):''}</div></div>
-    <div>${logged&&m.loggedInteractionId?`<button class="btn btn-sm" onclick="openEditIntModal('${escHtml(m.loggedInteractionId)}')">Open interaction</button>`:''}</div>
+    <div style="display:flex;gap:6px">${_hotCanCallBack(m)?`<button class="btn btn-sm" onclick="hotCallBack('${escHtml(m.id)}')">📞 Call back</button>`:''}${logged&&m.loggedInteractionId?`<button class="btn btn-sm" onclick="openEditIntModal('${escHtml(m.loggedInteractionId)}')">Open interaction</button>`:''}</div>
   </div>`;
 }
 async function hotPlay(id){
@@ -8945,6 +8951,53 @@ async function hotReassign(id, ini){
   const who=ini?(_leadName(ini)||ini):'';
   showToast(ini?('Assigned to '+who+(sent?' — they’ve been emailed.':' (no email sent: they may have no email on the team list).')):'Unassigned','info',4000);
   render();
+}
+// ── Call back from the hotline number (not recorded) ─────────────────────────
+// Twilio rings the staff member's own phone FROM the hotline number; they press
+// 1 and the caller is dialled, also from the hotline number. Nothing is logged —
+// staff log the call themselves (+ Related contact on the logged interaction).
+const HOT_RING_ME_KEY='cc_callback_phone';
+function _hotCanCallBack(m){
+  const d=String(m.callerNumber||'').replace(/\D/g,'');
+  const h=(DB.get('hotlines')||[]).find(x=>String(x.id)===String(m.hotlineId));
+  return /^1?[2-9]\d{9}$/.test(d)&&!!h&&h.active!==false;
+}
+function _hotMyPhone(){
+  let p=''; try{ p=localStorage.getItem(HOT_RING_ME_KEY)||''; }catch(e){}
+  if(p) return p;
+  const me=_teamByIni(_myInitials());
+  return me&&me.phone||'';
+}
+function hotCallBack(id){
+  const m=(DB.get('hotline_messages')||[]).find(x=>String(x.id)===String(id)); if(!m) return;
+  const h=(DB.get('hotlines')||[]).find(x=>String(x.id)===String(m.hotlineId));
+  S.hotCallId=id;
+  openM('Call back from the hotline',`<div style="font-size:13px;color:var(--mist);line-height:1.6;margin-bottom:12px">
+      Twilio will ring <b>your phone</b> in a few seconds, showing the <b>${escHtml(h?h.name:'hotline')}</b> number
+      ${escHtml(_hotFmtPhone(h&&h.phoneNumber))}. Answer and <b>press 1</b> — then it calls
+      <b>${escHtml(_hotFmtPhone(m.callerNumber))}</b>, who also sees the hotline number, never yours.</div>
+    <div class="fr"><label>Ring me at</label><input id="f-hcb-phone" value="${escHtml(_hotFmtPhone(_hotMyPhone()))}" placeholder="(801) 555-0123" maxlength="20"></div>
+    <div style="font-size:11px;color:var(--fog);line-height:1.5">The call is <b>not recorded</b>. Afterwards, log it yourself — on the logged voicemail, <b>+ Related contact</b> keeps it in the same thread.</div>`,
+  `<button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-primary" id="hcb-go" onclick="hotCallBackGo()">📞 Call me now</button>`);
+}
+async function hotCallBackGo(){
+  const id=S.hotCallId; if(!id) return;
+  const raw=(document.getElementById('f-hcb-phone')?.value||'').trim();
+  const num=_hotNormPhone(raw);
+  if(!/^\+1[2-9]\d{9}$/.test(num)){ alert('Enter your own 10-digit phone number.'); return; }
+  try{ localStorage.setItem(HOT_RING_ME_KEY, raw); }catch(e){}
+  const btn=document.getElementById('hcb-go'); if(btn){ btn.disabled=true; btn.textContent='Calling…'; }
+  let msg='';
+  try{
+    const sess=getSession();
+    const r=await fetch(HOT_FN_URL+'/callback',{method:'POST',headers:{'Content-Type':'application/json',apikey:SUPA_KEY,Authorization:'Bearer '+(sess?sess.access_token:SUPA_KEY)},
+      body:JSON.stringify({messageId:Number(id),ringMe:num})});
+    const j=await r.json().catch(()=>({}));
+    if(r.ok&&j.ok){ closeM(); S.hotCallId=null; showToast('Your phone will ring in a few seconds — answer and press 1.','info',7000); return; }
+    msg=j.error||('The call could not be placed ('+r.status+').');
+  }catch(e){ msg='The call could not be placed — the hotline service did not answer.'; }
+  if(btn){ btn.disabled=false; btn.textContent='📞 Call me now'; }
+  showToast(msg,'error',8000);
 }
 function hotDismiss(id){
   S.hotDismissId=id;

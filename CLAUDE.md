@@ -3102,7 +3102,25 @@ a Twilio trial + one number on DEV for a real call, then release.
   Supabase projects). A trial account refuses `<Record>`; the account was
   upgraded. Twilio's built-in transcript is rough on names — staff listen
   before logging.
-- **ON HOLD (Jeff, 2026-10-12: inbound voicemails first) — recorded call-back ("call me, then connect them"):**
+- **Call back from the hotline — BUILT on DEV (2026-10-12), NOT recorded.**
+  **📞 Call back** on every Hotline inbox card (waiting and logged) →
+  `hotCallBack` dialog ("Ring me at", prefilled from localStorage
+  `cc_callback_phone`, else my PI-team phone) → POST `/callback` with the
+  staff session (`pi_staff` checked) → Twilio REST `Calls.json` rings the
+  STAFF phone FROM the hotline number → `/bridge` says "press 1 to call …"
+  → `/connect` (Digits=1 only) `<Dial callerId=hotline>` the caller. The
+  caller's number is read from the message row server-side, never taken
+  from a request; both numbers must be +1 NANP (`callableNumber`, 900/976
+  refused); no `<Record>` anywhere. Unsigned bridge legs are confirmed as an
+  `outbound-api` call FROM a hotline number. Nothing is logged — staff log it
+  themselves (+ Related contact). Not on mobile yet.
+- **Fallback assignee (2026-10-12):** `pi_hotlines.default_assignee`
+  (initials; "If the project has no PI Lead…" in the hotline dialog). The
+  receiver assigns the project's active lead, else this person (also for the
+  general mailbox), else unassigned.
+- **Greeting:** `hotName()` / `_hotName()` drop a trailing "Hotline" so
+  "Test Hotline" reads "the Test hotline" (receiver and app preview agree).
+- **ON HOLD (Jeff, 2026-10-12: inbound voicemails first) — RECORDED call-back ("call me, then connect them"):**
   staff press Call back; Twilio rings the staff member's own phone, then dials
   the caller from the hotline number; the call is recorded (with a recording
   announcement) and lands in the Hotline inbox for REVIEW, then Log as

@@ -9,8 +9,12 @@
 //   POST /hotline/transcription  the transcript is ready
 // Every Twilio request must carry a valid X-Twilio-Signature, or — when it
 // carries none at all — be confirmed call-by-call against Twilio's own API
-// (confirmWithTwilio). Anything else is refused. The app calls one route, with the signed-in user's token:
+// (confirmWithTwilio). Anything else is refused.
+//   POST /hotline/bridge       call-back: the staff member's phone answered → "press 1"
+//   POST /hotline/connect      they pressed 1 → dial the caller from the hotline number
+// The app calls two routes, with the signed-in user's token:
 //   POST /hotline/notify       {messageId} → email the person it is assigned to
+//   POST /hotline/callback     {messageId, ringMe} → ring the staff phone (not recorded)
 //
 // Nothing here creates an interaction. A voicemail lands as a PENDING row in
 // pi_hotline_messages and only becomes an interaction when a person logs it
@@ -28,7 +32,7 @@ export const AUDIO_BUCKET = 'hotline-audio';
 
 const T = {
   en: {
-    greeting: name => `Thank you for calling the ${name} hotline.`,
+    greeting: name => `Thank you for calling the ${hotName(name)} hotline.`,
     option: (label, d) => `For ${label}, press ${d}.`,
     general: 'To leave a general message, press 0.',
     spanish: 'Para español, oprima 9.',
@@ -38,9 +42,14 @@ const T = {
     closed: 'This number is not in service. Goodbye.',
     noMessage: 'We did not receive a message. Goodbye.',
     trouble: 'Sorry, we are having trouble taking messages right now. Please call back later.',
+    callbackPrompt: (num, name) => `This is your call back from the ${name} hotline. Press 1 to call ${num}. Or hang up to cancel.`,
+    callbackConnecting: 'Connecting. This call is not recorded.',
+    callbackCancelled: 'No call was placed. Goodbye.',
+    callbackEnded: 'The call has ended. Goodbye.',
+    callbackGone: 'This call back is no longer available. Goodbye.',
   },
   es: {
-    greeting: name => `Gracias por llamar a la línea de información del proyecto ${name}.`,
+    greeting: name => `Gracias por llamar a la línea de información del proyecto ${hotName(name)}.`,
     option: (label, d) => `Para ${label}, oprima ${d}.`,
     general: 'Para dejar un mensaje general, oprima 0.',
     spanish: '',
@@ -53,6 +62,25 @@ const T = {
   },
 };
 export const PHRASES = T;
+
+// "Test Hotline" must not be read as "the Test Hotline hotline".
+export function hotName(name) {
+  const n = String(name || '').trim();
+  return n.replace(/\s+hotline$/i, '').trim() || n;
+}
+
+// A US/Canada number the call-back may ring or dial. Premium (900/976) and
+// anything outside +1 is refused — the call-back must never become a way to
+// run up charges.
+export function callableNumber(p) {
+  const n = normPhone(p);
+  return /^\+1[2-9]\d{2}[2-9]\d{6}$/.test(n) && !/^\+1(900|976)/.test(n) ? n : '';
+}
+// Digits read one by one: "8 0 1, 6 5 2, 4 0 0 8".
+export function spokenNumber(p) {
+  const d = String(p || '').replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '');
+  return d.length === 10 ? [d.slice(0, 3), d.slice(3, 6), d.slice(6)].map(x => x.split('').join(' ')).join(', ') : d.split('').join(' ');
+}
 
 export function xmlEsc(s) {
   return String(s == null ? '' : s)
@@ -256,10 +284,14 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
     const c = await twilioGet(`Calls/${params.CallSid}.json`);
     if (!c) return 'no such call';
     if (c.account_sid !== SID) return 'account';
-    if (c.direction !== 'inbound') return 'direction';
-    if (params.To && normPhone(params.To) !== normPhone(c.to)) return 'to';
-    if (!(await one(`pi_hotlines?phone_number=eq.${encodeURIComponent(normPhone(c.to))}&select=id`))) return 'not a hotline';
-    if (['/voice', '/menu', '/recorded'].includes(sub)) {
+    // A call-back leg is a call WE placed from a hotline number; everything
+    // else is a call that came IN to one.
+    const outbound = ['/bridge', '/connect'].includes(sub);
+    if (c.direction !== (outbound ? 'outbound-api' : 'inbound')) return 'direction';
+    const ours = outbound ? c.from : c.to;
+    if (!outbound && params.To && normPhone(params.To) !== normPhone(c.to)) return 'to';
+    if (!(await one(`pi_hotlines?phone_number=eq.${encodeURIComponent(normPhone(ours))}&select=id`))) return 'not a hotline';
+    if (['/voice', '/menu', '/recorded', '/bridge', '/connect'].includes(sub)) {
       if (!['queued', 'ringing', 'in-progress'].includes(c.status)) return 'call over';
     } else {
       const age = now().getTime() - new Date(c.date_created || c.start_time).getTime();
@@ -324,6 +356,26 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
 
   async function handleTwilio(sub, url, params) {
     const lang = url.searchParams.get('l') === 'es' ? 'es' : 'en';
+    // ── Call-back (staff phone first, then the caller) ───────────────────
+    // Nothing here is recorded. The message id carries the caller's number;
+    // it is looked up again here, never taken from the request.
+    if (sub === '/bridge' || sub === '/connect') {
+      const msg = await one(`pi_hotline_messages?id=eq.${encodeURIComponent(url.searchParams.get('m'))}&select=id,caller_number,hotline_id`);
+      const h = msg && msg.hotline_id ? await one(`pi_hotlines?id=eq.${msg.hotline_id}&select=id,name,phone_number,active`) : null;
+      const to = msg && callableNumber(msg.caller_number);
+      if (!h || h.active === false || !to) return xml(twiml(say(T.en.callbackGone, 'en') + '<Hangup/>'));
+      if (sub === '/bridge') {
+        const q = `m=${msg.id}`;
+        return xml(twiml(
+          `<Gather numDigits="1" timeout="8" action="${xmlEsc(base + '/connect?' + q)}" method="POST">`
+          + say(T.en.callbackPrompt(spokenNumber(to), hotName(h.name)), 'en') + '</Gather>'
+          + say(T.en.callbackCancelled, 'en') + '<Hangup/>'));
+      }
+      if (String(params.Digits || '') !== '1') return xml(twiml(say(T.en.callbackCancelled, 'en') + '<Hangup/>'));
+      return xml(twiml(say(T.en.callbackConnecting, 'en')
+        + `<Dial callerId="${xmlEsc(h.phone_number)}" timeout="30"><Number>${xmlEsc(to)}</Number></Dial>`
+        + say(T.en.callbackEnded, 'en') + '<Hangup/>'));
+    }
     if (sub === '/voice') {
       const h = await one(`pi_hotlines?phone_number=eq.${encodeURIComponent(normPhone(params.To))}&active=eq.true&select=*`);
       if (!h) return xml(closedTwiml());
@@ -346,13 +398,14 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
       let assignee = null;
       // Who it goes to is a convenience; a failed lookup must never lose the
       // voicemail itself — it lands unassigned instead.
-      if (projectId) {
-        try {
-          const proj = await one(`pi_projects?id=eq.${encodeURIComponent(projectId)}&select=id,lead`);
-          const team = await rest('pi_team_members?select=initials,active');
-          assignee = pickAssignee(proj, team);
-        } catch (e) { console.error('hotline: assignee lookup failed', e.message); }
-      }
+      // The project's PI Lead; failing that (no lead, an inactive one, or the
+      // general mailbox) the hotline's own fallback person.
+      try {
+        const team = await rest('pi_team_members?select=initials,active');
+        const proj = projectId ? await one(`pi_projects?id=eq.${encodeURIComponent(projectId)}&select=id,lead`) : null;
+        assignee = pickAssignee(proj, team)
+          || pickAssignee({ lead: loaded && loaded.h.default_assignee }, team);
+      } catch (e) { console.error('hotline: assignee lookup failed', e.message); }
       // Twilio's two callbacks (this one and /transcription) can arrive in
       // either order, so each UPSERTS on call_sid and sends only its own
       // fields — neither can overwrite what the other wrote.
@@ -404,6 +457,38 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
     return json({ error: 'not found' }, 404);
   }
 
+  // Staff press "Call back": Twilio rings THEIR phone from the hotline number,
+  // and /bridge asks them to press 1 before anyone else is dialled.
+  async function handleCallback(req) {
+    const auth = req.headers.get('authorization') || '';
+    const u = await fetchFn(SB + '/auth/v1/user', { headers: { apikey: KEY, Authorization: auth } });
+    if (!u.ok) return json({ error: 'not signed in' }, 401);
+    const user = await u.json();
+    const staff = await one(`pi_staff?email=eq.${encodeURIComponent(String(user.email || '').toLowerCase())}&select=email`);
+    if (!staff) return json({ error: 'not staff' }, 403);
+    if (!TOKEN || !SID) return json({ error: 'hotline not configured' }, 503);
+    let body = {};
+    try { body = await req.json(); } catch (_) {}
+    const ring = callableNumber(body.ringMe);
+    if (!ring) return json({ error: 'Enter your own 10-digit US phone number to ring.' }, 400);
+    const msg = await one(`pi_hotline_messages?id=eq.${encodeURIComponent(body.messageId)}&select=id,caller_number,hotline_id`);
+    if (!msg) return json({ error: 'no such message' }, 404);
+    const to = callableNumber(msg.caller_number);
+    if (!to) return json({ error: 'This caller’s number can’t be called back from the hotline.' }, 400);
+    const h = msg.hotline_id ? await one(`pi_hotlines?id=eq.${msg.hotline_id}&select=id,phone_number,active`) : null;
+    if (!h || h.active === false) return json({ error: 'That hotline is switched off.' }, 400);
+    if (ring === to || ring === normPhone(h.phone_number)) return json({ error: 'Enter your own phone number, not the caller’s or the hotline’s.' }, 400);
+    const form = new URLSearchParams({ To: ring, From: h.phone_number, Url: `${base}/bridge?m=${msg.id}`, Method: 'POST', Timeout: '25' });
+    const r = await fetchFn(`${API}/Calls.json`, { method: 'POST', body: form.toString(),
+      headers: { Authorization: twilioAuth(), 'Content-Type': 'application/x-www-form-urlencoded' } });
+    if (!r.ok) {
+      console.error('hotline: call-back failed', r.status);
+      return json({ error: 'Twilio refused the call (' + r.status + ').' }, 502);
+    }
+    const c = await r.json();
+    return json({ ok: true, sid: c.sid || null });
+  }
+
   // The app asks for an email after reassigning. The caller must be signed-in staff.
   async function handleNotify(req) {
     const auth = req.headers.get('authorization') || '';
@@ -431,6 +516,7 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
     if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
     try {
       if (sub === '/notify') return await handleNotify(req);
+      if (sub === '/callback') return await handleCallback(req);
       if (!TOKEN || !env.TWILIO_ACCOUNT_SID) return json({ error: 'hotline not configured' }, 503);
       const raw = await req.text();
       const form = new URLSearchParams(raw);

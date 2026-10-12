@@ -39,10 +39,12 @@ create table if not exists pi_hotlines (
   spanish_greeting_text       text,
   spanish_greeting_audio_path text,
   active              boolean not null default true,
+  default_assignee    text,                      -- initials; when the project has no active PI Lead, and for the general mailbox
   created_at          timestamptz default now(),
   updated_at          timestamptz default now(),
   updated_by          text
 );
+alter table pi_hotlines add column if not exists default_assignee text;
 create unique index if not exists pi_hotlines_number_uniq on pi_hotlines (phone_number);
 
 create table if not exists pi_hotline_extensions (

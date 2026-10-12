@@ -44,7 +44,7 @@ module.exports = {
     const [h3] = await t.sql(`insert into pi_hotlines (name, phone_number, project_id, spanish_enabled, greeting_mode, greeting_audio_path) values ('Recorded One','+18015550103',$1,true,'recording','greetings/x-en.mp3') returning id`, [String(pC.id)]);
 
     // ── fakes ─────────────────────────────────────────────────────────────
-    const log = { storage: [], twilioDeletes: [], emails: [], downloads: [], twilioLookups: [] };
+    const log = { storage: [], twilioDeletes: [], emails: [], downloads: [], twilioLookups: [], calls: [] };
     // Twilio's REST API, as the fallback check for unsigned requests sees it.
     const TW_API = `https://api.twilio.com/2010-04-01/Accounts/${ACCT}`;
     const twilioApi = {};
@@ -65,6 +65,10 @@ module.exports = {
       if (u.startsWith(TW_API + '/Recordings/') && u.endsWith('.mp3')) {
         log.downloads.push({ url: u, auth: opts.headers.Authorization });
         return new Response(new Uint8Array([1, 2, 3, 4]), { status: 200 });
+      }
+      if (u === TW_API + '/Calls.json' && opts.method === 'POST') {
+        log.calls.push(Object.fromEntries(new URLSearchParams(opts.body)));
+        return new Response(JSON.stringify({ sid: 'CA' + 'e'.repeat(32) }), { status: 201 });
       }
       if (u.startsWith(TW_API + '/')) {
         log.twilioLookups.push(u);
@@ -222,5 +226,52 @@ module.exports = {
     t.eq((await notify('Bearer stranger-token', { messageId: m2.id })).status, 403, '/notify refuses a signed-in non-staff user');
     const n = await notify('Bearer staff-token', { messageId: m2.id });
     t.ok(n.status === 200 && n.body.sent === true && log.emails.length === before + 1 && /SR-201/.test(log.emails.at(-1).subject), 'staff: the new assignee is emailed');
+
+    // ── greeting wording ──────────────────────────────────────────────────
+    t.eq(L.hotName('Test Hotline'), 'Test', 'a name ending in "Hotline" is not doubled');
+    t.ok(/calling the Test hotline\./.test(L.greetingParts({ name: 'Test Hotline' }, 'en')) && !/Hotline hotline/i.test(L.greetingParts({ name: 'Test Hotline' }, 'en')), 'greeting reads “the Test hotline”, not “Test Hotline hotline”');
+    t.ok(/proyecto Test\./.test(L.greetingParts({ name: 'Test Hotline' }, 'es')), 'Spanish greeting drops it too');
+
+    // ── fallback assignee (no PI Lead, or the general mailbox) ────────────
+    await t.sql(`update pi_hotlines set default_assignee='JP' where id=$1`, [h1.id]);
+    await call(`/recording?h=${h1.id}&l=en&d=0&p=`, { ...recParams, CallSid: 'CA400', RecordingSid: 'RE400' });
+    await call(`/recording?h=${h1.id}&l=en&d=2&p=${pB.id}`, { ...recParams, CallSid: 'CA401', RecordingSid: 'RE401' });
+    const fb = Object.fromEntries((await t.sql(`select call_sid, assigned_to from pi_hotline_messages where call_sid in ('CA400','CA401')`)).map(r => [r.call_sid, r.assigned_to]));
+    t.ok(fb.CA400 === 'JP' && fb.CA401 === 'JP', 'general mailbox, and a project whose lead is not on the team list, go to the hotline’s fallback person');
+    await call(`/recording?h=${h1.id}&l=en&d=1&p=${pA.id}`, { ...recParams, CallSid: 'CA402', RecordingSid: 'RE402' });
+    t.eq((await t.sql(`select assigned_to from pi_hotline_messages where call_sid='CA402'`))[0].assigned_to, 'JP', 'the project’s own lead still comes first');
+
+    // ── call-back via the hotline (not recorded) ──────────────────────────
+    const cb = async (auth, body) => {
+      const res = await handler(new Request('http://localhost:9000/hotline/callback', { method: 'POST',
+        headers: { Authorization: auth, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }));
+      return { status: res.status, body: await res.json() };
+    };
+    const [cm] = await t.sql(`select id from pi_hotline_messages where call_sid='CA100'`);
+    t.eq((await cb('', { messageId: cm.id, ringMe: '8015550177' })).status, 401, 'call-back: refused without a sign-in');
+    t.eq((await cb('Bearer stranger-token', { messageId: cm.id, ringMe: '8015550177' })).status, 403, 'call-back: refused for a non-staff sign-in');
+    t.eq((await cb('Bearer staff-token', { messageId: cm.id, ringMe: '+449876543210' })).status, 400, 'call-back: a non-US “ring me” number is refused');
+    t.eq((await cb('Bearer staff-token', { messageId: cm.id, ringMe: '9005550100' })).status, 400, 'call-back: a premium 900 number is refused');
+    t.eq((await cb('Bearer staff-token', { messageId: cm.id, ringMe: '3855550199' })).status, 400, 'call-back: ringing the caller’s own number is refused');
+    t.eq(log.calls.length, 0, '…and none of those reached Twilio');
+    const ok = await cb('Bearer staff-token', { messageId: cm.id, ringMe: '(801) 555-0177' });
+    const placed = log.calls[0] || {};
+    t.ok(ok.status === 200 && placed.To === '+18015550177' && placed.From === '+18015550101'
+      && placed.Url === base + '/bridge?m=' + cm.id && !/3855550199/.test(JSON.stringify(placed)),
+      'call-back: Twilio rings the staff phone FROM the hotline number; the caller’s number is not in the request');
+    // The staff leg: press 1, then the caller is dialled from the hotline number.
+    const leg = { CallSid: 'CA' + 'f'.repeat(32), AccountSid: ACCT, From: '+18015550101', To: '+18015550177' };
+    r = await call('/bridge?m=' + cm.id, leg);
+    t.ok(/<Gather numDigits="1"/.test(r.body) && /Press 1 to call 3 8 5, 5 5 5, 0 1 9 9/.test(r.body) && !/<Dial/.test(r.body), 'bridge: asks the staff member to press 1 — nobody is dialled yet');
+    r = await call('/connect?m=' + cm.id, { ...leg, Digits: '1' });
+    t.ok(/<Dial callerId="\+18015550101"[^>]*><Number>\+13855550199<\/Number><\/Dial>/.test(r.body) && !/<Record/.test(r.body) && !/record="/.test(r.body), 'press 1: the caller is dialled from the hotline number, not recorded');
+    r = await call('/connect?m=' + cm.id, { ...leg, Digits: '' });
+    t.ok(!/<Dial/.test(r.body) && /No call was placed/.test(r.body), 'no key (voicemail picked up): nobody is dialled');
+    // Unsigned bridge legs are confirmed as OUR outbound call from a hotline.
+    const legSid = 'CA' + '1'.repeat(32);
+    twilioApi[`Calls/${legSid}.json`] = { sid: legSid, account_sid: ACCT, direction: 'outbound-api', from: '+18015550101', to: '+18015550177', status: 'in-progress' };
+    t.eq((await call('/bridge?m=' + cm.id, { ...leg, CallSid: legSid }, { signed: false })).status, 200, 'unsigned bridge leg: accepted once Twilio confirms our outbound call');
+    twilioApi[`Calls/${legSid}.json`].direction = 'inbound';
+    t.eq((await call('/bridge?m=' + cm.id, { ...leg, CallSid: legSid }, { signed: false })).status, 403, 'unsigned bridge leg: an inbound call cannot pose as one');
   },
 };

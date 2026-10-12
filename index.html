@@ -1027,7 +1027,8 @@ const SB_TABLES = {
   hotlines:             'pi_hotlines',
   hotline_extensions:   'pi_hotline_extensions',
   hotline_messages:     'pi_hotline_messages',
-  hotline_calls:        'pi_hotline_calls'
+  hotline_calls:        'pi_hotline_calls',
+  hotline_settings:     'pi_hotline_settings'
 };
 
 // Map our internal field names to Supabase column names
@@ -1215,11 +1216,13 @@ const SB_TO_INT = {
     greetingMode:'greeting_mode', greetingText:'greeting_text', greetingAudioPath:'greeting_audio_path',
     spanishEnabled:'spanish_enabled', spanishGreetingText:'spanish_greeting_text',
     spanishGreetingAudioPath:'spanish_greeting_audio_path', active:'active',
-    defaultAssignee:'default_assignee', updatedBy:'updated_by'
+    defaultAssignee:'default_assignee', updatedBy:'updated_by',
+    ringMode:'ring_mode', ringSeconds:'ring_seconds', hoursStart:'hours_start', hoursEnd:'hours_end', hoursDays:'hours_days'
   },
   pi_hotline_extensions: {
     id:'id', hotlineId:'hotline_id', digit:'digit', projectId:'project_id',
-    label:'label', labelEs:'label_es', active:'active'
+    label:'label', labelEs:'label_es', active:'active',
+    ringMode:'ring_mode', hoursStart:'hours_start', hoursEnd:'hours_end', hoursDays:'hours_days'
   },
   pi_hotline_messages: {
     id:'id', hotlineId:'hotline_id', extensionDigit:'extension_digit', projectId:'project_id',
@@ -1236,7 +1239,13 @@ const SB_TO_INT = {
     id:'id', hotlineId:'hotline_id', projectId:'project_id', stakeholderId:'stakeholder_id',
     toNumber:'to_number', ringNumber:'ring_number', placedBy:'placed_by', placedByEmail:'placed_by_email',
     status:'status', outcome:'outcome', loggedInteractionId:'logged_interaction_id',
-    decidedAt:'decided_at', decidedBy:'decided_by', createdAt:'created_at'
+    decidedAt:'decided_at', decidedBy:'decided_by', createdAt:'created_at',
+    direction:'direction', durationSeconds:'duration_seconds'
+  },
+  // The all-hotlines ring/hours defaults (one row, id 1).
+  pi_hotline_settings: {
+    id:'id', ringEnabled:'ring_enabled', ringSeconds:'ring_seconds', hoursStart:'hours_start',
+    hoursEnd:'hours_end', hoursDays:'hours_days', timezone:'timezone', updatedBy:'updated_by'
   }
 };
 
@@ -1313,8 +1322,8 @@ function toSB(table, obj) {
       } else {
         result[sbCol] = val;
       }
-    } else if (DATE_FIELDS.has(sbCol)) {
-      result[sbCol] = null;   // an explicit null clears the date
+    } else if (DATE_FIELDS.has(sbCol) || NULL_CLEARS_FIELDS.has(sbCol)) {
+      result[sbCol] = null;   // an explicit null clears the date (or override)
     }
   }
   if (sbTable === 'pi_projects' && !window._leadCols) { delete result.lead; delete result.lead_history; }
@@ -1326,6 +1335,10 @@ function toSB(table, obj) {
   if (sbTable === 'pi_interactions' && !window._relCol) delete result.related_to;
   return result;
 }
+
+// Columns where a null the caller sends means "clear it": a hotline's or menu
+// option's ring/hours override set back to "use the default".
+const NULL_CLEARS_FIELDS = new Set(['ring_mode','ring_seconds','hours_start','hours_end','hours_days']);
 
 // Convert Supabase row back to our internal format
 function fromSB(table, row) {
@@ -1643,7 +1656,7 @@ function cacheClear(k) { delete _cache[k]; delete _cacheTime[k]; }
 const _syncCache = {};
 
 async function loadAllData() {
-  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments','comment_periods','tribal_consultations','reports','report_archive','client_summaries','parcels','parcel_owners','parcel_outreach','closeouts','team_members','hotlines','hotline_extensions','hotline_messages','hotline_calls'];
+  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments','comment_periods','tribal_consultations','reports','report_archive','client_summaries','parcels','parcel_owners','parcel_outreach','closeouts','team_members','hotlines','hotline_extensions','hotline_messages','hotline_calls','hotline_settings'];
   // Boot stays tolerant — one unreachable table should not lock the app — but a
   // table that FAILED must not be presented as an empty one. An empty Master
   // List that is really a 401 is worse than an error message.
@@ -8013,6 +8026,7 @@ function openIntModal(preStake, opts){
     </div>`
     :opts.hotlineCallId?`<div style="margin:0 0 12px;border:1px solid rgba(74,155,232,.35);background:rgba(74,155,232,.07);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--mist)">
       <b style="color:var(--sky-lt)">A call from the hotline.</b> Pick the contact (or add a new one), write what was said, then save — the call is marked logged.
+      ${_sug.length?`<div style="margin-top:6px">Number matches: ${_sug.map(s=>`<button class="btn btn-sm" style="margin:2px 4px 0 0" onclick="_intSetStake('${escHtml(s.id)}')">Use ${escHtml(dispName(s))}</button>`).join('')}</div>`:''}
     </div>`
     :_parent?`<div style="margin:0 0 12px;border:1px solid rgba(74,155,232,.35);background:rgba(74,155,232,.07);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--mist)">
       <b style="color:var(--sky-lt)">Related to</b> the ${escHtml(fmt(_parent.date))} ${escHtml((_parent.channel||'').toLowerCase())} contact: ${escHtml(String(_parent.summary||'').slice(0,120))}
@@ -8686,15 +8700,88 @@ function _hotCallbackDue(ts){
 }
 
 async function _hotReload(){
-  for(const t of ['hotlines','hotline_extensions','hotline_messages','hotline_calls']){
+  for(const t of ['hotlines','hotline_extensions','hotline_messages','hotline_calls','hotline_settings']){
     try{ cacheClear(t); _syncCache[t]=await sbGet(t,{strict:true}); }catch(e){ console.error('Hotline reload failed', t, e.message); }
   }
+}
+
+// ── Ring-through settings (ring the PI Lead before voicemail) ───────────────
+// Three layers, each field taken from the first that sets it: a menu option
+// (a project on a menu hotline), the hotline, then the all-hotlines defaults.
+// Must match the receiver's ringSettings() — asserted in test 83.
+const HOT_RING_DEFAULTS={enabled:true,seconds:12,start:'07:00',end:'18:00',days:'1,2,3,4,5',tz:'America/Denver'};
+const HOT_DAY_NAMES=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function _hotRingGlobal(){ return (DB.get('hotline_settings')||[]).find(x=>String(x.id)==='1')||null; }
+function _hotRingSettings(g,h,ext){
+  const has=v=>v!==null&&v!==undefined&&v!=='';
+  const layers=[ext||{},h||{},g||{}];
+  const pick=(k,fb)=>{ for(const l of layers) if(has(l[k])) return l[k]; return fb; };
+  const mode=pick('ringMode',null);
+  const enabled=mode==='on'?true:mode==='off'?false:(g&&typeof g.ringEnabled==='boolean'?g.ringEnabled:HOT_RING_DEFAULTS.enabled);
+  let secs=Math.round(Number(pick('ringSeconds',HOT_RING_DEFAULTS.seconds))); if(!isFinite(secs)) secs=HOT_RING_DEFAULTS.seconds;
+  return {enabled, seconds:Math.min(60,Math.max(5,secs)), start:pick('hoursStart',HOT_RING_DEFAULTS.start),
+    end:pick('hoursEnd',HOT_RING_DEFAULTS.end), days:pick('hoursDays',HOT_RING_DEFAULTS.days), tz:(g&&g.timezone)||HOT_RING_DEFAULTS.tz};
+}
+function _hotTime12(t){ const m=String(t||'').match(/^(\d{1,2}):(\d{2})$/); if(!m) return t||''; let h=+m[1]; const ap=h>=12?'pm':'am'; h=h%12||12; return h+':'+m[2]+' '+ap; }
+function _hotDaysLabel(days){
+  const d=String(days||'').split(',').map(x=>x.trim()).filter(x=>/^[0-6]$/.test(x)).map(Number).sort((a,b)=>a-b);
+  if(!d.length) return 'no days';
+  if(d.join()==='1,2,3,4,5') return 'Mon–Fri';
+  if(d.join()==='0,1,2,3,4,5,6') return 'every day';
+  const run=d.every((x,i)=>i===0||x===d[i-1]+1);
+  return run&&d.length>2?HOT_DAY_NAMES[d[0]]+'–'+HOT_DAY_NAMES[d[d.length-1]]:d.map(x=>HOT_DAY_NAMES[x]).join(', ');
+}
+function _hotRingSummary(st){
+  return st.enabled?'Rings the PI Lead '+st.seconds+' s, '+_hotDaysLabel(st.days)+' '+_hotTime12(st.start)+'–'+_hotTime12(st.end):'Voicemail only';
+}
+// The ring/hours fields, by class, so the same block works in three places.
+function _hotRingFieldsHTML(st,withSecs){
+  const days=String(st.days||'').split(',').map(x=>x.trim());
+  const lbl='font-weight:400;text-transform:none;letter-spacing:0';
+  return `<div class="fcheck" style="margin-bottom:8px"><label style="${lbl};display:flex;gap:6px;align-items:center"><input type="checkbox" class="rf-on"${st.enabled?' checked':''}> Ring the project’s PI Lead before voicemail</label></div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      ${withSecs?`<label style="font-size:11px;color:var(--fog);${lbl}">Ring for<br><input type="number" class="rf-secs" min="5" max="60" step="1" value="${escHtml(st.seconds)}" style="width:64px"> seconds</label>`:''}
+      <label style="font-size:11px;color:var(--fog);${lbl}">From<br><input type="time" class="rf-start" value="${escHtml(st.start)}"></label>
+      <label style="font-size:11px;color:var(--fog);${lbl}">To<br><input type="time" class="rf-end" value="${escHtml(st.end)}"></label>
+      <div style="font-size:11px;color:var(--fog)">Days<br>${HOT_DAY_NAMES.map((n,i)=>`<label style="${lbl};margin-right:6px;white-space:nowrap"><input type="checkbox" class="rf-day" value="${i}"${days.includes(String(i))?' checked':''}> ${n}</label>`).join('')}</div>
+    </div>`;
+}
+function _hotReadRing(el,withSecs){
+  if(!el) return null;
+  const q=c=>el.querySelector('.'+c);
+  const days=[...el.querySelectorAll('.rf-day')].filter(x=>x.checked).map(x=>x.value).join(',');
+  const r={on:!!q('rf-on')?.checked, start:q('rf-start')?.value||'', end:q('rf-end')?.value||'', days};
+  if(withSecs) r.seconds=Number(q('rf-secs')?.value);
+  return r;
+}
+function _hotRingProblem(r,withSecs){
+  if(!r) return '';
+  if(withSecs&&!(Number.isInteger(r.seconds)&&r.seconds>=5&&r.seconds<=60)) return 'Ring time must be a whole number of seconds from 5 to 60.';
+  if(r.on){
+    if(!/^\d{2}:\d{2}$/.test(r.start)||!/^\d{2}:\d{2}$/.test(r.end)) return 'Enter both business-hours times.';
+    if(r.end<=r.start) return 'Business hours must end after they start.';
+    if(!r.days) return 'Pick at least one business day.';
+  }
+  return '';
+}
+async function saveHotlineDefaults(){
+  const r=_hotReadRing(document.getElementById('hot-defaults'),true);
+  const bad=_hotRingProblem({...r,on:true},true); if(bad){ alert(bad); return; }
+  const rec={ringEnabled:r.on, ringSeconds:r.seconds, hoursStart:r.start, hoursEnd:r.end, hoursDays:r.days, updatedBy:getLoggedBy()||''};
+  const ok=_hotRingGlobal()?await sbUpdate('hotline_settings',1,rec):await sbAdd('hotline_settings',{id:1,...rec});
+  if(!ok){ showToast('Couldn’t save the defaults. Has the latest sql/2026-10-12_hotlines.sql been run?','error',7000); return; }
+  await _hotReload(); showToast('Hotline defaults saved','info',2000); renderHotlineCard();
+}
+function _hotToggleCustom(sel){
+  const box=sel.parentElement.querySelector('.rf-custom'); if(box) box.style.display=sel.value==='custom'?'':'none';
+  _hotPreview();
 }
 
 // ── Settings → Project hotlines ─────────────────────────────────────────────
 function renderHotlineCard(){
   const el=document.getElementById('hotline-card-body'); if(!el) return;
   const hs=(DB.get('hotlines')||[]).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+  const g=_hotRingGlobal(), gst=_hotRingSettings(g,null,null);
   const rows=hs.map(h=>{
     const ex=_hotExts(h.id);
     const where=ex.length?ex.length+' extension'+(ex.length===1?'':'s')+': '+ex.map(e=>e.digit+' → '+escHtml(_hotProjName(e.projectId)||'?')).join(', ')
@@ -8704,10 +8791,18 @@ function renderHotlineCard(){
       <td style="padding:6px 8px;font-family:var(--mono)">${escHtml(_hotFmtPhone(h.phoneNumber))}</td>
       <td style="padding:6px 8px">${where}</td>
       <td style="padding:6px 8px">${h.spanishEnabled?'Español (9)':'English only'}</td>
+      <td style="padding:6px 8px">${escHtml(_hotRingSummary(_hotRingSettings(g,h,null)))}${ex.some(e=>e.ringMode||e.hoursStart)?' <span title="Some menu options have their own ringing or hours">*</span>':''}</td>
       <td style="padding:6px 8px;text-align:right"><button class="btn btn-sm" onclick="openHotlineModal('${escHtml(h.id)}')">Edit</button></td>
     </tr>`;}).join('');
-  el.innerHTML=`${hs.length?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;color:var(--fog)">
-      <thead><tr style="text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em"><th style="padding:4px 8px">Hotline</th><th style="padding:4px 8px">Number</th><th style="padding:4px 8px">Goes to</th><th style="padding:4px 8px">Language</th><th></th></tr></thead>
+  el.innerHTML=`<div id="hot-defaults" style="border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:12px 14px;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:var(--white);margin-bottom:4px">When someone calls — defaults for every hotline</div>
+      <div style="font-size:11px;color:var(--fog);line-height:1.5;margin-bottom:10px">During business hours the project’s PI Lead (from the PI team list) is rung first; they press 1 to take the call. If nobody does, or it’s after hours, the caller leaves a voicemail. A hotline or a menu option can set its own — open it with Edit.</div>
+      ${_hotRingFieldsHTML(gst,true)}
+      <div style="margin-top:10px"><button class="btn btn-sm btn-primary" onclick="saveHotlineDefaults()">Save defaults</button>
+        <span style="font-size:11px;color:var(--fog);margin-left:8px">Times are Mountain Time.</span></div>
+    </div>
+    ${hs.length?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;color:var(--fog)">
+      <thead><tr style="text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em"><th style="padding:4px 8px">Hotline</th><th style="padding:4px 8px">Number</th><th style="padding:4px 8px">Goes to</th><th style="padding:4px 8px">Language</th><th style="padding:4px 8px">When a call comes in</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>`:'<div style="font-size:12px;color:var(--fog)">No hotlines yet.</div>'}
     <div style="margin-top:12px"><button class="btn btn-primary btn-sm" onclick="openHotlineModal()">+ Add hotline</button></div>`;
 }
@@ -8719,12 +8814,21 @@ function _hotProjOptions(cur){
 }
 function _hotExtRowHTML(e){
   e=e||{};
-  return `<div class="hot-ext-row" data-id="${escHtml(e.id||'')}" style="display:grid;grid-template-columns:70px 1fr 1fr 1fr 28px;gap:6px;align-items:center;margin-bottom:6px">
+  const custom=!!(e.ringMode||e.hoursStart);
+  const st=_hotRingSettings(_hotRingGlobal(),null,e);
+  return `<div class="hot-ext-row" data-id="${escHtml(e.id||'')}" style="margin-bottom:6px">
+   <div style="display:grid;grid-template-columns:70px 1fr 1fr 1fr 28px 28px;gap:6px;align-items:center">
     <select class="hx-digit">${['1','2','3','4','5','6','7','8'].map(d=>`<option${String(e.digit)===d?' selected':''}>${d}</option>`).join('')}</select>
     <select class="hx-proj" onchange="_hotPreview()">${_hotProjOptions(e.projectId)}</select>
     <input class="hx-label" value="${escHtml(e.label||'')}" placeholder="Menu says: For ___, press N" oninput="_hotPreview()">
     <input class="hx-label-es" value="${escHtml(e.labelEs||'')}" placeholder="Spanish (optional)" oninput="_hotPreview()">
-    <button class="btn btn-sm" title="Remove" onclick="this.parentElement.remove();_hotPreview()">×</button>
+    <button class="btn btn-sm hx-hours-btn" title="Ringing and business hours for this project" onclick="const h=this.closest('.hot-ext-row').querySelector('.hx-hours');h.style.display=h.style.display==='none'?'':'none'"${custom?' style="color:var(--sky-lt)"':''}>⏰</button>
+    <button class="btn btn-sm" title="Remove" onclick="this.closest('.hot-ext-row').remove();_hotPreview()">×</button>
+   </div>
+   <div class="hx-hours" style="display:none;margin:6px 0 10px 76px;padding:8px 10px;border-left:2px solid rgba(74,155,232,.35)">
+    <select class="hx-ruse" onchange="_hotToggleCustom(this)"><option value="default"${custom?'':' selected'}>Same as this hotline</option><option value="custom"${custom?' selected':''}>Its own ringing and hours</option></select>
+    <div class="rf-custom" style="margin-top:8px;${custom?'':'display:none'}">${_hotRingFieldsHTML(st,false)}</div>
+   </div>
   </div>`;
 }
 function openHotlineModal(id){
@@ -8733,6 +8837,7 @@ function openHotlineModal(id){
   const ex=id?_hotExts(id):[];
   const menu=ex.length>0;
   const lbl='font-weight:400;text-transform:none;letter-spacing:0;color:var(--fog)';
+  const hCustom=!!(h.ringMode||h.ringSeconds||h.hoursStart);
   openM(id?'Edit hotline':'Add hotline',
   `<div class="fgrid fg2f">
     <div class="fr"><label>Name *</label><input id="f-hl-name" value="${escHtml(h.name||'')}" maxlength="80" placeholder="e.g. UDOT Region One" oninput="_hotPreview()"></div>
@@ -8763,6 +8868,12 @@ function openHotlineModal(id){
     <div class="fr"><label>Spanish greeting</label><textarea id="f-hl-gtext-es" rows="2" placeholder="${escHtml('Gracias por llamar a la línea de información del proyecto '+(_hotName(h.name)||'…')+'.')}" oninput="_hotPreview()">${escHtml(h.spanishGreetingText||'')}</textarea></div>
     <div class="fr"><label>Spanish recording <span style="${lbl}">(optional)${h.spanishGreetingAudioPath?' — one is uploaded':''}</span></label><input type="file" id="f-hl-gfile-es" accept="audio/mpeg,audio/mp3,audio/wav,audio/x-wav"></div>
   </div>
+  <div class="fsec">When someone calls</div>
+  <div class="fr" id="f-hl-ringwrap">
+    <select id="f-hl-ruse" onchange="_hotToggleCustom(this)"><option value="default"${hCustom?'':' selected'}>Use the defaults — ${escHtml(_hotRingSummary(_hotRingSettings(_hotRingGlobal(),null,null)))}</option><option value="custom"${hCustom?' selected':''}>This hotline’s own ringing and hours</option></select>
+    <div class="rf-custom" id="f-hl-ring" onchange="_hotPreview()" style="margin-top:8px;${hCustom?'':'display:none'}">${_hotRingFieldsHTML(_hotRingSettings(_hotRingGlobal(),h,null),true)}</div>
+    <div style="font-size:11px;color:var(--fog);margin-top:6px">On a menu hotline, each project can have its own hours — the ⏰ button on its row. Only the project’s PI Lead is rung (set on the Projects view, with a phone on the PI team list).</div>
+  </div>
   <div class="fr"><label>Status</label><select id="f-hl-active"><option value="1"${h.active!==false?' selected':''}>Active</option><option value="0"${h.active===false?' selected':''}>Off — callers hear “not in service”</option></select></div>
   <div class="fsec">What callers hear</div>
   <div id="f-hl-preview" style="font-size:12px;line-height:1.6;color:var(--mist);background:rgba(255,255,255,.04);border-radius:8px;padding:10px 12px"></div>
@@ -8789,7 +8900,8 @@ function _hotAddExt(){
 function _hotFormExts(){
   return [...document.querySelectorAll('#f-hl-exts .hot-ext-row')].map(r=>({
     id:r.dataset.id||'', digit:r.querySelector('.hx-digit').value, projectId:r.querySelector('.hx-proj').value,
-    label:r.querySelector('.hx-label').value.trim(), labelEs:r.querySelector('.hx-label-es').value.trim()}));
+    label:r.querySelector('.hx-label').value.trim(), labelEs:r.querySelector('.hx-label-es').value.trim(),
+    ring:r.querySelector('.hx-ruse')?.value==='custom'?_hotReadRing(r.querySelector('.rf-custom'),false):null}));
 }
 function _hotPreview(){
   const out=document.getElementById('f-hl-preview'); if(!out) return;
@@ -8802,6 +8914,8 @@ function _hotPreview(){
   const greet=rec?'<i>[your recording]</i>':escHtml(_hotGreeting(h,'en'));
   const m=_hotMenuText(h,ex,'en');
   let html=greet+(m?' '+escHtml(m):'');
+  const rst=_hotRingSettings(_hotRingGlobal(), document.getElementById('f-hl-ruse')?.value==='custom'?(()=>{const r=_hotReadRing(document.getElementById('f-hl-ring'),true)||{};return {ringMode:r.on?'on':'off',ringSeconds:r.seconds,hoursStart:r.start,hoursEnd:r.end,hoursDays:r.days};})():{}, null);
+  if(rst.enabled) html+='<br><span style="color:var(--fog)">'+escHtml(_hotDaysLabel(rst.days)+' '+_hotTime12(rst.start)+'–'+_hotTime12(rst.end))+':</span> '+escHtml('Please hold while we connect you.')+' <i>[the PI Lead’s phone rings for '+rst.seconds+' seconds; if nobody takes it:]</i>';
   html+='<br><span style="color:var(--fog)">Then:</span> '+escHtml('Please leave your name, your phone number and your message after the tone. You have two minutes.');
   if(h.spanishEnabled) html+='<br><span style="color:var(--fog)">Press 9:</span> '+(rec?'<i>[your Spanish recording, or the text]</i> ':escHtml(_hotGreeting(h,'es'))+' ')+escHtml(_hotMenuText(h,ex,'es'));
   out.innerHTML=html;
@@ -8826,6 +8940,10 @@ async function saveHotline(){
     greetingMode:v('f-hl-gmode')||'voice', greetingText:v('f-hl-gtext'),
     spanishEnabled:!!document.getElementById('f-hl-es')?.checked, spanishGreetingText:v('f-hl-gtext-es'),
     active:v('f-hl-active')!=='0', defaultAssignee:v('f-hl-assignee')||null, updatedBy:getLoggedBy()||''};
+  const rr=v('f-hl-ruse')==='custom'?_hotReadRing(document.getElementById('f-hl-ring'),true):null;
+  const rBad=_hotRingProblem(rr,true); if(rBad){alert(rBad);return}
+  Object.assign(rec, rr?{ringMode:rr.on?'on':'off', ringSeconds:rr.seconds, hoursStart:rr.start, hoursEnd:rr.end, hoursDays:rr.days}
+    :{ringMode:null, ringSeconds:null, hoursStart:null, hoursEnd:null, hoursDays:null});
   if(!rec.name){alert('Name is required.');return}
   if(!/^\+1\d{10}$/.test(num)){alert('Enter the hotline’s 10-digit phone number.');return}
   if((DB.get('hotlines')||[]).some(x=>String(x.id)!==String(id)&&x.phoneNumber===num)){alert('Another hotline already uses that number.');return}
@@ -8834,6 +8952,7 @@ async function saveHotline(){
     if(!ex.length){alert('Add at least one extension, or choose “One project”.');return}
     if(ex.some(e=>!e.projectId)){alert('Pick a project for every extension.');return}
     const ds=ex.map(e=>e.digit); if(new Set(ds).size!==ds.length){alert('Two extensions use the same key.');return}
+    for(const e of ex){ const b=_hotRingProblem(e.ring,false); if(b){alert('Key '+e.digit+': '+b);return} }
   } else if(!rec.projectId){alert('Pick the project this number is for.');return}
   let hid=id;
   if(id){ if(!await sbUpdate('hotlines',id,rec)){showToast('Couldn’t save the hotline. Has sql/2026-10-12_hotlines.sql been run?','error',7000);return} }
@@ -8848,7 +8967,9 @@ async function saveHotline(){
   const keep=new Set(ex.map(e=>e.id).filter(Boolean));
   for(const o of old) if(!keep.has(String(o.id))) await sbUpdate('hotline_extensions',o.id,{active:false});
   for(const e of ex){
-    const row={hotlineId:hid,digit:e.digit,projectId:e.projectId,label:e.label,labelEs:e.labelEs,active:true};
+    const row={hotlineId:hid,digit:e.digit,projectId:e.projectId,label:e.label,labelEs:e.labelEs,active:true,
+      ...(e.ring?{ringMode:e.ring.on?'on':'off',hoursStart:e.ring.start,hoursEnd:e.ring.end,hoursDays:e.ring.days}
+        :{ringMode:null,hoursStart:null,hoursEnd:null,hoursDays:null})};
     if(e.id) await sbUpdate('hotline_extensions',e.id,row); else await sbAdd('hotline_extensions',row);
   }
   await _hotReload();
@@ -8891,11 +9012,11 @@ function renderHotline(el){
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
         <button class="btn btn-sm${tab==='pending'?' btn-primary':''}" onclick="setHotFilter('hotTab','pending')">Waiting (${pending.length})</button>
         <button class="btn btn-sm${tab==='closed'?' btn-primary':''}" onclick="setHotFilter('hotTab','closed')">Logged &amp; dismissed</button>
-        <button class="btn btn-sm${tab==='calls'?' btn-primary':''}" onclick="setHotFilter('hotTab','calls')">Calls placed${toDecide.length?' ('+toDecide.length+' to decide)':''}</button>
+        <button class="btn btn-sm${tab==='calls'?' btn-primary':''}" onclick="setHotFilter('hotTab','calls')">Calls${toDecide.length?' ('+toDecide.length+' to decide)':''}</button>
         ${tab==='pending'?`<span style="width:1px;height:20px;background:rgba(255,255,255,.15);margin:0 6px"></span>${chip('mine','Mine',mine.length)}${chip('unassigned','Unassigned',unassigned.length)}${chip('all','All',pending.length)}<span style="font-size:11px;color:var(--fog);margin-left:6px">Oldest first</span>`:''}
       </div>
       <div id="hot-list">${tab==='calls'?(calls.length?calls.slice(0,200).map(_hotCallRowHTML).join('')
-          :'<div style="font-size:13px;color:var(--fog);padding:24px 0">No calls placed from a hotline yet. Use 📞 New call.</div>')
+          :'<div style="font-size:13px;color:var(--fog);padding:24px 0">No calls yet. Calls you answer from a hotline, and calls placed with 📞 New call, show here to log or skip.</div>')
         :shown.length?shown.map(m=>tab==='pending'?_hotCardHTML(m):_hotClosedRowHTML(m)).join('')
         :`<div style="font-size:13px;color:var(--fog);padding:24px 0">${tab==='pending'?'Nothing waiting'+(who==='mine'?' for you':'')+'.':'No logged or dismissed voicemails yet.'}</div>`}</div>
     </div></div>`;
@@ -9029,7 +9150,8 @@ async function hotCallBackGo(){
 // first (who placed it, to which number) and caps fresh calls per person per
 // day. Nothing is logged automatically: afterwards it is "Log this call" or
 // "Don't log", and a call not decided yet waits under the Calls tab.
-const HOT_CALL_STATUS={placing:'Placing',ringing:'Ringing you',answered:'You answered',connected:'Connected',cancelled:'Cancelled — nobody was dialled',failed:'Could not be placed'};
+const HOT_CALL_STATUS={placing:'Placing',ringing:'Ringing you',answered:'You answered',connected:'Connected',completed:'Call ended',cancelled:'Cancelled — nobody was dialled',failed:'Could not be placed'};
+const _hotIsInbound=c=>c&&c.direction==='inbound';
 function _hotActiveLines(){
   return (DB.get('hotlines')||[]).filter(h=>h.active!==false).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
 }
@@ -9136,11 +9258,15 @@ function hotCallLog(id){
   const h=(DB.get('hotlines')||[]).find(x=>String(x.id)===String(c.hotlineId));
   const stake=c.stakeholderId&&(DB.get('stakeholders')||[]).find(x=>String(x.id)===String(c.stakeholderId));
   closeM();
+  const inbound=_hotIsInbound(c);
   openIntModal(stake?String(stake.id):null,{
     hotlineCallId:String(c.id), projectId:c.projectId||S.projectFilter||'', date:_hotLocalDate(c.createdAt),
-    channel:'Phone', direction:'Outgoing',
-    summary:'Called '+_hotFmtPhone(c.toNumber)+' from the '+(h?_hotName(h.name)+' ':'')+'hotline. ',
-    callerNumber:stake?'':c.toNumber
+    channel:'Phone', direction:inbound?'Incoming':'Outgoing',
+    summary:inbound
+      ?'Hotline call from '+_hotFmtPhone(c.toNumber)+' to the '+(h?_hotName(h.name)+' ':'')+'hotline'+(c.placedBy?', answered by '+c.placedBy:'')+(c.durationSeconds?' ('+_hotDur(c.durationSeconds)+')':'')+'. '
+      :'Called '+_hotFmtPhone(c.toNumber)+' from the '+(h?_hotName(h.name)+' ':'')+'hotline. ',
+    callerNumber:stake?'':c.toNumber,
+    suggest:inbound&&!stake?_hotPhoneMatches({callerNumber:c.toNumber,projectId:c.projectId}).map(s=>String(s.id)):[]
   });
 }
 async function hotCallSkip(id){
@@ -9162,9 +9288,11 @@ function _hotCallRowHTML(c){
   const st=c.stakeholderId&&(DB.get('stakeholders')||[]).find(x=>String(x.id)===String(c.stakeholderId));
   const decide=!c.outcome&&!['cancelled','failed'].includes(c.status);
   const out=c.outcome==='logged'?'Logged':c.outcome==='not_logged'?'Not logged':decide?'<span style="color:var(--amber,#e8a020)">Not decided yet</span>':'';
-  return `<div class="hot-call" data-id="${escHtml(c.id)}" style="display:flex;justify-content:space-between;gap:12px;padding:10px 4px;border-bottom:1px solid rgba(255,255,255,.07);font-size:12px;color:var(--fog)">
-    <div><span style="color:var(--white)">${escHtml(_hotFmtPhone(c.toNumber))}</span>${st?' · '+escHtml(dispName(st)):''} · ${escHtml(_hotWhen(c.createdAt))}
-      <div style="margin-top:2px">From ${escHtml(h?h.name:'a hotline')}${c.projectId?' · '+escHtml(_hotProjName(c.projectId)):''} · by ${escHtml(c.placedBy||c.placedByEmail||'')} · ${escHtml(HOT_CALL_STATUS[c.status]||c.status||'')}${out?' · '+out:''}${c.decidedBy&&c.outcome?' by '+escHtml(c.decidedBy):''}</div></div>
+  const inb=_hotIsInbound(c);
+  const match=inb&&!st?_hotPhoneMatches({callerNumber:c.toNumber,projectId:c.projectId})[0]:null;
+  return `<div class="hot-call" data-id="${escHtml(c.id)}" data-dir="${inb?'in':'out'}" style="display:flex;justify-content:space-between;gap:12px;padding:10px 4px;border-bottom:1px solid rgba(255,255,255,.07);font-size:12px;color:var(--fog)">
+    <div><span style="color:var(--white)">${inb?'⬇ ':'⬆ '}${escHtml(_hotFmtPhone(c.toNumber))}</span>${st?' · '+escHtml(dispName(st)):match?' · matches '+escHtml(dispName(match)):''} · ${escHtml(_hotWhen(c.createdAt))}${c.durationSeconds?' · '+_hotDur(c.durationSeconds):''}
+      <div style="margin-top:2px">${inb?'Answered call to':'From'} ${escHtml(h?h.name:'a hotline')}${c.projectId?' · '+escHtml(_hotProjName(c.projectId)):''} · ${inb?'answered':''} by ${escHtml(c.placedBy||c.placedByEmail||'')} · ${escHtml(HOT_CALL_STATUS[c.status]||c.status||'')}${out?' · '+out:''}${c.decidedBy&&c.outcome?' by '+escHtml(c.decidedBy):''}</div></div>
     <div style="display:flex;gap:6px;align-items:flex-start">${decide?`<button class="btn btn-primary btn-sm" onclick="hotCallLog('${escHtml(c.id)}')">Log this call</button><button class="btn btn-sm" onclick="hotCallSkip('${escHtml(c.id)}')">Don’t log</button>`:''}${c.outcome==='logged'&&c.loggedInteractionId?`<button class="btn btn-sm" onclick="openEditIntModal('${escHtml(c.loggedInteractionId)}')">Open interaction</button>`:''}</div>
   </div>`;
 }

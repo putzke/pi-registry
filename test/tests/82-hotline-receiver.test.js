@@ -323,5 +323,82 @@ module.exports = {
       'staff cannot insert or delete call rows — only the receiver writes them');
     const [g] = await t.sql(`select has_table_privilege('authenticated','pi_hotline_calls','INSERT') ins, has_table_privilege('authenticated','pi_hotline_calls','UPDATE') upd, has_table_privilege('anon','pi_hotline_calls','SELECT') anon`);
     t.ok(!g.ins && g.upd && !g.anon, 'grants: staff update only; anon nothing');
+
+    // ── Ring-through: the PI Lead's phone rings before voicemail ──────────
+    // Settings layering and business hours (pure).
+    const D = L.ringSettings(null, {}, null);
+    t.ok(D.enabled && D.seconds === 12 && D.start === '07:00' && D.end === '18:00' && D.days === '1,2,3,4,5' && D.tz === 'America/Denver',
+      'defaults: ring on, 12 seconds, Mon–Fri 7:00–18:00 Mountain');
+    const lay = L.ringSettings({ ring_enabled: true, ring_seconds: 15, hours_start: '06:00', hours_end: '17:00', hours_days: '1,2,3,4,5', timezone: 'America/Denver' },
+      { ring_seconds: 20 }, { ring_mode: 'off', hours_start: '09:00' });
+    t.ok(!lay.enabled && lay.seconds === 20 && lay.start === '09:00' && lay.end === '17:00', 'each field comes from the nearest layer that sets it (option → hotline → defaults)');
+    t.eq(L.ringSettings(null, { ring_seconds: 999 }, null).seconds, 60, 'ring time is held to 5–60 seconds');
+    const MON_10 = new Date('2026-10-12T16:00:00Z'), MON_6PM = new Date('2026-10-13T00:00:00Z'), SUN_10 = new Date('2026-10-11T16:00:00Z'), MON_659 = new Date('2026-10-12T12:59:00Z');
+    t.ok(L.inHours(D, MON_10) && !L.inHours(D, MON_6PM) && !L.inHours(D, SUN_10) && !L.inHours(D, MON_659),
+      'business hours: Monday 10 am in; 6:00 pm, 6:59 am and Sunday out (Mountain Time)');
+
+    await t.sql(`update pi_team_members set phone='801-555-0177' where initials='JP'`);
+    const at = when => L.createHandler({ env, fetchFn, now: () => when });
+    const inMon = at(MON_10);
+    const menu1 = { CallSid: 'CA' + '3'.repeat(32), From: '+13855550111', To: '+18015550101', Digits: '1' };
+    r = await call(`/menu?h=${h1.id}&l=en&r=0`, menu1, { h: inMon });
+    t.ok(/Please hold while we connect you/.test(r.body) && /<Dial timeout="12"/.test(r.body)
+      && /<Number url="[^"]*\/whisper\?[^"]*a=JP[^"]*" method="POST">\+18015550177<\/Number>/.test(r.body) && /action="[^"]*\/afterdial\?/.test(r.body) && !/<Record/.test(r.body),
+      'in hours: pressing the project’s key rings its PI Lead for 12 seconds');
+    r = await call(`/menu?h=${h1.id}&l=en&r=0`, menu1, { h: at(SUN_10) });
+    t.ok(/<Record /.test(r.body) && !/<Dial/.test(r.body), 'Sunday: straight to voicemail');
+    r = await call(`/menu?h=${h1.id}&l=en&r=0`, menu1, { h: at(MON_6PM) });
+    t.ok(/<Record /.test(r.body) && !/<Dial/.test(r.body), 'after 6 pm: straight to voicemail');
+    r = await call(`/menu?h=${h1.id}&l=en&r=0`, { ...menu1, Digits: '2' }, { h: inMon });
+    t.ok(/<Record /.test(r.body) && !/<Dial/.test(r.body), 'a project whose lead is not on the team list: voicemail');
+    r = await call(`/menu?h=${h1.id}&l=en&r=0`, { ...menu1, Digits: '0' }, { h: inMon });
+    t.ok(/<Record /.test(r.body) && !/<Dial/.test(r.body), 'the general mailbox has no lead: voicemail');
+    // The harness empties tables between tests; the migration's seeded row is gone.
+    await t.sql(`insert into pi_hotline_settings (id) values (1) on conflict (id) do nothing`);
+    await t.sql(`update pi_hotline_settings set ring_enabled=false where id=1`);
+    r = await call(`/menu?h=${h1.id}&l=en&r=0`, menu1, { h: inMon });
+    t.ok(/<Record /.test(r.body) && !/<Dial/.test(r.body), 'ringing switched off in the defaults: voicemail');
+    await t.sql(`update pi_hotlines set ring_mode='on', ring_seconds=20 where id=$1`, [h1.id]);
+    r = await call(`/menu?h=${h1.id}&l=en&r=0`, menu1, { h: inMon });
+    t.ok(/<Dial timeout="20"/.test(r.body), 'a hotline can switch ringing back on for itself, with its own ring time');
+    await t.sql(`update pi_hotline_extensions set hours_start='08:00', hours_end='09:00' where hotline_id=$1 and digit='1'`, [h1.id]);
+    r = await call(`/menu?h=${h1.id}&l=en&r=0`, menu1, { h: inMon });
+    t.ok(/<Record /.test(r.body) && !/<Dial/.test(r.body), 'a project on a menu can keep its own hours (8–9 am here, so 10 am goes to voicemail)');
+    await t.sql(`update pi_hotline_extensions set hours_start=null, hours_end=null where hotline_id=$1`, [h1.id]);
+    await t.sql(`update pi_hotlines set ring_mode=null, ring_seconds=null where id=$1`, [h1.id]);
+    await t.sql(`update pi_hotline_settings set ring_enabled=true where id=1`);
+    // A one-project number with no menu rings straight after the greeting.
+    await t.sql(`update pi_projects set lead='JP' where id=$1`, [pC.id]);
+    r = await call('/voice', { CallSid: 'CA' + '4'.repeat(32), From: '+13855550112', To: '+18015550102' }, { h: inMon });
+    t.ok(/Thank you for calling the Main Street Sewer hotline/.test(r.body) && /<Dial timeout="12"/.test(r.body), 'a one-project number: greeting, then the lead’s phone rings');
+    await t.sql(`update pi_projects set lead=null where id=$1`, [pC.id]);
+
+    // The lead's leg: press 1 to take it.
+    const rq = `h=${h1.id}&l=en&d=1&p=${pA.id}&a=JP`;
+    const PARENT = 'CA' + '5'.repeat(32), CHILD = 'CA' + '6'.repeat(32);
+    const lead = { CallSid: CHILD, ParentCallSid: PARENT, AccountSid: ACCT, From: '+13855550111', To: '+18015550177' };
+    r = await call('/whisper?' + rq, lead, { h: inMon });
+    t.ok(/<Gather numDigits="1"/.test(r.body) && /Call for the UDOT Region One hotline\. Press 1 to accept/.test(r.body) && /<Hangup\/>\s*<\/Response>/.test(r.body),
+      'the lead hears who it is for and must press 1 — their own voicemail never takes the call');
+    r = await call('/accept?' + rq, { ...lead, Digits: '' }, { h: inMon });
+    t.ok(/<Hangup\/>/.test(r.body) && (await t.sql(`select count(*)::int n from pi_hotline_calls where call_sid=$1`, [PARENT]))[0].n === 0, 'no key: not connected, nothing recorded');
+    r = await call('/accept?' + rq, { ...lead, Digits: '1' }, { h: inMon });
+    const [ans] = await t.sql(`select * from pi_hotline_calls where call_sid=$1`, [PARENT]);
+    t.ok(/<Response><\/Response>/.test(r.body) && ans && ans.direction === 'inbound' && ans.to_number === '+13855550111' && ans.ring_number === '+18015550177'
+      && ans.placed_by === 'JP' && ans.placed_by_email === 'lead@example.test' && ans.project_id === String(pA.id) && !ans.outcome,
+      'press 1: connected, and an answered-call row waits for review — number, project, who answered');
+    r = await call('/afterdial?' + rq, { CallSid: PARENT, AccountSid: ACCT, From: '+13855550111', To: '+18015550101', DialCallStatus: 'completed', DialCallDuration: '95' }, { h: inMon });
+    const [ans2] = await t.sql(`select status, duration_seconds from pi_hotline_calls where call_sid=$1`, [PARENT]);
+    t.ok(/<Hangup\/>/.test(r.body) && !/<Record/.test(r.body) && ans2.status === 'completed' && ans2.duration_seconds === 95, 'after an answered call: hang up, length recorded');
+    r = await call('/afterdial?' + rq, { CallSid: 'CA' + '7'.repeat(32), AccountSid: ACCT, From: '+13855550111', To: '+18015550101', DialCallStatus: 'no-answer' }, { h: inMon });
+    t.ok(/nobody can take your call/.test(r.body) && /<Record /.test(r.body) && new RegExp('p=' + pA.id).test(r.body), 'nobody took it: the caller leaves a voicemail for that project');
+    // Unsigned lead legs are confirmed as a leg of a live inbound hotline call.
+    twilioApi[`Calls/${CHILD}.json`] = { sid: CHILD, account_sid: ACCT, direction: 'outbound-dial', parent_call_sid: PARENT, status: 'in-progress' };
+    twilioApi[`Calls/${PARENT}.json`] = { sid: PARENT, account_sid: ACCT, direction: 'inbound', to: '+18015550101', status: 'in-progress' };
+    t.eq((await call('/whisper?' + rq, lead, { h: inMon, signed: false })).status, 200, 'unsigned lead leg: accepted once Twilio confirms it belongs to a live hotline call');
+    twilioApi[`Calls/${PARENT}.json`].to = '+18005550000';
+    t.eq((await call('/whisper?' + rq, lead, { h: inMon, signed: false })).status, 403, 'unsigned lead leg: refused when its parent call was not to a hotline');
+    // Answered calls never count against the dialpad's daily limit.
+    t.ok(/direction=eq\.outbound/.test(require('fs').readFileSync(path.join(__dirname, '..', '..', 'supabase', 'functions', 'hotline', 'logic.mjs'), 'utf8')), 'the daily limit counts calls placed, not calls answered');
   },
 };

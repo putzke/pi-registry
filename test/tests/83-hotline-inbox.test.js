@@ -195,6 +195,58 @@ module.exports = {
       const csp = require('fs').readFileSync(require('path').join(__dirname, '..', '..', 'index.html'), 'utf8').match(/Content-Security-Policy" content="([^"]*)"/)[1];
       const media = (csp.match(/media-src([^;]*)/) || [, ''])[1];
       t.ok(/ncfbblhlsiglxkoiounv\.supabase\.co/.test(media) && /oxbonrnilvadszgfctfl\.supabase\.co/.test(media), 'the CSP lets the recording player load audio from both Supabase projects');
+      // ── Ring-through settings ─────────────────────────────────────────
+      await app.page.evaluate(() => { setView('settings'); });
+      const def = await app.page.evaluate(() => { const el = document.getElementById('hot-defaults');
+        return { on: el.querySelector('.rf-on').checked, secs: el.querySelector('.rf-secs').value, start: el.querySelector('.rf-start').value, end: el.querySelector('.rf-end').value,
+          days: [...el.querySelectorAll('.rf-day')].filter(x => x.checked).map(x => x.value).join(',') }; });
+      t.ok(def.on && def.secs === '12' && def.start === '07:00' && def.end === '18:00' && def.days === '1,2,3,4,5', 'Settings opens on the defaults: ring the PI Lead 12 s, Mon–Fri 7:00–18:00');
+      const alerts = [];
+      await app.page.exposeFunction('_testAlert', m => { alerts.push(m); });
+      await app.page.evaluate(() => { window.alert = m => window._testAlert(String(m)); });
+      await app.page.evaluate(() => { document.querySelector('#hot-defaults .rf-secs').value = '3'; return saveHotlineDefaults(); });
+      await t.until(async () => alerts.length > 0);
+      t.ok(/5 to 60/.test(alerts[0] || '') && (await t.sql(`select count(*)::int n from pi_hotline_settings`))[0].n === 0, 'a ring time under 5 seconds is refused, nothing saved');
+      await app.page.evaluate(() => { const el = document.getElementById('hot-defaults');
+        el.querySelector('.rf-secs').value = '15'; el.querySelector('.rf-start').value = '06:30';
+        el.querySelector('.rf-day[value="6"]').checked = true; return saveHotlineDefaults(); });
+      const gs = await t.until(async () => (await t.sql(`select * from pi_hotline_settings where id=1`))[0]);
+      t.ok(gs && gs.ring_enabled === true && gs.ring_seconds === 15 && gs.hours_start === '06:30' && gs.hours_end === '18:00' && gs.hours_days === '1,2,3,4,5,6',
+        'the all-hotlines defaults save: 15 s, 6:30–18:00, Mon–Sat');
+      t.ok(await app.page.evaluate(() => /Rings the PI Lead 15 s, Mon–Sat 6:30 am–6:00 pm/.test(document.getElementById('hotline-card-body').textContent)), 'each hotline row says what happens when a call comes in');
+      // The app reads the layers exactly as the receiver does.
+      const cases = [
+        [null, {}, null],
+        [{ ringEnabled: false, ringSeconds: 15, hoursStart: '06:00', hoursEnd: '17:00', hoursDays: '1,2,3', timezone: 'America/Denver' }, { ringMode: 'on' }, { hoursStart: '09:00' }],
+        [{ ringEnabled: true }, { ringSeconds: 99, ringMode: 'off' }, { ringMode: 'on', hoursDays: '0,6' }],
+      ];
+      const snake = o => o && Object.fromEntries(Object.entries(o).map(([k, v]) => [{ ringEnabled: 'ring_enabled', ringSeconds: 'ring_seconds', ringMode: 'ring_mode', hoursStart: 'hours_start', hoursEnd: 'hours_end', hoursDays: 'hours_days', timezone: 'timezone' }[k], v]));
+      const appRes = await app.page.evaluate(cs => cs.map(c => _hotRingSettings(...c)), cases);
+      t.eq(appRes, cases.map(c => L.ringSettings(snake(c[0]), snake(c[1]), snake(c[2]))), 'the app and the receiver resolve ringing and hours the same way');
+      // A hotline's own settings, and a project's on its menu.
+      await app.page.evaluate(id => openHotlineModal(id), String(wh.id));
+      await app.page.evaluate(B => {
+        _hotAddExt(); const rs = document.querySelectorAll('#f-hl-exts .hot-ext-row'); rs[1].querySelector('.hx-proj').value = B; rs[1].querySelector('.hx-label').value = 'the second project';
+        const sel = document.getElementById('f-hl-ruse'); sel.value = 'custom'; _hotToggleCustom(sel);
+        const r = document.getElementById('f-hl-ring'); r.querySelector('.rf-secs').value = '20'; r.querySelector('.rf-end').value = '17:00';
+        const row = document.querySelector('#f-hl-exts .hot-ext-row'); row.querySelector('.hx-hours-btn').click();
+        const es = row.querySelector('.hx-ruse'); es.value = 'custom'; _hotToggleCustom(es);
+        const c = row.querySelector('.rf-custom'); c.querySelector('.rf-start').value = '08:00'; c.querySelector('.rf-end').value = '12:00';
+        _hotPreview();
+      }, B);
+      t.ok(await app.page.evaluate(() => /rings for 20 seconds/.test(document.getElementById('f-hl-preview').textContent)), '“What callers hear” includes the ringing');
+      await app.page.evaluate(() => saveHotline());
+      const wh2 = await t.until(async () => (await t.sql(`select * from pi_hotlines where id=$1 and ring_seconds is not null`, [wh.id]))[0]);
+      t.ok(wh2 && wh2.ring_mode === 'on' && wh2.ring_seconds === 20 && wh2.hours_start === '06:30' && wh2.hours_end === '17:00', 'a hotline can have its own ring time and hours');
+      const exs = await t.sql(`select digit, ring_mode, hours_start, hours_end from pi_hotline_extensions where hotline_id=$1 and active order by digit`, [wh.id]);
+      t.ok(exs[0].hours_start === '08:00' && exs[0].hours_end === '12:00' && exs[0].ring_mode === 'on' && exs[1].hours_start === null && exs[1].ring_mode === null,
+        'a project on the menu can have its own hours; the other keeps the hotline’s');
+      await app.page.evaluate(id => openHotlineModal(id), String(wh.id));
+      t.ok(await app.page.evaluate(() => document.getElementById('f-hl-ruse').value === 'custom'
+        && document.querySelector('#f-hl-exts .hot-ext-row .hx-ruse').value === 'custom'), 'reopening shows both custom settings');
+      await app.page.evaluate(() => { const sel = document.getElementById('f-hl-ruse'); sel.value = 'default'; _hotToggleCustom(sel); return saveHotline(); });
+      const wh3 = await t.until(async () => (await t.sql(`select * from pi_hotlines where id=$1 and ring_seconds is null`, [wh.id]))[0]);
+      t.ok(wh3 && wh3.ring_mode === null && wh3.hours_start === null && wh3.hours_days === null, 'back to “Use the defaults” clears the hotline’s own settings');
       // ── Call back from the hotline number ───────────────────────────────
       await app.page.evaluate(() => { S.hotTab = 'pending'; S.hotWho = 'all'; S.projectFilter = null; setView('hotline'); });
       t.ok(await app.page.evaluate(id => !!document.querySelector(`.hot-card[data-id="${id}"] button[onclick^="hotCallBack"]`), m4), 'a waiting voicemail has a Call back button');
@@ -254,6 +306,21 @@ module.exports = {
       await app.page.evaluate(() => setHotFilter('hotTab', 'calls'));
       const rows = await app.page.evaluate(() => [...document.querySelectorAll('.hot-call')].map(r => r.textContent));
       t.ok(rows.length === 2 && /Not logged/.test(rows[0]) && /Logged/.test(rows[1]) && /by PUT/.test(rows[1]), 'the Calls tab lists each call, who placed it and what was decided');
+      // ── An answered hotline call waits for review ────────────────────
+      const [ac] = await t.sql(`insert into pi_hotline_calls (direction, hotline_id, project_id, to_number, ring_number, placed_by, placed_by_email, call_sid, status, duration_seconds)
+        values ('inbound',$1,$2,'+18015550142','+18015550177','PUT','putzke@demo.test','CA${'9'.repeat(32)}','completed',95) returning id`, [h.id, A]);
+      await app.page.evaluate(async () => { await _hotReload(); S.projectFilter = null; S.hotTab = 'calls'; setView('hotline'); });
+      const inRow = await app.page.evaluate(id => document.querySelector(`.hot-call[data-id="${id}"]`)?.textContent || '', String(ac.id));
+      t.ok(/Answered call to Region One/.test(inRow) && /answered by PUT/.test(inRow) && /1:35/.test(inRow) && /Not decided yet/.test(inRow), 'the Calls tab shows the answered call: who took it, how long, not yet decided');
+      await app.page.evaluate(id => hotCallLog(String(id)), ac.id);
+      const af = await app.page.evaluate(() => ({ d: document.getElementById('f-idr').value, su: document.getElementById('f-isu').value,
+        use: !!document.querySelector('#modal-ov button[onclick^="_intSetStake"]'), stake: document.getElementById('f-is').value }));
+      t.ok(af.d === 'Incoming' && /^Hotline call from \(801\) 555-0142 to the Region One hotline, answered by PUT \(1:35\)\./.test(af.su) && af.use && af.stake === '',
+        'Log this call opens prefilled as Incoming, and only suggests the contact whose phone matches');
+      await app.page.evaluate(() => { document.querySelector('#modal-ov button[onclick^="_intSetStake"]').click(); document.getElementById('f-isu').value += 'Asked about night work.'; return saveInt(); });
+      const acDone = await t.until(async () => (await t.sql(`select outcome, logged_interaction_id from pi_hotline_calls where id=$1 and outcome is not null`, [ac.id]))[0]);
+      const [aInt] = acDone ? await t.sql(`select direction, stakeholder_id from pi_interactions where id=$1`, [acDone.logged_interaction_id]) : [{}];
+      t.ok(acDone && acDone.outcome === 'logged' && aInt.direction === 'Incoming' && String(aInt.stakeholder_id) === String(st.id), 'saved: an Incoming interaction with the chosen contact; the call is marked logged');
       t.eq(app.errors, [], 'no page errors');
     } finally { await app.close(); }
   },

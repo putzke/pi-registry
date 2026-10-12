@@ -45,6 +45,14 @@ create table if not exists pi_hotlines (
   updated_by          text
 );
 alter table pi_hotlines add column if not exists default_assignee text;
+-- Ring-through (ring the project's PI Lead before voicemail). Blank = use the
+-- all-hotlines default in pi_hotline_settings. ring_mode: 'on' | 'off'.
+-- hours_days: 0 = Sunday … 6 = Saturday, comma-separated; times 'HH:MM'.
+alter table pi_hotlines add column if not exists ring_mode    text;
+alter table pi_hotlines add column if not exists ring_seconds integer;
+alter table pi_hotlines add column if not exists hours_start  text;
+alter table pi_hotlines add column if not exists hours_end    text;
+alter table pi_hotlines add column if not exists hours_days   text;
 create unique index if not exists pi_hotlines_number_uniq on pi_hotlines (phone_number);
 
 create table if not exists pi_hotline_extensions (
@@ -57,6 +65,11 @@ create table if not exists pi_hotline_extensions (
   active      boolean not null default true,
   created_at  timestamptz default now()
 );
+-- A project on a menu hotline can have its own ringing and hours.
+alter table pi_hotline_extensions add column if not exists ring_mode   text;
+alter table pi_hotline_extensions add column if not exists hours_start text;
+alter table pi_hotline_extensions add column if not exists hours_end   text;
+alter table pi_hotline_extensions add column if not exists hours_days  text;
 create unique index if not exists pi_hotline_ext_digit_uniq
   on pi_hotline_extensions (hotline_id, digit) where active;
 
@@ -115,6 +128,24 @@ create table if not exists pi_hotline_calls (
   created_at            timestamptz not null default now()
 );
 create index if not exists pi_hotline_calls_by_email on pi_hotline_calls (placed_by_email, created_at);
+-- 'outbound' = placed with the dialpad; 'inbound' = a hotline call the PI Lead
+-- answered (ring-through). Inbound rows hold the facts only — no recording.
+alter table pi_hotline_calls add column if not exists direction text not null default 'outbound';
+alter table pi_hotline_calls add column if not exists duration_seconds integer;
+
+-- The all-hotlines defaults: one row, id 1.
+create table if not exists pi_hotline_settings (
+  id           integer primary key default 1 check (id = 1),
+  ring_enabled boolean not null default true,
+  ring_seconds integer not null default 12,
+  hours_start  text    not null default '07:00',
+  hours_end    text    not null default '18:00',
+  hours_days   text    not null default '1,2,3,4,5',
+  timezone     text    not null default 'America/Denver',
+  updated_at   timestamptz default now(),
+  updated_by   text
+);
+insert into pi_hotline_settings (id) values (1) on conflict (id) do nothing;
 
 alter table pi_interactions add column if not exists related_to bigint
   references pi_interactions(id) on delete set null;
@@ -123,7 +154,7 @@ alter table pi_interactions add column if not exists related_to bigint
 do $$
 declare t text;
 begin
-  foreach t in array array['pi_hotlines','pi_hotline_extensions','pi_hotline_messages','pi_hotline_calls'] loop
+  foreach t in array array['pi_hotlines','pi_hotline_extensions','pi_hotline_messages','pi_hotline_calls','pi_hotline_settings'] loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists %I on public.%I', t || '_staff_all', t);
     execute format($p$create policy %I on public.%I for all to authenticated
@@ -142,12 +173,15 @@ end $$;
 grant usage, select on all sequences in schema public to authenticated;
 -- Calls are placed only through the receiver: staff read and mark them.
 revoke insert, delete on public.pi_hotline_calls from authenticated;
+-- One settings row: edited, never added or removed.
+revoke insert, delete on public.pi_hotline_settings from authenticated;
 -- The hotline receiver (an Edge Function) runs as service_role: it reads the
 -- hotline tables, the project's lead and the team list. Live and dev rebuilt
 -- from live carry no service_role grant on pi_team_members / pi_staff.
 do $$ begin
   if exists (select 1 from pg_roles where rolname = 'service_role') then
     grant select, insert, update on public.pi_hotlines, public.pi_hotline_extensions, public.pi_hotline_messages, public.pi_hotline_calls to service_role;
+    grant select on public.pi_hotline_settings to service_role;
     grant select on public.pi_projects, public.pi_team_members, public.pi_staff to service_role;
   end if;
 end $$;
@@ -166,7 +200,7 @@ create policy hotline_audio_staff_all on storage.objects
 -- ── Verify (run after) ───────────────────────────────────────────────────────
 --   select tablename, policyname, permissive from pg_policies
 --    where tablename like 'pi_hotline%' order by 1, 2;
--- Expect *_staff_all (PERMISSIVE) and pi_staff_or_client (RESTRICTIVE) on all four.
+-- Expect *_staff_all (PERMISSIVE) and pi_staff_or_client (RESTRICTIVE) on all five.
 --   select has_table_privilege('anon', 'pi_hotline_messages', 'SELECT');   -- false
 --   select column_name from information_schema.columns
 --    where table_name = 'pi_interactions' and column_name = 'related_to';  -- one row

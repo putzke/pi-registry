@@ -10,6 +10,9 @@
 // Every Twilio request must carry a valid X-Twilio-Signature, or — when it
 // carries none at all — be confirmed call-by-call against Twilio's own API
 // (confirmWithTwilio). Anything else is refused.
+//   POST /hotline/whisper      ring-through: the PI Lead answered → "press 1 to accept"
+//   POST /hotline/accept       they pressed 1 → connected, an "answered call" row is written
+//   POST /hotline/afterdial    the ringing ended → hang up if answered, else voicemail
 //   POST /hotline/bridge       call-back: the staff member's phone answered → "press 1"
 //   POST /hotline/connect      they pressed 1 → dial the caller from the hotline number
 // The app calls two routes, with the signed-in user's token:
@@ -50,6 +53,9 @@ const T = {
     closed: 'This number is not in service. Goodbye.',
     noMessage: 'We did not receive a message. Goodbye.',
     trouble: 'Sorry, we are having trouble taking messages right now. Please call back later.',
+    hold: 'Please hold while we connect you.',
+    noAnswer: 'Sorry, nobody can take your call right now.',
+    whisper: (name, es) => `Call for the ${name} hotline${es ? ', from a Spanish-speaking caller' : ''}. Press 1 to accept.`,
     callbackPrompt: (num, name) => `This is your call back from the ${name} hotline. Press 1 to call ${num}. Or hang up to cancel.`,
     dialPrompt: (num, name) => `This is your call from the ${name} hotline. Press 1 to call ${num}. Or hang up to cancel.`,
     callbackConnecting: 'Connecting. This call is not recorded.',
@@ -68,6 +74,8 @@ const T = {
     closed: 'Este número no está en servicio. Adiós.',
     noMessage: 'No recibimos un mensaje. Adiós.',
     trouble: 'Lo sentimos, tenemos problemas para recibir mensajes. Por favor, llame más tarde.',
+    hold: 'Por favor, espere mientras lo comunicamos.',
+    noAnswer: 'Lo sentimos, nadie puede atender su llamada en este momento.',
   },
 };
 export const PHRASES = T;
@@ -226,6 +234,45 @@ export function pickAssignee(project, team) {
   return m ? m.initials : null;
 }
 
+// ── Ring-through: ring the PI Lead before voicemail ─────────────────────────
+// Settings come in three layers, each field taken from the first that sets it:
+// the menu option (a project on a menu hotline), the hotline, then the
+// all-hotlines defaults (pi_hotline_settings), then these built-in values.
+export const RING_DEFAULTS = { enabled: true, seconds: 12, start: '07:00', end: '18:00', days: '1,2,3,4,5', tz: 'America/Denver' };
+export const RING_SECONDS_MIN = 5, RING_SECONDS_MAX = 60;
+const set = v => v !== null && v !== undefined && v !== '';
+export function ringSettings(global, hotline, ext) {
+  const layers = [ext || {}, hotline || {}, global || {}];
+  const pick = (k, fb) => { for (const l of layers) if (set(l[k])) return l[k]; return fb; };
+  const mode = pick('ring_mode', null);
+  const enabled = mode === 'on' ? true : mode === 'off' ? false
+    : (global && typeof global.ring_enabled === 'boolean' ? global.ring_enabled : RING_DEFAULTS.enabled);
+  const secs = Math.round(Number(pick('ring_seconds', RING_DEFAULTS.seconds)));
+  return {
+    enabled,
+    seconds: Math.min(RING_SECONDS_MAX, Math.max(RING_SECONDS_MIN, isFinite(secs) ? secs : RING_DEFAULTS.seconds)),
+    start: pick('hours_start', RING_DEFAULTS.start), end: pick('hours_end', RING_DEFAULTS.end),
+    days: pick('hours_days', RING_DEFAULTS.days),
+    tz: (global && global.timezone) || RING_DEFAULTS.tz,
+  };
+}
+// Is `date` inside business hours, in the settings' time zone? Days are
+// 0 = Sunday … 6 = Saturday; times "HH:MM", end not included.
+export function inHours(st, date) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: st.tz, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .formatToParts(date).map(p => [p.type, p.value]));
+  const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parts.weekday);
+  if (!String(st.days || '').split(',').map(s => s.trim()).includes(String(day))) return false;
+  const now = `${String(parts.hour).padStart(2, '0')}:${parts.minute}`;
+  return now >= String(st.start) && now < String(st.end);
+}
+export function ringTwiml({ hotline, lang, base, projectId, digit, seconds, phone, lead, greet = '' }) {
+  const q = `h=${hotline.id}&l=${lang}&d=${encodeURIComponent(digit || '')}&p=${encodeURIComponent(projectId || '')}&a=${encodeURIComponent(lead || '')}`;
+  return twiml(greet + say(T[lang].hold, lang)
+    + `<Dial timeout="${Number(seconds)}" action="${xmlEsc(base + '/afterdial?' + q)}" method="POST">`
+    + `<Number url="${xmlEsc(base + '/whisper?' + q)}" method="POST">${xmlEsc(phone)}</Number></Dial>`);
+}
+
 // ── The handler ──────────────────────────────────────────────────────────────
 // env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, TWILIO_ACCOUNT_SID,
 //      TWILIO_AUTH_TOKEN, RESEND_API_KEY (optional), HOTLINE_FROM_EMAIL
@@ -256,6 +303,31 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
     if (!h || h.active === false) return null;
     const exts = activeExtensions(await rest(`pi_hotline_extensions?hotline_id=eq.${h.id}&select=*`), h.id);
     return { h, exts };
+  }
+
+  // Who to ring for this call right now, or null (straight to voicemail).
+  // Only the project's own PI Lead, active on the team list, with a US phone,
+  // inside business hours, and only if ringing is on for this hotline/option.
+  async function ringTarget(loaded, projectId, digit) {
+    try {
+      if (!loaded || !projectId) return null;
+      let g = null;
+      try { g = await one('pi_hotline_settings?id=eq.1&select=*'); } catch (_) { /* table not there yet: defaults */ }
+      const ext = digit ? loaded.exts.find(e => e.digit === digit) : null;
+      const st = ringSettings(g, loaded.h, ext);
+      if (!st.enabled || !inHours(st, now())) return null;
+      const proj = await one(`pi_projects?id=eq.${encodeURIComponent(projectId)}&select=id,lead`);
+      const lead = String((proj && proj.lead) || '').trim().toUpperCase();
+      if (!lead) return null;
+      const team = await rest('pi_team_members?select=initials,phone,email,active') || [];
+      const m = team.find(x => String(x.initials || '').trim().toUpperCase() === lead && x.active !== false);
+      const phone = m && callableNumber(m.phone);
+      if (!phone || phone === normPhone(loaded.h.phone_number)) return null;
+      return { phone, lead, email: String(m.email || '').toLowerCase(), seconds: st.seconds };
+    } catch (e) {
+      console.error('hotline: ring lookup failed', e.message);
+      return null;   // never lose the call: voicemail instead
+    }
   }
 
   async function greetingUrl(h, lang) {
@@ -295,12 +367,23 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
     if (c.account_sid !== SID) return 'account';
     // A call-back leg is a call WE placed from a hotline number; everything
     // else is a call that came IN to one.
+    // A ring-through leg is the PI Lead's phone, dialled from a live inbound
+    // call to one of our hotlines.
+    if (['/whisper', '/accept'].includes(sub)) {
+      if (c.direction !== 'outbound-dial' || !/^CA[0-9a-f]{32}$/i.test(c.parent_call_sid || '')) return 'direction';
+      if (!['queued', 'ringing', 'in-progress'].includes(c.status)) return 'call over';
+      const pc = await twilioGet(`Calls/${c.parent_call_sid}.json`);
+      if (!pc || pc.account_sid !== SID || pc.direction !== 'inbound') return 'parent';
+      if (!['queued', 'ringing', 'in-progress'].includes(pc.status)) return 'call over';
+      if (!(await one(`pi_hotlines?phone_number=eq.${encodeURIComponent(normPhone(pc.to))}&select=id`))) return 'not a hotline';
+      return '';
+    }
     const outbound = ['/bridge', '/connect'].includes(sub);
     if (c.direction !== (outbound ? 'outbound-api' : 'inbound')) return 'direction';
     const ours = outbound ? c.from : c.to;
     if (!outbound && params.To && normPhone(params.To) !== normPhone(c.to)) return 'to';
     if (!(await one(`pi_hotlines?phone_number=eq.${encodeURIComponent(normPhone(ours))}&select=id`))) return 'not a hotline';
-    if (['/voice', '/menu', '/recorded', '/bridge', '/connect'].includes(sub)) {
+    if (['/voice', '/menu', '/recorded', '/afterdial', '/bridge', '/connect'].includes(sub)) {
       if (!['queued', 'ringing', 'in-progress'].includes(c.status)) return 'call over';
     } else {
       const age = now().getTime() - new Date(c.date_created || c.start_time).getTime();
@@ -402,17 +485,74 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
       const h = await one(`pi_hotlines?phone_number=eq.${encodeURIComponent(normPhone(params.To))}&active=eq.true&select=*`);
       if (!h) return xml(closedTwiml());
       const loaded = await loadHotline(h.id);
-      return xml(voiceTwiml({ hotline: loaded.h, exts: loaded.exts, lang: 'en', base, greetingUrl: await greetingUrl(loaded.h, 'en') }));
+      const gu = await greetingUrl(loaded.h, 'en');
+      // A one-project number with no menu goes straight to the lead (or voicemail).
+      if (!menuText(loaded.h, loaded.exts, 'en')) {
+        const t = await ringTarget(loaded, loaded.h.project_id, '');
+        if (t) return xml(ringTwiml({ hotline: loaded.h, lang: 'en', base, projectId: loaded.h.project_id, digit: '', seconds: t.seconds, phone: t.phone, lead: t.lead, greet: greetingParts(loaded.h, 'en', gu) }));
+      }
+      return xml(voiceTwiml({ hotline: loaded.h, exts: loaded.exts, lang: 'en', base, greetingUrl: gu }));
     }
     const loaded = await loadHotline(url.searchParams.get('h'));
     if (sub === '/menu') {
       if (!loaded) return xml(closedTwiml());
       const digits = url.searchParams.get('none') ? '' : params.Digits;
       const r = route({ hotline: loaded.h, exts: loaded.exts, lang, digits, retry: url.searchParams.get('r') });
+      if (r.kind === 'record') {
+        const t = await ringTarget(loaded, r.projectId, r.digit);
+        if (t) return xml(ringTwiml({ hotline: loaded.h, lang, base, projectId: r.projectId, digit: r.digit, seconds: t.seconds, phone: t.phone, lead: t.lead }));
+      }
       const gu = r.kind === 'spanish' ? await greetingUrl(loaded.h, 'es') : '';
+      // Spanish on a one-project number: no Spanish menu, so ring (or record) now.
+      if (r.kind === 'spanish' && !menuText(loaded.h, loaded.exts, 'es')) {
+        const t = await ringTarget(loaded, loaded.h.project_id, '');
+        if (t) return xml(ringTwiml({ hotline: loaded.h, lang: 'es', base, projectId: loaded.h.project_id, digit: '', seconds: t.seconds, phone: t.phone, lead: t.lead, greet: greetingParts(loaded.h, 'es', gu) }));
+      }
       return xml(menuTwiml({ hotline: loaded.h, exts: loaded.exts, lang, base, digits, retry: url.searchParams.get('r'), greetingUrl: gu }));
     }
     if (sub === '/recorded') return xml(recordedTwiml(lang));
+
+    // ── Ring-through ─────────────────────────────────────────────────────
+    // The lead's leg: they must press 1, so a phone's own voicemail can never
+    // swallow the caller — it doesn't press 1, the ringing ends, and the
+    // caller gets the project's voicemail.
+    if (sub === '/whisper') {
+      if (!loaded) return xml(twiml('<Hangup/>'));
+      const q = url.search.slice(1);
+      return xml(twiml(`<Gather numDigits="1" timeout="6" action="${xmlEsc(base + '/accept?' + q)}" method="POST">`
+        + say(T.en.whisper(hotName(loaded.h.name), lang === 'es'), 'en') + '</Gather><Hangup/>'));
+    }
+    if (sub === '/accept') {
+      if (!loaded || String(params.Digits || '') !== '1') return xml(twiml('<Hangup/>'));
+      const lead = String(url.searchParams.get('a') || '').toUpperCase().slice(0, 6) || null;
+      let email = '';
+      try {
+        const m = lead ? await one(`pi_team_members?initials=ilike.${encodeURIComponent(lead)}&select=email`) : null;
+        email = String((m && m.email) || '').toLowerCase();
+      } catch (_) {}
+      // Only the facts of the call: no recording, so nothing to announce.
+      try {
+        await rest('pi_hotline_calls', { method: 'POST', headers: { 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+          body: JSON.stringify({ direction: 'inbound', hotline_id: loaded.h.id, project_id: url.searchParams.get('p') || null,
+            to_number: normPhone(params.From) || 'unknown', ring_number: normPhone(params.To) || null,
+            placed_by: lead, placed_by_email: email, call_sid: params.ParentCallSid || null, status: 'connected' }) });
+      } catch (e) { console.error('hotline: answered call not recorded', e.message); }
+      return xml(twiml(''));   // an empty response connects the two
+    }
+    if (sub === '/afterdial') {
+      const answered = params.CallSid
+        ? await one(`pi_hotline_calls?call_sid=eq.${encodeURIComponent(params.CallSid)}&direction=eq.inbound&select=id`) : null;
+      if (answered) {
+        try {
+          await rest(`pi_hotline_calls?id=eq.${answered.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+            body: JSON.stringify({ status: 'completed', duration_seconds: Number(params.DialCallDuration) || null }) });
+        } catch (_) {}
+        return xml(twiml('<Hangup/>'));
+      }
+      if (!loaded) return xml(closedTwiml());
+      return xml(twiml(say(T[lang].noAnswer, lang)
+        + recordParts({ hotline: loaded.h, lang, base, projectId: url.searchParams.get('p') || null, digit: url.searchParams.get('d') || '' })));
+    }
 
     if (sub === '/recording') {
       if (params.RecordingStatus && params.RecordingStatus !== 'completed') return json({ ok: true, skipped: params.RecordingStatus });
@@ -520,7 +660,7 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
       if (exts.some(e => String(e.project_id) === String(body.projectId))) project = String(body.projectId);
     }
     const since = new Date(now().getTime() - 86400000).toISOString();
-    const recent = await rest(`pi_hotline_calls?placed_by_email=eq.${encodeURIComponent(who.email)}&created_at=gte.${encodeURIComponent(since)}&select=id`) || [];
+    const recent = await rest(`pi_hotline_calls?placed_by_email=eq.${encodeURIComponent(who.email)}&direction=eq.outbound&created_at=gte.${encodeURIComponent(since)}&select=id`) || [];
     if (recent.length >= DIAL_DAILY_LIMIT) return json({ error: `You have placed ${DIAL_DAILY_LIMIT} hotline calls in the last 24 hours — the daily limit. It resets as the day goes on.` }, 429);
     const rows = await rest('pi_hotline_calls', { method: 'POST', headers: { 'Content-Type': 'application/json', Prefer: 'return=representation' },
       body: JSON.stringify({ hotline_id: h.id, project_id: project, stakeholder_id: body.stakeholderId ? String(body.stakeholderId) : null,
@@ -617,7 +757,7 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
     } catch (e) {
       console.error('hotline:', e.message);
       // A caller never hears an error code: they are told to call back later.
-      if (['/voice', '/menu'].includes(sub)) return xml(troubleTwiml());
+      if (['/voice', '/menu', '/afterdial'].includes(sub)) return xml(troubleTwiml());
       return json({ error: 'failed' }, 500);
     }
   };

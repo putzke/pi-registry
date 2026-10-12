@@ -3153,6 +3153,34 @@ a Twilio trial + one number on DEV for a real call, then release.
     bug), tests in the 82/83 style.
   - Not doing: in-browser calling (Twilio Voice SDK — bigger, unreliable on
     iPhone). Hotline settings stay desktop-only.
+- **Ring-through — BUILT on DEV (2026-10-12), not recorded.** Within business
+  hours a caller who reaches a project (one-project number, a menu key, or
+  Spanish on a one-project number) hears "Please hold…" while the project's
+  PI Lead's phone rings (active team member with a callable phone, not the
+  hotline's own number). The lead hears a whisper ("Call for the X hotline…
+  press 1 to accept"); pressing 1 (`/accept`) writes an INBOUND
+  `pi_hotline_calls` row (`call_sid` = the caller's call) and connects. No
+  answer within the ring time, or the lead hangs up / doesn't press 1 →
+  `/afterdial` plays "Sorry, nobody can take your call right now" and records
+  a voicemail as before. Outside hours, ringing off, no lead or no phone, or
+  any lookup error → straight to voicemail.
+  - **Settings, three layers** (first one set wins): an extension on a menu
+    hotline (its own hours/ring on-off; ⏰ on the extension row) → the hotline
+    ("When someone calls": use defaults / custom) → global
+    `pi_hotline_settings` (one row, id 1; Settings → Project hotlines →
+    "When someone calls — defaults") → code defaults: ringing on, **12 s**,
+    **7:00 am–6:00 pm, Mon–Fri** (days assumed — Jeff gave hours only),
+    America/Denver. Ring time 5–60 s. `ringSettings`/`inHours` (receiver) and
+    `_hotRingSettings` (app) are the same rule; test 83 asserts parity.
+    `NULL_CLEARS_FIELDS` lets `toSB` send `null` to clear an override.
+  - Calls tab ("Calls", was "Calls placed") lists answered inbound calls (⬇,
+    who answered, duration) beside outbound ones (⬆); **Log this call** opens
+    the dialog as Incoming with a phone-match suggestion (never attached).
+    `DIAL_DAILY_LIMIT` counts outbound rows only.
+  - Unsigned child legs (`/whisper`, `/accept`) are confirmed as an
+    `outbound-dial` call whose live parent is an inbound call to a hotline.
+  - Not yet: an in-app pop-up for incoming calls, ringing anyone but the lead,
+    recording answered calls (same open decisions as release 2).
 - **Fallback assignee (2026-10-12):** `pi_hotlines.default_assignee`
   (initials; "If the project has no PI Lead…" in the hotline dialog). The
   receiver assigns the project's active lead, else this person (also for the
@@ -3175,8 +3203,8 @@ a Twilio trial + one number on DEV for a real call, then release.
 - Not on mobile or in the portal (hotline data is staff-only). The nightly
   off-site backup reads `report-files` only — decide whether `hotline-audio`
   should be added (`backup.sh` in cirruscc-backups).
-- Guarded by `test/tests/82-hotline-receiver.test.js` (93 checks; fails if the
-  signature check is bypassed) and `test/tests/83-hotline-inbox.test.js` (58).
+- Guarded by `test/tests/82-hotline-receiver.test.js` (114 checks; fails if the
+  signature check is bypassed) and `test/tests/83-hotline-inbox.test.js` (71).
 - **Connector note:** on DEV, `execute_sql` / `apply_migration` time out on
   statements the connector treats as destructive (`drop …`) and on large
   multi-statement scripts — apply in small pieces. The DEV hotline tables were

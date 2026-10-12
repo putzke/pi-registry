@@ -2013,7 +2013,7 @@ shipped. Grep the actual functions before planning work off this list.
    `p=quarantine` ~2026-11-01; an automatic invite email on grant (needs an
    Edge Function) is a candidate, not started.
 
-**Next:** Twilio project hotlines — working end to end on DEV (2026-10-12); NOT for live until Jeff has tested it on DEV for a good while · outbound recorded call-back on hold ·
+**Next:** Twilio project hotlines — working end to end on DEV (2026-10-12); NOT for live until Jeff has tested it on DEV for a good while · desktop dialpad (release 1) on DEV awaiting Jeff's two-phone test → then the hotline on MOBILE (planned, see the hotline section) · outbound recorded call-back on hold ·
 Survey123 ingestion (blocked on a sample export) · ROW close-out TYPE.
 
 **Later:** county assessor owner lookup (Phase 3) · Google Sheets push ·
@@ -3133,6 +3133,26 @@ a Twilio trial + one number on DEV for a real call, then release.
   note below; decide announcement wording, retention and AI summaries first.
   Also fixed: `openIntModal(preStake, {projectId})` blanked the preselected
   contact when it set the project.
+- **PLANNED — the hotline on mobile (agreed with Jeff 2026-10-12; build AFTER
+  his desktop dialpad testing).** Judged feasible, a medium lift (~1/3 of the
+  desktop build): the receiver, `/dial`, `/callback` and the call log are
+  reused unchanged. Plan:
+  - Bottom nav: **Hotline replaces Dashboard** (shown only when a hotline
+    exists; otherwise Dashboard stays), with a badge = voicemails waiting on me
+    + unassigned + my undecided calls (same as desktop). Move what matters off
+    the Dashboard first (its project picker, "Use full desktop site").
+    The bottom nav is copied 5× in `mobile.html` — make it one shared bar.
+  - Hotline screen, top to bottom: **Calls to decide** (Log / Don't log —
+    survives iPhone reloading the tab after the call, since it's server-side),
+    **New call** (line/project, contact or number, Ring me at — typed once,
+    remembered; a web page can't read the phone's own number), **Voicemails**
+    (play, transcript, Log, Call back, Dismiss; reassign stays desktop).
+  - Logging reuses mobile's own Log sheet, prefilled as on desktop.
+  - Needs: hotline tables in mobile's `SB_TABLES`/`SB_TO_INT`/`loadAllData`,
+    CSP `media-src` for both Supabase projects (the desktop "no play button"
+    bug), tests in the 82/83 style.
+  - Not doing: in-browser calling (Twilio Voice SDK — bigger, unreliable on
+    iPhone). Hotline settings stay desktop-only.
 - **Fallback assignee (2026-10-12):** `pi_hotlines.default_assignee`
   (initials; "If the project has no PI Lead…" in the hotline dialog). The
   receiver assigns the project's active lead, else this person (also for the

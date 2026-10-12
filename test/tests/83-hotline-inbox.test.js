@@ -169,6 +169,11 @@ module.exports = {
       t.ok(L.menuText({ spanish_enabled: true }, [{ digit: '1', label: 'x' }], 'en') === await app.page.evaluate(() => _hotMenuText({ spanishEnabled: true }, [{ digit: '1', label: 'x' }], 'en'))
         && L.menuText({ spanish_enabled: true }, [{ digit: '1', label: 'x', label_es: 'y' }], 'es') === await app.page.evaluate(() => _hotMenuText({ spanishEnabled: true }, [{ digit: '1', label: 'x', labelEs: 'y' }], 'es')),
         'the app’s menu text and the receiver’s agree, English and Spanish');
+      // The page's CSP falls back to default-src 'self' for audio; without a
+      // media-src naming both Supabase projects the player loads nothing.
+      const csp = require('fs').readFileSync(require('path').join(__dirname, '..', '..', 'index.html'), 'utf8').match(/Content-Security-Policy" content="([^"]*)"/)[1];
+      const media = (csp.match(/media-src([^;]*)/) || [, ''])[1];
+      t.ok(/ncfbblhlsiglxkoiounv\.supabase\.co/.test(media) && /oxbonrnilvadszgfctfl\.supabase\.co/.test(media), 'the CSP lets the recording player load audio from both Supabase projects');
       t.eq(app.errors, [], 'no page errors');
     } finally { await app.close(); }
   },

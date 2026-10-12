@@ -2013,7 +2013,7 @@ shipped. Grep the actual functions before planning work off this list.
    `p=quarantine` ~2026-11-01; an automatic invite email on grant (needs an
    Edge Function) is a candidate, not started.
 
-**Next:** Twilio project hotlines — working end to end on DEV (2026-10-12); NOT for live until Jeff has tested it on DEV for a good while · outbound recorded call-back (planned) ·
+**Next:** Twilio project hotlines — working end to end on DEV (2026-10-12); NOT for live until Jeff has tested it on DEV for a good while · outbound recorded call-back on hold ·
 Survey123 ingestion (blocked on a sample export) · ROW close-out TYPE.
 
 **Later:** county assessor owner lookup (Phase 3) · Google Sheets push ·
@@ -3102,7 +3102,7 @@ a Twilio trial + one number on DEV for a real call, then release.
   Supabase projects). A trial account refuses `<Record>`; the account was
   upgraded. Twilio's built-in transcript is rough on names — staff listen
   before logging.
-- **PLANNED, not built — recorded call-back ("call me, then connect them"):**
+- **ON HOLD (Jeff, 2026-10-12: inbound voicemails first) — recorded call-back ("call me, then connect them"):**
   staff press Call back; Twilio rings the staff member's own phone, then dials
   the caller from the hotline number; the call is recorded (with a recording
   announcement) and lands in the Hotline inbox for REVIEW, then Log as

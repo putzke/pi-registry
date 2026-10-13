@@ -8628,6 +8628,22 @@ const HOT_AUDIO_BUCKET='hotline-audio';
 const HOT_AUDIO_KEEP_DAYS=90;
 const HOT_FN_URL=SUPA_URL+'/functions/v1/hotline';
 
+// +1 area codes outside the US/Canada (Caribbean, Bermuda) — refused for
+// calls placed from a hotline. Same list as the receiver's NOT_US_AREA_CODES.
+const HOT_NOT_US_AREA='242 246 264 268 284 345 441 473 649 658 664 721 758 767 784 809 829 849 868 869 876'.split(' ');
+// A number the hotline may ring or dial: 10-digit +1, not 900/976, not Caribbean.
+function _hotCallable(p){
+  const n=_hotNormPhone(p);
+  return /^\+1[2-9]\d{9}$/.test(n)&&!/^\+1(900|976)/.test(n)&&!HOT_NOT_US_AREA.includes(n.slice(2,5))?n:'';
+}
+// Why a typed number can't be called, in words; '' when it can.
+function _hotWhyNot(p,what){
+  const n=_hotNormPhone(p);
+  if(!/^\+1[2-9]\d{9}$/.test(n)) return 'Enter '+what+' as a 10-digit US number.';
+  if(/^\+1(900|976)/.test(n)) return '900 and 976 numbers can’t be called from a hotline.';
+  if(HOT_NOT_US_AREA.includes(n.slice(2,5))) return 'Area code '+n.slice(2,5)+' is outside the United States (Caribbean or Bermuda). Hotline calls are US only.';
+  return '';
+}
 function _hotNormPhone(p){
   const s=String(p||'').trim(), d=s.replace(/\D/g,'');
   if(!d) return '';
@@ -9102,9 +9118,8 @@ async function hotReassign(id, ini){
 // staff log the call themselves (+ Related contact on the logged interaction).
 const HOT_RING_ME_KEY='cc_callback_phone';
 function _hotCanCallBack(m){
-  const d=String(m.callerNumber||'').replace(/\D/g,'');
   const h=(DB.get('hotlines')||[]).find(x=>String(x.id)===String(m.hotlineId));
-  return /^1?[2-9]\d{9}$/.test(d)&&!!h&&h.active!==false;
+  return !!_hotCallable(m.callerNumber)&&!!h&&h.active!==false;
 }
 function _hotMyPhone(){
   let p=''; try{ p=localStorage.getItem(HOT_RING_ME_KEY)||''; }catch(e){}
@@ -9128,7 +9143,7 @@ async function hotCallBackGo(){
   const id=S.hotCallId; if(!id) return;
   const raw=(document.getElementById('f-hcb-phone')?.value||'').trim();
   const num=_hotNormPhone(raw);
-  if(!/^\+1[2-9]\d{9}$/.test(num)){ alert('Enter your own 10-digit phone number.'); return; }
+  const why=_hotWhyNot(raw,'your own phone number'); if(why){ alert(why); return; }
   try{ localStorage.setItem(HOT_RING_ME_KEY, raw); }catch(e){}
   const btn=document.getElementById('hcb-go'); if(btn){ btn.disabled=true; btn.textContent='Calling…'; }
   let msg='';
@@ -9164,7 +9179,7 @@ function _hotLineProjects(h){
 function _hotProjPhoneContacts(projId){
   if(!projId) return [];
   const ids=new Set((DB.get('project_stakeholders')||[]).filter(l=>String(l.projectId)===String(projId)).map(l=>String(l.stakeholderId)));
-  return DB.getActive('stakeholders').filter(s=>ids.has(String(s.id))&&/^1?[2-9]\d{9}$/.test(String(s.phone||'').replace(/\D/g,'')))
+  return DB.getActive('stakeholders').filter(s=>ids.has(String(s.id))&&!!_hotCallable(s.phone))
     .sort((a,b)=>dispName(a).localeCompare(dispName(b)));
 }
 function _hotCallsToDecide(){
@@ -9188,7 +9203,7 @@ function hotNewCall(preStake){
       <div class="fr"><label>Number to call</label><input id="f-hnc-to" placeholder="(801) 555-0123" maxlength="20" oninput="_hotNcKeyed()"></div>
     </div>
     <div class="fr"><label>Ring me at</label><input id="f-hnc-me" value="${escHtml(_hotFmtPhone(_hotMyPhone()))}" placeholder="Your own phone" maxlength="20"></div>
-    <div style="font-size:11px;color:var(--fog);line-height:1.5">The call is <b>not recorded</b>. When you hang up you choose whether to log it as an interaction. US numbers only; 900 and 976 numbers can’t be dialled.</div>`,
+    <div style="font-size:11px;color:var(--fog);line-height:1.5">The call is <b>not recorded</b>. When you hang up you choose whether to log it as an interaction. US numbers only — 900, 976 and Caribbean or Bermuda area codes can’t be dialled.</div>`,
   `<button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-primary" id="hnc-go" onclick="hotNewCallGo()">📞 Call me now</button>`);
   _hotNcLineChanged(pf, preStake);
 }
@@ -9224,8 +9239,7 @@ async function hotNewCallGo(){
   const stake=document.getElementById('f-hnc-stake')?.value||'';
   const toRaw=(document.getElementById('f-hnc-to')?.value||'').trim(), meRaw=(document.getElementById('f-hnc-me')?.value||'').trim();
   const to=_hotNormPhone(toRaw), me=_hotNormPhone(meRaw);
-  if(!/^\+1[2-9]\d{9}$/.test(to)){ alert('Enter the 10-digit number to call.'); return; }
-  if(!/^\+1[2-9]\d{9}$/.test(me)){ alert('Enter your own 10-digit phone number.'); return; }
+  let why=_hotWhyNot(toRaw,'the number to call')||_hotWhyNot(meRaw,'your own phone number'); if(why){ alert(why); return; }
   if(to===me){ alert('The number to call and your own phone must be different.'); return; }
   try{ localStorage.setItem(HOT_RING_ME_KEY, meRaw); }catch(e){}
   const btn=document.getElementById('hnc-go'); if(btn){ btn.disabled=true; btn.textContent='Calling…'; }

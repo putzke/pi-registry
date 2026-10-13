@@ -187,6 +187,9 @@ module.exports = {
       await app.page.evaluate(() => saveHotline());
       const ex = await t.sql(`select digit, active from pi_hotline_extensions where hotline_id=$1 order by digit`, [wh.id]);
       t.eq(ex, [{ digit: '1', active: true }, { digit: '2', active: false }], 'a removed extension is switched off, not deleted');
+      t.eq(JSON.stringify(await app.page.evaluate(() => HOT_NOT_US_AREA)), JSON.stringify(L.NOT_US_AREA_CODES), 'the app refuses the same Caribbean / Bermuda area codes as the receiver');
+      t.ok(await app.page.evaluate(() => /outside the United States/.test(_hotWhyNot('268-555-0100', 'the number to call')) && _hotWhyNot('801-652-4008', 'x') === '' && !_hotCallable('+18765550100')),
+        'the dialog explains a Caribbean number instead of sending it');
       t.ok(L.menuText({ spanish_enabled: true }, [{ digit: '1', label: 'x' }], 'en') === await app.page.evaluate(() => _hotMenuText({ spanishEnabled: true }, [{ digit: '1', label: 'x' }], 'en'))
         && L.menuText({ spanish_enabled: true }, [{ digit: '1', label: 'x', label_es: 'y' }], 'es') === await app.page.evaluate(() => _hotMenuText({ spanishEnabled: true }, [{ digit: '1', label: 'x', labelEs: 'y' }], 'es')),
         'the app’s menu text and the receiver’s agree, English and Spanish');

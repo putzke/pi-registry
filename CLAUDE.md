@@ -3138,6 +3138,15 @@ a Twilio trial + one number on DEV for a real call, then release.
   error code + message and maps the common ones (21219 trial / unverified,
   21215 geo permissions, 21210 / 21212 caller ID, 21211 / 21217 / 21214 bad
   number, 20003 credentials) to what to do; the function log keeps the code.
+  **US only, two locks (2026-10-13, Jeff's call):** Twilio → Voice → Settings
+  → Geo permissions has ONLY United States ticked (21215 was the first test's
+  refusal; ticking the whole North America continent also opens the
+  Caribbean, ~$0.40–0.60/min, a toll-fraud target). And the code refuses the
+  Caribbean and Bermuda +1 area codes itself: `NOT_US_AREA_CODES` in
+  `callableNumber` (receiver) = `HOT_NOT_US_AREA` / `_hotCallable` /
+  `_hotWhyNot` (app, which says why), asserted equal by test 83. US
+  territories (Puerto Rico etc.) stay callable. Same Geo setting is needed on
+  the Sunrise account at go-live.
 - **PLANNED — the hotline on mobile (agreed with Jeff 2026-10-12; build AFTER
   his desktop dialpad testing).** Judged feasible, a medium lift (~1/3 of the
   desktop build): the receiver, `/dial`, `/callback` and the call log are
@@ -3208,8 +3217,8 @@ a Twilio trial + one number on DEV for a real call, then release.
 - Not on mobile or in the portal (hotline data is staff-only). The nightly
   off-site backup reads `report-files` only — decide whether `hotline-audio`
   should be added (`backup.sh` in cirruscc-backups).
-- Guarded by `test/tests/82-hotline-receiver.test.js` (118 checks; fails if the
-  signature check is bypassed) and `test/tests/83-hotline-inbox.test.js` (71).
+- Guarded by `test/tests/82-hotline-receiver.test.js` (122 checks; fails if the
+  signature check is bypassed) and `test/tests/83-hotline-inbox.test.js` (73).
 - **Connector note:** on DEV, `execute_sql` / `apply_migration` time out on
   statements the connector treats as destructive (`drop …`) and on large
   multi-statement scripts — apply in small pieces. The DEV hotline tables were

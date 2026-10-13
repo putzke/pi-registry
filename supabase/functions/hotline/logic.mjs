@@ -89,9 +89,17 @@ export function hotName(name) {
 // A US/Canada number the call-back may ring or dial. Premium (900/976) and
 // anything outside +1 is refused — the call-back must never become a way to
 // run up charges.
+// +1 area codes that are NOT the United States or Canada: the Caribbean
+// nations and Bermuda share the US country code but bill like international
+// calls (about $0.40–0.60 a minute) and are a classic toll-fraud target.
+// Refused here as well as in Twilio's geo permissions, so a wrongly ticked
+// box on a Twilio account can't open them. Mirrored in index.html
+// (HOT_NOT_US_AREA, asserted equal by test 83).
+export const NOT_US_AREA_CODES = '242 246 264 268 284 345 441 473 649 658 664 721 758 767 784 809 829 849 868 869 876'.split(' ');
 export function callableNumber(p) {
   const n = normPhone(p);
-  return /^\+1[2-9]\d{2}[2-9]\d{6}$/.test(n) && !/^\+1(900|976)/.test(n) ? n : '';
+  return /^\+1[2-9]\d{2}[2-9]\d{6}$/.test(n) && !/^\+1(900|976)/.test(n)
+    && !NOT_US_AREA_CODES.includes(n.slice(2, 5)) ? n : '';
 }
 // Digits read one by one: "8 0 1, 6 5 2, 4 0 0 8".
 export function spokenNumber(p) {
@@ -667,7 +675,7 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
     const ring = callableNumber(body.ringMe);
     if (!ring) return json({ error: 'Enter your own 10-digit US phone number to ring.' }, 400);
     const to = callableNumber(body.to);
-    if (!to) return json({ error: 'Enter a 10-digit US number to call (not 900 or 976).' }, 400);
+    if (!to) return json({ error: 'Enter a 10-digit US number to call (not 900 or 976, and not a Caribbean or Bermuda area code).' }, 400);
     const h = await one(`pi_hotlines?id=eq.${encodeURIComponent(body.hotlineId)}&select=id,phone_number,project_id,active`);
     if (!h || h.active === false) return json({ error: 'That hotline is switched off.' }, 400);
     if (ring === to) return json({ error: 'The number to call and your own phone must be different.' }, 400);

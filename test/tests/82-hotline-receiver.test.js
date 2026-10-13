@@ -286,6 +286,11 @@ module.exports = {
     t.eq((await dial('', d0)).status, 401, 'dial: refused without a sign-in');
     t.eq((await dial('Bearer stranger-token', d0)).status, 403, 'dial: refused for a non-staff sign-in');
     t.eq((await dial('Bearer staff-token', { ...d0, to: '9765550100' })).status, 400, 'dial: a 976 number is refused');
+    t.eq((await dial('Bearer staff-token', { ...d0, to: '(268) 555-0100' })).status, 400, 'dial: a Caribbean +1 number (Antigua, 268) is refused');
+    t.eq((await dial('Bearer staff-token', { ...d0, to: '441-555-0100' })).status, 400, 'dial: Bermuda (441) is refused');
+    t.eq((await dial('Bearer staff-token', { ...d0, ringMe: '876-555-0177' })).status, 400, 'dial: a Caribbean “ring me” number (Jamaica, 876) is refused');
+    t.ok(L.callableNumber('8016524008') === '+18016524008' && L.callableNumber('+17875550100') === '+17875550100',
+      'US numbers (Utah; Puerto Rico, a US territory) are still callable');
     t.eq((await dial('Bearer staff-token', { ...d0, to: '+442071234567' })).status, 400, 'dial: a non-US number is refused');
     t.eq((await dial('Bearer staff-token', { ...d0, to: '8015550177' })).status, 400, 'dial: the number to call cannot be your own phone');
     t.eq((await dial('Bearer staff-token', { ...d0, to: '8015550101' })).status, 400, 'dial: the number to call cannot be the hotline itself');

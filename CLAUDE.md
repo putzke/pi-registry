@@ -2013,7 +2013,7 @@ shipped. Grep the actual functions before planning work off this list.
    `p=quarantine` ~2026-11-01; an automatic invite email on grant (needs an
    Edge Function) is a candidate, not started.
 
-**Next:** Twilio project hotlines — working end to end on DEV (2026-10-12); NOT for live until Jeff has tested it on DEV for a good while · desktop dialpad (release 1) on DEV awaiting Jeff's two-phone test → then the hotline on MOBILE (planned, see the hotline section) · outbound recorded call-back on hold ·
+**Next:** Twilio project hotlines — working end to end on DEV (2026-10-12); NOT for live until Jeff has tested it on DEV for a good while · desktop dialpad (release 1) WORKING on DEV (first real call 2026-10-13) → then the hotline on MOBILE (planned, see the hotline section) · outbound recorded call-back on hold ·
 Survey123 ingestion (blocked on a sample export) · ROW close-out TYPE.
 
 **Later:** county assessor owner lookup (Phase 3) · Google Sheets push ·
@@ -3147,6 +3147,10 @@ a Twilio trial + one number on DEV for a real call, then release.
   `_hotWhyNot` (app, which says why), asserted equal by test 83. US
   territories (Puerto Rico etc.) stay callable. Same Geo setting is needed on
   the Sunrise account at go-live.
+  **First real dialpad call WORKED on DEV (2026-10-13):** after the Geo fix,
+  Jeff's cell rang from the hotline number, he pressed 1, and his Teams
+  number rang (a Teams calling-plan number takes PSTN calls normally). Rows
+  on DEV: call 4 answered (no 1 pressed), call 5 connected; both "Don't log".
 - **PLANNED — the hotline on mobile (agreed with Jeff 2026-10-12; build AFTER
   his desktop dialpad testing).** Judged feasible, a medium lift (~1/3 of the
   desktop build): the receiver, `/dial`, `/callback` and the call log are

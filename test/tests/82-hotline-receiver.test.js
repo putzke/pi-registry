@@ -68,6 +68,7 @@ module.exports = {
       }
       if (u === TW_API + '/Calls.json' && opts.method === 'POST') {
         log.calls.push(Object.fromEntries(new URLSearchParams(opts.body)));
+        if (log.callRefuse) return new Response(JSON.stringify(log.callRefuse), { status: 400 });
         return new Response(JSON.stringify({ sid: 'CA' + 'e'.repeat(32) }), { status: 201 });
       }
       if (u.startsWith(TW_API + '/')) {
@@ -313,6 +314,18 @@ module.exports = {
     await t.sql(`update pi_hotline_calls set created_at = now() - interval '20 minutes' where id=$1`, [row.id]);
     r = await call('/connect?c=' + row.id, { ...dleg, Digits: '1' });
     t.ok(!/<Dial/.test(r.body) && /no longer available/.test(r.body), 'dial: an old call cannot be re-dialled through its bridge');
+    // Twilio's reason for a refusal reaches the log and the app, in words.
+    log.callRefuse = { code: 21219, message: 'The number +18015550177 is unverified.', status: 400 };
+    d = await dial('Bearer staff-token', d0);
+    t.ok(d.status === 502 && d.body.twilioCode === 21219 && /trial/.test(d.body.error) && /Twilio 21219: The number/.test(d.body.error),
+      'dial: Twilio’s refusal code and message reach the app, with what to do about it');
+    t.eq((await t.sql(`select status from pi_hotline_calls where id=(select max(id) from pi_hotline_calls)`))[0].status, 'failed', 'dial: a refused call is marked failed');
+    const cbr = await cb('Bearer staff-token', { messageId: cm.id, ringMe: '8015550177' });
+    t.ok(cbr.status === 502 && cbr.body.twilioCode === 21219, 'call-back: Twilio’s refusal reason reaches the app too');
+    log.callRefuse = { message: 'Something new' };
+    d = await dial('Bearer staff-token', d0);
+    t.ok(/^Twilio refused the call\. \(Twilio 400: Something new\)$/.test(d.body.error), 'an unknown refusal still shows Twilio’s own message');
+    log.callRefuse = null;
     // The daily cap.
     await t.sql(`insert into pi_hotline_calls (hotline_id, to_number, placed_by_email, status) select $1, '+14355550142', 'staff@sunrise.example', 'connected' from generate_series(1, ${L.DIAL_DAILY_LIMIT})`, [h1.id]);
     const capBefore = log.calls.length;

@@ -630,6 +630,25 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
     if (!staff) return { res: json({ error: 'not staff' }, 403) };
     return { email };
   }
+  // Twilio's reason for refusing a call, in words staff can act on. Twilio's
+  // own code and message are not secret; they go to the log and the app.
+  const TWILIO_CALL_ERRORS = {
+    21219: 'This Twilio account is still a trial and can only ring verified numbers. Verify the number in Twilio (Phone Numbers → Verified Caller IDs) or upgrade the account.',
+    21215: 'Twilio’s calling permissions block this number. Turn on the United States in Twilio (Voice → Settings → Geo permissions).',
+    21210: 'Twilio won’t call from the hotline number — it isn’t a voice number on this account.',
+    21212: 'Twilio says the hotline number is not a valid caller ID.',
+    21211: 'Twilio says the number to ring is not valid.',
+    21217: 'Twilio says the number to ring is not valid.',
+    21214: 'Twilio can’t reach the number to ring.',
+    20003: 'Twilio rejected the hotline’s credentials (check the function secrets).',
+  };
+  async function twilioRefusal(r) {
+    let code = null, message = '';
+    try { const b = await r.json(); code = b.code || null; message = String(b.message || '').slice(0, 300); } catch (_) {}
+    const plain = TWILIO_CALL_ERRORS[code] || 'Twilio refused the call.';
+    return { code, message, text: plain + ' (Twilio ' + (code || r.status) + (message ? ': ' + message : '') + ')' };
+  }
+
   async function placeCall(ring, from, bridgeQuery) {
     const form = new URLSearchParams({ To: ring, From: from, Url: `${base}/bridge?${bridgeQuery}`, Method: 'POST', Timeout: '25' });
     return fetchFn(`${API}/Calls.json`, { method: 'POST', body: form.toString(),
@@ -671,9 +690,10 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
     const patch = obj => rest(`pi_hotline_calls?id=eq.${call.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Prefer: 'return=minimal' }, body: JSON.stringify(obj) }).catch(() => {});
     const r = await placeCall(ring, h.phone_number, `c=${call.id}`);
     if (!r.ok) {
-      console.error('hotline: dial failed', r.status);
+      const why = await twilioRefusal(r);
+      console.error('hotline: dial failed', r.status, why.code, why.message);
       await patch({ status: 'failed' });
-      return json({ error: 'Twilio refused the call (' + r.status + ').' }, 502);
+      return json({ error: why.text, twilioCode: why.code }, 502);
     }
     const c = await r.json();
     await patch({ status: 'ringing', call_sid: c.sid || null });
@@ -699,8 +719,9 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
     if (ring === to || ring === normPhone(h.phone_number)) return json({ error: 'Enter your own phone number, not the caller’s or the hotline’s.' }, 400);
     const r = await placeCall(ring, h.phone_number, `m=${msg.id}`);
     if (!r.ok) {
-      console.error('hotline: call-back failed', r.status);
-      return json({ error: 'Twilio refused the call (' + r.status + ').' }, 502);
+      const why = await twilioRefusal(r);
+      console.error('hotline: call-back failed', r.status, why.code, why.message);
+      return json({ error: why.text, twilioCode: why.code }, 502);
     }
     const c = await r.json();
     return json({ ok: true, sid: c.sid || null });

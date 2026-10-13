@@ -3133,6 +3133,11 @@ a Twilio trial + one number on DEV for a real call, then release.
   note below; decide announcement wording, retention and AI summaries first.
   Also fixed: `openIntModal(preStake, {projectId})` blanked the preselected
   contact when it set the project.
+  **A refused call says why (2026-10-13):** the first real dialpad test got
+  a bare "Twilio refused the call (400)". `twilioRefusal()` now reads Twilio's
+  error code + message and maps the common ones (21219 trial / unverified,
+  21215 geo permissions, 21210 / 21212 caller ID, 21211 / 21217 / 21214 bad
+  number, 20003 credentials) to what to do; the function log keeps the code.
 - **PLANNED — the hotline on mobile (agreed with Jeff 2026-10-12; build AFTER
   his desktop dialpad testing).** Judged feasible, a medium lift (~1/3 of the
   desktop build): the receiver, `/dial`, `/callback` and the call log are
@@ -3203,7 +3208,7 @@ a Twilio trial + one number on DEV for a real call, then release.
 - Not on mobile or in the portal (hotline data is staff-only). The nightly
   off-site backup reads `report-files` only — decide whether `hotline-audio`
   should be added (`backup.sh` in cirruscc-backups).
-- Guarded by `test/tests/82-hotline-receiver.test.js` (114 checks; fails if the
+- Guarded by `test/tests/82-hotline-receiver.test.js` (118 checks; fails if the
   signature check is bypassed) and `test/tests/83-hotline-inbox.test.js` (71).
 - **Connector note:** on DEV, `execute_sql` / `apply_migration` time out on
   statements the connector treats as destructive (`drop …`) and on large

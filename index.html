@@ -9141,7 +9141,7 @@ async function hotCallBackGo(){
     msg=j.error||('The call could not be placed ('+r.status+').');
   }catch(e){ msg='The call could not be placed — the hotline service did not answer.'; }
   if(btn){ btn.disabled=false; btn.textContent='📞 Call me now'; }
-  showToast(msg,'error',8000);
+  showToast(msg,'error',15000);
 }
 // ── New call from a hotline number — the dialpad (not recorded) ─────────────
 // Same bridge as Call back: Twilio rings the staff member's own phone FROM the
@@ -9243,7 +9243,7 @@ async function hotNewCallGo(){
     msg=j.error||('The call could not be placed ('+r.status+').');
   }catch(e){ msg='The call could not be placed — the hotline service did not answer.'; }
   if(btn){ btn.disabled=false; btn.textContent='📞 Call me now'; }
-  showToast(msg,'error',8000);
+  showToast(msg,'error',15000);
 }
 // While the call is on: the choice for afterwards, right there.
 function _hotCallPlaced(callId){

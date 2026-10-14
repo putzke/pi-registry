@@ -375,6 +375,17 @@ module.exports = {
       const acDone = await t.until(async () => (await t.sql(`select outcome, logged_interaction_id from pi_hotline_calls where id=$1 and outcome is not null`, [ac.id]))[0]);
       const [aInt] = acDone ? await t.sql(`select direction, stakeholder_id from pi_interactions where id=$1`, [acDone.logged_interaction_id]) : [{}];
       t.ok(acDone && acDone.outcome === 'logged' && aInt.direction === 'Incoming' && String(aInt.stakeholder_id) === String(st.id), 'saved: an Incoming interaction with the chosen contact; the call is marked logged');
+      // ── The Hotline view refreshes every 30 s; other views every 60 s ──
+      const ticks = await app.page.evaluate(() => {
+        const real = window._bgRefreshTick; let n = 0; window._bgRefreshTick = () => { n++; };
+        const out = [];
+        S.view = 'hotline';   _bgLastTickAt = Date.now() - 31000; _bgRefreshTimer(); out.push(n);
+        S.view = 'dashboard'; _bgLastTickAt = Date.now() - 31000; _bgRefreshTimer(); out.push(n);
+        _bgLastTickAt = Date.now() - 61000; _bgRefreshTimer(); out.push(n);
+        window._bgRefreshTick = real; S.view = 'hotline';
+        return out;
+      });
+      t.eq(ticks, [1, 1, 2], 'Hotline refreshes after 30 s; other views wait the full minute');
       t.eq(app.errors, [], 'no page errors');
     } finally { await app.close(); }
   },

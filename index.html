@@ -1763,6 +1763,14 @@ function _bgRefreshOK(){
   return true;
 }
 
+const BG_REFRESH_SEC = 60, BG_REFRESH_HOTLINE_SEC = 30;
+var _bgLastTickAt = 0;
+function _bgRefreshTimer(){
+  const due = (S.view === 'hotline' ? BG_REFRESH_HOTLINE_SEC : BG_REFRESH_SEC) * 1000 - 2000;
+  if (Date.now() - _bgLastTickAt < due) return;
+  _bgLastTickAt = Date.now();
+  _bgRefreshTick();
+}
 async function _bgRefreshTick(){
   if (_bgRefreshBusy || !_bgRefreshOK()) return;
   const tables = _viewTables(S.view);
@@ -2331,8 +2339,9 @@ async function initApp(){
     render();
     // Keep the current view live for users who dwell on it: a light 60s
     // background refresh (guarded by _bgRefreshOK) + an immediate refresh when
-    // the tab regains focus. See _bgRefreshTick.
-    setInterval(_bgRefreshTick, 60 * 1000);
+    // the tab regains focus. See _bgRefreshTick. The Hotline inbox refreshes
+    // every 30s instead (BG_REFRESH_HOTLINE_SEC): a voicemail is waiting on someone.
+    setInterval(_bgRefreshTimer, BG_REFRESH_HOTLINE_SEC * 1000);
     document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible') _bgRefreshTick(); });
     // Refresh Supabase token every 45 min (tokens expire after 1 hour)
     setInterval(refreshSession, 45 * 60 * 1000);

@@ -3258,7 +3258,12 @@ a Twilio trial + one number on DEV for a real call, then release.
   (`#hot-use-btns`, `_hotUseBtnsHTML`, in `updateIntStakeholders`). `saveInt`'s
   link check now compares ids as strings. Never attached automatically.
 - Guarded by `test/tests/82-hotline-receiver.test.js` (122 checks; fails if the
-  signature check is bypassed) and `test/tests/83-hotline-inbox.test.js` (85).
+  signature check is bypassed) and `test/tests/83-hotline-inbox.test.js` (86).
+- **The Hotline view refreshes every 30 s** (2026-10-14, Jeff's call; other
+  views stay at 60 s): `_bgRefreshTimer` runs every `BG_REFRESH_HOTLINE_SEC`
+  and calls `_bgRefreshTick` only when that view's interval is due. A new
+  voicemail still takes a little longer to appear: Twilio posts the
+  recording seconds after hang-up, the transcript 30 s–2 min later.
 - **Connector note:** on DEV, `execute_sql` / `apply_migration` time out on
   statements the connector treats as destructive (`drop …`) and on large
   multi-statement scripts — apply in small pieces. The DEV hotline tables were

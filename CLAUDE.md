@@ -1167,6 +1167,19 @@ block, which invites the model to invent engagement. Guarded by
 prompt, instruction, token budget and model match **byte for byte** — plus that
 the capped generic prompt reaches no report narrative.
 
+### A drafted narrative is set as if TYPED (`_rptSetDraft`, Oct 2026)
+Reported live: after changing the report dates and re-drafting the overall
+summary, the live preview kept the old wording until another box was clicked.
+Every draft path (overall, section ✦ Draft, Draft all, and the no-key template
+fallbacks) set `ta.value` directly, which fires no `input` event — so the
+editor's delegated listener (preview + `_scheduleRptSave`) never ran: the draft
+was not autosaved, and the no-key path never refreshed the preview at all.
+`_rptSetDraft(ta, text)` sets the value and dispatches `input`, the same path
+as typing. The exact live lag did not reproduce in the harness with a key (that
+path already called `schedulePreview`); the autosave and no-key gaps did, and
+the fix makes a draft indistinguishable from typing. Guarded by
+`test/tests/84-draft-shows-in-preview.test.js` (fails on the old code).
+
 ### Reports view tabs (S.rptTab)
 - **`'reports'`** — summary stats bar, distribution group checkboxes, 10 report-type cards
 - **`'pi-editor'`** — landing card with draft status + "Open editor" button (opens split-pane `openPIReport()`)

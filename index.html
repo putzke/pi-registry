@@ -13780,6 +13780,17 @@ async function _mapLimit(items, limit, fn) {
   return out;
 }
 
+// Put a drafted narrative into a report-editor box exactly as if it had been
+// typed: the editor's own input listener then refreshes the live preview AND
+// autosaves. Setting .value alone does neither — the preview could lag behind
+// the box until something else was typed, and the draft was not saved.
+function _rptSetDraft(ta, text) {
+  if (!ta) return;
+  ta.value = text;
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+  schedulePreview();
+}
+
 async function generateSectionDraft(secType, textareaIdx) {
   var ta = document.querySelector('.rpt-sec-summary[data-idx="'+textareaIdx+'"]');
   if (!ta) return;
@@ -13793,7 +13804,7 @@ async function generateSectionDraft(secType, textareaIdx) {
   if (!key) {
     // Fall back to template draft
     if (!templateDraft) { showToast('Not enough data yet to generate a draft for this section.', 'warn'); return; }
-    ta.value = templateDraft;
+    _rptSetDraft(ta, templateDraft);
     return;
   }
 
@@ -13807,9 +13818,8 @@ async function generateSectionDraft(secType, textareaIdx) {
   var narrative = await _sectionDraftCall(secType, templateDraft);
 
   if (btn) { btn.textContent = origText; btn.disabled = false; }
-  ta.value = narrative || templateDraft;
+  _rptSetDraft(ta, narrative || templateDraft);
   if (narrative) showToast('AI narrative generated', 'info', 2000);
-  schedulePreview();
 }
 
 async function generateOverallDraft() {
@@ -13824,7 +13834,7 @@ async function generateOverallDraft() {
 
   if (!key) {
     if (!templateDraft) { showToast('Not enough data yet to generate an overall summary.', 'warn'); return; }
-    ta.value = templateDraft;
+    _rptSetDraft(ta, templateDraft);
     return;
   }
 
@@ -13836,9 +13846,8 @@ async function generateOverallDraft() {
   var narrative = await _overallDraftCall(templateDraft);
 
   if (btn) { btn.textContent = '✦ Generate Overall Summary'; btn.disabled = false; }
-  ta.value = narrative || templateDraft;
+  _rptSetDraft(ta, narrative || templateDraft);
   if (narrative) showToast('AI narrative generated', 'info', 2000);
-  schedulePreview();
 }
 
 async function generateAllSectionDrafts() {
@@ -13943,18 +13952,18 @@ async function generateAllSectionDrafts() {
       ? _overallDraftCall(j.templateDraft)
       : _sectionDraftCall(j.secType, j.templateDraft);
     return call.then(function(narrative) {
-      if (narrative) { j.ta.value = narrative; }
+      if (narrative) { _rptSetDraft(j.ta, narrative); }
       else {
         // Template text is raw facts, not prose. Writing it silently looks
         // exactly like a weak AI draft, which makes a failed call impossible
         // to spot — so it is named below.
-        if (j.templateDraft) j.ta.value = j.templateDraft;
+        if (j.templateDraft) _rptSetDraft(j.ta, j.templateDraft);
         failed.push(j.secType);
       }
       progress();
     }).catch(function(e) {
       console.warn('AI draft-all: ' + j.secType + ' failed —', e && e.message);
-      if (j.templateDraft) j.ta.value = j.templateDraft;
+      if (j.templateDraft) _rptSetDraft(j.ta, j.templateDraft);
       failed.push(j.secType);
       progress();
     });

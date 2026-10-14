@@ -2013,6 +2013,8 @@ shipped. Grep the actual functions before planning work off this list.
    `p=quarantine` ~2026-11-01; an automatic invite email on grant (needs an
    Edge Function) is a candidate, not started.
 
+**Conference — UDOT, 2026-10-27:** a demo site for other PI firms (see "PLANNED — Conference demo site"). ON HOLD until Jeff says go; keep it minimal.
+
 **Next:** Twilio project hotlines — working end to end on DEV (2026-10-12); NOT for live until Jeff has tested it on DEV for a good while · desktop dialpad (release 1) WORKING on DEV (first real call 2026-10-13) → then the hotline on MOBILE (planned, see the hotline section) · outbound recorded call-back on hold ·
 Survey123 ingestion (blocked on a sample export) · ROW close-out TYPE.
 
@@ -3264,6 +3266,36 @@ separate follow-up table; audio kept 90 days after logging, transcript kept;
 test on a NEW Twilio number — Sunrise's current hotlines are Microsoft Teams
 numbers, which can be ported out (porting PIN in Teams admin) or forwarded
 to Twilio; decide at go-live.
+
+## PLANNED — Conference demo site (for the UDOT conference, 2026-10-27; ON HOLD)
+Agreed with Jeff 2026-10-14: a third environment where other PI firms try the
+app risk-free and leave feedback. **Not started — wait for Jeff's go, and build
+the MINIMAL version.** Decisions so far:
+- **demo.cirruscc.com**, served from `main` (always the live release, never
+  `develop`'s unreleased work), by Cloudflare Pages (GitHub Pages serves one
+  domain per repo and that slot is live's). Wix DNS CNAME for `demo`.
+- **Its own Supabase project** (e.g. `cirruscc-demo`, ~$10/mo on Pro) with
+  live's structure and the demo seed only. Never real data; never dev (dev is
+  our test bed and is reset at will).
+- **The ENVIRONMENT block gets a third answer**: `demo.cirruscc.com` → the
+  demo project + an orange "DEMO" tab. Keep the rule that every unknown
+  hostname is dev; test 81 must cover the new row.
+- **Nightly reset** — a scheduled copy of "Reset dev" (in cirruscc-backups)
+  pointed at the demo project, reloading the demo seed.
+- **AI OFF on demo, every AI button shows a note** (what it does, that it is
+  on in the real product) instead of calling Claude — no API key, no proxy.
+- **Google Maps/Places ON** (map + address lookup — not AI): add
+  `https://demo.cirruscc.com/*` to the key's referrers and set a daily quota
+  cap in Google Cloud (Jeff, in the console).
+- **Hotline off** (no Twilio), **no sign-in emails**; portal shown through
+  ready-made token links.
+- Still to decide at build time: sign-in (likely a few shared demo logins,
+  two-step sign-in off on demo only), a "fictional data, resets nightly, don't
+  enter real stakeholders" notice on the sign-in screen, and a "Send feedback"
+  button (to the demo database or info@cirruscc.com).
+- Order: Supabase project + schema + seed → Cloudflare + DNS → ENVIRONMENT
+  block + AI-off notes + tests → nightly reset → Maps referrer → walk-through.
+  Leave a few days before the 27th for Jeff to try it.
 
 ## FUTURE — Multi-tenant launch readiness (plan captured July 2026, not started)
 

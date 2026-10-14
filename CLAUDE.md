@@ -3235,11 +3235,15 @@ a Twilio trial + one number on DEV for a real call, then release.
   call's own project first. Phone number ONLY: no transcript scanning, no
   caller-ID name (CNAM) lookup (cell phones return blank or the account
   holder). A match from elsewhere is labelled "— on <project>" / "master
-  list" (`_hotWhereLabel`); in the Log dialog "Use …" (`_hotUseMatch`) adds
-  that contact to the project (via `intAddMasterToProject`) and selects them.
-  Still a suggestion, never attached automatically.
+  list" (`_hotWhereLabel`). In the Log dialog "Use …" (`_hotUseMatch`) only
+  SELECTS; the link to a project is made by `saveInt` on Save, under the
+  project the interaction is logged to — so a caller who meant another project
+  (staff change the Project) leaves no stray link on the hotline's project.
+  The pick survives a project change and the "(on …)" labels redraw
+  (`#hot-use-btns`, `_hotUseBtnsHTML`, in `updateIntStakeholders`). `saveInt`'s
+  link check now compares ids as strings. Never attached automatically.
 - Guarded by `test/tests/82-hotline-receiver.test.js` (122 checks; fails if the
-  signature check is bypassed) and `test/tests/83-hotline-inbox.test.js` (80).
+  signature check is bypassed) and `test/tests/83-hotline-inbox.test.js` (85).
 - **Connector note:** on DEV, `execute_sql` / `apply_migration` time out on
   statements the connector treats as destructive (`drop …`) and on large
   multi-statement scripts — apply in small pieces. The DEV hotline tables were

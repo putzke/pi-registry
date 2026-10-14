@@ -7534,6 +7534,13 @@ function updateIntIssues(){
 function updateIntStakeholders(){
   const hid=document.getElementById('f-is');
   const search=document.getElementById('f-is-search');
+  // From the hotline: a phone match picked with "Use …" stays picked when the
+  // project changes (Save links it to whichever project is chosen), and the
+  // match labels are redrawn for the new project.
+  const hotBtns=document.getElementById('hot-use-btns');
+  const keep=hotBtns&&hid&&hid.value&&((S.intOpts&&S.intOpts.suggest)||[]).map(String).includes(String(hid.value))?hid.value:'';
+  if(hotBtns) hotBtns.innerHTML=_hotUseBtnsHTML();
+  if(keep){ _intSetStake(keep); return; }
   if(hid) hid.value='';
   if(search){
     search.value='';
@@ -8014,16 +8021,21 @@ async function saveQuickLog(){
 // — set when the dialog is opened from the Hotline inbox or "+ Related call".
 // A "Use …" button for a phone match in the Log dialog. A contact not yet on
 // the chosen project is added to it when picked (as the master-list pick does).
-function _hotUseBtnHTML(s){
-  const pid=(S.intOpts&&S.intOpts.projectId)||'';
+function _hotUseBtnHTML(s, pid){
+  if(pid===undefined) pid=(S.intOpts&&S.intOpts.projectId)||'';
   const w=_hotWhereLabel(s,pid);
-  return `<button class="btn btn-sm" style="margin:2px 4px 0 0" onclick="_hotUseMatch('${escHtml(s.id)}')" title="${w?'Adds this contact to the project you log it under':''}">Use ${escHtml(dispName(s))}${w?' <span style=\'color:var(--fog);font-weight:400\'>('+escHtml(w)+')</span>':''}</button>`;
+  return `<button class="btn btn-sm" style="margin:2px 4px 0 0" onclick="_hotUseMatch('${escHtml(s.id)}')" title="${w?'Added to the project you log this under when you save':''}">Use ${escHtml(dispName(s))}${w?' <span style=\'color:var(--fog);font-weight:400\'>('+escHtml(w)+')</span>':''}</button>`;
 }
-function _hotUseMatch(id){
-  const projId=document.getElementById('f-ip')?.value||'';
-  const s=DB.getActive('stakeholders').find(x=>String(x.id)===String(id)); if(!s) return;
-  if(projId&&!_hotOnProject(s,projId)) return intAddMasterToProject(id);
-  return _intSetStake(id);
+// Selects only. A contact from another project is added to the project the
+// interaction is LOGGED under when Save is pressed (saveInt links it), so
+// changing the project after picking never leaves a stray link behind.
+function _hotUseMatch(id){ return _intSetStake(id); }
+// The match buttons, redrawn when the dialog's project changes so the
+// "(on …)" labels describe the project actually chosen.
+function _hotUseBtnsHTML(){
+  const pid=document.getElementById('f-ip')?.value||(S.intOpts&&S.intOpts.projectId)||'';
+  const stakes=DB.getActive('stakeholders');
+  return ((S.intOpts&&S.intOpts.suggest)||[]).map(id=>stakes.find(s=>String(s.id)===String(id))).filter(Boolean).map(s=>_hotUseBtnHTML(s,pid)).join('');
 }
 function openIntModal(preStake, opts){
   S.editId=null;
@@ -8034,12 +8046,12 @@ function openIntModal(preStake, opts){
   const _parent=opts.relatedTo?(DB.get('interactions')||[]).find(x=>String(x.id)===String(opts.relatedTo)):null;
   const _banner=opts.hotlineMsgId?`<div style="margin:0 0 12px;border:1px solid rgba(74,155,232,.35);background:rgba(74,155,232,.07);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--mist)">
       <b style="color:var(--sky-lt)">From the hotline.</b> Pick the contact (or leave it anonymous), check the summary, then save — the voicemail is closed out against this interaction.
-      ${_sug.length?`<div style="margin-top:6px">Number matches: ${_sug.map(_hotUseBtnHTML).join('')}</div>`:''}
+      ${_sug.length?`<div style="margin-top:6px">Number matches: <span id="hot-use-btns">${_sug.map(x=>_hotUseBtnHTML(x)).join('')}</span></div>`:''}
       ${opts.spanish?`<div class="fcheck" style="margin-top:6px"><input type="checkbox" id="f-ihot-lep" checked><label for="f-ihot-lep">Spanish voicemail — mark the contact as LEP (limited English proficiency)</label></div>`:''}
     </div>`
     :opts.hotlineCallId?`<div style="margin:0 0 12px;border:1px solid rgba(74,155,232,.35);background:rgba(74,155,232,.07);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--mist)">
       <b style="color:var(--sky-lt)">A call from the hotline.</b> Pick the contact (or add a new one), write what was said, then save — the call is marked logged.
-      ${_sug.length?`<div style="margin-top:6px">Number matches: ${_sug.map(_hotUseBtnHTML).join('')}</div>`:''}
+      ${_sug.length?`<div style="margin-top:6px">Number matches: <span id="hot-use-btns">${_sug.map(x=>_hotUseBtnHTML(x)).join('')}</span></div>`:''}
     </div>`
     :_parent?`<div style="margin:0 0 12px;border:1px solid rgba(74,155,232,.35);background:rgba(74,155,232,.07);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--mist)">
       <b style="color:var(--sky-lt)">Related to</b> the ${escHtml(fmt(_parent.date))} ${escHtml((_parent.channel||'').toLowerCase())} contact: ${escHtml(String(_parent.summary||'').slice(0,120))}
@@ -8261,7 +8273,7 @@ async function saveInt(){
   if(_relTo) data.relatedTo=_relTo;
   const _relRes=!S.editId&&_relTo&&!!document.getElementById('f-irelres')?.checked;
   const psAll=DB.get('project_stakeholders');
-  if(stakeId&&!psAll.find(x=>x.projectId===projId&&x.stakeholderId===stakeId)){
+  if(stakeId&&!psAll.find(x=>String(x.projectId)===String(projId)&&String(x.stakeholderId)===String(stakeId))){
     psAll.push({id:DB.uid(),projectId:projId,stakeholderId:stakeId,support:'Neutral',issueTags:'',addedDate:data.date,notes:'Auto-linked via interaction log.',distributionGroups:'',stakeholderRole:'External'});
     await DB.set('project_stakeholders',psAll);
   }

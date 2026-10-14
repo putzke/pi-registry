@@ -99,10 +99,29 @@ module.exports = {
       await app.page.evaluate(id => hotLog(id), m3);
       const use3 = await app.page.evaluate(() => document.querySelector('#modal-ov button[onclick^="_hotUseMatch"]')?.textContent || '');
       t.ok(/\(on /.test(use3) && use3.includes(aName) && await app.page.evaluate(() => document.getElementById('f-is').value === ''), 'the Log dialog offers them, labelled, without attaching');
+      const setProj = (p) => app.page.evaluate(p => { const el = document.getElementById('f-ip'); el.value = p; el.dispatchEvent(new Event('change')); }, p);
       await app.page.evaluate(() => document.querySelector('#modal-ov button[onclick^="_hotUseMatch"]').click());
-      const linkB = await t.until(async () => (await t.sql(`select 1 from pi_project_stakeholders where stakeholder_id=$1 and project_id=$2`, [String(st2.id), B]))[0]);
-      t.ok(linkB && await app.page.evaluate(id => document.getElementById('f-is').value === id, String(st2.id)), 'choosing them adds them to this project and selects them');
+      const sel = () => app.page.evaluate(() => document.getElementById('f-is').value);
+      const btn = () => app.page.evaluate(() => document.getElementById('hot-use-btns').textContent);
+      t.ok(await sel() === String(st2.id), '“Use …” selects them');
+      t.eq((await t.sql(`select count(*)::int n from pi_project_stakeholders where stakeholder_id=$1 and project_id=$2`, [String(st2.id), B]))[0].n, 0, '…without adding them to any project yet');
+      await setProj(A);
+      t.ok(await sel() === String(st2.id) && !/\(on /.test(await btn()), 'switch the project to theirs: still selected, and the “on …” label goes');
+      await setProj(B);
+      t.ok(await sel() === String(st2.id) && /\(on /.test(await btn()), 'switch back: the label returns');
       await app.page.evaluate(() => closeM());
+      // Saved under their own project: no stray link to the project they called.
+      const [m5r] = await t.sql(`insert into pi_hotline_messages (hotline_id, extension_digit, project_id, language, caller_number, call_sid, recording_seconds, transcript_status, status, received_at)
+        values ($1,'2',$2,'en','+13855550122','CA5',20,'none','pending','2026-10-06T15:00:00Z') returning id`, [h.id, B]);
+      await app.page.evaluate(() => _hotReload());
+      await app.page.evaluate(id => hotLog(id), String(m5r.id));
+      await app.page.evaluate(() => document.querySelector('#modal-ov button[onclick^="_hotUseMatch"]').click());
+      await setProj(A);
+      await app.page.evaluate(() => { document.getElementById('f-isu').value = 'Meant the SR-154 project.'; return saveInt(); });
+      const m5 = await t.until(async () => (await t.sql(`select logged_interaction_id from pi_hotline_messages where id=$1 and status='logged'`, [m5r.id]))[0]);
+      const [i5] = m5 ? await t.sql(`select project_id, stakeholder_id from pi_interactions where id=$1`, [m5.logged_interaction_id]) : [{}];
+      t.ok(i5 && String(i5.project_id) === A && String(i5.stakeholder_id) === String(st2.id), 'logged under the project they meant, with them as the contact');
+      t.eq((await t.sql(`select count(*)::int n from pi_project_stakeholders where stakeholder_id=$1 and project_id=$2`, [String(st2.id), B]))[0].n, 0, 'no stray link to the hotline’s project');
 
       // ── log m1 ────────────────────────────────────────────────────────
       const intsBefore = (await t.sql(`select count(*)::int n from pi_interactions`))[0].n;

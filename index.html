@@ -9016,12 +9016,14 @@ function renderHotline(el){
   let who=S.hotWho||(mine.length?'mine':'all');
   const shown=tab==='calls'?[]:tab==='pending'
     ?(who==='mine'?mine:who==='unassigned'?unassigned:pending).slice().sort((a,b)=>String(a.receivedAt).localeCompare(String(b.receivedAt)))
-    :all.filter(m=>m.status!=='pending'&&inScope(m)).sort((a,b)=>String(b.closedAt||b.receivedAt).localeCompare(String(a.closedAt||a.receivedAt))).slice(0,200);
+    :all.filter(m=>m.status!=='pending'&&inScope(m));
   const projs=DB.get('projects')||[];
   const chip=(k,label,n)=>`<button class="btn btn-sm${who===k?' btn-primary':''}" onclick="setHotFilter('hotWho','${k}')">${label} (${n})</button>`;
-  el.innerHTML=`<div class="topbar"><div class="topbar-title">Hotline inbox</div><div class="topbar-sp"></div>
+  el.innerHTML=`<div class="topbar"><div class="topbar-title">Hotline inbox</div>
+      <div class="topbar-acts" id="hot-tools" style="margin-left:10px">
       ${_hotActiveLines().length?`<button class="btn btn-primary btn-sm" onclick="hotNewCall()" title="Call any number from a hotline — Twilio rings your phone first">📞 New call</button>`:''}
       <select id="hot-proj" onchange="S.projectFilter=this.value||null;render()" style="max-width:260px"><option value="">All projects</option>${projs.map(p=>`<option value="${escHtml(p.id)}"${String(pf)===String(p.id)?' selected':''}>${escHtml((p.pid?p.pid+' — ':'')+p.name)}</option>`).join('')}</select>
+      </div><div class="topbar-sp"></div>
     </div>
     <div class="content" style="display:block;overflow-y:auto"><div style="padding:18px 24px;max-width:980px">
       <div style="font-size:12px;color:var(--fog);margin-bottom:12px">Voicemails from the project hotlines, and calls placed from them. Nothing counts as an interaction until you log it.</div>
@@ -9031,9 +9033,12 @@ function renderHotline(el){
         <button class="btn btn-sm${tab==='calls'?' btn-primary':''}" onclick="setHotFilter('hotTab','calls')">Calls${toDecide.length?' ('+toDecide.length+' to decide)':''}</button>
         ${tab==='pending'?`<span style="width:1px;height:20px;background:rgba(255,255,255,.15);margin:0 6px"></span>${chip('mine','Mine',mine.length)}${chip('unassigned','Unassigned',unassigned.length)}${chip('all','All',pending.length)}<span style="font-size:11px;color:var(--fog);margin-left:6px">Oldest first</span>`:''}
       </div>
-      <div id="hot-list">${tab==='calls'?(calls.length?calls.slice(0,200).map(_hotCallRowHTML).join('')
+      ${tab!=='pending'&&(tab==='calls'?calls:shown).length?`<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;font-size:11px;color:var(--fog)">
+        <label style="display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0;font-size:12px;color:var(--mist);cursor:pointer"><input type="checkbox" id="hot-group"${S.hotGroup?' checked':''} onchange="hotToggleGroup()"> Group by caller</label>
+        <span>· Click a column heading to sort</span></div>`:''}
+      <div id="hot-list">${tab==='calls'?(calls.length?_hotHistoryTable(calls.map(_hotCallRow))
           :'<div style="font-size:13px;color:var(--fog);padding:24px 0">No calls yet. Calls you answer from a hotline, and calls placed with 📞 New call, show here to log or skip.</div>')
-        :shown.length?shown.map(m=>tab==='pending'?_hotCardHTML(m):_hotClosedRowHTML(m)).join('')
+        :shown.length?(tab==='pending'?shown.map(_hotCardHTML).join(''):_hotHistoryTable(shown.map(_hotClosedRow)))
         :`<div style="font-size:13px;color:var(--fog);padding:24px 0">${tab==='pending'?'Nothing waiting'+(who==='mine'?' for you':'')+'.':'No logged or dismissed voicemails yet.'}</div>`}</div>
     </div></div>`;
 }
@@ -9074,14 +9079,95 @@ function _hotCardHTML(m){
     </div>
   </div>`;
 }
-function _hotClosedRowHTML(m){
+// ── History table (Logged & dismissed, Calls) ──────────────────────────────
+// One table for both tabs: newest first by default, every column sortable,
+// optionally grouped by the caller's number. Rows are plain objects so the two
+// tabs share one renderer and one sort.
+const HOT_HIST_COLS=[
+  {k:'when',label:'Date &amp; time',w:'150px'},
+  {k:'caller',label:'Caller'},
+  {k:'project',label:'Project'},
+  {k:'what',label:'Call',sort:false},
+  {k:'outcome',label:'Outcome'},
+];
+function hotSortBy(k){
+  const cur=S.hotSort||{k:'when',dir:'desc'};
+  S.hotSort=cur.k===k?{k,dir:cur.dir==='asc'?'desc':'asc'}:{k,dir:k==='when'?'desc':'asc'};
+  render();
+}
+function hotToggleGroup(){ S.hotGroup=!S.hotGroup; render(); }
+function _hotCallerKey(num){ const d=String(num||'').replace(/\D/g,'').slice(-10); return d.length===10?d:''; }
+// Who a number belongs to: the contact on the record, else a linked contact
+// whose phone matches (a suggestion — shown as "matches").
+function _hotContactFor(num, projectId, stakeId){
+  const st=stakeId&&(DB.get('stakeholders')||[]).find(x=>String(x.id)===String(stakeId));
+  if(st) return dispName(st);
+  const mt=_hotPhoneMatches({callerNumber:num,projectId})[0];
+  return mt?'matches '+dispName(mt):'';
+}
+function _hotClosedRow(m){
   const logged=m.status==='logged';
-  const proj=m.projectId?escHtml(_hotProjName(m.projectId)):'General mailbox';
-  return `<div style="display:flex;justify-content:space-between;gap:12px;padding:10px 4px;border-bottom:1px solid rgba(255,255,255,.07);font-size:12px;color:var(--fog)">
-    <div><span style="color:var(--white)">${escHtml(_hotFmtPhone(m.callerNumber)||'Unknown caller')}</span> · ${escHtml(_hotWhen(m.receivedAt))} · ${proj}${m.language==='es'?' · Español':''}
-      <div style="margin-top:2px">${logged?'Logged':'Dismissed — '+escHtml(m.dismissReason||'')}${m.closedBy?' by '+escHtml(m.closedBy):''}${m.closedAt?' on '+escHtml(_hotWhen(m.closedAt)):''}</div></div>
-    <div style="display:flex;gap:6px">${_hotCanCallBack(m)?`<button class="btn btn-sm" onclick="hotCallBack('${escHtml(m.id)}')">📞 Call back</button>`:''}${logged&&m.loggedInteractionId?`<button class="btn btn-sm" onclick="openEditIntModal('${escHtml(m.loggedInteractionId)}')">Open interaction</button>`:''}</div>
-  </div>`;
+  const it=logged&&m.loggedInteractionId&&(DB.get('interactions')||[]).find(x=>String(x.id)===String(m.loggedInteractionId));
+  const outcome=(logged?'Logged':'Dismissed — '+(m.dismissReason||''))+(m.closedBy?' by '+m.closedBy:'');
+  return {id:m.id, cls:'hot-vm', dir:'in', ts:m.receivedAt||'', num:m.callerNumber,
+    callerKey:_hotCallerKey(m.callerNumber), contact:_hotContactFor(m.callerNumber,m.projectId,it&&it.stakeholderId),
+    project:m.projectId?(_hotProjName(m.projectId)||''):'General mailbox',
+    whatHTML:'Voicemail'+(m.recordingSeconds?' · '+_hotDur(m.recordingSeconds):'')+(m.language==='es'?' · Español':''),
+    outcome, outcomeHTML:escHtml(outcome)+(m.closedAt?`<div style="font-size:10px;color:var(--fog)">${escHtml(_hotWhen(m.closedAt))}</div>`:''),
+    actions:(_hotCanCallBack(m)?`<button class="btn btn-sm" onclick="hotCallBack('${escHtml(m.id)}')">📞 Call back</button>`:'')
+      +(logged&&m.loggedInteractionId?`<button class="btn btn-sm" onclick="openEditIntModal('${escHtml(m.loggedInteractionId)}')">Open interaction</button>`:'')};
+}
+function _hotCallRow(c){
+  const h=(DB.get('hotlines')||[]).find(x=>String(x.id)===String(c.hotlineId));
+  const decide=!c.outcome&&!['cancelled','failed'].includes(c.status);
+  const inb=_hotIsInbound(c);
+  const outcome=c.outcome==='logged'?'Logged':c.outcome==='not_logged'?'Not logged':decide?'Not decided yet':'—';
+  const who=escHtml(c.placedBy||c.placedByEmail||'');
+  return {id:c.id, cls:'hot-call', dir:inb?'in':'out', ts:c.createdAt||'', num:c.toNumber,
+    callerKey:_hotCallerKey(c.toNumber), contact:_hotContactFor(c.toNumber,c.projectId,c.stakeholderId),
+    project:c.projectId?(_hotProjName(c.projectId)||''):'',
+    whatHTML:`${inb?'⬇ Answered call to':'⬆ From'} ${escHtml(h?h.name:'a hotline')} · ${inb?'answered by':'placed by'} ${who}`
+      +`<div style="font-size:10px;color:var(--fog)">${escHtml(HOT_CALL_STATUS[c.status]||c.status||'')}${c.durationSeconds?' · '+_hotDur(c.durationSeconds):''}</div>`,
+    outcome, outcomeHTML:(decide?`<span style="color:var(--amber,#e8a020)">${outcome}</span>`:escHtml(outcome))+(c.decidedBy&&c.outcome?' by '+escHtml(c.decidedBy):''),
+    actions:(decide?`<button class="btn btn-primary btn-sm" onclick="hotCallLog('${escHtml(c.id)}')">Log this call</button><button class="btn btn-sm" onclick="hotCallSkip('${escHtml(c.id)}')">Don’t log</button>`:'')
+      +(c.outcome==='logged'&&c.loggedInteractionId?`<button class="btn btn-sm" onclick="openEditIntModal('${escHtml(c.loggedInteractionId)}')">Open interaction</button>`:'')};
+}
+function _hotSortRows(rows){
+  const {k,dir}=S.hotSort||{k:'when',dir:'desc'};
+  const val=r=>k==='when'?String(r.ts):k==='caller'?(r.callerKey?(r.contact||'~')+' '+r.callerKey:'~~'):String(r[k]||'').toLowerCase();
+  const m=dir==='asc'?1:-1;
+  // Ties fall back to newest first, so a sort by caller still reads in time order.
+  return rows.slice().sort((a,b)=>val(a)<val(b)?-m:val(a)>val(b)?m:String(b.ts).localeCompare(String(a.ts)));
+}
+function _hotHistoryTable(rows){
+  const sort=S.hotSort||{k:'when',dir:'desc'};
+  rows=_hotSortRows(rows).slice(0,300);
+  const th=c=>c.sort===false?`<th style="text-align:left;padding:6px 8px">${c.label}</th>`
+    :`<th style="text-align:left;padding:6px 8px;cursor:pointer;white-space:nowrap${c.w?';width:'+c.w:''}" data-sort="${c.k}" onclick="hotSortBy('${c.k}')">${c.label}${sort.k===c.k?(sort.dir==='asc'?' ▲':' ▼'):''}</th>`;
+  const td='padding:8px;vertical-align:top;border-bottom:1px solid rgba(255,255,255,.07)';
+  const tr=r=>`<tr class="${r.cls}" data-id="${escHtml(r.id)}" data-dir="${r.dir}">
+    <td style="${td};white-space:nowrap">${escHtml(_hotWhen(r.ts))}</td>
+    <td style="${td}"><span style="color:var(--white)">${escHtml(_hotFmtPhone(r.num)||'Unknown caller')}</span>${r.contact?`<div style="font-size:11px;color:var(--sky-lt)">${escHtml(r.contact)}</div>`:''}</td>
+    <td style="${td}">${escHtml(r.project||'—')}</td>
+    <td style="${td}">${r.whatHTML}</td>
+    <td style="${td}">${r.outcomeHTML}</td>
+    <td style="${td};text-align:right"><div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">${r.actions}</div></td></tr>`;
+  let body;
+  if(S.hotGroup){
+    // Groups appear in the order of their first row under the current sort.
+    const groups=new Map();
+    rows.forEach(r=>{ const g=r.callerKey||'unknown'; if(!groups.has(g)) groups.set(g,[]); groups.get(g).push(r); });
+    body=[...groups.entries()].map(([g,rs])=>{
+      const latest=rs.map(r=>String(r.ts)).sort().pop();
+      const name=rs.map(r=>r.contact).find(Boolean)||'';
+      return `<tr class="hot-group" data-caller="${escHtml(g)}"><td colspan="6" style="padding:10px 8px 6px;background:rgba(74,155,232,.08);font-size:12px">
+        <b style="color:var(--white)">${escHtml(g==='unknown'?'Unknown caller':_hotFmtPhone(rs[0].num))}</b>${name?' · '+escHtml(name):''}
+        <span style="color:var(--fog)"> · ${rs.length} ${rs.length===1?'call':'calls'} · latest ${escHtml(_hotWhen(latest))}</span></td></tr>`+rs.map(tr).join('');
+    }).join('');
+  } else body=rows.map(tr).join('');
+  return `<div style="overflow-x:auto"><table class="hot-hist" style="width:100%;border-collapse:collapse;font-size:12px;color:var(--fog)">
+    <thead><tr style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);border-bottom:1px solid rgba(255,255,255,.15)">${HOT_HIST_COLS.map(th).join('')}<th></th></tr></thead>
+    <tbody>${body}</tbody></table></div>`;
 }
 async function hotPlay(id){
   const m=(DB.get('hotline_messages')||[]).find(x=>String(x.id)===String(id)); if(!m||!m.recordingPath) return;
@@ -9296,19 +9382,6 @@ async function _hotCallAfterLog(opts, interactionId){
   }
   await sbUpdate('hotline_calls',opts.hotlineCallId,{outcome:'logged',loggedInteractionId:interactionId,decidedAt:new Date().toISOString(),decidedBy:getLoggedBy()||null});
   await _hotReload();
-}
-function _hotCallRowHTML(c){
-  const h=(DB.get('hotlines')||[]).find(x=>String(x.id)===String(c.hotlineId));
-  const st=c.stakeholderId&&(DB.get('stakeholders')||[]).find(x=>String(x.id)===String(c.stakeholderId));
-  const decide=!c.outcome&&!['cancelled','failed'].includes(c.status);
-  const out=c.outcome==='logged'?'Logged':c.outcome==='not_logged'?'Not logged':decide?'<span style="color:var(--amber,#e8a020)">Not decided yet</span>':'';
-  const inb=_hotIsInbound(c);
-  const match=inb&&!st?_hotPhoneMatches({callerNumber:c.toNumber,projectId:c.projectId})[0]:null;
-  return `<div class="hot-call" data-id="${escHtml(c.id)}" data-dir="${inb?'in':'out'}" style="display:flex;justify-content:space-between;gap:12px;padding:10px 4px;border-bottom:1px solid rgba(255,255,255,.07);font-size:12px;color:var(--fog)">
-    <div><span style="color:var(--white)">${inb?'⬇ ':'⬆ '}${escHtml(_hotFmtPhone(c.toNumber))}</span>${st?' · '+escHtml(dispName(st)):match?' · matches '+escHtml(dispName(match)):''} · ${escHtml(_hotWhen(c.createdAt))}${c.durationSeconds?' · '+_hotDur(c.durationSeconds):''}
-      <div style="margin-top:2px">${inb?'Answered call to':'From'} ${escHtml(h?h.name:'a hotline')}${c.projectId?' · '+escHtml(_hotProjName(c.projectId)):''} · ${inb?'answered':''} by ${escHtml(c.placedBy||c.placedByEmail||'')} · ${escHtml(HOT_CALL_STATUS[c.status]||c.status||'')}${out?' · '+out:''}${c.decidedBy&&c.outcome?' by '+escHtml(c.decidedBy):''}</div></div>
-    <div style="display:flex;gap:6px;align-items:flex-start">${decide?`<button class="btn btn-primary btn-sm" onclick="hotCallLog('${escHtml(c.id)}')">Log this call</button><button class="btn btn-sm" onclick="hotCallSkip('${escHtml(c.id)}')">Don’t log</button>`:''}${c.outcome==='logged'&&c.loggedInteractionId?`<button class="btn btn-sm" onclick="openEditIntModal('${escHtml(c.loggedInteractionId)}')">Open interaction</button>`:''}</div>
-  </div>`;
 }
 function hotDismiss(id){
   S.hotDismissId=id;

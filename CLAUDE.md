@@ -3221,8 +3221,16 @@ a Twilio trial + one number on DEV for a real call, then release.
 - Not on mobile or in the portal (hotline data is staff-only). The nightly
   off-site backup reads `report-files` only — decide whether `hotline-audio`
   should be added (`backup.sh` in cirruscc-backups).
+- **Inbox layout (2026-10-14, Jeff's ask):** New call + project picker sit
+  right after the title (`#hot-tools`). "Logged & dismissed" and "Calls" are one
+  table (`_hotHistoryTable`, rows from `_hotClosedRow` / `_hotCallRow`):
+  Date & time (newest first by default) · Caller (number + contact, or
+  "matches …") · Project · Call · Outcome · buttons (Call back, Open
+  interaction, Log this call / Don't log). Headings sort (`S.hotSort`,
+  `hotSortBy`); "Group by caller" (`S.hotGroup`) puts a header row over each
+  number, groups in the order of the current sort. Waiting stays as cards.
 - Guarded by `test/tests/82-hotline-receiver.test.js` (122 checks; fails if the
-  signature check is bypassed) and `test/tests/83-hotline-inbox.test.js` (73).
+  signature check is bypassed) and `test/tests/83-hotline-inbox.test.js` (77).
 - **Connector note:** on DEV, `execute_sql` / `apply_migration` time out on
   statements the connector treats as destructive (`drop …`) and on large
   multi-statement scripts — apply in small pieces. The DEV hotline tables were

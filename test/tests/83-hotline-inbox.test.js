@@ -309,6 +309,20 @@ module.exports = {
       await app.page.evaluate(() => setHotFilter('hotTab', 'calls'));
       const rows = await app.page.evaluate(() => [...document.querySelectorAll('.hot-call')].map(r => r.textContent));
       t.ok(rows.length === 2 && /Not logged/.test(rows[0]) && /Logged/.test(rows[1]) && /by PUT/.test(rows[1]), 'the Calls tab lists each call, who placed it and what was decided');
+      // ── The history table: toolbar beside the title, sortable, groupable ─
+      const tb = await app.page.evaluate(() => { const t = document.querySelector('.topbar'); const kids = [...t.children];
+        return { tools: kids.findIndex(k => k.id === 'hot-tools'), sp: kids.findIndex(k => k.classList.contains('topbar-sp')), proj: !!document.querySelector('#hot-tools #hot-proj') }; });
+      t.ok(tb.tools === 1 && tb.sp > tb.tools && tb.proj, 'New call and the project picker sit right after the title, not pushed to the right');
+      const callIds = () => app.page.evaluate(() => [...document.querySelectorAll("#hot-list tr.hot-call")].map(r => r.dataset.id));
+      const newestFirst = await callIds();
+      await app.page.evaluate(() => hotSortBy('when'));
+      const oldestFirst = await callIds();
+      t.ok(newestFirst.length === 2 && oldestFirst.join() === newestFirst.slice().reverse().join(), 'newest first by default; clicking Date & time reverses it');
+      t.ok(await app.page.evaluate(() => /▲/.test(document.querySelector('th[data-sort="when"]').textContent)), 'the sorted column shows its direction');
+      await app.page.evaluate(() => { S.hotSort = null; hotToggleGroup(); });
+      const grp = await app.page.evaluate(() => [...document.querySelectorAll('#hot-list tr')].map(r => r.className));
+      t.ok(grp.filter(c => c === 'hot-group').length >= 1 && grp[1] === 'hot-group' && grp.filter(c => c === 'hot-call').length === 2, 'Group by caller puts a header row over each number’s calls');
+      await app.page.evaluate(() => { S.hotGroup = false; render(); });
       // ── An answered hotline call waits for review ────────────────────
       const [ac] = await t.sql(`insert into pi_hotline_calls (direction, hotline_id, project_id, to_number, ring_number, placed_by, placed_by_email, call_sid, status, duration_seconds)
         values ('inbound',$1,$2,'+18015550142','+18015550177','PUT','putzke@demo.test','CA${'9'.repeat(32)}','completed',95) returning id`, [h.id, A]);

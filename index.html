@@ -8012,6 +8012,19 @@ async function saveQuickLog(){
 //   followUp:{note,due,assignee}, relatedTo, parentFollowUpOpen,
 //   hotlineMsgId, hotlineCallId, callerNumber, spanish, suggest:[stakeholder ids]}
 // — set when the dialog is opened from the Hotline inbox or "+ Related call".
+// A "Use …" button for a phone match in the Log dialog. A contact not yet on
+// the chosen project is added to it when picked (as the master-list pick does).
+function _hotUseBtnHTML(s){
+  const pid=(S.intOpts&&S.intOpts.projectId)||'';
+  const w=_hotWhereLabel(s,pid);
+  return `<button class="btn btn-sm" style="margin:2px 4px 0 0" onclick="_hotUseMatch('${escHtml(s.id)}')" title="${w?'Adds this contact to the project you log it under':''}">Use ${escHtml(dispName(s))}${w?' <span style=\'color:var(--fog);font-weight:400\'>('+escHtml(w)+')</span>':''}</button>`;
+}
+function _hotUseMatch(id){
+  const projId=document.getElementById('f-ip')?.value||'';
+  const s=DB.getActive('stakeholders').find(x=>String(x.id)===String(id)); if(!s) return;
+  if(projId&&!_hotOnProject(s,projId)) return intAddMasterToProject(id);
+  return _intSetStake(id);
+}
 function openIntModal(preStake, opts){
   S.editId=null;
   opts=opts||{};
@@ -8021,12 +8034,12 @@ function openIntModal(preStake, opts){
   const _parent=opts.relatedTo?(DB.get('interactions')||[]).find(x=>String(x.id)===String(opts.relatedTo)):null;
   const _banner=opts.hotlineMsgId?`<div style="margin:0 0 12px;border:1px solid rgba(74,155,232,.35);background:rgba(74,155,232,.07);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--mist)">
       <b style="color:var(--sky-lt)">From the hotline.</b> Pick the contact (or leave it anonymous), check the summary, then save — the voicemail is closed out against this interaction.
-      ${_sug.length?`<div style="margin-top:6px">Number matches: ${_sug.map(s=>`<button class="btn btn-sm" style="margin:2px 4px 0 0" onclick="_intSetStake('${escHtml(s.id)}')">Use ${escHtml(dispName(s))}</button>`).join('')}</div>`:''}
+      ${_sug.length?`<div style="margin-top:6px">Number matches: ${_sug.map(_hotUseBtnHTML).join('')}</div>`:''}
       ${opts.spanish?`<div class="fcheck" style="margin-top:6px"><input type="checkbox" id="f-ihot-lep" checked><label for="f-ihot-lep">Spanish voicemail — mark the contact as LEP (limited English proficiency)</label></div>`:''}
     </div>`
     :opts.hotlineCallId?`<div style="margin:0 0 12px;border:1px solid rgba(74,155,232,.35);background:rgba(74,155,232,.07);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--mist)">
       <b style="color:var(--sky-lt)">A call from the hotline.</b> Pick the contact (or add a new one), write what was said, then save — the call is marked logged.
-      ${_sug.length?`<div style="margin-top:6px">Number matches: ${_sug.map(s=>`<button class="btn btn-sm" style="margin:2px 4px 0 0" onclick="_intSetStake('${escHtml(s.id)}')">Use ${escHtml(dispName(s))}</button>`).join('')}</div>`:''}
+      ${_sug.length?`<div style="margin-top:6px">Number matches: ${_sug.map(_hotUseBtnHTML).join('')}</div>`:''}
     </div>`
     :_parent?`<div style="margin:0 0 12px;border:1px solid rgba(74,155,232,.35);background:rgba(74,155,232,.07);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--mist)">
       <b style="color:var(--sky-lt)">Related to</b> the ${escHtml(fmt(_parent.date))} ${escHtml((_parent.channel||'').toLowerCase())} contact: ${escHtml(String(_parent.summary||'').slice(0,120))}
@@ -8688,15 +8701,31 @@ function _hotIsMine(m){ const me=_myInitials(); return !!me&&String(m.assignedTo
 function _hotWaitingForMe(){
   return (DB.get('hotline_messages')||[]).filter(m=>m.status==='pending'&&(!m.assignedTo||_hotIsMine(m)));
 }
-// Contacts whose phone matches the caller's. Suggested, never attached: a
-// shared household or office line is a different person half the time.
+// Contacts whose phone matches the caller's — searched across EVERY contact
+// (all projects and the master list), on the phone number only. Those already
+// on the call's project come first. Suggested, never attached: a shared
+// household or office line is a different person half the time.
 function _hotPhoneMatches(m){
   const want=String(m.callerNumber||'').replace(/\D/g,'').slice(-10);
   if(want.length<10) return [];
-  const linked=new Set((DB.get('project_stakeholders')||[])
-    .filter(l=>!m.projectId||String(l.projectId)===String(m.projectId)).map(l=>String(l.stakeholderId)));
-  return DB.getActive('stakeholders').filter(s=>linked.has(String(s.id))
-    &&String(s.phone||'').replace(/\D/g,'').slice(-10)===want);
+  const all=DB.getActive('stakeholders').filter(s=>String(s.phone||'').replace(/\D/g,'').slice(-10)===want);
+  return all.sort((a,b)=>(_hotOnProject(b,m.projectId)?1:0)-(_hotOnProject(a,m.projectId)?1:0));
+}
+function _hotOnProject(s, projectId){
+  if(!projectId) return true;
+  return (DB.get('project_stakeholders')||[]).some(l=>String(l.stakeholderId)===String(s.id)&&String(l.projectId)===String(projectId));
+}
+// Where a matched contact lives, when it isn't the call's own project:
+// "on SR-201 …" / "master list" — so staff know choosing it adds them here.
+function _hotWhereLabel(s, projectId){
+  if(_hotOnProject(s,projectId)) return '';
+  const links=(DB.get('project_stakeholders')||[]).filter(l=>String(l.stakeholderId)===String(s.id));
+  const names=[...new Set(links.map(l=>_hotProjName(l.projectId)).filter(Boolean))];
+  return names.length?'on '+names.slice(0,2).join(', ')+(names.length>2?' +'+(names.length-2):''):s.isMaster?'master list':'no project';
+}
+function _hotMatchLabel(s, projectId){
+  const w=_hotWhereLabel(s,projectId);
+  return dispName(s)+(s.org&&(s.firstName||s.lastName)?' ('+s.org+')':'')+(w?' — '+w:'');
 }
 function _hotWhen(ts){
   if(!ts) return '';
@@ -9070,7 +9099,7 @@ function _hotCardHTML(m){
         <label style="font-size:11px;color:var(--fog);display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0">Assigned to <select onchange="hotReassign('${escHtml(m.id)}',this.value)" style="font-size:12px">${opts}</select></label>
       </div>
     </div>
-    ${matches.length?`<div style="font-size:12px;color:var(--sky-lt);margin-top:8px">Number matches ${matches.map(s=>escHtml(dispName(s))+(s.org&&(s.firstName||s.lastName)?' ('+escHtml(s.org)+')':'')).join(', ')} — suggested when you log it.</div>`:''}
+    ${matches.length?`<div style="font-size:12px;color:var(--sky-lt);margin-top:8px">Number matches ${matches.map(s=>escHtml(_hotMatchLabel(s,m.projectId))).join('; ')} — suggested when you log it.</div>`:''}
     ${tr}${audio}
     <div style="display:flex;gap:8px;margin-top:12px">
       <button class="btn btn-primary btn-sm" onclick="hotLog('${escHtml(m.id)}')">Log as interaction</button>
@@ -9103,7 +9132,7 @@ function _hotContactFor(num, projectId, stakeId){
   const st=stakeId&&(DB.get('stakeholders')||[]).find(x=>String(x.id)===String(stakeId));
   if(st) return dispName(st);
   const mt=_hotPhoneMatches({callerNumber:num,projectId})[0];
-  return mt?'matches '+dispName(mt):'';
+  return mt?'matches '+_hotMatchLabel(mt,projectId):'';
 }
 function _hotClosedRow(m){
   const logged=m.status==='logged';

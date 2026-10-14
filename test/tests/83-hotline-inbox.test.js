@@ -32,6 +32,12 @@ module.exports = {
     const [st] = await t.sql(`select s.id from pi_stakeholders s join pi_project_stakeholders l on l.stakeholder_id = s.id::text
                                where l.project_id=$1 and coalesce(s.is_archived,false)=false order by s.id limit 1`, [A]);
     await t.sql(`update pi_stakeholders set phone='801-555-0142', lep=false where id=$1`, [st.id]);
+    // A contact on project A only, whose phone matches a caller to project B — the widened match.
+    const [st2] = await t.sql(`select s.id from pi_stakeholders s join pi_project_stakeholders l on l.stakeholder_id = s.id::text
+                               where l.project_id=$1 and s.id<>$3 and coalesce(s.is_archived,false)=false
+                                 and not exists (select 1 from pi_project_stakeholders x where x.stakeholder_id = s.id::text and x.project_id=$2)
+                               order by s.id limit 1`, [A, B, st.id]);
+    await t.sql(`update pi_stakeholders set phone='(385) 555-0122' where id=$1`, [st2.id]);
     const [h] = await t.sql(`insert into pi_hotlines (name, phone_number, spanish_enabled) values ('Region One','+18015550101',true) returning id`);
     await t.sql(`insert into pi_hotline_extensions (hotline_id, digit, project_id, label) values ($1,'1',$2,'the first project'),($1,'2',$3,'the second project')`, [h.id, A, B]);
     const ins = (o) => t.sql(`insert into pi_hotline_messages (hotline_id, extension_digit, project_id, language, caller_number, call_sid,
@@ -86,6 +92,18 @@ module.exports = {
       const card2 = await app.page.evaluate(id => document.querySelector(`.hot-card[data-id="${id}"]`).textContent, m2);
       t.ok(/Español · LEP/.test(card2) && /General mailbox/.test(card2) && /listen to the recording/.test(card2), 'a Spanish general-mailbox message says so');
 
+      // ── a match from another project is suggested, labelled, and added when picked ──
+      const card3 = await app.page.evaluate(id => document.querySelector(`.hot-card[data-id="${id}"]`).textContent, m3);
+      const aName = (await t.sql(`select name from pi_projects where id=$1`, [A]))[0].name;
+      t.ok(/Number matches/.test(card3) && /— on /.test(card3) && card3.includes(aName), 'a contact on another project matches by phone, and the card says where they are');
+      await app.page.evaluate(id => hotLog(id), m3);
+      const use3 = await app.page.evaluate(() => document.querySelector('#modal-ov button[onclick^="_hotUseMatch"]')?.textContent || '');
+      t.ok(/\(on /.test(use3) && use3.includes(aName) && await app.page.evaluate(() => document.getElementById('f-is').value === ''), 'the Log dialog offers them, labelled, without attaching');
+      await app.page.evaluate(() => document.querySelector('#modal-ov button[onclick^="_hotUseMatch"]').click());
+      const linkB = await t.until(async () => (await t.sql(`select 1 from pi_project_stakeholders where stakeholder_id=$1 and project_id=$2`, [String(st2.id), B]))[0]);
+      t.ok(linkB && await app.page.evaluate(id => document.getElementById('f-is').value === id, String(st2.id)), 'choosing them adds them to this project and selects them');
+      await app.page.evaluate(() => closeM());
+
       // ── log m1 ────────────────────────────────────────────────────────
       const intsBefore = (await t.sql(`select count(*)::int n from pi_interactions`))[0].n;
       await app.page.evaluate(id => hotLog(id), m1);
@@ -94,14 +112,14 @@ module.exports = {
         proj: document.getElementById('f-ip').value, ch: document.getElementById('f-ic').value, dir: document.getElementById('f-idr').value,
         date: document.getElementById('f-id').value, sum: document.getElementById('f-isu').value,
         fu: document.getElementById('f-ifu').checked, fun: document.getElementById('f-ifun').value, fud: document.getElementById('f-ifud').value,
-        stake: document.getElementById('f-is').value, useBtn: !!document.querySelector('#modal-ov button[onclick^="_intSetStake"]'),
+        stake: document.getElementById('f-is').value, useBtn: !!document.querySelector('#modal-ov button[onclick^="_hotUseMatch"]'),
       }));
       t.ok(/Log hotline voicemail/.test(form.title), 'the Log dialog opens for the voicemail');
       t.ok(form.proj === A && form.ch === 'Phone' && form.dir === 'Incoming' && form.date === '2026-10-10', 'prefilled: project, Phone, Incoming, the day it was left');
       t.ok(/^Hotline voicemail \(Region One, pressed 1\)/.test(form.sum) && /detour sign/.test(form.sum), 'the summary starts from the transcript');
       t.ok(form.fu && /^Call back at \(801\) 555-0142/.test(form.fun) && form.fud === '2026-10-13', 'a “Call back” follow-up, due two working days later');
       t.ok(form.stake === '' && form.useBtn, 'the matching contact is suggested, not attached');
-      await app.page.evaluate(() => document.querySelector('#modal-ov button[onclick^="_intSetStake"]').click());
+      await app.page.evaluate(() => document.querySelector('#modal-ov button[onclick^="_hotUseMatch"]').click());
       await app.page.evaluate(() => saveInt());
       const logged = await t.until(async () => (await t.sql(`select * from pi_hotline_messages where id=$1 and status='logged'`, [m1]))[0]);
       t.ok(logged && logged.logged_interaction_id && logged.closed_by === 'PUT' && logged.audio_purge_after, 'the voicemail is closed out against the interaction, with a recording clean-up date');
@@ -331,10 +349,10 @@ module.exports = {
       t.ok(/Answered call to Region One/.test(inRow) && /answered by PUT/.test(inRow) && /1:35/.test(inRow) && /Not decided yet/.test(inRow), 'the Calls tab shows the answered call: who took it, how long, not yet decided');
       await app.page.evaluate(id => hotCallLog(String(id)), ac.id);
       const af = await app.page.evaluate(() => ({ d: document.getElementById('f-idr').value, su: document.getElementById('f-isu').value,
-        use: !!document.querySelector('#modal-ov button[onclick^="_intSetStake"]'), stake: document.getElementById('f-is').value }));
+        use: !!document.querySelector('#modal-ov button[onclick^="_hotUseMatch"]'), stake: document.getElementById('f-is').value }));
       t.ok(af.d === 'Incoming' && /^Hotline call from \(801\) 555-0142 to the Region One hotline, answered by PUT \(1:35\)\./.test(af.su) && af.use && af.stake === '',
         'Log this call opens prefilled as Incoming, and only suggests the contact whose phone matches');
-      await app.page.evaluate(() => { document.querySelector('#modal-ov button[onclick^="_intSetStake"]').click(); document.getElementById('f-isu').value += 'Asked about night work.'; return saveInt(); });
+      await app.page.evaluate(() => { document.querySelector('#modal-ov button[onclick^="_hotUseMatch"]').click(); document.getElementById('f-isu').value += 'Asked about night work.'; return saveInt(); });
       const acDone = await t.until(async () => (await t.sql(`select outcome, logged_interaction_id from pi_hotline_calls where id=$1 and outcome is not null`, [ac.id]))[0]);
       const [aInt] = acDone ? await t.sql(`select direction, stakeholder_id from pi_interactions where id=$1`, [acDone.logged_interaction_id]) : [{}];
       t.ok(acDone && acDone.outcome === 'logged' && aInt.direction === 'Incoming' && String(aInt.stakeholder_id) === String(st.id), 'saved: an Incoming interaction with the chosen contact; the call is marked logged');

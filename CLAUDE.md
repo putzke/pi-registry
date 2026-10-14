@@ -3229,8 +3229,17 @@ a Twilio trial + one number on DEV for a real call, then release.
   interaction, Log this call / Don't log). Headings sort (`S.hotSort`,
   `hotSortBy`); "Group by caller" (`S.hotGroup`) puts a header row over each
   number, groups in the order of the current sort. Waiting stays as cards.
+- **Phone match covers EVERY contact (2026-10-14, Jeff's call):**
+  `_hotPhoneMatches` compares the last 10 digits of the caller's number with
+  every active contact's phone — all projects and the master list — the
+  call's own project first. Phone number ONLY: no transcript scanning, no
+  caller-ID name (CNAM) lookup (cell phones return blank or the account
+  holder). A match from elsewhere is labelled "— on <project>" / "master
+  list" (`_hotWhereLabel`); in the Log dialog "Use …" (`_hotUseMatch`) adds
+  that contact to the project (via `intAddMasterToProject`) and selects them.
+  Still a suggestion, never attached automatically.
 - Guarded by `test/tests/82-hotline-receiver.test.js` (122 checks; fails if the
-  signature check is bypassed) and `test/tests/83-hotline-inbox.test.js` (77).
+  signature check is bypassed) and `test/tests/83-hotline-inbox.test.js` (80).
 - **Connector note:** on DEV, `execute_sql` / `apply_migration` time out on
   statements the connector treats as destructive (`drop …`) and on large
   multi-statement scripts — apply in small pieces. The DEV hotline tables were

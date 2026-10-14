@@ -8738,8 +8738,10 @@ function _hotOnProject(s, projectId){
 }
 // Where a matched contact lives, when it isn't the call's own project:
 // "on SR-201 …" / "master list" — so staff know choosing it adds them here.
+// With no project yet (a general-mailbox message), always say where the
+// contact is: that is the hint for which project to log the call under.
 function _hotWhereLabel(s, projectId){
-  if(_hotOnProject(s,projectId)) return '';
+  if(projectId && _hotOnProject(s,projectId)) return '';
   const links=(DB.get('project_stakeholders')||[]).filter(l=>String(l.stakeholderId)===String(s.id));
   const names=[...new Set(links.map(l=>_hotProjName(l.projectId)).filter(Boolean))];
   return names.length?'on '+names.slice(0,2).join(', ')+(names.length>2?' +'+(names.length-2):''):s.isMaster?'master list':'no project';

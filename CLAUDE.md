@@ -3250,7 +3250,8 @@ a Twilio trial + one number on DEV for a real call, then release.
   call's own project first. Phone number ONLY: no transcript scanning, no
   caller-ID name (CNAM) lookup (cell phones return blank or the account
   holder). A match from elsewhere is labelled "— on <project>" / "master
-  list" (`_hotWhereLabel`). In the Log dialog "Use …" (`_hotUseMatch`) only
+  list" (`_hotWhereLabel`); a general-mailbox message (no project yet)
+  always shows it, as the hint for which project to log under. In the Log dialog "Use …" (`_hotUseMatch`) only
   SELECTS; the link to a project is made by `saveInt` on Save, under the
   project the interaction is logged to — so a caller who meant another project
   (staff change the Project) leaves no stray link on the hotline's project.
@@ -3258,7 +3259,7 @@ a Twilio trial + one number on DEV for a real call, then release.
   (`#hot-use-btns`, `_hotUseBtnsHTML`, in `updateIntStakeholders`). `saveInt`'s
   link check now compares ids as strings. Never attached automatically.
 - Guarded by `test/tests/82-hotline-receiver.test.js` (122 checks; fails if the
-  signature check is bypassed) and `test/tests/83-hotline-inbox.test.js` (86).
+  signature check is bypassed) and `test/tests/83-hotline-inbox.test.js` (87).
 - **The Hotline view refreshes every 30 s** (2026-10-14, Jeff's call; other
   views stay at 60 s): `_bgRefreshTimer` runs every `BG_REFRESH_HOTLINE_SEC`
   and calls `_bgRefreshTick` only when that view's interval is due. A new

@@ -2456,7 +2456,7 @@ function refreshBadges(){
   const masterCount=all.filter(s=>s.isMaster).length;
   const ints=DB.get('interactions');
   const _meB=getLoggedBy();
-  const openFU=ints.filter(i=>i.followUp&&!i.followUpDone&&(!_meB||_fuOwner(i)===_meB)).length;
+  const openFU=ints.filter(i=>i.followUp&&!i.followUpDone&&(!_meB||_fuIsMine(i))).length;
   document.getElementById('nb-master').textContent=masterCount;
   const fuEl=document.getElementById('nb-fu');
   fuEl.textContent=openFU;
@@ -2559,7 +2559,7 @@ function renderDash(el){
   const _me=getLoggedBy();
   const _openFUAll=ints.filter(i=>i.followUp&&!i.followUpDone);
   const _isOverdue=i=>i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<new Date();
-  const _openFUMine=_me?_openFUAll.filter(i=>_fuOwner(i)===_me):_openFUAll;
+  const _openFUMine=_me?_openFUAll.filter(_fuIsMine):_openFUAll;
   const openFUCt=_openFUMine.length;
   const openFUTeamCt=_openFUAll.length;
   const overdueCt=_openFUMine.filter(_isOverdue).length;
@@ -5908,7 +5908,7 @@ function renderFollowups(el){
   else if(statusF==='overdue')ints=ints.filter(_fuOverdue);
   else if(statusF==='resolved')ints=ints.filter(i=>i.followUpDone);
   if(projF)ints=ints.filter(i=>String(i.projectId)===String(projF));
-  if(myLoggedBy&&userF==='mine')        ints=ints.filter(i=>_fuOwner(i)===myLoggedBy);
+  if(myLoggedBy&&userF==='mine')        ints=ints.filter(_fuIsMine);
   else if(myLoggedBy&&userF==='logged') ints=ints.filter(i=>i.loggedBy===myLoggedBy);
   if(search)ints=ints.filter(i=>{
     const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
@@ -5920,7 +5920,7 @@ function renderFollowups(el){
   ints=sortFollowups(ints,stakes_fu);
 
   const _fuScope=i=>!myLoggedBy||userF==='all'
-    ||(userF==='logged'?i.loggedBy===myLoggedBy:_fuOwner(i)===myLoggedBy);
+    ||(userF==='logged'?i.loggedBy===myLoggedBy:_fuIsMine(i));
   const allFU=DB.get('interactions').filter(i=>i.followUp&&(!projF||String(i.projectId)===String(projF))&&_fuScope(i));
   const openCt=allFU.filter(i=>!i.followUpDone).length;
   const overdueCt=allFU.filter(i=>!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<now).length;
@@ -6041,8 +6041,7 @@ function renderFollowups(el){
                             title="Reassign this follow-up. Does not change who logged the interaction."
                             onchange="assignFollowUp('${i.id}',this.value)">
                       <option value=""${!i.followUpAssignedTo?' selected':''}>${i.loggedBy?'— '+i.loggedBy+' —':'— Unassigned —'}</option>
-                      ${_fuTeam().map(u=>`<option value="${u}"${i.followUpAssignedTo===u?' selected':''}>${u}</option>`).join('')}
-                      <option value="__new">＋ Someone else…</option>
+                      ${_fuRosterOptions((i.followUpAssignedTo||'').trim(), '')}
                     </select>
                   </td>
 
@@ -8064,7 +8063,7 @@ function openIntModal(preStake, opts){
     </div>`
     :_parent?`<div style="margin:0 0 12px;border:1px solid rgba(74,155,232,.35);background:rgba(74,155,232,.07);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--mist)">
       <b style="color:var(--sky-lt)">Related to</b> the ${escHtml(fmt(_parent.date))} ${escHtml((_parent.channel||'').toLowerCase())} contact: ${escHtml(String(_parent.summary||'').slice(0,120))}
-      ${opts.parentFollowUpOpen?`<div class="fcheck" style="margin-top:6px"><input type="checkbox" id="f-irelres" checked><label for="f-irelres">This resolves its follow-up (“${escHtml(_parent.followUpNote||'follow-up')}”)</label></div>`:''}
+      ${opts.parentFollowUpOpen?`<div class="fcheck" style="margin-top:6px"><input type="checkbox" id="f-irelres" checked onchange="_relFuWarn()"><label for="f-irelres">This resolves its follow-up (“${escHtml(_parent.followUpNote||'follow-up')}”)</label></div>`:''}
     </div>`:'';
   openM(opts.hotlineMsgId?'Log hotline voicemail':opts.hotlineCallId?'Log hotline call':_parent?'Log related contact':'Log interaction',
   `${_banner}<div class="fgrid fg2f">
@@ -8115,12 +8114,13 @@ function openIntModal(preStake, opts){
   </div>
   <input type="hidden" id="f-inepastage">
   <div class="fsec">Follow-up</div>
-  <div class="fr"><div class="fcheck"><input type="checkbox" id="f-ifu" onchange="document.getElementById('fu-f').style.display=this.checked?'':'none'"><label for="f-ifu">This interaction requires a follow-up action</label></div></div>
+  <div class="fr"><div class="fcheck"><input type="checkbox" id="f-ifu" onchange="document.getElementById('fu-f').style.display=this.checked?'':'none';_relFuWarn()"><label for="f-ifu">This interaction requires a follow-up action</label></div></div>
+  <div id="f-irel-warn" style="display:none;margin:-4px 0 10px;border:1px solid rgba(232,163,23,.4);background:rgba(232,163,23,.08);border-radius:6px;padding:7px 10px;font-size:12px;color:var(--mist)"></div>
   <div id="fu-f" style="display:none"><div class="fgrid fg2f">
     <div class="fr"><label>Follow-up action</label><input id="f-ifun" placeholder="What needs to be done?"></div>
     <div class="fr"><label>Due date</label><input type="date" id="f-ifud"></div>
   </div>
-  <div class="fr"><label>Assign to <span id="f-ifua-hint" style="font-weight:400;color:var(--fog)">(defaults to you)</span></label><select id="f-ifua" onchange="this.dataset.touched='1';_fuAssignPick(this)">${_fuAssignOptions('', getLoggedBy())}</select></div>
+  <div class="fr"><label>Assign to <span id="f-ifua-hint" style="font-weight:400;color:var(--fog)">(defaults to you)</span></label><select id="f-ifua" onchange="this.dataset.touched='1';_fuAssignPick(this)">${_fuAssignOptions('', getLoggedBy())}</select><div id="f-ifua-warn" style="font-size:11px;color:var(--amber);margin-top:4px"></div></div>
   <div class="fr"><div class="fcheck"><input type="checkbox" id="f-ifudo" onchange="document.getElementById('fu-rdate').style.display=this.checked?'':'none';document.getElementById('fu-rnote').style.display=this.checked?'':'none'"><label for="f-ifudo">Follow-up resolved</label></div></div>
   <div id="fu-rdate" style="display:none"><div class="fr"><label>Date resolved</label><input type="date" id="f-ifudr" value="${localToday()}"></div></div>
   ${_fuResNoteHTML('',false)}</div>`,
@@ -8167,11 +8167,12 @@ function openIntModal(preStake, opts){
     if(sel){
       if(a===getLoggedBy()) sel.value='';
       else {
-        if(![...sel.options].some(o=>o.value===a)){ const o=document.createElement('option'); o.value=a; o.textContent=a; sel.insertBefore(o, sel.lastElementChild); }
+        _fuEnsureOpt(sel, a);
         sel.value=a;
       }
       sel.dataset.touched='1';
       const hint=document.getElementById('f-ifua-hint'); if(hint) hint.textContent='(the voicemail is assigned to '+(_leadName(a)||a)+')';
+      _fuAssignPick(sel);
     }
   }
 }
@@ -8180,6 +8181,18 @@ function openIntModal(preStake, opts){
 // overridable: the picker shows the lead, and once you choose someone yourself
 // a project change no longer moves it. When you ARE the lead (or there is no
 // active lead) it stays as before: unassigned, i.e. with whoever logged it.
+// "+ Related contact": the earlier contact's follow-up stays open unless this
+// one resolves it. Adding a new follow-up while leaving the old one open gives
+// the thread two open tasks — allowed (say, a letter and a call back), but
+// usually a slip, so it is said out loud before Save.
+function _relFuWarn(){
+  const w=document.getElementById('f-irel-warn'), rr=document.getElementById('f-irelres');
+  if(!w) return;
+  const on=!!rr&&!rr.checked&&!!document.getElementById('f-ifu')?.checked;
+  const par=on?(DB.get('interactions')||[]).find(x=>String(x.id)===String((S.intOpts||{}).relatedTo)):null;
+  w.style.display=on?'':'none';
+  w.innerHTML=on?'⚠ The original follow-up (“'+escHtml(par&&par.followUpNote||'follow-up')+'”) will <b>stay open</b> too, so this thread will have two open follow-ups. If the call back is done, tick “This resolves its follow-up” at the top.':'';
+}
 function _fuDefaultToLead(){
   const sel=document.getElementById('f-ifua'), hint=document.getElementById('f-ifua-hint');
   if(!sel||sel.dataset.touched) return;
@@ -8188,16 +8201,14 @@ function _fuDefaultToLead(){
   const lead=String(p&&p.lead||'').trim().toUpperCase();
   const m=lead?_teamByIni(lead):null;
   if(lead&&lead!==getLoggedBy()&&lead!==_myInitials()&&(!m||m.active!==false)){
-    if(![...sel.options].some(o=>o.value===lead)){
-      const o=document.createElement('option'); o.value=lead; o.textContent=lead;
-      sel.insertBefore(o, sel.lastElementChild);
-    }
+    _fuEnsureOpt(sel, lead);
     sel.value=lead;
     if(hint) hint.textContent='(defaults to the project’s PI Lead, '+(m&&m.name||lead)+')';
   } else {
     sel.value='';
     if(hint) hint.textContent='(defaults to you)';
   }
+  _fuAssignPick(sel);
 }
 function updateIntNepaStage(){
   const projId=document.getElementById('f-ip')?.value||'';
@@ -8249,7 +8260,7 @@ async function openEditIntModal(id){
     </div>
   </div>
   ${_fuResNoteHTML(i.followUpResolution||'',!!i.followUpDone)}
-  <div class="fr"><label>Assign to <span style="font-weight:400;color:var(--fog)">(defaults to whoever logged it)</span></label><select id="f-ifua" onchange="_fuAssignPick(this)">${_fuAssignOptions(i.followUpAssignedTo, i.loggedBy)}</select></div>
+  <div class="fr"><label>Assign to <span style="font-weight:400;color:var(--fog)">(defaults to whoever logged it)</span></label><select id="f-ifua" onchange="_fuAssignPick(this)">${_fuAssignOptions(i.followUpAssignedTo, i.loggedBy)}</select><div id="f-ifua-warn" style="font-size:11px;color:var(--amber);margin-top:4px">${_fuAssignWarn(i.followUpAssignedTo)}</div></div>
   </div>
   ${_intThreadHTML(id)}`,
   `<button class="btn btn-danger" onclick="delInt('${id}')">Delete</button>
@@ -8275,7 +8286,7 @@ async function saveInt(){
     followUpResolution:(_fuOn&&fuDone)?v('f-ifures').trim():'',
     // Clearing the follow-up clears its owner too — an assignment on a
     // non-follow-up would be invisible and unresolvable.
-    followUpAssignedTo:_fuOn?((v('f-ifua')==='__new'?'':v('f-ifua'))||''):''};
+    followUpAssignedTo:_fuOn?(v('f-ifua')||''):''};
   // The thread link is kept on edit and set once, from "+ Related contact".
   const _opts=S.editId?{}:(S.intOpts||{});
   const _relTo=S.editId?(_existingInt&&_existingInt.relatedTo):_opts.relatedTo;
@@ -8362,6 +8373,13 @@ function _fuResNoteLine(i, style){
 // provenance on a compliance record and flows into archived PI reports, so it
 // must never be rewritten to re-route a task.
 function _fuOwner(i){ return (i && (i.followUpAssignedTo || i.loggedBy)) || ''; }
+// "Assigned to me": my email-derived initials OR my initials on the PI team
+// list (matched by sign-in email), so a member whose initials differ from
+// their email still sees what was assigned to them.
+function _fuIsMine(i){
+  const o=String(_fuOwner(i)).trim().toUpperCase(); if(!o) return false;
+  return o===getLoggedBy()||o===_myInitials();
+}
 
 // Team roster, derived from data rather than a users table: every initial that
 // has ever logged or been assigned something, plus the current user. Keeps this
@@ -9546,37 +9564,53 @@ function _fuAssignOptions(cur, loggedBy){
   const me=getLoggedBy();
   cur=(cur||'').trim();
   const owner=(loggedBy||'').trim()||me;
-  const team=_fuTeam().filter(u=>u!==me);
-  if(cur&&cur!==me&&team.indexOf(cur)<0) team.push(cur);       // keep an off-roster assignee
-  if(owner&&owner!==me&&team.indexOf(owner)<0) team.push(owner);
-  team.sort();
   let html='<option value=""'+(!cur?' selected':'')+'>'
     +(owner?'— Unassigned · stays with '+escHtml(owner)+' —':'— Unassigned —')+'</option>';
   if(me) html+='<option value="'+escHtml(me)+'"'+(cur===me?' selected':'')+'>Me ('+escHtml(me)+')</option>';
-  team.forEach(u=>{ html+='<option value="'+escHtml(u)+'"'+(cur===u?' selected':'')+'>'+escHtml(u)+'</option>'; });
-  return html+'<option value="__new">＋ Someone else…</option>';
+  return html+_fuRosterOptions(cur, me);
 }
-
-// Same escape hatch as the Follow-ups table: assign to a teammate who has never
-// logged an interaction and so isn't in the derived roster yet.
+// Who a follow-up can be assigned to: the ACTIVE PI team list and nobody else
+// (Oct 2026). Free-typed initials ("Someone else…") and initials picked up from
+// old logs were dropped: a follow-up given to someone with no sign-in reached
+// nobody's "Assigned to me" and was only ever seen under "All".
+function _fuAssignees(){
+  return _team(true).filter(m=>String(m.initials||'').trim())
+    .map(m=>({ini:String(m.initials).trim().toUpperCase(), name:m.name||'', email:String(m.email||'').trim()}));
+}
+function _fuRosterOptions(cur, skip){
+  const list=_fuAssignees().filter(m=>m.ini!==skip);
+  let html=list.map(m=>'<option value="'+escHtml(m.ini)+'"'+(cur===m.ini?' selected':'')+'>'
+    +escHtml(m.name?m.name+' ('+m.ini+')':m.ini)+(m.email?'':' · no email')+'</option>').join('');
+  // An existing assignment to someone off the list is kept and labelled, never
+  // silently dropped by opening and saving the record.
+  if(cur&&cur!==skip&&!list.some(m=>m.ini===cur))
+    html+='<option value="'+escHtml(cur)+'" selected>'+escHtml(cur)+' · not on the team list</option>';
+  if(!list.length) html+='<option value="" disabled>Add people in Settings → PI team</option>';
+  return html;
+}
+// The warning under the picker when the chosen person can't see the follow-up
+// under "Assigned to me" — which finds people by the email they sign in with.
+function _fuAssignWarn(ini){
+  ini=String(ini||'').trim().toUpperCase();
+  if(!ini||ini===getLoggedBy()) return '';
+  const m=_teamByIni(ini);
+  if(!m) return '⚠ '+escHtml(ini)+' is not on the PI team list, so this follow-up won’t show under anyone’s “Assigned to me”.';
+  if(m.active===false) return '⚠ '+escHtml(m.name||ini)+' is inactive on the PI team list.';
+  if(!String(m.email||'').trim()) return '⚠ '+escHtml(m.name||ini)+' has no email on the PI team list. “Assigned to me” finds people by the email they sign in with, so they won’t see this until it’s added (Settings → PI team).';
+  return '';
+}
 function _fuAssignPick(sel){
-  if(sel.value!=='__new') return;
-  const who=(prompt('Assign to — enter initials or a short name (e.g. SHA):')||'').trim().slice(0,20);
-  if(!who){ sel.value=''; return; }
-  const o=document.createElement('option');
-  o.value=who; o.textContent=who;
-  sel.insertBefore(o, sel.lastElementChild);
-  sel.value=who;
+  const w=document.getElementById('f-ifua-warn'); if(w) w.innerHTML=_fuAssignWarn(sel&&sel.value);
+}
+// Put a specific person in the picker (the PI Lead, a voicemail's assignee)
+// even if they are not offered — labelled, so it's visible they're off-list.
+function _fuEnsureOpt(sel, ini){
+  if(![...sel.options].some(o=>o.value===ini)){
+    const o=document.createElement('option'); o.value=ini; o.textContent=ini+' · not on the team list'; sel.appendChild(o);
+  }
 }
 
 function assignFollowUp(id,val){
-  // '__new' lets you assign to a teammate who has never logged an interaction —
-  // without it the derived roster is a chicken-and-egg trap on a fresh team.
-  if(val==='__new'){
-    const who=(prompt('Assign to — enter initials or a short name (e.g. SHA):')||'').trim();
-    if(!who){ render(); return; }          // cancelled: repaint to reset the select
-    val=who.slice(0,20);
-  }
   const all=DB.get('interactions');
   const i=all.findIndex(x=>String(x.id)===String(id));
   if(i<0) return;

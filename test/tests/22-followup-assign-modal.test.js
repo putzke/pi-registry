@@ -70,7 +70,7 @@ module.exports = {
       await app.page.waitForTimeout(400);
       o = await opts();
       t.eq(o.selected, assigned.a, 'the stored assignee is selected');
-      t.eq(o.selectedText, assigned.a, 'and shown by name');
+      t.eq(o.selectedText, assigned.a + ' · not on the team list', 'and shown by name (labelled off-list: this seed has no PI team list)');
 
       // ── assigned to the reader ──────────────────────────────────────────
       // This is the one case the old label got right by accident, and it must

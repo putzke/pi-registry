@@ -413,6 +413,25 @@ first time a fetched project row carries a `lead` key — so a save never 400s).
 - Guarded by `test/tests/73-project-lead.test.js` (27 checks; verified to fail
   with the scope filter removed and with a partial-record re-key).
 
+### Follow-up Assign-to = the PI team list; threads warn on two open tasks (Oct 2026)
+Jeff's worry: a follow-up assigned to someone who doesn't sign in gets lost.
+- **Assign to** (both interaction dialogs and the Follow-ups table) offers
+  ONLY active PI team members (`_fuAssignees` / `_fuRosterOptions`), "Name (INI)".
+  "＋ Someone else…" and initials scraped from old logs are gone (`_fuTeam()`
+  still exists for the Team view etc., not for the picker). A member with no
+  email is labelled "· no email"; picking an off-list, inactive or email-less
+  person shows `_fuAssignWarn` under the picker. An EXISTING off-list
+  assignment stays selected, labelled "· not on the team list" — never dropped
+  by a save. The PI Lead / voicemail assignee is added via `_fuEnsureOpt`.
+- **"Assigned to me"** = `_fuIsMine(i)`: owner equals my email initials
+  (`getLoggedBy`) OR my team-list initials (`_myInitials`). Used by the
+  Follow-ups filter, its counts, and both badges.
+- **"+ Related contact"**: one follow-up per interaction; a thread can hold
+  several open ones. Unticking "This resolves its follow-up" while ticking a
+  new follow-up shows `#f-irel-warn` (`_relFuWarn`): the original stays open
+  too. A hint, not a block.
+- Guarded by `test/tests/85-followup-assign-team.test.js` (fails on the old code).
+
 ### Follow-up resolution note (Oct 2026)
 `sql/2026-10-11_followup_resolution_note.sql` adds `pi_interactions.follow_up_resolution`
 (`followUpResolution`) — **must be pasted in the SQL Editor**; until then `toSB`

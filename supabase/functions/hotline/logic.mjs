@@ -40,6 +40,8 @@ export const AUDIO_BUCKET = 'hotline-audio';
 export const DIAL_DAILY_LIMIT = 30;
 // A placed call's bridge works only this long after it was placed.
 export const DIAL_BRIDGE_MINUTES = 10;
+// How long the staff leg waits for "press 1" — each of the two prompts.
+export const BRIDGE_KEY_WAIT_SEC = 15;
 
 const T = {
   en: {
@@ -60,6 +62,8 @@ const T = {
     dialPrompt: (num, name) => `This is your call from the ${name} hotline. Press 1 to call ${num}. Or hang up to cancel.`,
     callbackConnecting: 'Connecting. This call is not recorded.',
     callbackCancelled: 'No call was placed. Goodbye.',
+    callbackNoKey: 'We didn\u2019t hear a 1, so no call was placed. Goodbye.',
+    callbackRepeat: 'Sorry, I didn\u2019t hear that.',
     callbackEnded: 'The call has ended. Goodbye.',
     callbackGone: 'This call back is no longer available. Goodbye.',
   },
@@ -478,10 +482,14 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
       const mark = async status => { if (fresh) { try { await rest(`pi_hotline_calls?id=eq.${encodeURIComponent(cid)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Prefer: 'return=minimal' }, body: JSON.stringify({ status }) }); } catch (_) {} } };
       if (sub === '/bridge') {
         await mark('answered');
-        return xml(twiml(
-          `<Gather numDigits="1" timeout="8" action="${xmlEsc(base + '/connect?' + q)}" method="POST">`
-          + say((fresh ? T.en.dialPrompt : T.en.callbackPrompt)(spokenNumber(to), hotName(h.name)), 'en') + '</Gather>'
-          + say(T.en.callbackCancelled, 'en') + '<Hangup/>'));
+        // Forgiving on purpose (Oct 2026): a 1 pressed late, or lost on a
+        // Bluetooth/car phone, used to end the call after 8 s. Now the prompt
+        // waits BRIDGE_KEY_WAIT_SEC, is said once more, and the goodbye says why.
+        const prompt = (fresh ? T.en.dialPrompt : T.en.callbackPrompt)(spokenNumber(to), hotName(h.name));
+        const gather = text => `<Gather numDigits="1" timeout="${BRIDGE_KEY_WAIT_SEC}" action="${xmlEsc(base + '/connect?' + q)}" method="POST">`
+          + say(text, 'en') + '</Gather>';
+        return xml(twiml(gather(prompt) + gather(T.en.callbackRepeat + ' ' + prompt)
+          + say(T.en.callbackNoKey, 'en') + '<Hangup/>'));
       }
       if (String(params.Digits || '') !== '1') { await mark('cancelled'); return xml(twiml(say(T.en.callbackCancelled, 'en') + '<Hangup/>')); }
       await mark('connected');

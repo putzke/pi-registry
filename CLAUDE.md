@@ -3181,6 +3181,11 @@ a Twilio trial + one number on DEV for a real call, then release.
   `_hotWhyNot` (app, which says why), asserted equal by test 83. US
   territories (Puerto Rico etc.) stay callable. Same Geo setting is needed on
   the Sunrise account at go-live.
+  **"Press 1" is forgiving (2026-10-17):** a late or lost keypress (seen
+  live: Twilio heard no digit on two tries; /connect never called) ended the
+  call after 8 s with "No call was placed". `/bridge` now waits
+  `BRIDGE_KEY_WAIT_SEC` (15) per prompt, says the prompt twice, and the
+  goodbye says "We didn't hear a 1". Deployed to DEV as version 14.
   **First real dialpad call WORKED on DEV (2026-10-13):** after the Geo fix,
   Jeff's cell rang from the hotline number, he pressed 1, and his Teams
   number rang (a Teams calling-plan number takes PSTN calls normally). Rows

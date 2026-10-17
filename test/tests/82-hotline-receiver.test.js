@@ -264,6 +264,8 @@ module.exports = {
     const leg = { CallSid: 'CA' + 'f'.repeat(32), AccountSid: ACCT, From: '+18015550101', To: '+18015550177' };
     r = await call('/bridge?m=' + cm.id, leg);
     t.ok(/<Gather numDigits="1"/.test(r.body) && /Press 1 to call 3 8 5, 5 5 5, 0 1 9 9/.test(r.body) && !/<Dial/.test(r.body), 'bridge: asks the staff member to press 1 — nobody is dialled yet');
+    t.ok((r.body.match(/<Gather numDigits="1" timeout="15"/g) || []).length === 2 && /didn.t hear that/.test(r.body)
+      && /didn.t hear a 1, so no call was placed/.test(r.body), 'bridge: waits 15 s, asks twice, and the goodbye says no 1 was heard');
     r = await call('/connect?m=' + cm.id, { ...leg, Digits: '1' });
     t.ok(/<Dial callerId="\+18015550101"[^>]*><Number>\+13855550199<\/Number><\/Dial>/.test(r.body) && !/<Record/.test(r.body) && !/record="/.test(r.body), 'press 1: the caller is dialled from the hotline number, not recorded');
     r = await call('/connect?m=' + cm.id, { ...leg, Digits: '' });

@@ -438,7 +438,9 @@ Jeff's worry: a follow-up assigned to someone who doesn't sign in gets lost.
   if left anonymous. While the original's follow-up is open the dialog shows
   **"This resolves the follow-up"** (`f-irelres`, ticked): ticked closes it
   ("Replied by <channel> on <date>."), unticked leaves it open (a voicemail
-  left). Something genuinely new = a new interaction with its own follow-up.
+  left). **Save & log next contact** (`saveIntAndNext`, next-contact dialog
+  only) saves and opens another; `saveInt` returns true on success. Something
+  genuinely new = a new interaction with its own follow-up.
   Both dialogs list the conversation (`_intPairHTML`, "Conversation · N
   contacts", open follow-up flagged). Removed: What's next? (`f-inext`),
   `_intThread`, `_threadOpen`, `_threadElsewhere`, `#fu-own`.

@@ -8126,7 +8126,7 @@ function openIntModal(preStake, opts){
   <div class="fr"><div class="fcheck"><input type="checkbox" id="f-ifudo" onchange="document.getElementById('fu-rdate').style.display=this.checked?'':'none';document.getElementById('fu-rnote').style.display=this.checked?'':'none'"><label for="f-ifudo">Follow-up resolved</label></div></div>
   <div id="fu-rdate" style="display:none"><div class="fr"><label>Date resolved</label><input type="date" id="f-ifudr" value="${localToday()}"></div></div>
   ${_fuResNoteHTML('',false)}</div></div>`,
-  `<button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-primary" onclick="saveInt()">Save interaction</button>`,true);
+  `<button class="btn" onclick="closeM()">Cancel</button>${_parent?`<button class="btn" onclick="saveIntAndNext('${escHtml(String(_parent.id))}')" title="Save this one and open another next contact in the same conversation">Save &amp; log next contact</button>`:''}<button class="btn btn-primary" onclick="saveInt()">Save interaction</button>`,true);
   // If a project is already selected (via filter), populate stakeholders for that project
   if(S.projectFilter){ updateIntStakeholders(); updateIntIssues(); }
   // Re-apply the pre-selected contact AFTERWARDS. openIntModal seeds the hidden
@@ -8337,6 +8337,12 @@ async function saveInt(){
   if(_opts.hotlineCallId) await _hotCallAfterLog(_opts, data.id);
   S.intOpts={};
   closeM();refreshBadges();render();
+  return true;
+}
+// "Save & log next contact": save this next contact, then open another in
+// the same conversation (nothing opens if the save was refused).
+async function saveIntAndNext(rootId){
+  if(await saveInt()) logRelatedInt(rootId);
 }
 function delInt(id){
   if(!confirm('Delete this interaction? This cannot be undone.')) return;

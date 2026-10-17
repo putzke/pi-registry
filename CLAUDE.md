@@ -3268,6 +3268,14 @@ a Twilio trial + one number on DEV for a real call, then release.
     `outbound-dial` call whose live parent is an inbound call to a hotline.
   - Not yet: an in-app pop-up for incoming calls, ringing anyone but the lead,
     recording answered calls (same open decisions as release 2).
+  - **Answered calls are NOT recorded or transcribed — a future release,
+    deferred by Jeff 2026-10-17.** Live transcription runs only while a
+    caller leaves a voicemail (caller's track). Twilio could transcribe both
+    tracks of an answered call (Nova-3, ~$0.027/min per track); decide first:
+    the announcement ("may be recorded and transcribed" — one-party consent
+    in Utah, not in every caller's state), retention (GRAMA), whether it
+    only displays or also prefills the Log form (never auto-logged), and
+    transcript-only vs. keeping audio. Don't build until Jeff says go.
 - **Fallback assignee (2026-10-12):** `pi_hotlines.default_assignee`
   (initials; "If the project has no PI Lead…" in the hotline dialog). The
   receiver assigns the project's active lead, else this person (also for the

@@ -3087,12 +3087,29 @@ a Twilio trial + one number on DEV for a real call, then release.
   `/recording` + `/transcription` (both UPSERT on `call_sid` with only their
   own fields, so they work in either order), `/notify` (app → email the
   assignee; checks the caller's session + `pi_staff`). Voices: Amazon Polly
-  neural via Twilio `<Say>` (Joanna / Lupe). Recording limit 120 s (Twilio's
-  transcription ceiling). English is transcribed by Twilio; **Spanish is not
-  transcribed** (Twilio's built-in transcription is treated as English-only —
-  confirm before go-live) — the inbox says "listen to the recording".
+  neural via Twilio `<Say>` (Joanna / Lupe). Recording limit 120 s (what the
+  prompt promises).
+  **Transcripts: Twilio LIVE transcription with Deepgram Nova-3 (Oct 2026,
+  Jeff's call)** — `<Start><Transcription>` right before `<Record>`
+  (`TRANSCRIBE_ENGINE`/`_MODEL`/`_LANG`: deepgram / nova-3 / en-US, es-US),
+  caller's track only, so the greeting and menu aren't billed. Replaced
+  `<Record transcribe>` (English only, 2-minute cap, rough on names;
+  $0.05/min vs Twilio's listed $0.027/min). Spanish is now transcribed.
+  Finished pieces post to `/transcription` (`TranscriptionEvent`
+  transcription-content, `SequenceId`, `TranscriptionData` JSON) and go through
+  `pi_hotline_transcript_part()` (`sql/2026-10-17_hotline_live_transcript.sql`,
+  service_role only): one statement merges the piece into
+  `transcript_parts` and rebuilds `transcript` in order under the row lock,
+  creating the row if the recording callback hasn't landed. `transcription-
+  stopped`/`-error` only PATCH an existing row (done / none / failed) — a
+  hang-up never creates a voicemail. The inbox shows any text present and
+  stops saying "on its way" after `HOT_TRANSCRIPT_WAIT_MIN` (10). Unsigned
+  live-transcription events are confirmed by the call alone (no RecordingSid).
+  The old `<Record transcribe>` callback is still handled for older messages.
+  Applied to DEV + function v15 on 2026-10-17; **not yet confirmed on a real
+  call** — Spanish `es-US` with Nova-3 in particular.
   The audio is copied into `hotline-audio/messages/<id>.mp3`, then Twilio's
-  copy is DELETED (Spanish: at once; English: once the transcript is in).
+  copy is DELETED at once (the transcript no longer comes from it).
   The new-voicemail email (Resend API, `RESEND_API_KEY` secret, optional)
   names the project only — no caller number or transcript.
 - **Secrets to add per project** (Supabase → Edge Functions → Secrets):
@@ -3128,7 +3145,8 @@ a Twilio trial + one number on DEV for a real call, then release.
   email — a Resend key `RESEND_API_KEY` in the function secrets, and every PI
   Lead's email on the team list (Jeff, 2026-10-12: leave it off for the DEV
   trial, but it must be on before live); (2) confirm Spanish transcription
-  with Twilio; (3) decide whether `hotline-audio` joins the nightly backup;
+  with Twilio — now Nova-3 live transcription, confirm on DEV calls; paste
+  `sql/2026-10-17_hotline_live_transcript.sql` on LIVE too; (3) decide whether `hotline-audio` joins the nightly backup;
   (4) paste `sql/2026-10-12_hotlines.sql` on LIVE, set the LIVE secrets and
   point the real number(s) at the LIVE function; (5) add Twilio to "Outside
   services" and the Service Map; (6) **not before a long stretch of DEV

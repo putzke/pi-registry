@@ -12,8 +12,10 @@
 //    a single-project number with Spanish off goes straight to the recording;
 //  - a voicemail becomes a PENDING row (never an interaction), assigned to the
 //    project's PI Lead, with the audio copied to our storage, Twilio's copy
-//    deleted only once ours exists, and an email to the lead;
-//  - the recording and transcription callbacks work in either order;
+//    deleted once ours exists, and an email to the lead;
+//  - live transcription (Deepgram Nova-3, English and Spanish) starts with the
+//    message; its pieces land in order however they arrive, before or after
+//    the recording callback; a hang-up never creates a voicemail;
 //  - /notify only works for signed-in staff.
 const path = require('path');
 const { pathToFileURL } = require('url');
@@ -129,7 +131,12 @@ module.exports = {
     t.ok(log.downloads.some(d => d.url === TW_API + `/Recordings/${RS}.mp3`), '…the audio is fetched from api.twilio.com by SID — never from the RecordingUrl the request named');
     const [mLive] = await t.sql(`select * from pi_hotline_messages where call_sid=$1`, [CS]);
     t.ok(mLive && mLive.status === 'pending', '…as a pending voicemail');
+    const livePiece = { ...live, TranscriptionEvent: 'transcription-content', TranscriptionSid: 'GT' + 'e'.repeat(32), Final: 'true', SequenceId: '1',
+                    TranscriptionData: JSON.stringify({ transcript: 'Unsigned piece.', confidence: 0.9 }) };
+    t.eq((await call('/transcription?' + qLive, livePiece, { signed: false })).status, 200, 'unsigned live transcription: accepted once Twilio confirms the call');
+    t.eq((await call('/transcription?' + qLive, { ...livePiece, AccountSid: 'ACother' }, { signed: false })).status, 403, '…but not for another account');
     twilioApi[`Calls/${CS}.json`].date_created = new Date(Date.now() - 2 * 86400000).toUTCString();
+    t.eq((await call('/transcription?' + qLive, livePiece, { signed: false })).status, 403, 'unsigned live transcription: a call older than a day is refused');
     t.eq((await call('/recording?' + qLive, { ...recLive, RecordingSid: 'RE' + 'd'.repeat(32) }, { signed: false })).status, 403, 'unsigned recording: a call older than a day is refused');
     await t.sql(`delete from pi_hotline_messages where call_sid=$1`, [CS]);
     log.downloads.length = 0; log.storage.length = 0; log.emails.length = 0; log.twilioDeletes.length = 0;
@@ -150,7 +157,12 @@ module.exports = {
     const q = `h=${h1.id}&l=en&r=0`;
     r = await menu(q, '2');
     t.ok(/<Record /.test(r.body) && new RegExp(`p=${pB.id}`).test(r.body) && /d=2/.test(r.body), 'pressing 2 records for the SR-201 project');
-    t.ok(/maxLength="120"/.test(r.body) && /transcribe="true"/.test(r.body), 'English: two minutes, transcribed');
+    t.ok(/maxLength="120"/.test(r.body) && !/transcribe=/.test(r.body), 'English: two minutes; Twilio’s old recording transcription is not requested');
+    t.ok(/<Start><Transcription [^>]*transcriptionEngine="deepgram"[^>]*speechModel="nova-3"[^>]*languageCode="en-US"/.test(r.body)
+      && /track="inbound_track"/.test(r.body) && /partialResults="false"/.test(r.body) && /statusCallbackUrl="[^"]*\/transcription\?h=/.test(r.body),
+      'English: live Deepgram Nova-3 transcription of the caller only');
+    t.ok(r.body.indexOf('<Start><Transcription') > r.body.indexOf('after the tone') && r.body.indexOf('<Start><Transcription') < r.body.indexOf('<Record '),
+      'it starts after the prompt, right before the recording — the greeting and menu are not transcribed or billed');
     r = await menu(q, '0');
     t.ok(/<Record /.test(r.body) && /p="/.test(r.body), '0 → the general mailbox (no project)');
     r = await call(`/menu?${q}&none=1`, inbound);
@@ -162,7 +174,7 @@ module.exports = {
     r = await menu(q, '9');
     t.ok(/Polly\.Lupe-Neural/.test(r.body) && /Gracias por llamar/.test(r.body) && /oprima 1/.test(r.body) && /l=es/.test(r.body), '9 → the menu in Spanish');
     r = await menu(`h=${h1.id}&l=es&r=0`, '1');
-    t.ok(/<Record /.test(r.body) && !/transcribe=/.test(r.body) && /deje su nombre/.test(r.body), 'Spanish: recorded in Spanish, no transcription requested');
+    t.ok(/<Record /.test(r.body) && /deje su nombre/.test(r.body) && /languageCode="es-US"/.test(r.body) && /speechModel="nova-3"/.test(r.body), 'Spanish: recorded and transcribed in Spanish');
 
     r = await call('/voice', { ...inbound, To: '+18015550102' });
     t.ok(!/<Gather/.test(r.body) && /<Record /.test(r.body) && new RegExp(`p=${pC.id}`).test(r.body), 'single project with Spanish off: straight to the recording');
@@ -188,32 +200,62 @@ module.exports = {
     t.eq(m.recording_path, `messages/${m.id}.mp3`, 'the audio was copied into our storage');
     t.ok(log.storage.some(s => s.url.endsWith(`/hotline-audio/messages/${m.id}.mp3`) && s.type === 'audio/mpeg'), '…in the private hotline-audio bucket');
     t.ok(log.downloads[0] && log.downloads[0].url === TW_API + '/Recordings/RE100.mp3' && /^Basic /.test(log.downloads[0].auth), 'downloaded from Twilio with the account’s credentials');
-    t.eq(log.twilioDeletes.length, 0, 'Twilio’s copy is kept until the transcript is in');
+    t.ok(log.twilioDeletes.length === 1 && /Recordings\/RE100\.json$/.test(log.twilioDeletes[0]), 'Twilio’s copy is deleted once ours exists (the transcript does not need it)');
     t.eq((await t.sql(`select count(*)::int n from pi_interactions`))[0].n, intsBefore, 'no interaction is created — a person logs it');
     t.ok(log.emails.length === 1 && log.emails[0].to[0] === 'lead@example.test' && /400 North/.test(log.emails[0].subject)
       && !/3855550199/.test(JSON.stringify(log.emails[0])), 'the lead is emailed, without the caller’s number');
 
-    r = await call('/transcription?' + recQ, { CallSid: 'CA100', RecordingSid: 'RE100', TranscriptionStatus: 'completed',
-                                               TranscriptionText: 'Hi, this is about the detour on 400 North.', From: '+13855550199' });
+    // Live transcription: finished pieces, in any order and at the same moment.
+    const piece = (callSid, seq, text, extra = {}) => ({ CallSid: callSid, AccountSid: ACCT, From: '+13855550199', TranscriptionEvent: 'transcription-content',
+      TranscriptionSid: 'GT1', Track: 'inbound_track', Final: 'true', SequenceId: String(seq), TranscriptionData: JSON.stringify({ transcript: text, confidence: 0.97 }), ...extra });
+    await Promise.all([
+      call('/transcription?' + recQ, piece('CA100', 2, 'Please call me back.')),
+      call('/transcription?' + recQ, piece('CA100', 1, 'Hi, this is about the detour on 400 North.')),
+      call('/transcription?' + recQ, piece('CA100', 3, 'IGNORED PARTIAL', { Final: 'false' })),
+    ]);
     [m] = await t.sql(`select * from pi_hotline_messages where call_sid='CA100'`);
-    t.ok(m.transcript_status === 'done' && /detour/.test(m.transcript) && m.recording_path && m.assigned_to === 'JP', 'transcript saved; recording fields untouched');
-    t.ok(log.twilioDeletes.length === 1 && /Recordings\/RE100\.json$/.test(log.twilioDeletes[0]), 'then Twilio’s copy is deleted');
+    t.eq(m.transcript, 'Hi, this is about the detour on 400 North. Please call me back.', 'pieces arriving together land in order; a partial result is ignored');
+    t.ok(m.transcript_status === 'pending' && m.recording_path && m.assigned_to === 'JP', '…recording fields untouched; still pending until it stops');
+    await call('/transcription?' + recQ, { CallSid: 'CA100', AccountSid: ACCT, TranscriptionEvent: 'transcription-stopped' });
+    [m] = await t.sql(`select * from pi_hotline_messages where call_sid='CA100'`);
+    t.eq(m.transcript_status, 'done', 'stopped → the transcript is done');
 
-    // Transcription first, recording second.
+    // Transcript first, recording second.
     const q2 = `h=${h1.id}&l=en&d=2&p=${pB.id}`;
-    await call('/transcription?' + q2, { CallSid: 'CA200', RecordingSid: 'RE200', TranscriptionStatus: 'failed', From: '+13855550111' });
+    await call('/transcription?' + q2, piece('CA200', 1, 'Question about the lane closure.', { From: '+13855550111' }));
     await call('/recording?' + q2, { ...recParams, CallSid: 'CA200', RecordingSid: 'RE200', RecordingUrl: 'https://recordings.example/RE200', From: '+13855550111' });
+    await call('/transcription?' + q2, { CallSid: 'CA200', AccountSid: ACCT, TranscriptionEvent: 'transcription-stopped' });
     [m] = await t.sql(`select * from pi_hotline_messages where call_sid='CA200'`);
-    t.ok(m && m.transcript_status === 'failed' && m.recording_path, 'callbacks in the other order: still one complete row');
+    t.ok(m && m.transcript_status === 'done' && /lane closure/.test(m.transcript) && m.recording_path && m.recording_seconds === 41, 'transcript before the recording: still one complete row');
     t.eq(m.assigned_to, null, 'a lead not on the active team list → unassigned');
-    t.ok(log.twilioDeletes.some(u => /RE200/.test(u)), 'Twilio’s copy deleted once both are in');
+    t.ok(log.twilioDeletes.some(u => /RE200/.test(u)), 'Twilio’s copy deleted');
     t.eq((await t.sql(`select count(*)::int n from pi_hotline_messages where call_sid='CA200'`))[0].n, 1, 'one row per call');
 
-    // Spanish, general mailbox.
+    // A caller who hung up before leaving a message: no voicemail appears.
+    await call('/transcription?' + q2, { CallSid: 'CA999', AccountSid: ACCT, TranscriptionEvent: 'transcription-stopped' });
+    t.eq((await t.sql(`select count(*)::int n from pi_hotline_messages where call_sid='CA999'`))[0].n, 0, 'a hang-up creates no voicemail');
+
+    // Spanish, general mailbox: transcribed too.
     await call(`/recording?h=${h1.id}&l=es&d=0&p=`, { ...recParams, CallSid: 'CA300', RecordingSid: 'RE300', RecordingUrl: 'https://recordings.example/RE300' });
+    await call(`/transcription?h=${h1.id}&l=es&d=0&p=`, piece('CA300', 1, 'Hola, llamo por el desvío.'));
+    await call(`/transcription?h=${h1.id}&l=es&d=0&p=`, { CallSid: 'CA300', AccountSid: ACCT, TranscriptionEvent: 'transcription-stopped' });
     [m] = await t.sql(`select * from pi_hotline_messages where call_sid='CA300'`);
-    t.ok(m && m.language === 'es' && m.transcript_status === 'none' && m.project_id === null && m.assigned_to === null, 'Spanish general-mailbox message: no transcript expected, no project yet');
+    t.ok(m && m.language === 'es' && m.transcript_status === 'done' && /desvío/.test(m.transcript) && m.project_id === null && m.assigned_to === null, 'Spanish general-mailbox message: transcribed, no project yet');
     t.ok(log.twilioDeletes.some(u => /RE300/.test(u)), 'Spanish: Twilio’s copy deleted as soon as ours exists');
+
+    // Nothing said, or Twilio reports an error.
+    await call('/recording?' + q2, { ...recParams, CallSid: 'CA310', RecordingSid: 'RE310' });
+    await call('/transcription?' + q2, { CallSid: 'CA310', AccountSid: ACCT, TranscriptionEvent: 'transcription-stopped' });
+    await call('/recording?' + q2, { ...recParams, CallSid: 'CA320', RecordingSid: 'RE320' });
+    await call('/transcription?' + q2, { CallSid: 'CA320', AccountSid: ACCT, TranscriptionEvent: 'transcription-error' });
+    const st = Object.fromEntries((await t.sql(`select call_sid, transcript_status from pi_hotline_messages where call_sid in ('CA310','CA320')`)).map(r => [r.call_sid, r.transcript_status]));
+    t.ok(st.CA310 === 'none' && st.CA320 === 'failed', 'no words → no transcript; a transcription error → failed');
+
+    // A message recorded under the old <Record transcribe> still completes.
+    await call('/recording?' + q2, { ...recParams, CallSid: 'CA330', RecordingSid: 'RE330' });
+    await call('/transcription?' + q2, { CallSid: 'CA330', RecordingSid: 'RE330', TranscriptionStatus: 'completed', TranscriptionText: 'Old style.' });
+    [m] = await t.sql(`select * from pi_hotline_messages where call_sid='CA330'`);
+    t.ok(m.transcript_status === 'done' && m.transcript === 'Old style.', 'the older recording-transcription callback still works');
 
     // ── /notify ───────────────────────────────────────────────────────────
     const notify = async (auth, body) => {

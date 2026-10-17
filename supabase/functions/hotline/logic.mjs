@@ -6,7 +6,8 @@
 //   POST /hotline/menu         the caller pressed a key (or nothing)
 //   POST /hotline/recorded     the recording ended   → "thank you", hang up
 //   POST /hotline/recording    the recording is ready → save the voicemail
-//   POST /hotline/transcription  the transcript is ready
+//   POST /hotline/transcription  live transcription (Deepgram Nova-3): each finished
+//                              piece of the message, then a stopped event
 // Every Twilio request must carry a valid X-Twilio-Signature, or — when it
 // carries none at all — be confirmed call-by-call against Twilio's own API
 // (confirmWithTwilio). Anything else is refused.
@@ -30,8 +31,16 @@ export const VOICE = {
   en: { voice: 'Polly.Joanna-Neural', language: 'en-US' },
   es: { voice: 'Polly.Lupe-Neural',   language: 'es-US' },
 };
-// Twilio's <Record> transcription only covers recordings up to two minutes.
+// The callers are told they have two minutes.
 export const MAX_RECORD_SECONDS = 120;
+// Voicemail transcripts: Twilio's LIVE transcription with Deepgram Nova-3
+// (Oct 2026; replaced <Record transcribe>, which was English only, capped at
+// two minutes and rough on names). It starts as the caller begins the
+// message, so the greeting and menu are not transcribed or billed. Only the
+// caller's side is transcribed. Twilio's US price: $0.027/min (was $0.05).
+export const TRANSCRIBE_ENGINE = 'deepgram';
+export const TRANSCRIBE_MODEL = 'nova-3';
+export const TRANSCRIBE_LANG = { en: 'en-US', es: 'es-US' };
 export const SPANISH_DIGIT = '9';
 export const GENERAL_DIGIT = '0';
 export const AUDIO_BUCKET = 'hotline-audio';
@@ -188,15 +197,16 @@ export function route({ hotline, exts, lang, digits, retry }) {
 
 function recordParts({ hotline, lang, base, projectId, digit }) {
   const q = `h=${hotline.id}&l=${lang}&d=${encodeURIComponent(digit || '')}&p=${encodeURIComponent(projectId || '')}`;
-  // Twilio's own transcription is English; a Spanish message is kept as audio
-  // and the inbox says to listen to it.
-  const tr = lang === 'en'
-    ? ` transcribe="true" transcribeCallback="${xmlEsc(base + '/transcription?' + q)}"` : '';
+  // Live transcription starts here, after the prompt, so only the message
+  // itself is transcribed (and billed). English and Spanish alike.
   return say(T[lang].record, lang)
+    + `<Start><Transcription name="voicemail" track="inbound_track"`
+    + ` transcriptionEngine="${TRANSCRIBE_ENGINE}" speechModel="${TRANSCRIBE_MODEL}" languageCode="${TRANSCRIBE_LANG[lang] || TRANSCRIBE_LANG.en}"`
+    + ` partialResults="false" statusCallbackUrl="${xmlEsc(base + '/transcription?' + q)}" statusCallbackMethod="POST"/></Start>`
     + `<Record maxLength="${MAX_RECORD_SECONDS}" timeout="6" finishOnKey="#" playBeep="true"`
     + ` action="${xmlEsc(base + '/recorded?' + q)}" method="POST"`
     + ` recordingStatusCallback="${xmlEsc(base + '/recording?' + q)}" recordingStatusCallbackMethod="POST"`
-    + ` recordingStatusCallbackEvent="completed"${tr}/>`
+    + ` recordingStatusCallbackEvent="completed"/>`
     + say(T[lang].noMessage, lang) + '<Hangup/>';
 }
 
@@ -400,6 +410,9 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
     } else {
       const age = now().getTime() - new Date(c.date_created || c.start_time).getTime();
       if (!(age >= 0 && age < 86400000)) return 'too old';
+      // A live-transcription event names no recording; the call is enough —
+      // it can only add text to that call's own voicemail.
+      if (sub === '/transcription' && params.TranscriptionEvent) return '';
       if (!/^RE[0-9a-f]{32}$/i.test(params.RecordingSid || '')) return 'recording sid';
       const rec = await twilioGet(`Recordings/${params.RecordingSid}.json`);
       if (!rec || rec.call_sid !== params.CallSid) return 'recording';
@@ -594,11 +607,10 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
         assigned_to: assignee,
         assigned_at: assignee ? now().toISOString() : null,
       };
-      if (lang !== 'en') row.transcript_status = 'none';
       const saved = await upsertMessage(row);
 
-      // Copy the audio into our own storage, then drop Twilio's copy (a
-      // Spanish message now; an English one once its transcript is in).
+      // Copy the audio into our own storage, then drop Twilio's copy (the
+      // transcript comes from live transcription, not from the recording).
       if (saved && params.RecordingSid) {
         try {
           // Built from the SID, never from RecordingUrl: our credentials go to
@@ -613,7 +625,7 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
           await rest(`pi_hotline_messages?id=eq.${saved.id}`, { method: 'PATCH',
             body: JSON.stringify({ recording_path: path }), headers: { 'Content-Type': 'application/json' } });
           saved.recording_path = path;
-          if (lang !== 'en' || ['done', 'failed'].includes(saved.transcript_status)) await deleteTwilioRecording(params.RecordingSid);
+          await deleteTwilioRecording(params.RecordingSid);
         } catch (e) {
           // The row stays; the inbox says the audio could not be copied.
           console.error('hotline: audio copy failed', e.message);
@@ -623,6 +635,36 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
       return json({ ok: true, id: saved && saved.id });
     }
 
+    if (sub === '/transcription' && params.TranscriptionEvent) {
+      const ev = params.TranscriptionEvent;
+      if (ev === 'transcription-content') {
+        if (String(params.Final).toLowerCase() === 'false') return json({ ok: true, skipped: 'partial' });
+        let text = '';
+        try { text = String(JSON.parse(params.TranscriptionData || '{}').transcript || '').trim(); } catch (_) {}
+        if (!text) return json({ ok: true, skipped: 'empty' });
+        // One piece at a time, added in the database under the row lock, so
+        // pieces arriving together never overwrite each other.
+        await rest('rpc/pi_hotline_transcript_part', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ p_call_sid: params.CallSid, p_seq: Number(params.SequenceId) || 0, p_text: text,
+            p_row: baseRow(url, params, loaded, lang) }) });
+        return json({ ok: true });
+      }
+      if (ev === 'transcription-stopped' || ev === 'transcription-error') {
+        if (ev === 'transcription-error') console.error('hotline: transcription error', params.TranscriptionError || params.ErrorMessage || '');
+        // Never creates a row: a caller who hung up before leaving a message
+        // has no voicemail. If the recording callback has not landed yet the
+        // row stays "pending" and the inbox stops waiting after a while.
+        const cur = await one(`pi_hotline_messages?call_sid=eq.${encodeURIComponent(params.CallSid || '')}&select=id,transcript`);
+        if (cur) {
+          const status = String(cur.transcript || '').trim() ? 'done' : ev === 'transcription-error' ? 'failed' : 'none';
+          await rest(`pi_hotline_messages?id=eq.${cur.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ transcript_status: status, updated_at: now().toISOString() }) });
+        }
+        return json({ ok: true });
+      }
+      return json({ ok: true, skipped: ev });
+    }
+    // The older <Record transcribe> callback (messages recorded before Oct 2026).
     if (sub === '/transcription') {
       const done = params.TranscriptionStatus === 'completed';
       const row = { ...baseRow(url, params, loaded, lang), transcript_status: done ? 'done' : 'failed' };

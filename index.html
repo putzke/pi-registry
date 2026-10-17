@@ -9127,15 +9127,26 @@ function renderHotline(el){
         :`<div style="font-size:13px;color:var(--fog);padding:24px 0">${tab==='pending'?'Nothing waiting'+(who==='mine'?' for you':'')+'.':'No logged or dismissed voicemails yet.'}</div>`}</div>
     </div></div>`;
 }
+// A transcript can arrive before its "finished" signal, and that signal can
+// arrive before the voicemail row exists — so show whatever text there is,
+// and stop saying "on its way" after HOT_TRANSCRIPT_WAIT_MIN.
+const HOT_TRANSCRIPT_WAIT_MIN=10;
+function _hotHasTranscript(m){ return !!String((m&&m.transcript)||'').trim(); }
+function _hotTranscriptWaiting(m){
+  if(!m||m.transcriptStatus!=='pending') return false;
+  const t=Date.parse(m.receivedAt||'');
+  return !t||Date.now()-t<HOT_TRANSCRIPT_WAIT_MIN*60000;
+}
 function _hotCardHTML(m){
   const h=(DB.get('hotlines')||[]).find(x=>String(x.id)===String(m.hotlineId));
   const ext=m.extensionDigit&&m.extensionDigit!=='0'?' · pressed '+escHtml(m.extensionDigit):'';
   const proj=m.projectId?escHtml(_hotProjName(m.projectId)||'Project '+m.projectId)
     :'<span style="color:var(--amber,#e8a020)">General mailbox — choose the project when you log it</span>';
   const es=m.language==='es';
-  const tr=m.transcriptStatus==='done'&&m.transcript?`<div style="font-size:13px;color:var(--mist);line-height:1.5;margin-top:8px;white-space:pre-wrap">${escHtml(m.transcript)}</div>`
-    :`<div style="font-size:12px;color:var(--fog);font-style:italic;margin-top:8px">${es?'Spanish message — listen to the recording (no automatic transcript).'
-      :m.transcriptStatus==='pending'?'The transcript is on its way — or listen now.':'No transcript for this one — listen to the recording.'}</div>`;
+  // Live transcription (Nova-3) fills the text in pieces as the caller
+  // speaks, so any text is shown as it arrives, Spanish included.
+  const tr=_hotHasTranscript(m)?`${es?'<div style="font-size:11px;color:var(--fog);margin-top:8px">Spanish — automatic transcript; check the recording before logging.</div>':''}<div style="font-size:13px;color:var(--mist);line-height:1.5;margin-top:${es?4:8}px;white-space:pre-wrap">${escHtml(m.transcript)}</div>`
+    :`<div style="font-size:12px;color:var(--fog);font-style:italic;margin-top:8px">${_hotTranscriptWaiting(m)?'The transcript is on its way — or listen now.':'No transcript for this one — listen to the recording.'}</div>`;
   const audio=m.recordingPath&&!m.audioDeletedAt
     ?`<div id="hot-audio-${escHtml(m.id)}" style="margin-top:8px"><button class="btn btn-sm" onclick="hotPlay('${escHtml(m.id)}')">▶ Play recording${m.recordingSeconds?' ('+_hotDur(m.recordingSeconds)+')':''}</button></div>`
     :`<div style="font-size:11px;color:var(--fog);margin-top:8px">${m.audioDeletedAt?'Recording removed after '+HOT_AUDIO_KEEP_DAYS+' days.':'The recording could not be saved — the transcript is what we have.'}</div>`;
@@ -9489,7 +9500,7 @@ function hotLog(id){
   const h=(DB.get('hotlines')||[]).find(x=>String(x.id)===String(m.hotlineId));
   const head='Hotline voicemail'+(h?' ('+h.name+(m.extensionDigit&&m.extensionDigit!=='0'?', pressed '+m.extensionDigit:'')+')':'')
     +(m.recordingSeconds?', '+_hotDur(m.recordingSeconds):'')+(m.language==='es'?', in Spanish':'')+'.';
-  const body=m.transcriptStatus==='done'&&m.transcript?' '+m.transcript:'';
+  const body=_hotHasTranscript(m)?' '+m.transcript:'';
   openIntModal(null,{
     hotlineMsgId:String(m.id), projectId:m.projectId||S.projectFilter||'', date:_hotLocalDate(m.receivedAt),
     channel:'Phone', direction:'Incoming', summary:head+body,

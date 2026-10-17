@@ -461,16 +461,28 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
     return sendEmail(m.email, `New hotline voicemail — ${where}`, text);
   }
 
-  // Fields both recording callbacks know.
+  // Fields both recording callbacks know. The caller's number is sent only
+  // when known, so an upsert without it can never blank one already saved.
   const baseRow = (url, params, loaded, lang) => ({
     hotline_id: loaded ? loaded.h.id : (Number(url.searchParams.get('h')) || null),
     extension_digit: url.searchParams.get('d') || null,
     project_id: url.searchParams.get('p') || null,
     language: lang,
-    caller_number: params.From || null,
+    ...(params.From ? { caller_number: params.From } : {}),
     call_sid: params.CallSid,
     updated_at: now().toISOString(),
   });
+  // Neither the recording callback nor live transcription carries the
+  // caller's number (only the old <Record transcribe> callback did), so it is
+  // read from Twilio's own record of the call. A failed lookup leaves the
+  // number blank; the voicemail itself is never lost over it.
+  async function callerOf(params) {
+    if (params.From) return params.From;
+    try {
+      const c = await twilioGet(`Calls/${encodeURIComponent(params.CallSid || '')}.json`);
+      return (c && c.from) || null;
+    } catch (e) { console.error('hotline: caller lookup failed', e.message); return null; }
+  }
   async function upsertMessage(row) {
     if (!row.call_sid) throw new Error('no CallSid');
     return ((await rest('pi_hotline_messages?on_conflict=call_sid', {
@@ -608,8 +620,10 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
       // Twilio's two callbacks (this one and /transcription) can arrive in
       // either order, so each UPSERTS on call_sid and sends only its own
       // fields — neither can overwrite what the other wrote.
+      const caller = await callerOf(params);
       const row = {
         ...baseRow(url, params, loaded, lang),
+        ...(caller ? { caller_number: caller } : {}),
         recording_sid: params.RecordingSid || null,
         recording_seconds: params.RecordingDuration != null ? Number(params.RecordingDuration) : null,
         assigned_to: assignee,

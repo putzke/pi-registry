@@ -192,13 +192,17 @@ module.exports = {
     // ── the voicemail ─────────────────────────────────────────────────────
     const intsBefore = (await t.sql(`select count(*)::int n from pi_interactions`))[0].n;
     const recQ = `h=${h1.id}&l=en&d=1&p=${pA.id}`;
-    const recParams = { CallSid: 'CA100', From: '+13855550199', To: '+18015550101', RecordingSid: 'RE100',
+    // Like Twilio's real recording callback: no From — the number comes from the call itself.
+    twilioApi['Calls/CA100.json'] = { sid: 'CA100', from: '+13855550199' };
+    twilioApi['Calls/CA200.json'] = { sid: 'CA200', from: '+13855550111' };
+    const recParams = { CallSid: 'CA100', AccountSid: ACCT, RecordingSid: 'RE100',
                         RecordingUrl: 'https://recordings.example/RE100', RecordingDuration: '41', RecordingStatus: 'completed' };
     r = await call('/recording?' + recQ, recParams);
     t.eq(r.status, 200, 'recording callback accepted');
     let [m] = await t.sql(`select * from pi_hotline_messages where call_sid='CA100'`);
     t.ok(m && m.status === 'pending' && m.project_id === String(pA.id) && m.extension_digit === '1' && m.recording_seconds === 41
       && m.caller_number === '+13855550199' && m.language === 'en', 'a PENDING voicemail row with project, extension, caller and length');
+    t.ok(log.twilioLookups.some(u => u.endsWith('/Calls/CA100.json')), 'the caller’s number is read from Twilio’s record of the call');
     t.eq(m.assigned_to, 'JP', 'assigned to the project’s PI Lead');
     t.eq(m.recording_path, `messages/${m.id}.mp3`, 'the audio was copied into our storage');
     t.ok(log.storage.some(s => s.url.endsWith(`/hotline-audio/messages/${m.id}.mp3`) && s.type === 'audio/mpeg'), '…in the private hotline-audio bucket');
@@ -209,7 +213,7 @@ module.exports = {
       && !/3855550199/.test(JSON.stringify(log.emails[0])), 'the lead is emailed, without the caller’s number');
 
     // Live transcription: finished pieces, in any order and at the same moment.
-    const piece = (callSid, seq, text, extra = {}) => ({ CallSid: callSid, AccountSid: ACCT, From: '+13855550199', TranscriptionEvent: 'transcription-content',
+    const piece = (callSid, seq, text, extra = {}) => ({ CallSid: callSid, AccountSid: ACCT, TranscriptionEvent: 'transcription-content',
       TranscriptionSid: 'GT1', Track: 'inbound_track', Final: 'true', SequenceId: String(seq), TranscriptionData: JSON.stringify({ transcript: text, confidence: 0.97 }), ...extra });
     await Promise.all([
       call('/transcription?' + recQ, piece('CA100', 2, 'Please call me back.')),
@@ -225,11 +229,14 @@ module.exports = {
 
     // Transcript first, recording second.
     const q2 = `h=${h1.id}&l=en&d=2&p=${pB.id}`;
-    await call('/transcription?' + q2, piece('CA200', 1, 'Question about the lane closure.', { From: '+13855550111' }));
-    await call('/recording?' + q2, { ...recParams, CallSid: 'CA200', RecordingSid: 'RE200', RecordingUrl: 'https://recordings.example/RE200', From: '+13855550111' });
+    await call('/transcription?' + q2, piece('CA200', 1, 'Question about the lane closure.'));
+    await call('/recording?' + q2, { ...recParams, CallSid: 'CA200', RecordingSid: 'RE200', RecordingUrl: 'https://recordings.example/RE200' });
     await call('/transcription?' + q2, { CallSid: 'CA200', AccountSid: ACCT, TranscriptionEvent: 'transcription-stopped' });
     [m] = await t.sql(`select * from pi_hotline_messages where call_sid='CA200'`);
     t.ok(m && m.transcript_status === 'done' && /lane closure/.test(m.transcript) && m.recording_path && m.recording_seconds === 41, 'transcript before the recording: still one complete row');
+    t.eq(m.caller_number, '+13855550111', 'transcript first, then the recording: the caller’s number is filled in');
+    await call('/transcription?' + q2, piece('CA200', 2, 'One more thing.'));
+    t.eq((await t.sql(`select caller_number from pi_hotline_messages where call_sid='CA200'`))[0].caller_number, '+13855550111', 'a later piece never blanks the number');
     t.eq(m.assigned_to, null, 'a lead not on the active team list → unassigned');
     t.ok(log.twilioDeletes.some(u => /RE200/.test(u)), 'Twilio’s copy deleted');
     t.eq((await t.sql(`select count(*)::int n from pi_hotline_messages where call_sid='CA200'`))[0].n, 1, 'one row per call');

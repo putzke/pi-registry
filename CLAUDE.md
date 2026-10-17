@@ -3107,6 +3107,12 @@ a Twilio trial + one number on DEV for a real call, then release.
   stops saying "on its way" after `HOT_TRANSCRIPT_WAIT_MIN` (10). Unsigned
   live-transcription events are confirmed by the call alone (no RecordingSid).
   The old `<Record transcribe>` callback is still handled for older messages.
+  **The caller's number** comes from Twilio's record of the call
+  (`callerOf` → `Calls/<CallSid>.json`) on `/recording`: neither the recording
+  callback nor live transcription sends `From` (only the old transcribe
+  callback did — every DEV voicemail between the Nova-3 switch and this fix,
+  ids 23–39, has no number). `baseRow` leaves the number out when unknown, so
+  no upsert can blank one already saved.
   Applied to DEV + function v15 on 2026-10-17; **not yet confirmed on a real
   call** — Spanish `es-US` with Nova-3 in particular.
   The audio is copied into `hotline-audio/messages/<id>.mp3`, then Twilio's

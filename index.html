@@ -9539,7 +9539,9 @@ function _intThreadHTML(id){
 function logRelatedInt(id){
   const p=(DB.get('interactions')||[]).find(x=>String(x.id)===String(id)); if(!p) return;
   closeM();
-  setTimeout(()=>openIntModal(null,{relatedTo:String(p.id),projectId:p.projectId,
+  // A related contact is usually OUR reply (a call back, an email) — so it
+  // opens as Outgoing; an inbound reply is one click away.
+  setTimeout(()=>openIntModal(null,{relatedTo:String(p.id),projectId:p.projectId,direction:'Outgoing',
     parentFollowUpOpen:!!(p.followUp&&!p.followUpDone)}),0);
 }
 

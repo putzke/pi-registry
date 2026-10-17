@@ -57,6 +57,7 @@ module.exports = {
       // + Related contact: two open follow-ups are called out.
       await app.page.evaluate(id => logRelatedInt(id), String(par.id));
       await app.page.waitForFunction(() => document.getElementById('f-irelres'));
+      t.eq(await app.page.evaluate(() => document.getElementById('f-idr').value), 'Outgoing', 'a related contact opens as Outgoing');
       const warn = () => app.page.evaluate(() => { const w = document.getElementById('f-irel-warn'); return w.style.display !== 'none' ? w.textContent : ''; });
       await app.page.evaluate(() => { const f = document.getElementById('f-ifu'); f.checked = true; f.dispatchEvent(new Event('change')); });
       t.eq(await warn(), '', 'resolves ticked + new follow-up: no warning (a handoff)');

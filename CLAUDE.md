@@ -429,7 +429,8 @@ Jeff's worry: a follow-up assigned to someone who doesn't sign in gets lost.
 - **"+ Related contact"**: one follow-up per interaction; a thread can hold
   several open ones. Unticking "This resolves its follow-up" while ticking a
   new follow-up shows `#f-irel-warn` (`_relFuWarn`): the original stays open
-  too. A hint, not a block.
+  too. A hint, not a block. The related-contact dialog opens with Direction =
+  Outgoing (usually our reply); change it for an inbound one.
 - Guarded by `test/tests/85-followup-assign-team.test.js` (fails on the old code).
 
 ### Follow-up resolution note (Oct 2026)

@@ -426,20 +426,22 @@ Jeff's worry: a follow-up assigned to someone who doesn't sign in gets lost.
 - **"Assigned to me"** = `_fuIsMine(i)`: owner equals my email initials
   (`getLoggedBy`) OR my team-list initials (`_myInitials`). Used by the
   Follow-ups filter, its counts, and both badges.
-- **Log next contact = ONE reply (Oct 2026; Jeff: the What's-next threads were
-  "far too complicated … we need to step back").** An interaction can have one
-  reply (`relatedTo` = the original): the call back or email answering it.
-  `logRelatedInt` opens it Outgoing with the SAME contact and project, both
-  locked (an anonymous original stays anonymous, same label); no follow-up box
-  of its own. Saving it closes the original's open follow-up (resolution
-  "Replied by <channel> on <date>."). The button shows only on an original with
-  no reply yet (`_intCanReply`); the reply has none. Both dialogs link each
-  other (`_intPairHTML`, "Reply to" / "Next contact"). Anything after that —
-  another call from the person, a spouse — is a NEW interaction. "Requires
-  follow-up" on the original is for the wait: someone else must be reached
-  before we can reply. The thread code (`_intThread`, What's next?
-  `f-inext`, `_threadOpen`, `_threadElsewhere`, `#fu-own`) is gone; older DEV
-  test rows with longer chains just show their links.
+- **Log next contact = one conversation, one follow-up (Oct 2026; settled
+  with Jeff after the What's-next threads were "far too complicated").** A
+  conversation is the ORIGINAL interaction plus its next contacts, each linked
+  straight to the original (`relatedTo` = original id; `_intRoot` follows older
+  chains back). **The follow-up lives only on the original**; next contacts
+  have none (their edit dialog hides the box and points to the original).
+  `logRelatedInt` (on the original AND on any next contact) opens Outgoing,
+  project locked, contact defaulting to the ORIGINAL's but changeable (a
+  spouse, the contractor called first); an anonymous original keeps its label
+  if left anonymous. While the original's follow-up is open the dialog shows
+  **"This resolves the follow-up"** (`f-irelres`, ticked): ticked closes it
+  ("Replied by <channel> on <date>."), unticked leaves it open (a voicemail
+  left). Something genuinely new = a new interaction with its own follow-up.
+  Both dialogs list the conversation (`_intPairHTML`, "Conversation · N
+  contacts", open follow-up flagged). Removed: What's next? (`f-inext`),
+  `_intThread`, `_threadOpen`, `_threadElsewhere`, `#fu-own`.
 - Guarded by `test/tests/85-followup-assign-team.test.js` (fails on the old code).
 
 ### Follow-up resolution note (Oct 2026)

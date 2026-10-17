@@ -1,13 +1,13 @@
 // Follow-up "Assign to" offers the ACTIVE PI team list only (Oct 2026), and
-// "Log next contact": ONE reply per interaction, same contact, closes the
-// original's follow-up (Oct 2026, simplified from the What's-next threads).
+// "Log next contact": next contacts link to the original; the follow-up lives
+// only on the original; "This resolves the follow-up" closes it.
 //  - No "Someone else…", no initials picked up from old logs, no inactive member.
 //  - A member with no email is labelled, and picking them warns (they can't see
 //    it under "Assigned to me", which finds people by their sign-in email).
 //  - An existing off-list assignment is kept and labelled, not dropped on save.
 //  - "Assigned to me" matches my team-list initials as well as my email's.
 module.exports = {
-  name: 'follow-ups — Assign to is the team list; Log next contact is one reply',
+  name: 'follow-ups — Assign to is the team list; Log next contact builds one conversation',
   async run({ t }) {
     t.seed();
     const [A] = (await t.sql(`select id from pi_projects where status='Active' order by id limit 1`)).map(r => String(r.id));
@@ -56,26 +56,41 @@ module.exports = {
       await app.page.evaluate(() => { S.fuUser = 'mine'; render(); });
       t.ok(await app.page.evaluate(() => document.getElementById('main').textContent.includes('Send exhibit')), 'and it shows under "Assigned to me"');
 
-      // Log next contact: one reply, same contact, locked; closes the follow-up.
-      await app.page.evaluate(() => closeM());
-      await app.page.evaluate(id => logRelatedInt(id), String(par.id));
-      await app.page.waitForFunction(() => /Reply to/.test(document.getElementById('modal-ov').textContent));
+      // Log next contact: original's contact by default (changeable), project locked.
+      const nextOpen = async id => { await app.page.evaluate(() => closeM()); await app.page.evaluate(x => logRelatedInt(x), String(id)); await app.page.waitForFunction(() => /Next contact on/.test(document.getElementById('modal-ov').textContent)); };
+      const saveNext = async (summary, resolve, otherStake) => app.page.evaluate(async ([sm, res, os]) => {
+        const cb = document.getElementById('f-irelres'); if (cb) cb.checked = res;
+        if (os) _intSetStake(os);
+        document.getElementById('f-isu').value = sm; await saveInt();
+      }, [summary, resolve, otherStake || null]);
+      await nextOpen(par.id);
       t.eq(await app.page.evaluate(() => document.getElementById('f-idr').value), 'Outgoing', 'a next contact opens as Outgoing');
-      t.eq(await app.page.evaluate(() => document.getElementById('f-is').value), String(parStake), 'a next contact opens with the same contact');
-      t.ok(await app.page.evaluate(() => document.getElementById('f-is-search').disabled && document.getElementById('f-ip').disabled), 'contact and project are locked');
-      t.ok(await app.page.evaluate(() => !document.querySelector('input[name="f-inext"]')), 'no What’s next? question');
-      t.ok(await app.page.evaluate(() => /closes the earlier contact’s follow-up/.test(document.getElementById('modal-ov').textContent) && document.getElementById('f-ifu').offsetParent === null), 'the dialog says it closes the follow-up, and has no follow-up box of its own');
-      await app.page.evaluate(async () => { document.getElementById('f-isu').value = 'CALLED BACK'; await saveInt(); });
-      const [rep] = await t.until(async () => t.sql(`select stakeholder_id::text s, project_id::text p, follow_up, related_to::text r from pi_interactions where summary='CALLED BACK'`));
-      t.ok(rep && rep.s === String(parStake) && rep.p === A && rep.follow_up === false && rep.r === String(par.id), 'the reply is saved with the same contact and project, linked, with no follow-up');
-      const [p1] = await t.sql(`select follow_up_done, follow_up_resolution from pi_interactions where id=$1`, [par.id]);
-      t.ok(p1.follow_up_done === true && /Replied by phone/.test(p1.follow_up_resolution || ''), 'saving it closes the original’s follow-up');
-      // Only one reply: the original no longer offers it, nor does the reply.
+      t.eq(await app.page.evaluate(() => document.getElementById('f-is').value), String(parStake), 'it opens with the original contact');
+      t.ok(await app.page.evaluate(() => !document.getElementById('f-is-search').disabled && document.getElementById('f-ip').disabled), 'the contact can be changed; the project cannot');
+      t.ok(await app.page.evaluate(() => !document.querySelector('input[name="f-inext"]') && document.getElementById('f-ifu').offsetParent === null), 'no What’s next?, no follow-up box of its own');
+      t.ok(await app.page.evaluate(() => document.getElementById('f-irelres').checked), '“This resolves the follow-up” starts ticked');
+      // Still waiting: untick — the follow-up stays open on the original.
+      const [{ sid: other }] = await t.sql(`select stakeholder_id as sid from pi_project_stakeholders where project_id=$1 and stakeholder_id<>$2 limit 1`, [A, parStake]);
+      await saveNext('LEFT VOICEMAIL', false, String(other));
+      const [w] = await t.until(async () => t.sql(`select stakeholder_id::text s, project_id::text p, follow_up, related_to::text r from pi_interactions where summary='LEFT VOICEMAIL'`));
+      t.ok(w && w.s === String(other) && w.p === A && w.follow_up === false && w.r === String(par.id), 'saved with the changed contact, on the project, linked to the original, no follow-up');
+      let [p1] = await t.sql(`select follow_up_done from pi_interactions where id=$1`, [par.id]);
+      t.eq(p1.follow_up_done, false, 'unticked: the original’s follow-up stays open');
+      // From the NEXT contact, Log next contact still links to the original.
+      const [wid] = await t.sql(`select id from pi_interactions where summary='LEFT VOICEMAIL'`);
+      await app.page.evaluate(id => openEditIntModal(id), String(wid.id));
+      t.ok(await app.page.evaluate(() => /lives on the original/.test(document.getElementById('modal-ov').textContent) && document.getElementById('f-ifu').offsetParent === null && /Follow-up open: Call back at 555/.test(document.getElementById('modal-ov').textContent)), 'a next contact shows no follow-up of its own, and the conversation shows the open one');
+      await nextOpen(wid.id);
+      t.eq(await app.page.evaluate(() => document.getElementById('f-is').value), String(parStake), 'from a next contact it still defaults to the original’s contact');
+      await saveNext('CALLED BACK', true);
+      const [c] = await t.until(async () => t.sql(`select related_to::text r from pi_interactions where summary='CALLED BACK'`));
+      t.eq(c && c.r, String(par.id), 'and links to the original, not to the previous contact');
+      [p1] = await t.sql(`select follow_up_done, follow_up_resolution from pi_interactions where id=$1`, [par.id]);
+      t.ok(p1.follow_up_done === true && /Replied by phone/.test(p1.follow_up_resolution || ''), 'ticked: the original’s follow-up closes');
       await app.page.evaluate(id => openEditIntModal(id), String(par.id));
-      t.ok(await app.page.evaluate(() => !document.querySelector('#modal-ov button[onclick^="logRelatedInt"]') && /Next contact:/.test(document.getElementById('modal-ov').textContent)), 'the original shows its next contact and no second button');
-      const [rid] = await t.sql(`select id from pi_interactions where summary='CALLED BACK'`);
-      await app.page.evaluate(id => openEditIntModal(id), String(rid.id));
-      t.ok(await app.page.evaluate(() => !document.querySelector('#modal-ov button[onclick^="logRelatedInt"]') && /Reply to:/.test(document.getElementById('modal-ov').textContent)), 'the reply links back and cannot be replied to');
+      t.ok(await app.page.evaluate(() => /Conversation · 3 contacts/.test(document.getElementById('modal-ov').textContent) && !!document.querySelector('#modal-ov button[onclick^="logRelatedInt"]')), 'the original lists the conversation and still offers Log next contact');
+      await nextOpen(par.id);
+      t.ok(await app.page.evaluate(() => !document.getElementById('f-irelres') && /lives on the original/.test(document.getElementById('modal-ov').textContent)), 'with the follow-up closed, no resolve box is offered');
       await app.page.evaluate(() => closeM());
       t.eq(app.errors, [], 'no page errors');
     } finally { await app.close(); }

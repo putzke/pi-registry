@@ -11,7 +11,7 @@
 //  - A Spanish voicemail can mark the contact LEP.
 //  - Dismiss records a reason and creates no interaction.
 //  - Reassign saves and asks the receiver to email the new assignee.
-//  - "Log next contact" links ONE reply to the earlier interaction,
+//  - "Log next contact" links a next contact to the original interaction,
 //    can resolve its follow-up, and the thread shows in the dialog.
 //  - New call (the dialpad): line + project + contact/number + my phone go to
 //    the receiver; afterwards Log this call (prefilled, Outgoing) or Don't log.
@@ -182,7 +182,8 @@ module.exports = {
       await app.page.evaluate(id => openEditIntModal(id), parentId);
       t.ok(await app.page.evaluate(() => !!document.querySelector('#modal-ov button[onclick^="logRelatedInt"]')), 'the edit dialog has “Log next contact”');
       await app.page.evaluate(id => logRelatedInt(id), parentId);
-      await app.page.waitForFunction(() => /Reply to/.test(document.getElementById('modal-ov').textContent));
+      await app.page.waitForFunction(() => /Next contact on/.test(document.getElementById('modal-ov').textContent));
+      t.ok(await app.page.evaluate(() => document.getElementById('f-irelres') && document.getElementById('f-irelres').checked), '“This resolves the follow-up” is offered, ticked');
       await app.page.evaluate(() => { document.getElementById('f-isu').value = 'Called back; crew reset the sign.'; document.getElementById('f-idr').value = 'Outgoing'; });
       await app.page.evaluate(() => saveInt());
       const child = await t.until(async () => (await t.sql(`select * from pi_interactions where related_to=$1`, [parentId]))[0]);
@@ -190,7 +191,7 @@ module.exports = {
       const [par] = await t.sql(`select follow_up_done, follow_up_resolution from pi_interactions where id=$1`, [parentId]);
       t.ok(par.follow_up_done === true && /Replied by phone/.test(par.follow_up_resolution || ''), 'and resolves the voicemail’s follow-up');
       await app.page.evaluate(id => openEditIntModal(id), parentId);
-      t.ok(await app.page.evaluate(() => /Next contact:/.test(document.getElementById('modal-ov').textContent) && !document.querySelector('#modal-ov button[onclick^="logRelatedInt"]')), 'the voicemail’s dialog links its reply, and offers no second one');
+      t.ok(await app.page.evaluate(() => /Conversation · 2 contacts/.test(document.getElementById('modal-ov').textContent)), 'the voicemail’s dialog shows the conversation');
       await app.page.evaluate(() => closeM());
 
       // ── Settings ───────────────────────────────────────────────────────

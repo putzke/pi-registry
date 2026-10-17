@@ -9541,7 +9541,8 @@ function logRelatedInt(id){
   closeM();
   // A related contact is usually OUR reply (a call back, an email) — so it
   // opens as Outgoing; an inbound reply is one click away.
-  setTimeout(()=>openIntModal(null,{relatedTo:String(p.id),projectId:p.projectId,direction:'Outgoing',
+  // Same contact as the original (changeable); an anonymous original stays anonymous.
+  setTimeout(()=>openIntModal(p.stakeholderId?String(p.stakeholderId):null,{relatedTo:String(p.id),projectId:p.projectId,direction:'Outgoing',
     parentFollowUpOpen:!!(p.followUp&&!p.followUpDone)}),0);
 }
 

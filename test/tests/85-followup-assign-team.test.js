@@ -13,8 +13,9 @@ module.exports = {
     await t.sql(`update pi_projects set lead=null where id=$1`, [A]);
     await t.sql(`insert into pi_team_members (name, initials, email, active) values
       ('Jeff P','PUT','jeff.p@demo.test',true),('Bo Field','BNE',null,true),('Old Hand','OLD','old@demo.test',false)`);
-    const [par] = await t.sql(`insert into pi_interactions (project_id, interaction_date, channel, direction, summary, logged_by, follow_up, follow_up_note, follow_up_due, follow_up_done, follow_up_assigned_to)
-      values ($1, '2026-10-01', 'Phone', 'Incoming', 'PARENT CALL', 'ZZQ', true, 'Call back at 555', '2026-10-03', false, 'JERRY') returning id`, [A]);
+    const [{ sid: parStake }] = await t.sql(`select stakeholder_id as sid from pi_project_stakeholders where project_id=$1 limit 1`, [A]);
+    const [par] = await t.sql(`insert into pi_interactions (project_id, stakeholder_id, interaction_date, channel, direction, summary, logged_by, follow_up, follow_up_note, follow_up_due, follow_up_done, follow_up_assigned_to)
+      values ($1, $2, '2026-10-01', 'Phone', 'Incoming', 'PARENT CALL', 'ZZQ', true, 'Call back at 555', '2026-10-03', false, 'JERRY') returning id`, [A, parStake]);
     const [mine] = await t.sql(`insert into pi_interactions (project_id, interaction_date, channel, direction, summary, logged_by, follow_up, follow_up_note, follow_up_due, follow_up_done, follow_up_assigned_to)
       values ($1, '2026-10-02', 'Phone', 'Incoming', 'MINE CALL', 'ZZQ', true, 'Send exhibit', '2026-10-04', false, 'PUT') returning id`, [A]);
     // Signed in as jeff.p@ → email initials "JEF"; on the team list as "PUT".
@@ -58,6 +59,7 @@ module.exports = {
       await app.page.evaluate(id => logRelatedInt(id), String(par.id));
       await app.page.waitForFunction(() => document.getElementById('f-irelres'));
       t.eq(await app.page.evaluate(() => document.getElementById('f-idr').value), 'Outgoing', 'a related contact opens as Outgoing');
+      t.eq(await app.page.evaluate(() => document.getElementById('f-is').value), String(parStake), 'a related contact opens with the same contact');
       const warn = () => app.page.evaluate(() => { const w = document.getElementById('f-irel-warn'); return w.style.display !== 'none' ? w.textContent : ''; });
       await app.page.evaluate(() => { const f = document.getElementById('f-ifu'); f.checked = true; f.dispatchEvent(new Event('change')); });
       t.eq(await warn(), '', 'resolves ticked + new follow-up: no warning (a handoff)');

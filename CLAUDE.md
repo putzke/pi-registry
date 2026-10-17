@@ -426,20 +426,20 @@ Jeff's worry: a follow-up assigned to someone who doesn't sign in gets lost.
 - **"Assigned to me"** = `_fuIsMine(i)`: owner equals my email initials
   (`getLoggedBy`) OR my team-list initials (`_myInitials`). Used by the
   Follow-ups filter, its counts, and both badges.
-- **ONE open follow-up per thread (Oct 2026, Jeff: "we need to simplify").**
-  The edit dialog's button is **Log next contact** (was "+ Related contact";
-  `logRelatedInt`, opens Outgoing with the same contact). Its dialog has no
-  follow-up checkboxes; one question, **What's next?** (`_relNextHTML`,
-  radios `f-inext`): **Done** (default — closes the thread's open follow-up,
-  resolution "See the next … on …"), **Still waiting** (keeps it, due moves to
-  +2 working days, `_relWaitDue`), **New next step** (closes it, starts one on
-  the new contact). No open task in the thread → Nothing more needed / New
-  next step. `saveInt` acts on `_threadOpen(relatedTo)` — the whole thread,
-  not just the parent. In the edit dialog, a thread member whose thread's open
-  task sits on ANOTHER contact shows that task (`_threadElsewhereHTML`, "open
-  it") and hides its own follow-up fields (`#fu-own`, values kept on save).
-  The thread list marks the open task "⏳ Open: …". Data unchanged: follow-ups
-  still live on interactions. `_relFuWarn` / `f-irelres` are gone.
+- **Log next contact = ONE reply (Oct 2026; Jeff: the What's-next threads were
+  "far too complicated … we need to step back").** An interaction can have one
+  reply (`relatedTo` = the original): the call back or email answering it.
+  `logRelatedInt` opens it Outgoing with the SAME contact and project, both
+  locked (an anonymous original stays anonymous, same label); no follow-up box
+  of its own. Saving it closes the original's open follow-up (resolution
+  "Replied by <channel> on <date>."). The button shows only on an original with
+  no reply yet (`_intCanReply`); the reply has none. Both dialogs link each
+  other (`_intPairHTML`, "Reply to" / "Next contact"). Anything after that —
+  another call from the person, a spouse — is a NEW interaction. "Requires
+  follow-up" on the original is for the wait: someone else must be reached
+  before we can reply. The thread code (`_intThread`, What's next?
+  `f-inext`, `_threadOpen`, `_threadElsewhere`, `#fu-own`) is gone; older DEV
+  test rows with longer chains just show their links.
 - Guarded by `test/tests/85-followup-assign-team.test.js` (fails on the old code).
 
 ### Follow-up resolution note (Oct 2026)
@@ -3117,11 +3117,9 @@ a Twilio trial + one number on DEV for a real call, then release.
     open, at most hourly) deletes recordings past `audio_purge_after` and sets
     `audio_deleted_at` — so audio is only removed when someone opens the inbox.
     A scheduled purge (pg_cron → function) is a possible later step.
-- **Threads (any interaction):** `relatedTo`. The edit dialog has
-  **+ Related contact** (`logRelatedInt`) — a new interaction linked to this
-  one, which can resolve its open follow-up ("See the related phone on …");
-  the dialog lists the thread (`_intThread` / `_intThreadHTML`). Each
-  interaction still counts once.
+- **Log next contact (any interaction):** `relatedTo` — one reply per
+  interaction; see "Log next contact = ONE reply" under the follow-ups notes.
+  Each interaction still counts once.
 - **Go-live checklist (before release to LIVE):** (1) the new-voicemail
   email — a Resend key `RESEND_API_KEY` in the function secrets, and every PI
   Lead's email on the team list (Jeff, 2026-10-12: leave it off for the DEV

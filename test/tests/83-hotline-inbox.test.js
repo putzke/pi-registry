@@ -11,7 +11,7 @@
 //  - A Spanish voicemail can mark the contact LEP.
 //  - Dismiss records a reason and creates no interaction.
 //  - Reassign saves and asks the receiver to email the new assignee.
-//  - Threads: "+ Related contact" links a new interaction to the earlier one,
+//  - Threads: "Log next contact" links a new interaction to the earlier one,
 //    can resolve its follow-up, and the thread shows in the dialog.
 //  - New call (the dialpad): line + project + contact/number + my phone go to
 //    the receiver; afterwards Log this call (prefilled, Outgoing) or Don't log.
@@ -180,16 +180,16 @@ module.exports = {
       // ── threads ────────────────────────────────────────────────────────
       const parentId = String(logged.logged_interaction_id);
       await app.page.evaluate(id => openEditIntModal(id), parentId);
-      t.ok(await app.page.evaluate(() => !!document.querySelector('#modal-ov button[onclick^="logRelatedInt"]')), 'the edit dialog has “+ Related contact”');
+      t.ok(await app.page.evaluate(() => !!document.querySelector('#modal-ov button[onclick^="logRelatedInt"]')), 'the edit dialog has “Log next contact”');
       await app.page.evaluate(id => logRelatedInt(id), parentId);
-      await app.page.waitForFunction(() => document.getElementById('f-irelres'));
-      t.ok(await app.page.evaluate(() => document.getElementById('f-irelres').checked), 'offers to resolve the earlier follow-up');
+      await app.page.waitForFunction(() => document.querySelector('input[name="f-inext"]'));
+      t.eq(await app.page.evaluate(() => document.querySelector('input[name="f-inext"]:checked').value), 'done', 'What’s next? defaults to Done (close the earlier follow-up)');
       await app.page.evaluate(() => { document.getElementById('f-isu').value = 'Called back; crew reset the sign.'; document.getElementById('f-idr').value = 'Outgoing'; });
       await app.page.evaluate(() => saveInt());
       const child = await t.until(async () => (await t.sql(`select * from pi_interactions where related_to=$1`, [parentId]))[0]);
       t.ok(child && /crew reset/.test(child.summary), 'the callback is its own interaction, linked to the voicemail');
       const [par] = await t.sql(`select follow_up_done, follow_up_resolution from pi_interactions where id=$1`, [parentId]);
-      t.ok(par.follow_up_done === true && /See the related phone/.test(par.follow_up_resolution || ''), 'and resolves the voicemail’s follow-up');
+      t.ok(par.follow_up_done === true && /See the next phone/.test(par.follow_up_resolution || ''), 'and resolves the voicemail’s follow-up');
       t.eq(await app.page.evaluate(id => _intThread(id).length, String(child.id)), 2, 'the thread holds both, from either end');
       await app.page.evaluate(id => openEditIntModal(id), parentId);
       t.ok(await app.page.evaluate(() => /Thread · 2 contacts/.test(document.getElementById('modal-ov').textContent)), 'the dialog shows the thread');

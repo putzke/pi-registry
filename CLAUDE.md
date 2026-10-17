@@ -426,12 +426,20 @@ Jeff's worry: a follow-up assigned to someone who doesn't sign in gets lost.
 - **"Assigned to me"** = `_fuIsMine(i)`: owner equals my email initials
   (`getLoggedBy`) OR my team-list initials (`_myInitials`). Used by the
   Follow-ups filter, its counts, and both badges.
-- **"+ Related contact"**: one follow-up per interaction; a thread can hold
-  several open ones. Unticking "This resolves its follow-up" while ticking a
-  new follow-up shows `#f-irel-warn` (`_relFuWarn`): the original stays open
-  too. A hint, not a block. The related-contact dialog opens with Direction =
-  Outgoing (usually our reply) and the original's contact pre-selected (an
-  anonymous original stays anonymous); both changeable.
+- **ONE open follow-up per thread (Oct 2026, Jeff: "we need to simplify").**
+  The edit dialog's button is **Log next contact** (was "+ Related contact";
+  `logRelatedInt`, opens Outgoing with the same contact). Its dialog has no
+  follow-up checkboxes; one question, **What's next?** (`_relNextHTML`,
+  radios `f-inext`): **Done** (default — closes the thread's open follow-up,
+  resolution "See the next … on …"), **Still waiting** (keeps it, due moves to
+  +2 working days, `_relWaitDue`), **New next step** (closes it, starts one on
+  the new contact). No open task in the thread → Nothing more needed / New
+  next step. `saveInt` acts on `_threadOpen(relatedTo)` — the whole thread,
+  not just the parent. In the edit dialog, a thread member whose thread's open
+  task sits on ANOTHER contact shows that task (`_threadElsewhereHTML`, "open
+  it") and hides its own follow-up fields (`#fu-own`, values kept on save).
+  The thread list marks the open task "⏳ Open: …". Data unchanged: follow-ups
+  still live on interactions. `_relFuWarn` / `f-irelres` are gone.
 - Guarded by `test/tests/85-followup-assign-team.test.js` (fails on the old code).
 
 ### Follow-up resolution note (Oct 2026)

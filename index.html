@@ -8024,7 +8024,7 @@ async function saveQuickLog(){
 }
 
 // opts (optional): {projectId, date, channel, direction, summary,
-//   followUp:{note,due,assignee}, relatedTo, parentFollowUpOpen,
+//   followUp:{note,due,assignee}, relatedTo,
 //   hotlineMsgId, hotlineCallId, callerNumber, spanish, suggest:[stakeholder ids]}
 // — set when the dialog is opened from the Hotline inbox or "+ Related call".
 // A "Use …" button for a phone match in the Log dialog. A contact not yet on
@@ -8063,9 +8063,9 @@ function openIntModal(preStake, opts){
     </div>`
     :_parent?`<div style="margin:0 0 12px;border:1px solid rgba(74,155,232,.35);background:rgba(74,155,232,.07);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--mist)">
       <b style="color:var(--sky-lt)">Related to</b> the ${escHtml(fmt(_parent.date))} ${escHtml((_parent.channel||'').toLowerCase())} contact: ${escHtml(String(_parent.summary||'').slice(0,120))}
-      ${opts.parentFollowUpOpen?`<div class="fcheck" style="margin-top:6px"><input type="checkbox" id="f-irelres" checked onchange="_relFuWarn()"><label for="f-irelres">This resolves its follow-up (“${escHtml(_parent.followUpNote||'follow-up')}”)</label></div>`:''}
+      ${_relNextHTML(_parent)}
     </div>`:'';
-  openM(opts.hotlineMsgId?'Log hotline voicemail':opts.hotlineCallId?'Log hotline call':_parent?'Log related contact':'Log interaction',
+  openM(opts.hotlineMsgId?'Log hotline voicemail':opts.hotlineCallId?'Log hotline call':_parent?'Log next contact':'Log interaction',
   `${_banner}<div class="fgrid fg2f">
     <div class="fr"><label>Project *</label><select id="f-ip" onchange="updateIntStakeholders();updateIntIssues();updateIntNepaStage();_fuDefaultToLead()"><option value="">— Select project —</option>${projs.map(p=>`<option value="${p.id}"${S.projectFilter===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
     <div class="fr" style="position:relative"><label>Stakeholder</label>
@@ -8114,14 +8114,14 @@ function openIntModal(preStake, opts){
   </div>
   <input type="hidden" id="f-inepastage">
   <div class="fsec">Follow-up</div>
-  <div class="fr"><div class="fcheck"><input type="checkbox" id="f-ifu" onchange="document.getElementById('fu-f').style.display=this.checked?'':'none';_relFuWarn()"><label for="f-ifu">This interaction requires a follow-up action</label></div></div>
-  <div id="f-irel-warn" style="display:none;margin:-4px 0 10px;border:1px solid rgba(232,163,23,.4);background:rgba(232,163,23,.08);border-radius:6px;padding:7px 10px;font-size:12px;color:var(--mist)"></div>
+  <div class="fr"${_parent?' style="display:none"':''}><div class="fcheck"><input type="checkbox" id="f-ifu" onchange="document.getElementById('fu-f').style.display=this.checked?'':'none'"><label for="f-ifu">This interaction requires a follow-up action</label></div></div>
+  ${_parent?'<div style="font-size:12px;color:var(--fog);margin:-4px 0 8px">Set by “What’s next?” at the top.</div>':''}
   <div id="fu-f" style="display:none"><div class="fgrid fg2f">
     <div class="fr"><label>Follow-up action</label><input id="f-ifun" placeholder="What needs to be done?"></div>
     <div class="fr"><label>Due date</label><input type="date" id="f-ifud"></div>
   </div>
   <div class="fr"><label>Assign to <span id="f-ifua-hint" style="font-weight:400;color:var(--fog)">(defaults to you)</span></label><select id="f-ifua" onchange="this.dataset.touched='1';_fuAssignPick(this)">${_fuAssignOptions('', getLoggedBy())}</select><div id="f-ifua-warn" style="font-size:11px;color:var(--amber);margin-top:4px"></div></div>
-  <div class="fr"><div class="fcheck"><input type="checkbox" id="f-ifudo" onchange="document.getElementById('fu-rdate').style.display=this.checked?'':'none';document.getElementById('fu-rnote').style.display=this.checked?'':'none'"><label for="f-ifudo">Follow-up resolved</label></div></div>
+  <div class="fr"${_parent?' style="display:none"':''}><div class="fcheck"><input type="checkbox" id="f-ifudo" onchange="document.getElementById('fu-rdate').style.display=this.checked?'':'none';document.getElementById('fu-rnote').style.display=this.checked?'':'none'"><label for="f-ifudo">Follow-up resolved</label></div></div>
   <div id="fu-rdate" style="display:none"><div class="fr"><label>Date resolved</label><input type="date" id="f-ifudr" value="${localToday()}"></div></div>
   ${_fuResNoteHTML('',false)}</div>`,
   `<button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-primary" onclick="saveInt()">Save interaction</button>`,true);
@@ -8181,17 +8181,30 @@ function openIntModal(preStake, opts){
 // overridable: the picker shows the lead, and once you choose someone yourself
 // a project change no longer moves it. When you ARE the lead (or there is no
 // active lead) it stays as before: unassigned, i.e. with whoever logged it.
-// "+ Related contact": the earlier contact's follow-up stays open unless this
-// one resolves it. Adding a new follow-up while leaving the old one open gives
-// the thread two open tasks — allowed (say, a letter and a call back), but
-// usually a slip, so it is said out loud before Save.
-function _relFuWarn(){
-  const w=document.getElementById('f-irel-warn'), rr=document.getElementById('f-irelres');
-  if(!w) return;
-  const on=!!rr&&!rr.checked&&!!document.getElementById('f-ifu')?.checked;
-  const par=on?(DB.get('interactions')||[]).find(x=>String(x.id)===String((S.intOpts||{}).relatedTo)):null;
-  w.style.display=on?'':'none';
-  w.innerHTML=on?'⚠ The original follow-up (“'+escHtml(par&&par.followUpNote||'follow-up')+'”) will <b>stay open</b> too, so this thread will have two open follow-ups. If the call back is done, tick “This resolves its follow-up” at the top.':'';
+// ── One open task per thread (Oct 2026, Jeff: "we need to simplify") ──────
+// A thread (interactions linked by relatedTo) carries at most ONE open
+// follow-up. "Log next contact" asks one question — What's next? — instead of
+// two checkboxes: Done (close it), Still waiting (keep it, due +2 working
+// days) or New next step (close it, start one on this contact).
+function _threadOpen(id){ return _intThread(id).filter(i=>i.followUp&&!i.followUpDone); }
+function _relWaitDue(){ return _hotCallbackDue(); }
+function _relNextHTML(parent){
+  const open=_threadOpen(parent.id);
+  const r=(v,label,checked)=>`<label style="display:flex;gap:8px;align-items:flex-start;margin:4px 0;cursor:pointer"><input type="radio" name="f-inext" value="${v}"${checked?' checked':''} onchange="_relNextChange()" style="margin-top:2px"><span>${label}</span></label>`;
+  const what=open.length?'“'+escHtml(open[0].followUpNote||'follow-up')+'”'+(open.length>1?' and '+(open.length-1)+' more':''):'';
+  return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.08)"><b style="color:var(--white)">What’s next?</b>
+    ${open.length
+      ?r('done','<b>Done</b> — close the follow-up '+what,true)
+        +r('wait','<b>Still waiting</b> — keep '+what+' open, due '+escHtml(fmt(_relWaitDue())),false)
+        +r('new','<b>New next step</b> — close '+what+' and start a new one below',false)
+      :r('done','<b>Nothing more needed</b>',true)
+        +r('new','<b>New next step</b> — start a follow-up below',false)}</div>`;
+}
+function _relNextChange(){
+  const v=(document.querySelector('input[name="f-inext"]:checked')||{}).value;
+  const cb=document.getElementById('f-ifu'); if(!cb) return;
+  cb.checked=v==='new';
+  document.getElementById('fu-f').style.display=cb.checked?'':'none';
 }
 function _fuDefaultToLead(){
   const sel=document.getElementById('f-ifua'), hint=document.getElementById('f-ifua-hint');
@@ -8248,6 +8261,8 @@ async function openEditIntModal(id){
     })()}</select>
   </div>
   <div class="fsec">Follow-up</div>
+  ${_threadElsewhereHTML(id)}
+  <div id="fu-own"${_threadElsewhere(id).length?' style="display:none"':''}>
   <div class="fr"><div style="display:flex;gap:20px;flex-wrap:wrap">
     <div class="fcheck"><input type="checkbox" id="f-ifu"${i.followUp?' checked':''} onchange="document.getElementById('fu-f').style.display=this.checked?'':'none';document.getElementById('fu-done-wrap').style.display=this.checked?'':'none'"><label for="f-ifu">Requires follow-up</label></div>
     <div class="fcheck" id="fu-done-wrap" style="${i.followUp?'':'display:none'}"><input type="checkbox" id="f-ifudo"${i.followUpDone?' checked':''} onchange="document.getElementById('fu-rdate').style.display=this.checked?'block':'none';document.getElementById('fu-rnote').style.display=this.checked?'':'none'"><label for="f-ifudo">Follow-up resolved</label></div>
@@ -8262,9 +8277,10 @@ async function openEditIntModal(id){
   ${_fuResNoteHTML(i.followUpResolution||'',!!i.followUpDone)}
   <div class="fr"><label>Assign to <span style="font-weight:400;color:var(--fog)">(defaults to whoever logged it)</span></label><select id="f-ifua" onchange="_fuAssignPick(this)">${_fuAssignOptions(i.followUpAssignedTo, i.loggedBy)}</select><div id="f-ifua-warn" style="font-size:11px;color:var(--amber);margin-top:4px">${_fuAssignWarn(i.followUpAssignedTo)}</div></div>
   </div>
+  </div>
   ${_intThreadHTML(id)}`,
   `<button class="btn btn-danger" onclick="delInt('${id}')">Delete</button>
-  <button class="btn" onclick="logRelatedInt('${id}')" title="Log a callback, or a call to someone else, that came out of this one">+ Related contact</button>
+  <button class="btn" onclick="logRelatedInt('${id}')" title="Log the next call, email or visit in this conversation">Log next contact</button>
   <button class="btn" onclick="closeM()">Cancel</button>
   <button class="btn btn-primary" onclick="saveInt()">Save changes</button>`,true);
 }
@@ -8287,11 +8303,12 @@ async function saveInt(){
     // Clearing the follow-up clears its owner too — an assignment on a
     // non-follow-up would be invisible and unresolvable.
     followUpAssignedTo:_fuOn?(v('f-ifua')||''):''};
-  // The thread link is kept on edit and set once, from "+ Related contact".
+  // The thread link is kept on edit and set once, from "Log next contact".
   const _opts=S.editId?{}:(S.intOpts||{});
   const _relTo=S.editId?(_existingInt&&_existingInt.relatedTo):_opts.relatedTo;
   if(_relTo) data.relatedTo=_relTo;
-  const _relRes=!S.editId&&_relTo&&!!document.getElementById('f-irelres')?.checked;
+  const _relNext=(!S.editId&&_relTo)?((document.querySelector('input[name="f-inext"]:checked')||{}).value||'done'):'';
+  const _relOpen=_relNext?_threadOpen(_relTo).map(x=>String(x.id)):[];
   const psAll=DB.get('project_stakeholders');
   if(stakeId&&!psAll.find(x=>String(x.projectId)===String(projId)&&String(x.stakeholderId)===String(stakeId))){
     psAll.push({id:DB.uid(),projectId:projId,stakeholderId:stakeId,support:'Neutral',issueTags:'',addedDate:data.date,notes:'Auto-linked via interaction log.',distributionGroups:'',stakeholderRole:'External'});
@@ -8314,14 +8331,18 @@ async function saveInt(){
   }
   await DB.set('issue_interactions',cleanedLinks);
 
-  // "+ Related contact" can close the earlier contact's follow-up.
-  if(_relRes){
-    const all2=DB.get('interactions'); const pi=all2.findIndex(x=>String(x.id)===String(_relTo));
-    if(pi>-1&&all2[pi].followUp&&!all2[pi].followUpDone){
-      all2[pi]={...all2[pi],followUpDone:true,followUpResolved:data.date||localToday(),
-        followUpResolution:all2[pi].followUpResolution||('See the related '+String(data.channel||'contact').toLowerCase()+' on '+fmt(data.date)+'.')};
-      await DB.set('interactions',all2);
-    }
+  // "Log next contact": Done / New next step close the thread's open
+  // follow-up; Still waiting keeps it and moves its due date.
+  if(_relOpen.length){
+    const all2=DB.get('interactions');
+    _relOpen.forEach(oid=>{
+      const k=all2.findIndex(x=>String(x.id)===oid); if(k<0) return;
+      all2[k]=_relNext==='wait'
+        ?{...all2[k],followUpDue:_relWaitDue()}
+        :{...all2[k],followUpDone:true,followUpResolved:data.date||localToday(),
+          followUpResolution:all2[k].followUpResolution||('See the next '+String(data.channel||'contact').toLowerCase()+' on '+fmt(data.date)+'.')};
+    });
+    await DB.set('interactions',all2);
   }
   // Opened from the Hotline inbox: close the voicemail out against this interaction.
   if(_opts.hotlineMsgId) await _hotAfterLog(_opts, data.id, stakeId);
@@ -9271,7 +9292,7 @@ async function hotReassign(id, ini){
 // ── Call back from the hotline number (not recorded) ─────────────────────────
 // Twilio rings the staff member's own phone FROM the hotline number; they press
 // 1 and the caller is dialled, also from the hotline number. Nothing is logged —
-// staff log the call themselves (+ Related contact on the logged interaction).
+// staff log the call themselves (Log next contact on the logged interaction).
 const HOT_RING_ME_KEY='cc_callback_phone';
 function _hotCanCallBack(m){
   const h=(DB.get('hotlines')||[]).find(x=>String(x.id)===String(m.hotlineId));
@@ -9292,7 +9313,7 @@ function hotCallBack(id){
       ${escHtml(_hotFmtPhone(h&&h.phoneNumber))}. Answer and <b>press 1</b> — then it calls
       <b>${escHtml(_hotFmtPhone(m.callerNumber))}</b>, who also sees the hotline number, never yours.</div>
     <div class="fr"><label>Ring me at</label><input id="f-hcb-phone" value="${escHtml(_hotFmtPhone(_hotMyPhone()))}" placeholder="(801) 555-0123" maxlength="20"></div>
-    <div style="font-size:11px;color:var(--fog);line-height:1.5">The call is <b>not recorded</b>. Afterwards, log it yourself — on the logged voicemail, <b>+ Related contact</b> keeps it in the same thread.</div>`,
+    <div style="font-size:11px;color:var(--fog);line-height:1.5">The call is <b>not recorded</b>. Afterwards, log it yourself — on the logged voicemail, <b>Log next contact</b> keeps it in the same thread.</div>`,
   `<button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-primary" id="hcb-go" onclick="hotCallBackGo()">📞 Call me now</button>`);
 }
 async function hotCallBackGo(){
@@ -9533,9 +9554,16 @@ function _intThreadHTML(id){
   return `<div class="fsec">Thread · ${th.length} contacts</div><div style="font-size:12px;color:var(--fog);margin-bottom:8px">${th.map(i=>{
     const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
     const me=String(i.id)===String(id);
-    return `<div style="padding:4px 0;${me?'color:var(--white)':''}">${escHtml(fmt(i.date))} · ${escHtml(i.channel||'')} · ${escHtml(i.direction||'')} · ${escHtml(s?dispName(s):(i.anonLabel||'Anonymous'))}${me?' <b>(this one)</b>':` <a href="#" onclick="event.preventDefault();openEditIntModal('${escHtml(i.id)}')" style="color:var(--sky-lt)">open</a>`}<div style="color:var(--slate)">${escHtml(String(i.summary||'').slice(0,140))}</div></div>`;}).join('')}</div>`;
+    const task=(i.followUp&&!i.followUpDone)?`<div style="color:var(--amber)">⏳ Open: ${escHtml(i.followUpNote||'follow-up')}${i.followUpDue?' · due '+escHtml(fmt(i.followUpDue)):''} · ${escHtml(_fuOwner(i)||'—')}</div>`:'';
+    return `<div style="padding:4px 0;${me?'color:var(--white)':''}">${escHtml(fmt(i.date))} · ${escHtml(i.channel||'')} · ${escHtml(i.direction||'')} · ${escHtml(s?dispName(s):(i.anonLabel||'Anonymous'))}${me?' <b>(this one)</b>':` <a href="#" onclick="event.preventDefault();openEditIntModal('${escHtml(i.id)}')" style="color:var(--sky-lt)">open</a>`}<div style="color:var(--slate)">${escHtml(String(i.summary||'').slice(0,140))}</div>${task}</div>`;}).join('')}</div>`;
 }
-// "+ Related call": a new interaction that comes out of this one.
+// The thread's open follow-up(s) held by OTHER contacts in it.
+function _threadElsewhere(id){ return _threadOpen(id).filter(x=>String(x.id)!==String(id)); }
+function _threadElsewhereHTML(id){
+  const o=_threadElsewhere(id); if(!o.length) return '';
+  return `<div style="border:1px solid rgba(232,163,23,.4);background:rgba(232,163,23,.08);border-radius:6px;padding:8px 10px;font-size:12px;color:var(--mist);margin-bottom:10px">${o.map(x=>`⏳ This conversation’s open follow-up: <b>${escHtml(x.followUpNote||'follow-up')}</b>${x.followUpDue?' · due '+escHtml(fmt(x.followUpDue)):''} · ${escHtml(_fuOwner(x)||'—')} — <a href="#" onclick="event.preventDefault();openEditIntModal('${escHtml(x.id)}')" style="color:var(--sky-lt)">open it</a>`).join('<br>')}<div style="color:var(--fog);margin-top:4px">To record what happened next, use <b>Log next contact</b>.</div></div>`;
+}
+// "Log next contact": a new interaction that comes out of this one.
 function logRelatedInt(id){
   const p=(DB.get('interactions')||[]).find(x=>String(x.id)===String(id)); if(!p) return;
   closeM();
@@ -9543,7 +9571,7 @@ function logRelatedInt(id){
   // opens as Outgoing; an inbound reply is one click away.
   // Same contact as the original (changeable); an anonymous original stays anonymous.
   setTimeout(()=>openIntModal(p.stakeholderId?String(p.stakeholderId):null,{relatedTo:String(p.id),projectId:p.projectId,direction:'Outgoing',
-    parentFollowUpOpen:!!(p.followUp&&!p.followUpDone)}),0);
+    }),0);
 }
 
 

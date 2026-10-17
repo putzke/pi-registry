@@ -3082,8 +3082,9 @@ a Twilio trial + one number on DEV for a real call, then release.
   available on trial accounts") — the voicemail test needs an upgraded account. With no
   `TWILIO_AUTH_TOKEN`/`TWILIO_ACCOUNT_SID` secret it answers 503 to
   everything. Routes: `/voice` (greeting + menu TwiML, looked up by the `To`
-  number), `/menu` (key → project; 0 / none → general; a wrong key → menu once
-  more, then general; 9 → Spanish when on), `/recorded` (thanks, hang up),
+  number; with Spanish on, "Para español, oprima 9" comes FIRST, right after
+  the greeting, in the Spanish voice — Jeff, 2026-10-17), `/menu` (key → project;
+  0 / none → general; a wrong key → menu once more, then general; 9 → Spanish when on), `/recorded` (thanks, hang up),
   `/recording` + `/transcription` (both UPSERT on `call_sid` with only their
   own fields, so they work in either order), `/notify` (app → email the
   assignee; checks the caller's session + `pi_staff`). Voices: Amazon Polly

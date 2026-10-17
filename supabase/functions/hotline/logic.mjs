@@ -157,28 +157,36 @@ export function greetingParts(hotline, lang, greetingUrl) {
   return say(text, lang);
 }
 
-export function menuText(hotline, exts, lang) {
+// The menu in two parts. The Spanish offer comes FIRST, right after the
+// greeting, and is spoken by the Spanish voice, so a Spanish speaker doesn't
+// sit through the English project list to find it (Jeff, 2026-10-17).
+export function menuParts(hotline, exts, lang) {
   const t = T[lang];
+  const spanish = lang === 'en' && hotline.spanish_enabled ? T.en.spanish : '';
   const lines = [];
   if (exts.length) {
     exts.forEach(e => lines.push(t.option((lang === 'es' && e.label_es) || e.label || ('project ' + e.digit), e.digit)));
     lines.push(t.general);
   }
-  if (lang === 'en' && hotline.spanish_enabled) lines.push(T.en.spanish);
-  return lines.join(' ');
+  return { spanish, options: lines.join(' ') };
+}
+export function menuText(hotline, exts, lang) {
+  const m = menuParts(hotline, exts, lang);
+  return [m.spanish, m.options].filter(Boolean).join(' ');
 }
 
 // The greeting + menu. A single-project number with Spanish off has no menu at
 // all and goes straight to the recording.
 export function voiceTwiml({ hotline, exts, lang, base, greetingUrl, retry = 0 }) {
   const q = `h=${hotline.id}&l=${lang}`;
-  const menu = menuText(hotline, exts, lang);
+  const parts = menuParts(hotline, exts, lang);
+  const menu = say(parts.spanish, 'es') + say(parts.options, lang);
   const greet = retry ? '' : greetingParts(hotline, lang, greetingUrl);
   if (!menu) return twiml(greet + recordParts({ hotline, lang, base, projectId: hotline.project_id, digit: '' }));
   const timeout = exts.length ? 6 : 3;
   return twiml(
     `<Gather numDigits="1" timeout="${timeout}" action="${xmlEsc(base + '/menu?' + q + '&r=' + retry)}" method="POST">`
-    + greet + say(menu, lang) + '</Gather>'
+    + greet + menu + '</Gather>'
     + `<Redirect method="POST">${xmlEsc(base + '/menu?' + q + '&r=' + retry + '&none=1')}</Redirect>`);
 }
 

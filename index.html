@@ -8731,6 +8731,8 @@ function _hotExts(hotlineId){
 }
 function _hotMenuText(h, exts, lang){
   const es=lang==='es', lines=[];
+  // The Spanish offer first, right after the greeting (the receiver says it in the Spanish voice).
+  if(!es&&h.spanishEnabled) lines.push('Para español, oprima 9.');
   if(exts.length){
     exts.forEach(e=>{
       const label=(es&&e.labelEs)||e.label||('project '+e.digit);
@@ -8738,7 +8740,6 @@ function _hotMenuText(h, exts, lang){
     });
     lines.push(es?'Para dejar un mensaje general, oprima 0.':'To leave a general message, press 0.');
   }
-  if(!es&&h.spanishEnabled) lines.push('Para español, oprima 9.');
   return lines.join(' ');
 }
 // "Test Hotline" is read as "the Test hotline" — same rule as the receiver's hotName().

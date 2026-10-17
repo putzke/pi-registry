@@ -147,6 +147,9 @@ module.exports = {
     t.ok(/<Gather numDigits="1"/.test(r.body) && /For the 400 North project, press 1\./.test(r.body)
       && /For the SR-201 project, press 2\./.test(r.body) && /general message, press 0/.test(r.body), 'the menu lists each extension and the general mailbox');
     t.ok(/Para español, oprima 9\./.test(r.body), 'the Spanish option is offered when it is on');
+    t.ok(r.body.indexOf('Para español') > r.body.indexOf('Thank you for calling') && r.body.indexOf('Para español') < r.body.indexOf('press 1'),
+      'the Spanish offer comes right after the greeting, before the project list');
+    t.ok(/<Say voice="Polly\.Lupe-Neural"[^>]*>Para español, oprima 9\.<\/Say>/.test(r.body), 'the Spanish offer is spoken by the Spanish voice');
     t.ok(/Thank you for calling the UDOT Region One hotline/.test(r.body) && /Polly\.Joanna-Neural/.test(r.body), 'default greeting in the computer voice');
     t.ok(/<Redirect method="POST">[^<]*none=1/.test(r.body), 'no key pressed → falls through to the menu handler');
 

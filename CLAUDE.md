@@ -3410,6 +3410,9 @@ a Twilio trial + one number on DEV for a real call, then release.
   The pick survives a project change and the "(on …)" labels redraw
   (`#hot-use-btns`, `_hotUseBtnsHTML`, in `updateIntStakeholders`). `saveInt`'s
   link check now compares ids as strings. Never attached automatically.
+  **Outbound calls too (2026-10-18, Jeff):** Log this call suggests the
+  matching contact for an OUTGOING call to a typed number as well (it used
+  to be inbound only); the mobile Calls-to-decide card says who it matches.
 - Guarded by `test/tests/82-hotline-receiver.test.js` (122 checks; fails if the
   signature check is bypassed) and `test/tests/83-hotline-inbox.test.js` (87).
 - **The Hotline view refreshes every 30 s** (2026-10-14, Jeff's call; other

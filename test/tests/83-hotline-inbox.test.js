@@ -377,6 +377,15 @@ module.exports = {
       const acDone = await t.until(async () => (await t.sql(`select outcome, logged_interaction_id from pi_hotline_calls where id=$1 and outcome is not null`, [ac.id]))[0]);
       const [aInt] = acDone ? await t.sql(`select direction, stakeholder_id from pi_interactions where id=$1`, [acDone.logged_interaction_id]) : [{}];
       t.ok(acDone && acDone.outcome === 'logged' && aInt.direction === 'Incoming' && String(aInt.stakeholder_id) === String(st.id), 'saved: an Incoming interaction with the chosen contact; the call is marked logged');
+      // ── An outbound call to a typed number that belongs to a contact ─
+      const [oc] = await t.sql(`insert into pi_hotline_calls (hotline_id, project_id, to_number, ring_number, placed_by, placed_by_email, status)
+        values ($1,$2,'+18015550142','+18015550177','PUT','putzke@demo.test','completed') returning id`, [h.id, A]);
+      await app.page.evaluate(async () => { await _hotReload(); render(); });
+      await app.page.evaluate(id => hotCallLog(String(id)), oc.id);
+      const of = await app.page.evaluate(() => ({ d: document.getElementById('f-idr').value, stake: document.getElementById('f-is').value,
+        use: !!document.querySelector('#modal-ov button[onclick^="_hotUseMatch"]') }));
+      t.ok(of.d === 'Outgoing' && of.use && of.stake === '', 'an outbound call to a number that matches a contact suggests them too (not attached)');
+      await app.page.evaluate(() => closeM());
       // ── General mailbox: the match names the contact's project ─────────
       const wl = await app.page.evaluate(({ sid, A }) => {
         const s = DB.getActive('stakeholders').find(x => String(x.id) === sid);

@@ -9593,7 +9593,8 @@ function hotCallLog(id){
       ?'Hotline call from '+_hotFmtPhone(c.toNumber)+' to the '+(h?_hotName(h.name)+' ':'')+'hotline'+(c.placedBy?', answered by '+c.placedBy:'')+(c.durationSeconds?' ('+_hotDur(c.durationSeconds)+')':'')+'. '
       :'Called '+_hotFmtPhone(c.toNumber)+' from the '+(h?_hotName(h.name)+' ':'')+'hotline. ',
     callerNumber:stake?'':c.toNumber,
-    suggest:inbound&&!stake?_hotPhoneMatches({callerNumber:c.toNumber,projectId:c.projectId}).map(s=>String(s.id)):[]
+    // Inbound or outbound: a typed number that belongs to a contact is suggested (never attached).
+    suggest:!stake?_hotPhoneMatches({callerNumber:c.toNumber,projectId:c.projectId}).map(s=>String(s.id)):[]
   });
 }
 async function hotCallSkip(id){

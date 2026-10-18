@@ -2879,6 +2879,13 @@ function _hotPhoneMatches(num, projectId){
   return DB.getActive('stakeholders').filter(s=>String(s.phone||'').replace(/\D/g,'').slice(-10)===want)
     .sort((a,b)=>(onProj(b)?1:0)-(onProj(a)?1:0));
 }
+// " — on <project>" when the contact isn't on the call's project (the desktop's _hotWhereLabel).
+function _hotWhereLabel(s, projectId){
+  const links=(DB.get('project_stakeholders')||[]).filter(l=>String(l.stakeholderId)===String(s.id));
+  if(projectId&&links.some(l=>String(l.projectId)===String(projectId))) return '';
+  const names=[...new Set(links.map(l=>_hotProjName(l.projectId)).filter(Boolean))];
+  return names.length?' — on '+names.slice(0,2).join(', ')+(names.length>2?' +'+(names.length-2):''):s.isMaster?' — master list':'';
+}
 function _hotWhen(ts){
   if(!ts) return '';
   const d=new Date(ts);
@@ -2944,7 +2951,7 @@ function _hotCardHTML(m){
     </div>
     <div style="font-size:12px;color:var(--text3);margin-top:2px">${escHtml(_hotWhen(m.receivedAt))} · ${escHtml(h?h.name:'Hotline')}${m.extensionDigit&&m.extensionDigit!=='0'?' · pressed '+escHtml(m.extensionDigit):''} · ${assigned}</div>
     <div style="font-size:13px;color:var(--text2);margin-top:4px">${proj}</div>
-    ${matches.length?`<div style="font-size:13px;color:var(--sky);margin-top:6px">Number matches ${matches.slice(0,3).map(s=>escHtml(dispName(s))).join('; ')} — suggested when you log it.</div>`:''}
+    ${matches.length?`<div style="font-size:13px;color:var(--sky);margin-top:6px">Number matches ${matches.slice(0,3).map(s=>escHtml(dispName(s)+_hotWhereLabel(s,m.projectId))).join('; ')} — suggested when you log it.</div>`:''}
     ${tr}${audio}
     <div style="display:flex;gap:8px;margin-top:12px">
       <button class="btn-primary" style="padding:11px;font-size:14px;flex:1" onclick="mobHotLog('${escHtml(m.id)}')">Log</button>
@@ -2957,10 +2964,14 @@ function _hotCallCardHTML(c){
   const h=_hotLine(c.hotlineId);
   const inbound=c.direction==='inbound';
   const stake=c.stakeholderId&&(DB.get('stakeholders')||[]).find(x=>String(x.id)===String(c.stakeholderId));
+  // A number typed by hand that belongs to a contact: say who, and on which project.
+  const matches=stake?[]:_hotPhoneMatches(c.toNumber,c.projectId);
+  const matchLine=matches.length?`<div style="font-size:13px;color:var(--sky);margin-top:6px">Number matches ${matches.slice(0,3).map(s=>escHtml(dispName(s)+_hotWhereLabel(s,c.projectId))).join('; ')} — suggested when you log it.</div>`:'';
   return `<div class="card hot-call" data-id="${escHtml(c.id)}" style="padding:14px">
     <div style="font-size:15px;font-weight:700;color:var(--text)">${inbound?'⬇ From ':'⬆ To '}${escHtml(stake?dispName(stake):_hotFmtPhone(c.toNumber))}</div>
     <div style="font-size:12px;color:var(--text3);margin-top:2px">${escHtml(_hotWhen(c.createdAt))} · ${escHtml(h?h.name:'Hotline')} · ${escHtml(HOT_CALL_STATUS[c.status]||c.status||'')}${c.durationSeconds?' · '+_hotDur(c.durationSeconds):''}</div>
     ${c.projectId?`<div style="font-size:13px;color:var(--text2);margin-top:4px">${escHtml(_hotProjName(c.projectId))}</div>`:''}
+    ${matchLine}
     <div style="display:flex;gap:8px;margin-top:12px">
       <button class="btn-primary" style="padding:11px;font-size:14px;flex:1" onclick="mobHotCallLog('${escHtml(c.id)}')">Log this call</button>
       <button class="btn-secondary" style="padding:10px;font-size:14px;flex:1" onclick="mobHotCallSkip('${escHtml(c.id)}')">Don’t log</button>
@@ -3189,7 +3200,7 @@ function _mobLogHotBox(){
   }
   if((o.suggest||[]).length){
     const all=DB.get('stakeholders')||[];
-    parts.push(`<div style="font-size:13px;color:var(--text2)">The caller’s number matches:</div><div style="display:flex;flex-wrap:wrap;gap:6px">${o.suggest.map(id=>{
+    parts.push(`<div style="font-size:13px;color:var(--text2)">This number matches:</div><div style="display:flex;flex-wrap:wrap;gap:6px">${o.suggest.map(id=>{
       const s=all.find(x=>String(x.id)===String(id)); if(!s) return '';
       return `<button class="btn-secondary" style="width:auto;padding:7px 10px;font-size:13px" onclick="mobUseStake('${escHtml(s.id)}')">Use ${escHtml(dispName(s))}</button>`;
     }).join('')}</div>`);
@@ -3245,7 +3256,8 @@ function mobHotCallLog(id){
       ?'Hotline call from '+_hotFmtPhone(c.toNumber)+' to the '+(h?_hotName(h.name)+' ':'')+'hotline'+(c.placedBy?', answered by '+c.placedBy:'')+(c.durationSeconds?' ('+_hotDur(c.durationSeconds)+')':'')+'. '
       :'Called '+_hotFmtPhone(c.toNumber)+' from the '+(h?_hotName(h.name)+' ':'')+'hotline. ',
     callerNumber:stake?'':c.toNumber,
-    suggest:inbound&&!stake?_hotPhoneMatches(c.toNumber,c.projectId).map(s=>String(s.id)):[]
+    // Inbound or outbound: a typed number that belongs to a contact is suggested (never attached).
+    suggest:!stake?_hotPhoneMatches(c.toNumber,c.projectId).map(s=>String(s.id)):[]
   });
 }
 async function mobHotCallSkip(id){

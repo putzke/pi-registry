@@ -180,6 +180,17 @@ module.exports = {
       const lc = await t.until(async () => (await t.sql(`select outcome, logged_interaction_id from pi_hotline_calls where id=$1 and outcome='logged'`, [c1.id]))[0]);
       t.ok(lc && lc.logged_interaction_id, 'saving marks the call logged against the interaction');
 
+      // An outbound call typed to a number that belongs to a contact on another project.
+      const [oc] = await t.sql(`insert into pi_hotline_calls (hotline_id, project_id, to_number, ring_number, placed_by, placed_by_email, status) values ($1,$2,'+18015550987','+18015550177','PUT','putzke@demo.test','completed') returning id`, [h.id, B]);
+      await mob.page.evaluate(async () => { await _hotReload(); renderHotline(); });
+      const ocCard = await mob.page.evaluate(id => document.querySelector(`#hot-body .hot-call[data-id="${id}"]`)?.textContent || '', String(oc.id));
+      t.ok(/Number matches/.test(ocCard) && /suggested when you log it/.test(ocCard), 'Calls to decide: an outbound call to a known number says who it matches');
+      await mob.page.evaluate(id => mobHotCallLog(id), String(oc.id));
+      const ocf = await mob.page.evaluate(() => ({ dir: document.getElementById('log-direction').value, stake: document.getElementById('log-stake').value,
+        use: [...document.querySelectorAll('#log-hot button')].some(b => /^Use /.test(b.textContent.trim())), txt: document.getElementById('log-hot').textContent }));
+      t.ok(ocf.dir === 'Outgoing' && ocf.stake === '' && ocf.use && /This number matches/.test(ocf.txt), '…and logging it offers “Use …” (not attached), as for inbound');
+      await mob.page.evaluate(() => closeSheet('sheet-log'));
+      await mob.page.evaluate(id => mobHotCallSkip(id), String(oc.id));
       // A second call: Don't log.
       const [c2] = await t.sql(`insert into pi_hotline_calls (hotline_id, to_number, ring_number, placed_by, placed_by_email, status) values ($1,'+13855550198','+18015550177','PUT','putzke@demo.test','completed') returning id`, [h.id]);
       await mob.page.evaluate(async () => { await _hotReload(); renderHotline(); });

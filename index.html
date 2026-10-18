@@ -8691,6 +8691,13 @@ async function saveTeamMember(){
 // What callers hear is built by the receiver; _hotMenuText mirrors its
 // menuText() so Settings can show it (test 83 asserts the two agree).
 const HOT_DISMISS_REASONS=['Hang-up / no message','Wrong number','Spam / robocall','Duplicate of another message','Other'];
+// Dismissed as one of these → deleted HOT_JUNK_KEEP_DAYS after dismissal, by
+// pi_hotline_cleanup() (sql/2026-10-18_hotline_junk_cleanup.sql — the same
+// rule; test 83 asserts they agree). Nothing else is ever deleted.
+const HOT_JUNK_REASONS=['Spam / robocall','Hang-up / no message'];
+const HOT_JUNK_KEEP_DAYS=90;
+// The history tables show recent rows only; older ones are hidden, not deleted.
+const HOT_RANGES=[['30','Last 30 days'],['90','Last 90 days'],['365','Last year'],['all','All']];
 const HOT_AUDIO_BUCKET='hotline-audio';
 const HOT_AUDIO_KEEP_DAYS=90;
 const HOT_FN_URL=SUPA_URL+'/functions/v1/hotline';
@@ -9096,13 +9103,20 @@ function renderHotline(el){
   const inScope=m=>!pf||!m.projectId||String(m.projectId)===String(pf);
   const tab=S.hotTab||'pending';
   const pending=all.filter(m=>m.status==='pending'&&inScope(m));
-  const calls=(DB.get('hotline_calls')||[]).filter(inScope).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
-  const toDecide=calls.filter(c=>!c.outcome&&!['cancelled','failed'].includes(c.status));
+  const allCalls=(DB.get('hotline_calls')||[]).filter(inScope).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+  const toDecide=allCalls.filter(c=>!c.outcome&&!['cancelled','failed'].includes(c.status));
+  // Only recent history is shown (S.hotRange days, 30 by default). A call still
+  // waiting for Log / Don't log always shows, however old.
+  const range=S.hotRange||'30';
+  const cutoff=range==='all'?'':new Date(Date.now()-Number(range)*864e5).toISOString();
+  const recent=ts=>!cutoff||String(ts||'')>=cutoff;
+  const calls=allCalls.filter(c=>recent(c.createdAt)||toDecide.includes(c));
   const mine=pending.filter(_hotIsMine), unassigned=pending.filter(m=>!m.assignedTo);
   let who=S.hotWho||(mine.length?'mine':'all');
   const shown=tab==='calls'?[]:tab==='pending'
     ?(who==='mine'?mine:who==='unassigned'?unassigned:pending).slice().sort((a,b)=>String(a.receivedAt).localeCompare(String(b.receivedAt)))
-    :all.filter(m=>m.status!=='pending'&&inScope(m));
+    :all.filter(m=>m.status!=='pending'&&inScope(m)&&recent(m.receivedAt));
+  const hidden=tab==='calls'?allCalls.length-calls.length:tab==='closed'?all.filter(m=>m.status!=='pending'&&inScope(m)).length-shown.length:0;
   const projs=DB.get('projects')||[];
   const chip=(k,label,n)=>`<button class="btn btn-sm${who===k?' btn-primary':''}" onclick="setHotFilter('hotWho','${k}')">${label} (${n})</button>`;
   el.innerHTML=`<div class="topbar"><div class="topbar-title">Hotline inbox</div>
@@ -9119,13 +9133,18 @@ function renderHotline(el){
         <button class="btn btn-sm${tab==='calls'?' btn-primary':''}" onclick="setHotFilter('hotTab','calls')">Calls${toDecide.length?' ('+toDecide.length+' to decide)':''}</button>
         ${tab==='pending'?`<span style="width:1px;height:20px;background:rgba(255,255,255,.15);margin:0 6px"></span>${chip('mine','Mine',mine.length)}${chip('unassigned','Unassigned',unassigned.length)}${chip('all','All',pending.length)}<span style="font-size:11px;color:var(--fog);margin-left:6px">Oldest first</span>`:''}
       </div>
-      ${tab!=='pending'&&(tab==='calls'?calls:shown).length?`<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;font-size:11px;color:var(--fog)">
-        <label style="display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0;font-size:12px;color:var(--mist);cursor:pointer"><input type="checkbox" id="hot-group"${S.hotGroup?' checked':''} onchange="hotToggleGroup()"> Group by caller</label>
-        <span>· Click a column heading to sort</span></div>`:''}
+      ${tab!=='pending'?`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px;font-size:11px;color:var(--fog)">
+        <label style="display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0;font-size:12px;color:var(--mist)">Show
+          <select id="hot-range" onchange="setHotFilter('hotRange',this.value)">${HOT_RANGES.map(([v,l])=>`<option value="${v}"${range===v?' selected':''}>${l}</option>`).join('')}</select></label>
+        <label style="display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0;font-size:12px;color:var(--mist)">Group
+          <select id="hot-group" onchange="setHotFilter('hotGroup',this.value)">${[['','None'],['date','By date'],['caller','By caller']].map(([v,l])=>`<option value="${v}"${_hotGroupBy()===v?' selected':''}>${l}</option>`).join('')}</select></label>
+        <span>· Click a column heading to sort</span>
+        ${hidden?`<span>· ${hidden} older ${hidden===1?'row':'rows'} hidden — choose a longer period to see ${hidden===1?'it':'them'}</span>`:''}</div>`:''}
       <div id="hot-list">${tab==='calls'?(calls.length?_hotHistoryTable(calls.map(_hotCallRow))
           :'<div style="font-size:13px;color:var(--fog);padding:24px 0">No calls yet. Calls you answer from a hotline, and calls placed with 📞 New call, show here to log or skip.</div>')
         :shown.length?(tab==='pending'?shown.map(_hotCardHTML).join(''):_hotHistoryTable(shown.map(_hotClosedRow)))
-        :`<div style="font-size:13px;color:var(--fog);padding:24px 0">${tab==='pending'?'Nothing waiting'+(who==='mine'?' for you':'')+'.':'No logged or dismissed voicemails yet.'}</div>`}</div>
+        :`<div style="font-size:13px;color:var(--fog);padding:24px 0">${tab==='pending'?'Nothing waiting'+(who==='mine'?' for you':'')+'.':hidden?'Nothing logged or dismissed in this period.':'No logged or dismissed voicemails yet.'}</div>`}</div>
+      ${tab==='closed'?`<div style="font-size:11px;color:var(--fog);margin-top:12px">Recordings are removed ${HOT_AUDIO_KEEP_DAYS} days after a voicemail is logged or dismissed; the transcript stays. Voicemails dismissed as ${HOT_JUNK_REASONS.map(r=>'“'+escHtml(r)+'”').join(' or ')} are deleted after ${HOT_JUNK_KEEP_DAYS} days. Everything else is kept.</div>`:''}
     </div></div>`;
 }
 // A transcript can arrive before its "finished" signal, and that signal can
@@ -9192,7 +9211,10 @@ function hotSortBy(k){
   S.hotSort=cur.k===k?{k,dir:cur.dir==='asc'?'desc':'asc'}:{k,dir:k==='when'?'desc':'asc'};
   render();
 }
-function hotToggleGroup(){ S.hotGroup=!S.hotGroup; render(); }
+// Group the history table: '' (none) | 'date' | 'caller'. (Older code stored true for "by caller".)
+function _hotGroupBy(){ return S.hotGroup===true?'caller':(S.hotGroup||''); }
+function hotToggleGroup(){ S.hotGroup=_hotGroupBy()==='caller'?'':'caller'; render(); }
+function _hotDayKey(ts){ const d=new Date(ts); return isNaN(d)?'':d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function _hotCallerKey(num){ const d=String(num||'').replace(/\D/g,'').slice(-10); return d.length===10?d:''; }
 // Who a number belongs to: the contact on the record, else a linked contact
 // whose phone matches (a suggestion — shown as "matches").
@@ -9250,7 +9272,16 @@ function _hotHistoryTable(rows){
     <td style="${td}">${r.outcomeHTML}</td>
     <td style="${td};text-align:right"><div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">${r.actions}</div></td></tr>`;
   let body;
-  if(S.hotGroup){
+  if(_hotGroupBy()==='date'){
+    // One header per day, in the order of the current sort.
+    const groups=new Map();
+    rows.forEach(r=>{ const g=_hotDayKey(r.ts); if(!groups.has(g)) groups.set(g,[]); groups.get(g).push(r); });
+    body=[...groups.entries()].map(([g,rs])=>{
+      const label=g?new Date(g+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}):'No date';
+      return `<tr class="hot-group hot-day" data-day="${escHtml(g)}"><td colspan="6" style="padding:10px 8px 6px;background:rgba(74,155,232,.08);font-size:12px">
+        <b style="color:var(--white)">${escHtml(label)}</b><span style="color:var(--fog)"> · ${rs.length} ${rs.length===1?'call':'calls'}</span></td></tr>`+rs.map(tr).join('');
+    }).join('');
+  } else if(_hotGroupBy()==='caller'){
     // Groups appear in the order of their first row under the current sort.
     const groups=new Map();
     rows.forEach(r=>{ const g=r.callerKey||'unknown'; if(!groups.has(g)) groups.set(g,[]); groups.get(g).push(r); });
@@ -9483,7 +9514,8 @@ async function _hotCallAfterLog(opts, interactionId){
 function hotDismiss(id){
   S.hotDismissId=id;
   openM('Dismiss voicemail',`<div style="font-size:13px;color:var(--mist);margin-bottom:10px">A dismissed voicemail never becomes an interaction. It stays in “Logged &amp; dismissed” with the reason.</div>
-    <div class="fr"><label>Reason</label><select id="f-hd-reason">${HOT_DISMISS_REASONS.map(r=>`<option>${escHtml(r)}</option>`).join('')}</select></div>
+    <div class="fr"><label>Reason</label><select id="f-hd-reason">${HOT_DISMISS_REASONS.map(r=>`<option>${escHtml(r)}</option>`).join('')}</select>
+      <div style="font-size:11px;color:var(--fog);margin-top:4px">${HOT_JUNK_REASONS.map(r=>'“'+escHtml(r)+'”').join(' and ')} are deleted after ${HOT_JUNK_KEEP_DAYS} days; every other reason is kept.</div></div>
     <div class="fr"><label>Note <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--fog)">(optional)</span></label><input id="f-hd-note" maxlength="200"></div>`,
   `<button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-primary" onclick="saveHotDismiss()">Dismiss</button>`);
 }
@@ -9532,13 +9564,26 @@ async function _hotPurgeExpired(){
   if(Date.now()-_hotPurgedAt<3600e3) return; _hotPurgedAt=Date.now();
   const now=new Date().toISOString();
   const due=(DB.get('hotline_messages')||[]).filter(m=>m.recordingPath&&!m.audioDeletedAt&&m.audioPurgeAfter&&m.audioPurgeAfter<now);
-  if(!due.length) return;
+  if(due.length){
+    try{
+      const h=getAuthHeaders(); delete h['Prefer'];
+      const r=await fetch(SUPA_URL+'/storage/v1/object/'+HOT_AUDIO_BUCKET,{method:'DELETE',headers:h,body:JSON.stringify({prefixes:due.map(m=>m.recordingPath)})});
+      if(!r.ok) throw new Error(r.status);
+      for(const m of due){ await sbUpdate('hotline_messages',m.id,{audioDeletedAt:now}); m.audioDeletedAt=now; }
+    }catch(e){ console.warn('Hotline audio clean-up failed', e.message); }
+  }
+  // Then the junk rule: the database decides what may go (spam and hang-ups,
+  // HOT_JUNK_KEEP_DAYS after dismissal, recording already removed).
   try{
     const h=getAuthHeaders(); delete h['Prefer'];
-    const r=await fetch(SUPA_URL+'/storage/v1/object/'+HOT_AUDIO_BUCKET,{method:'DELETE',headers:h,body:JSON.stringify({prefixes:due.map(m=>m.recordingPath)})});
+    const r=await fetch(SUPA_URL+'/rest/v1/rpc/pi_hotline_cleanup',{method:'POST',headers:{...h,'Content-Type':'application/json'},body:'{}'});
     if(!r.ok) throw new Error(r.status);
-    for(const m of due){ await sbUpdate('hotline_messages',m.id,{audioDeletedAt:now}); m.audioDeletedAt=now; }
-  }catch(e){ console.warn('Hotline audio clean-up failed', e.message); }
+    const gone=new Set(((await r.json())||[]).map(x=>String(x.id)));
+    if(gone.size){
+      _syncCache.hotline_messages=(DB.get('hotline_messages')||[]).filter(m=>!gone.has(String(m.id)));
+      if(S.view==='hotline') render();
+    }
+  }catch(e){ console.warn('Hotline junk clean-up failed', e.message); }
 }
 
 // ── Log next contact (Oct 2026, simplified with Jeff) ─────────────────────

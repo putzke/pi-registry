@@ -3153,7 +3153,8 @@ a Twilio trial + one number on DEV for a real call, then release.
   Lead's email on the team list (Jeff, 2026-10-12: leave it off for the DEV
   trial, but it must be on before live); (2) confirm Spanish transcription
   with Twilio — now Nova-3 live transcription, confirm on DEV calls; paste
-  `sql/2026-10-17_hotline_live_transcript.sql` on LIVE too; (3) decide whether `hotline-audio` joins the nightly backup;
+  `sql/2026-10-17_hotline_live_transcript.sql` and
+  `sql/2026-10-18_hotline_junk_cleanup.sql` on LIVE too; (3) decide whether `hotline-audio` joins the nightly backup;
   (4) paste `sql/2026-10-12_hotlines.sql` on LIVE, set the LIVE secrets and
   point the real number(s) at the LIVE function; (5) add Twilio to "Outside
   services" and the Service Map; (6) **not before a long stretch of DEV
@@ -3313,6 +3314,21 @@ a Twilio trial + one number on DEV for a real call, then release.
   interaction, Log this call / Don't log). Headings sort (`S.hotSort`,
   `hotSortBy`); "Group by caller" (`S.hotGroup`) puts a header row over each
   number, groups in the order of the current sort. Waiting stays as cards.
+- **History view + junk clean-up (2026-10-18, Jeff's choice "B"):** "Logged &
+  dismissed" and "Calls" show the last 30 days by default (`S.hotRange`,
+  `HOT_RANGES`: 30 / 90 / year / all); older rows are HIDDEN, never deleted, and
+  the toolbar says how many. A call still waiting for Log / Don't log always
+  shows. Group: none / by date / by caller (`S.hotGroup` '' | 'date' |
+  'caller'; an old `true` reads as caller). **Only junk is ever deleted:**
+  `pi_hotline_cleanup()` (`sql/2026-10-18_hotline_junk_cleanup.sql`, SECURITY
+  DEFINER, staff only, anon refused) deletes voicemails dismissed as "Spam /
+  robocall" or "Hang-up / no message" (a typed note after the reason is fine)
+  more than 90 days ago whose recording is already removed. Logged rows, wrong
+  numbers, duplicates and "Other" are kept for good (GRAMA; the interaction
+  links back). The app calls it from `_hotPurgeExpired` (inbox open, at most
+  hourly) after the audio purge and drops the returned ids from the cache.
+  `HOT_JUNK_REASONS` / `HOT_JUNK_KEEP_DAYS` mirror the SQL (test 86). Applied
+  to DEV 2026-10-18; paste on LIVE with the other hotline SQL at go-live.
 - **Phone match covers EVERY contact (2026-10-14, Jeff's call):**
   `_hotPhoneMatches` compares the last 10 digits of the caller's number with
   every active contact's phone — all projects and the master list — the

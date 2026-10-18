@@ -182,6 +182,10 @@ hr.div{border:none;border-top:1px solid var(--border);margin:14px 0}
 /* LOG */
 .log-entry{display:flex;gap:12px;padding:11px 0;border-bottom:1px solid var(--border)}
 .log-entry:last-child{border-bottom:none}
+.iss-int{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:12px;cursor:pointer;transition:background .12s,border-color .12s}
+.iss-int:hover,.iss-int:focus{background:rgba(255,255,255,.08);border-color:var(--sky);outline:none}
+.iss-int-open{color:var(--sky-lt);opacity:0;transition:opacity .12s}
+.iss-int:hover .iss-int-open,.iss-int:focus .iss-int-open{opacity:1}
 .log-tl{display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:28px}
 .log-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;margin-top:4px}
 .log-line{width:1px;flex:1;background:var(--border);margin-top:4px}
@@ -4894,14 +4898,7 @@ function renderIssuesPanel(projectId){
   if(sel.notes) det+='<div style="font-size:12px;color:var(--slate);margin-bottom:16px"><span style="font-weight:600">Notes:</span> '+sel.notes+'</div>';
   det+='<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Linked interactions ('+linkedInts.length+')</div>';
   if(linkedInts.length){
-    linkedInts.forEach(function(i){
-      const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
-      const cName=s?dispName(s):(i.anonLabel||'Anonymous');
-      det+='<div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:12px">';
-      det+='<div style="display:flex;justify-content:space-between;margin-bottom:3px"><span><span style="color:var(--sky-lt);font-weight:600">'+fmt(i.date)+'</span><span style="color:var(--mist);margin-left:8px">'+cName+'</span></span><span style="color:var(--slate)">'+i.channel+'</span></div>';
-      det+='<div style="color:var(--mist)">'+(i.summary||'')+'</div>';
-      det+='</div>';
-    });
+    linkedInts.forEach(function(i){ det+=_issLinkedIntHTML(i,stakes); });
   } else {
     det+='<div style="color:var(--slate);font-size:12px;font-style:italic">No interactions linked yet.</div>';
   }
@@ -7530,6 +7527,18 @@ async function unlinkFromProject(linkId){
   renderStakeholders(document.getElementById('main'));
 }
 
+// A linked interaction on an issue (both issue screens). The whole card opens
+// the interaction's Edit window — from there "Log next contact" records a
+// call-back, which inherits the issue (see openIntModal).
+function _issLinkedIntHTML(i,stakes){
+  const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
+  const cName=s?dispName(s):(i.anonLabel||'Anonymous');
+  return '<div class="iss-int" role="button" tabindex="0" title="Open this interaction" onclick="openEditIntModal(\''+escHtml(String(i.id))+'\')" onkeydown="if(event.key===\'Enter\')this.click()">'
+    +'<div style="display:flex;justify-content:space-between;margin-bottom:3px"><span><span style="color:var(--sky-lt);font-weight:600">'+fmt(i.date)+'</span><span style="color:var(--mist);margin-left:8px">'+cName+'</span></span>'
+    +'<span style="color:var(--slate)">'+i.channel+'<span class="iss-int-open"> · Open ›</span></span></div>'
+    +'<div style="color:var(--mist)">'+(i.summary||'')+'</div></div>';
+}
+
 // INTERACTION MODAL
 function updateIntIssues(){
   const projId=document.getElementById('f-ip')?.value;
@@ -8155,6 +8164,10 @@ function openIntModal(preStake, opts){
     const ps=document.getElementById('f-ip'), se=document.getElementById('f-is-search');
     if(ps) ps.disabled=true;
     if(se&&!_parent.stakeholderId){ se.value=''; se.placeholder=(_parent.anonLabel||'Anonymous')+' — or search for a contact'; se.dataset.keepPh='1'; }
+    // Same issue as the original, so a call-back shows under it.
+    const _pl=(DB.get('issue_interactions')||[]).find(l=>String(l.interactionId)===String(_parent.id));
+    const is=document.getElementById('f-iissue');
+    if(_pl&&is&&[...is.options].some(o=>String(o.value)===String(_pl.issueId))) is.value=String(_pl.issueId);
   }
   const _setV=(id,v)=>{ const el=document.getElementById(id); if(el&&v!=null&&v!=='') el.value=v; };
   _setV('f-id',opts.date); _setV('f-ic',opts.channel); _setV('f-idr',opts.direction); _setV('f-isu',opts.summary);
@@ -10118,17 +10131,7 @@ function renderIssuesView(el){
           ${selIss.resolutionSummary?`<div style="background:rgba(40,168,112,.08);border:1px solid rgba(40,168,112,.2);border-radius:6px;padding:10px 14px;margin-bottom:16px"><div style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:4px">RESOLUTION</div><div style="font-size:13px;color:var(--mist);line-height:1.5">${selIss.resolutionSummary}</div></div>`:''}
           ${selIss.notes?`<div style="font-size:12px;color:var(--slate);margin-bottom:16px"><span style="font-weight:600">Notes:</span> ${selIss.notes}</div>`:''}
           <div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Linked interactions (${linkedInts.length})</div>
-          ${linkedInts.length?linkedInts.map(i=>{
-            const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
-            const cName=s?dispName(s):(i.anonLabel||'Anonymous');
-            return`<div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:12px">
-              <div style="display:flex;justify-content:space-between;margin-bottom:3px">
-                <span><span style="color:var(--sky-lt);font-weight:600">${fmt(i.date)}</span><span style="color:var(--mist);margin-left:8px">${cName}</span></span>
-                <span style="color:var(--slate)">${i.channel}</span>
-              </div>
-              <div style="color:var(--mist)">${i.summary||''}</div>
-            </div>`;
-          }).join(''):`<div style="color:var(--slate);font-size:12px;font-style:italic">No interactions linked yet.</div>`}
+          ${linkedInts.length?linkedInts.map(i=>_issLinkedIntHTML(i,stakes)).join(''):`<div style="color:var(--slate);font-size:12px;font-style:italic">No interactions linked yet.</div>`}
         </div>`;
       })():`<div class="pane-empty"><div class="pe-title">Select an issue</div></div>`}
       </div>

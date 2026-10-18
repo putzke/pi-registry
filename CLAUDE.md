@@ -465,6 +465,14 @@ Jeff's worry: a follow-up assigned to someone who doesn't sign in gets lost.
   "Hotline: no call-back needed". "Hotline original" = the interaction a
   logged voicemail or a logged inbound call points to. Guarded by
   `test/tests/87-callback-threads.test.js` (verified to fail on the old code).
+- **An issue's linked interactions open the interaction (Oct 2026, Jeff; on
+  DEV, ships with the hotline release).** On both issue screens (Project
+  contacts → Issues and the Issues view) each linked-interaction card
+  (`_issLinkedIntHTML`, `.iss-int`) opens `openEditIntModal`; the issue stays
+  selected. A next contact inherits the ORIGINAL's issue link (`f-iissue`
+  prefilled in `openIntModal` when `_parent` is linked), so a call-back lists
+  under the issue. The issue .docx/print exports are unchanged. Guarded by
+  `test/tests/88-issue-linked-int-open.test.js` (verified to fail without it).
 
 ### Follow-up resolution note (Oct 2026)
 `sql/2026-10-11_followup_resolution_note.sql` adds `pi_interactions.follow_up_resolution`

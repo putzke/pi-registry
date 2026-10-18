@@ -438,13 +438,33 @@ Jeff's worry: a follow-up assigned to someone who doesn't sign in gets lost.
   if left anonymous. While the original's follow-up is open the dialog shows
   **"This resolves the follow-up"** (`f-irelres`, ticked): ticked closes it
   ("Replied by <channel> on <date>."), unticked leaves it open (a voicemail
-  left). **Save & log next contact** (`saveIntAndNext`, next-contact dialog
-  only) saves and opens another; `saveInt` returns true on success. Something
-  genuinely new = a new interaction with its own follow-up.
+  left). **Save & log next contact** (`saveIntAndNext`) is on EVERY new
+  interaction (since 2026-10-18): from a next contact it opens another; from a
+  new one, the one just saved becomes the original. `saveInt` returns the real
+  id (after `await DB.set`) or false. Something genuinely new = a new
+  interaction with its own follow-up.
   Both dialogs list the conversation (`_intPairHTML`, "Conversation · N
   contacts", open follow-up flagged). Removed: What's next? (`f-inext`),
   `_intThread`, `_threadOpen`, `_threadElsewhere`, `#fu-own`.
 - Guarded by `test/tests/85-followup-assign-team.test.js` (fails on the old code).
+- **Follow-up vs. next contact, and "no call-back needed" (Oct 2026, Jeff).**
+  A follow-up is a DATED task with an owner; a next contact is history (no
+  due date, owner or overdue). The box reads **"Requires a scheduled
+  follow-up"** (both dialogs). Logging a hotline voicemail opens it prefilled
+  (note, due, assignee) but UNTICKED. An inbound hotline call (a voicemail, or
+  an answered call — `_intIsHotlineInbound`) saved with neither is a deliberate
+  choice: the primary button reads **"Save — no call-back needed"**
+  (`_intSaveLabel`, re-run when the box changes; never on a next contact).
+  Tags under the summary in the Interactions table and the contact's history
+  (`_intThreadIndex` once per render, `_intCallbackState`,
+  `_intThreadTagsHTML`): "Called back · date" (a hotline original with an
+  OUTGOING next contact), "No call-back needed" (a hotline original with no
+  next contact and no open follow-up), "Conversation · N contacts",
+  "↳ Next contact", and in the table "⏳ Follow-up due/overdue · date" /
+  "Follow-up resolved". The Follow-up filter adds "Hotline: called back" /
+  "Hotline: no call-back needed". "Hotline original" = the interaction a
+  logged voicemail or a logged inbound call points to. Guarded by
+  `test/tests/87-callback-threads.test.js` (verified to fail on the old code).
 
 ### Follow-up resolution note (Oct 2026)
 `sql/2026-10-11_followup_resolution_note.sql` adds `pi_interactions.follow_up_resolution`
@@ -3135,7 +3155,10 @@ a Twilio trial + one number on DEV for a real call, then release.
   - **Log as interaction** = `hotLog` → the ordinary `openIntModal(null, opts)`
     PREFILLED (project, the day it was left, Phone, Incoming, transcript,
     a "Call back at …" follow-up due two working days later, assigned to the
-    voicemail's assignee). A contact whose phone matches is offered as a
+    voicemail's assignee — prefilled but UNTICKED since 2026-10-18). The
+    dialog also carries **📞 Call me now** (same `/callback` as the inbox
+    card's Call back, which stays); the dialog stays open, so the call-back
+    is then saved with "Save & log next contact". A contact whose phone matches is offered as a
     "Use …" button — never attached. Spanish: "mark the contact LEP" (ticked).
     `saveInt` then calls `_hotAfterLog` (status logged, `logged_interaction_id`,
     `audio_purge_after` = +90 days).

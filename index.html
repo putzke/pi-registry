@@ -5719,7 +5719,7 @@ function renderStakeDetail(s,link){
     ${eventsSection}
     <div class="sec-hd"><span class="sec-t">Interaction history (${ints.length})</span><button class="btn btn-primary btn-xs" onclick="openIntModal('${s.id}')">+ Log</button></div>
     ${ints.length===0?`<div class="pane-empty" style="padding:24px 0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" style="width:28px;height:28px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><div class="pe-sub">No interactions logged — this contact is on the list without any recorded interactions.</div></div>`
-    :ints.sort((a,b)=>b.date.localeCompare(a.date)).map((i,idx,arr)=>`
+    :(()=>{const _stT=_intThreadIndex();return ints.sort((a,b)=>b.date.localeCompare(a.date)).map((i,idx,arr)=>`
     <div class="log-entry">
       <div class="log-tl"><div class="log-dot" style="background:${i.direction==='Incoming'?'var(--sky)':'var(--green)'}"></div>${idx<arr.length-1?'<div class="log-line"></div>':''}</div>
       <div class="log-chi ${chCls(i.channel)}">${chIco(i.channel)}</div>
@@ -5731,13 +5731,13 @@ function renderStakeDetail(s,link){
           ${(function(){if(link)return '';var _p=projs.find(function(x){return String(x.id)===String(i.projectId);});return _p?'<span class="badge b-dark" style="font-size:10px;color:var(--sky-lt);border-color:rgba(45,125,210,.3)">'+_p.name+'</span>':'';}())}
           <span class="log-date">${fmt(i.date)} <span style="color:var(--fog)">${ago(i.date)}</span></span>
         </div>
-        <div class="log-sum">${i.summary}</div>
+        <div class="log-sum">${i.summary}</div>${_intThreadTagsHTML(i,_stT,false)}
         ${i.followUp?`<div class="log-fu${i.followUpDone?' done':''}">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">${i.followUpDone?'<path d="M3 8l4 4 6-6"/>':'<circle cx="8" cy="8" r="6"/><path d="M8 5v4M8 11v1"/>'}</svg>
           <span>${i.followUpDone?'Resolved: ':'Follow-up: '}<strong>${i.followUpNote}</strong>${i.followUpDone&&i.followUpResolved?' — '+fmt(i.followUpResolved):''}${!i.followUpDone&&i.followUpDue?' — due '+fmt(i.followUpDue):''}${_fuResNoteLine(i,'font-size:12px;opacity:.85;margin-top:2px')}</span>
           ${!i.followUpDone?`<button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" style="margin-left:auto" onclick="resolveFollowUp('${i.id}')">Resolve</button>`:''}        </div>`:''}        <div style="margin-top:6px"><button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="openEditIntModal('${i.id}')">Edit</button></div>
       </div>
-    </div>`).join('')}
+    </div>`).join('')})()}
   </div>`;
   // ── Events Attended tab ─────────────────────────────────────────────────────
   const stakeMeetings=(DB.get('meetings')||[]).filter(function(m){
@@ -6112,6 +6112,8 @@ function renderInteractions(el){
   if(natF)ints=ints.filter(i=>(i.nature||'Inquiry')===natF);
   if(fuF==='open')ints=ints.filter(i=>i.followUp&&!i.followUpDone);
   if(fuF==='done')ints=ints.filter(i=>i.followUp&&i.followUpDone);
+  const _T=_intThreadIndex();
+  if(fuF==='calledback'||fuF==='nocallback')ints=ints.filter(i=>_intCallbackState(i,_T)===fuF);
   if(pF)ints=ints.filter(i=>i.projectId===pF);
   window._intStakes=stakes;
   ints=sortInts(ints);
@@ -6141,7 +6143,7 @@ function renderInteractions(el){
     <select class="fsel" id="int-subj" onchange="S.intSubj=this.value;renderInteractions(document.getElementById('main'))"><option value="">All subjects</option>${(S.intSubj||'')=== 'General'?`<option value='General' selected>General</option>`:`<option value='General'>General</option>`}${(S.intSubj||'')=== 'Traffic'?`<option value='Traffic' selected>Traffic</option>`:`<option value='Traffic'>Traffic</option>`}${(S.intSubj||'')=== 'Property Access'?`<option value='Property Access' selected>Property Access</option>`:`<option value='Property Access'>Property Access</option>`}${(S.intSubj||'')=== 'Property Issue'?`<option value='Property Issue' selected>Property Issue</option>`:`<option value='Property Issue'>Property Issue</option>`}${(S.intSubj||'')=== 'Environmental'?`<option value='Environmental' selected>Environmental</option>`:`<option value='Environmental'>Environmental</option>`}${(S.intSubj||'')=== 'Utility Service'?`<option value='Utility Service' selected>Utility Service</option>`:`<option value='Utility Service'>Utility Service</option>`}${(S.intSubj||'')=== 'Information'?`<option value='Information' selected>Information</option>`:`<option value='Information'>Information</option>`}</select>
     <select class="fsel" id="int-nat" onchange="S.intNat=this.value;renderInteractions(document.getElementById('main'))"><option value="">All types</option>${['Inquiry','Complaint','Compliment'].map(n=>`<option value="${n}"${(S.intNat||'')=== n?' selected':''}>${n}</option>`).join('')}</select>
     <select class="fsel" id="int-ch" onchange="S.intCh=this.value;renderInteractions(document.getElementById('main'))"><option value="">All channels</option>${['Phone','Email','In-person','Public meeting','Public event','Mail','Social media','Media inquiry','Door-to-door','Comment card','Other'].map(c=>`<option${(S.intCh||'')=== c?' selected':''}>${c}</option>`).join('')}</select>
-    <select class="fsel" id="int-fu" onchange="S.intFu=this.value;renderInteractions(document.getElementById('main'))"><option value=""${(S.intFu||'')=== ''?' selected':''}>All</option><option value="open"${(S.intFu||'')=== 'open'?' selected':''}>Open / overdue</option><option value="done"${(S.intFu||'')=== 'done'?' selected':''}>Resolved</option></select>
+    <select class="fsel" id="int-fu" onchange="S.intFu=this.value;renderInteractions(document.getElementById('main'))"><option value=""${(S.intFu||'')=== ''?' selected':''}>All</option><option value="open"${(S.intFu||'')=== 'open'?' selected':''}>Open / overdue</option><option value="done"${(S.intFu||'')=== 'done'?' selected':''}>Resolved</option><option value="calledback"${(S.intFu||'')=== 'calledback'?' selected':''}>Hotline: called back</option><option value="nocallback"${(S.intFu||'')=== 'nocallback'?' selected':''}>Hotline: no call-back needed</option></select>
     <button class="btn btn-sm" style="background:rgba(45,125,210,.15);border-color:rgba(74,155,232,.4);color:var(--sky-lt);white-space:nowrap" onclick="S.intSearch='';S.intProj='';S.intCh='';S.intFu='';renderInteractions(document.getElementById('main'))" title="Reset all filters">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M2 8a6 6 0 1 0 1.5-3.9"/><path d="M2 4v4h4"/></svg>
       Reset filters
@@ -6169,7 +6171,7 @@ function renderInteractions(el){
               <td><span class="badge ${i.direction==='Incoming'?'b-sky':'b-green'}">${i.direction}</span></td>
               <td style="font-size:12px;color:var(--mist)">${i.subject||'General'}</td>
               <td><span class="badge ${(i.nature||'Inquiry')==='Complaint'?'b-red':(i.nature||'Inquiry')==='Compliment'?'b-green':'b-sky'}" style="font-size:11px">${i.nature||'Inquiry'}</span></td>
-              <td style="min-width:200px"><div style="font-size:13px;color:var(--mist);white-space:normal;line-height:1.5">${i.summary}</div></td>
+              <td style="min-width:200px"><div style="font-size:13px;color:var(--mist);white-space:normal;line-height:1.5">${i.summary}</div>${_intThreadTagsHTML(i,_T,true)}</td>
               <td style="font-size:12px;color:var(--mist)">${i.loggedBy}</td>
               <td><button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="openEditIntModal('${i.id}')">Edit</button></td>
             </tr>`;
@@ -8056,6 +8058,10 @@ function openIntModal(preStake, opts){
       <b style="color:var(--sky-lt)">From the hotline.</b> Pick the contact (or leave it anonymous), check the summary, then save — the voicemail is closed out against this interaction.
       ${_sug.length?`<div style="margin-top:6px">Number matches: <span id="hot-use-btns">${_sug.map(x=>_hotUseBtnHTML(x)).join('')}</span></div>`:''}
       ${opts.spanish?`<div class="fcheck" style="margin-top:6px"><input type="checkbox" id="f-ihot-lep" checked><label for="f-ihot-lep">Spanish voicemail — mark the contact as LEP (limited English proficiency)</label></div>`:''}
+      ${opts.callerNumber&&_hotCallable(opts.callerNumber)?`<div style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">📞 Call back ${escHtml(_hotFmtPhone(opts.callerNumber))} — ring me at
+        <input id="f-hcb-phone" value="${escHtml(_hotFmtPhone(_hotMyPhone()))}" placeholder="(801) 555-0123" maxlength="20" style="width:150px">
+        <button class="btn btn-sm" id="hcb-go" onclick="hotCallBackGo('${escHtml(String(opts.hotlineMsgId))}')">📞 Call me now</button>
+        <div style="flex-basis:100%;font-size:11px;color:var(--fog)">Not recorded. Afterwards, <b>Save &amp; log next contact</b> records the call-back in this conversation.</div></div>`:''}
     </div>`
     :opts.hotlineCallId?`<div style="margin:0 0 12px;border:1px solid rgba(74,155,232,.35);background:rgba(74,155,232,.07);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--mist)">
       <b style="color:var(--sky-lt)">A call from the hotline.</b> Pick the contact (or add a new one), write what was said, then save — the call is marked logged.
@@ -8117,7 +8123,7 @@ function openIntModal(preStake, opts){
     ?`<div class="fr"><div class="fcheck"><input type="checkbox" id="f-irelres" checked><label for="f-irelres">This resolves the follow-up (“${escHtml(_parent.followUpNote||'follow-up')}”)</label></div><div style="font-size:12px;color:var(--fog);margin-top:4px">Untick if you’re still waiting — e.g. you left a voicemail. The follow-up stays on the original contact.</div></div>`
     :`<div style="font-size:12px;color:var(--fog);margin:-4px 0 8px">The follow-up for this conversation lives on the original contact. Something new? Log it as a new interaction.</div>`):''}
   <div${_parent?' style="display:none"':''}>
-  <div class="fr"><div class="fcheck"><input type="checkbox" id="f-ifu" onchange="document.getElementById('fu-f').style.display=this.checked?'':'none'"><label for="f-ifu">This interaction requires a follow-up action</label></div></div>
+  <div class="fr"><div class="fcheck"><input type="checkbox" id="f-ifu" onchange="document.getElementById('fu-f').style.display=this.checked?'':'none';_intSaveLabel()"><label for="f-ifu">Requires a scheduled follow-up</label></div><div style="font-size:11px;color:var(--fog);margin-top:2px">A dated task with an owner. Already replied, or calling back now? Use “Save &amp; log next contact” instead.</div></div>
   <div id="fu-f" style="display:none"><div class="fgrid fg2f">
     <div class="fr"><label>Follow-up action</label><input id="f-ifun" placeholder="What needs to be done?"></div>
     <div class="fr"><label>Due date</label><input type="date" id="f-ifud"></div>
@@ -8126,7 +8132,7 @@ function openIntModal(preStake, opts){
   <div class="fr"><div class="fcheck"><input type="checkbox" id="f-ifudo" onchange="document.getElementById('fu-rdate').style.display=this.checked?'':'none';document.getElementById('fu-rnote').style.display=this.checked?'':'none'"><label for="f-ifudo">Follow-up resolved</label></div></div>
   <div id="fu-rdate" style="display:none"><div class="fr"><label>Date resolved</label><input type="date" id="f-ifudr" value="${localToday()}"></div></div>
   ${_fuResNoteHTML('',false)}</div></div>`,
-  `<button class="btn" onclick="closeM()">Cancel</button>${_parent?`<button class="btn" onclick="saveIntAndNext('${escHtml(String(_parent.id))}')" title="Save this one and open another next contact in the same conversation">Save &amp; log next contact</button>`:''}<button class="btn btn-primary" onclick="saveInt()">Save interaction</button>`,true);
+  `<button class="btn" onclick="closeM()">Cancel</button><button class="btn" onclick="saveIntAndNext('${_parent?escHtml(String(_parent.id)):''}')" title="Save this one and open the next contact in the same conversation — a reply, a call-back">Save &amp; log next contact</button><button class="btn btn-primary" id="f-isave" onclick="saveInt()">Save interaction</button>`,true);
   // If a project is already selected (via filter), populate stakeholders for that project
   if(S.projectFilter){ updateIntStakeholders(); updateIntIssues(); }
   // Re-apply the pre-selected contact AFTERWARDS. openIntModal seeds the hidden
@@ -8154,7 +8160,7 @@ function openIntModal(preStake, opts){
   _setV('f-id',opts.date); _setV('f-ic',opts.channel); _setV('f-idr',opts.direction); _setV('f-isu',opts.summary);
   if(opts.callerNumber) _setV('nc-ph',_hotFmtPhone(opts.callerNumber));
   if(opts.followUp){
-    const cb=document.getElementById('f-ifu'); if(cb){ cb.checked=true; document.getElementById('fu-f').style.display=''; }
+    const cb=document.getElementById('f-ifu'); if(cb&&opts.followUp.checked!==false){ cb.checked=true; document.getElementById('fu-f').style.display=''; }
     _setV('f-ifun',opts.followUp.note); _setV('f-ifud',opts.followUp.due);
   }
   // Set placeholder to next anonymous label for this project — but never over a
@@ -8170,6 +8176,7 @@ function openIntModal(preStake, opts){
   // Auto-populate NEPA stage from selected project
   updateIntNepaStage();
   _fuDefaultToLead();
+  _intSaveLabel();
   // A voicemail's call-back goes to whoever the voicemail is assigned to.
   if(opts.followUp&&opts.followUp.assignee){
     const sel=document.getElementById('f-ifua'), a=String(opts.followUp.assignee).toUpperCase();
@@ -8248,7 +8255,7 @@ async function openEditIntModal(id){
   ${(i.relatedTo&&!i.followUp)?`<div style="font-size:12px;color:var(--fog);margin:-4px 0 8px">The follow-up for this conversation lives on the original contact (listed below).</div>`:''}
   <div${(i.relatedTo&&!i.followUp)?' style="display:none"':''}>
   <div class="fr"><div style="display:flex;gap:20px;flex-wrap:wrap">
-    <div class="fcheck"><input type="checkbox" id="f-ifu"${i.followUp?' checked':''} onchange="document.getElementById('fu-f').style.display=this.checked?'':'none';document.getElementById('fu-done-wrap').style.display=this.checked?'':'none'"><label for="f-ifu">Requires follow-up</label></div>
+    <div class="fcheck"><input type="checkbox" id="f-ifu"${i.followUp?' checked':''} onchange="document.getElementById('fu-f').style.display=this.checked?'':'none';document.getElementById('fu-done-wrap').style.display=this.checked?'':'none'"><label for="f-ifu">Requires a scheduled follow-up</label></div>
     <div class="fcheck" id="fu-done-wrap" style="${i.followUp?'':'display:none'}"><input type="checkbox" id="f-ifudo"${i.followUpDone?' checked':''} onchange="document.getElementById('fu-rdate').style.display=this.checked?'block':'none';document.getElementById('fu-rnote').style.display=this.checked?'':'none'"><label for="f-ifudo">Follow-up resolved</label></div>
   </div></div>
   <div id="fu-f" style="${i.followUp?'':'display:none'}"><div class="fgrid fg2f">
@@ -8337,12 +8344,27 @@ async function saveInt(){
   if(_opts.hotlineCallId) await _hotCallAfterLog(_opts, data.id);
   S.intOpts={};
   closeM();refreshBadges();render();
-  return true;
+  return data.id||true;
 }
-// "Save & log next contact": save this next contact, then open another in
-// the same conversation (nothing opens if the save was refused).
+// "Save & log next contact": save this one, then open the next contact in
+// the same conversation (nothing opens if the save was refused). From a new
+// interaction, the one just saved becomes the conversation's original.
 async function saveIntAndNext(rootId){
-  if(await saveInt()) logRelatedInt(rootId);
+  const id=await saveInt();
+  if(id) logRelatedInt(rootId||String(id));
+}
+// A call that came IN through a hotline: saving it with no follow-up and no
+// next contact is a deliberate "no call-back needed", and the button says so.
+function _intIsHotlineInbound(opts){
+  opts=opts||{};
+  if(opts.hotlineMsgId) return true;
+  if(opts.hotlineCallId) return _hotIsInbound((DB.get('hotline_calls')||[]).find(x=>String(x.id)===String(opts.hotlineCallId)));
+  return false;
+}
+function _intSaveLabel(){
+  const b=document.getElementById('f-isave'); if(!b||S.editId) return;
+  const fu=document.getElementById('f-ifu')?.checked;
+  b.textContent=(_intIsHotlineInbound(S.intOpts)&&!fu&&!(S.intOpts||{}).relatedTo)?'Save — no call-back needed':'Save interaction';
 }
 function delInt(id){
   if(!confirm('Delete this interaction? This cannot be undone.')) return;
@@ -9353,8 +9375,8 @@ function hotCallBack(id){
     <div style="font-size:11px;color:var(--fog);line-height:1.5">The call is <b>not recorded</b>. Afterwards, log it yourself — on the logged voicemail, <b>Log next contact</b> links it to the voicemail.</div>`,
   `<button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-primary" id="hcb-go" onclick="hotCallBackGo()">📞 Call me now</button>`);
 }
-async function hotCallBackGo(){
-  const id=S.hotCallId; if(!id) return;
+async function hotCallBackGo(fromLog){
+  const id=fromLog||S.hotCallId; if(!id) return;
   const raw=(document.getElementById('f-hcb-phone')?.value||'').trim();
   const num=_hotNormPhone(raw);
   const why=_hotWhyNot(raw,'your own phone number'); if(why){ alert(why); return; }
@@ -9366,7 +9388,12 @@ async function hotCallBackGo(){
     const r=await fetch(HOT_FN_URL+'/callback',{method:'POST',headers:{'Content-Type':'application/json',apikey:SUPA_KEY,Authorization:'Bearer '+(sess?sess.access_token:SUPA_KEY)},
       body:JSON.stringify({messageId:Number(id),ringMe:num})});
     const j=await r.json().catch(()=>({}));
-    if(r.ok&&j.ok){ closeM(); S.hotCallId=null; showToast('Your phone will ring in a few seconds — answer and press 1.','info',7000); return; }
+    if(r.ok&&j.ok){
+      // From the Log dialog the dialog stays open, ready for "Save & log next contact".
+      if(fromLog){ if(btn) btn.textContent='Ringing you — press 1'; }
+      else { closeM(); S.hotCallId=null; }
+      showToast('Your phone will ring in a few seconds — answer and press 1.','info',7000); return;
+    }
     msg=j.error||('The call could not be placed ('+r.status+').');
   }catch(e){ msg='The call could not be placed — the hotline service did not answer.'; }
   if(btn){ btn.disabled=false; btn.textContent='📞 Call me now'; }
@@ -9537,7 +9564,9 @@ function hotLog(id){
   openIntModal(null,{
     hotlineMsgId:String(m.id), projectId:m.projectId||S.projectFilter||'', date:_hotLocalDate(m.receivedAt),
     channel:'Phone', direction:'Incoming', summary:head+body,
-    followUp:{note:'Call back'+(m.callerNumber?' at '+_hotFmtPhone(m.callerNumber):''), due:_hotCallbackDue(m.receivedAt), assignee:m.assignedTo||''},
+    // Prefilled but NOT ticked (Jeff, Oct 2026): a call-back made now is a
+    // next contact; tick it only to schedule one for later.
+    followUp:{checked:false, note:'Call back'+(m.callerNumber?' at '+_hotFmtPhone(m.callerNumber):''), due:_hotCallbackDue(m.receivedAt), assignee:m.assignedTo||''},
     callerNumber:m.callerNumber||'', spanish:m.language==='es', suggest:_hotPhoneMatches(m).map(s=>String(s.id))
   });
 }
@@ -9616,6 +9645,53 @@ function _intPairHTML(i){
   };
   const fu=(root.followUp&&!root.followUpDone)?`<div style="color:var(--amber)">⏳ Follow-up open: ${escHtml(root.followUpNote||'follow-up')}${root.followUpDue?' · due '+escHtml(fmt(root.followUpDue)):''}</div>`:'';
   return `<div class="fsec">Conversation · ${kids.length+1} contacts</div><div style="font-size:12px;color:var(--fog);margin-bottom:8px"><div style="font-weight:600;color:var(--mist)">Original</div>${line(root)}${fu}<div style="font-weight:600;color:var(--mist);margin-top:6px">Next contacts</div>${kids.map(line).join('')}</div>`;
+}
+// Conversation status at a glance (Oct 2026, with Jeff). A follow-up is the
+// dated to-do; a next contact is history. A call that came IN through a
+// hotline and was saved with neither is a deliberate "no call-back needed";
+// one answered by an outgoing next contact reads "Called back". Built once
+// per render: next contacts per original, and which originals came from a
+// hotline (a logged voicemail, or an answered call that was logged).
+function _intThreadIndex(){
+  const all=DB.get('interactions')||[], byId=new Map(all.map(x=>[String(x.id),x])), idx=new Map();
+  all.forEach(x=>{
+    if(!x.relatedTo) return;
+    let r=x; const seen=new Set();
+    while(r&&r.relatedTo&&!seen.has(String(r.id))){ seen.add(String(r.id)); const p=byId.get(String(r.relatedTo)); if(!p) break; r=p; }
+    if(!r||r===x) return;
+    const e=idx.get(String(r.id))||{n:0,lastOut:''}; e.n++;
+    if(x.direction==='Outgoing'&&String(x.date||'')>e.lastOut) e.lastOut=String(x.date||'');
+    idx.set(String(r.id),e);
+  });
+  const hot=new Set();
+  (DB.get('hotline_messages')||[]).forEach(m=>{ if(m.status==='logged'&&m.loggedInteractionId) hot.add(String(m.loggedInteractionId)); });
+  (DB.get('hotline_calls')||[]).forEach(c=>{ if(_hotIsInbound(c)&&c.outcome==='logged'&&c.loggedInteractionId) hot.add(String(c.loggedInteractionId)); });
+  return {idx,hot};
+}
+// 'calledback' | 'nocallback' | '' for a hotline original.
+function _intCallbackState(i,T){
+  if(!i||i.relatedTo||!T.hot.has(String(i.id))) return '';
+  const e=T.idx.get(String(i.id));
+  if(e&&e.lastOut) return 'calledback';
+  if(!e&&!(i.followUp&&!i.followUpDone)) return 'nocallback';
+  return '';
+}
+function _intThreadTagsHTML(i,T,withFu){
+  if(!i) return '';
+  const tag=(t,c,tip)=>`<span class="badge ${c} int-tag" style="font-size:10px"${tip?` title="${tip}"`:''}>${t}</span>`;
+  const out=[];
+  if(withFu&&i.followUp){
+    const od=!i.followUpDone&&i.followUpDue&&i.followUpDue<localToday();
+    out.push(i.followUpDone?tag('Follow-up resolved','b-gray'):tag('⏳ Follow-up'+(i.followUpDue?(od?' overdue · ':' due ')+escHtml(fmt(i.followUpDue)):''),od?'b-red':'b-amber'));
+  }
+  if(i.relatedTo) out.push(tag('↳ Next contact','b-dark','Part of a conversation — open it to see the rest'));
+  else {
+    const st=_intCallbackState(i,T), e=T.idx.get(String(i.id));
+    if(st==='calledback') out.push(tag('Called back · '+escHtml(fmt(e.lastOut)),'b-green'));
+    if(st==='nocallback') out.push(tag('No call-back needed','b-gray','Logged from the hotline with no follow-up and no next contact'));
+    if(e) out.push(tag('Conversation · '+(e.n+1)+' contacts','b-dark'));
+  }
+  return out.length?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${out.join('')}</div>`:'';
 }
 // "Log next contact": another contact in this conversation, linked to the original.
 function logRelatedInt(id){

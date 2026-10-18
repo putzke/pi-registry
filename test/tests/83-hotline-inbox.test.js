@@ -5,7 +5,8 @@
 //  - Mine / Unassigned / All; oldest first; a general-mailbox message shows
 //    whatever project is in scope.
 //  - "Log as interaction" opens the ordinary dialog PREFILLED (project, date,
-//    Phone, Incoming, transcript, "Call back" follow-up to the assignee) and
+//    Phone, Incoming, transcript, a "Call back" follow-up to the assignee,
+//    prefilled but unticked) and
 //    only SUGGESTS the contact whose phone matches; saving closes the
 //    voicemail out against the new interaction.
 //  - A Spanish voicemail can mark the contact LEP.
@@ -136,7 +137,9 @@ module.exports = {
       t.ok(/Log hotline voicemail/.test(form.title), 'the Log dialog opens for the voicemail');
       t.ok(form.proj === A && form.ch === 'Phone' && form.dir === 'Incoming' && form.date === '2026-10-10', 'prefilled: project, Phone, Incoming, the day it was left');
       t.ok(/^Hotline voicemail \(Region One, pressed 1\)/.test(form.sum) && /detour sign/.test(form.sum), 'the summary starts from the transcript');
-      t.ok(form.fu && /^Call back at \(801\) 555-0142/.test(form.fun) && form.fud === '2026-10-13', 'a “Call back” follow-up, due two working days later');
+      t.ok(!form.fu && /^Call back at \(801\) 555-0142/.test(form.fun) && form.fud === '2026-10-13', 'the “Call back” follow-up is prefilled (due two working days later) but NOT ticked');
+      // This voicemail does need a scheduled call-back: tick it.
+      await app.page.evaluate(() => { const cb = document.getElementById('f-ifu'); cb.checked = true; cb.dispatchEvent(new Event('change')); });
       t.ok(form.stake === '' && form.useBtn, 'the matching contact is suggested, not attached');
       await app.page.evaluate(() => document.querySelector('#modal-ov button[onclick^="_hotUseMatch"]').click());
       await app.page.evaluate(() => saveInt());

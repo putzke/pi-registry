@@ -1221,7 +1221,9 @@ const SB_TO_INT = {
     spanishEnabled:'spanish_enabled', spanishGreetingText:'spanish_greeting_text',
     spanishGreetingAudioPath:'spanish_greeting_audio_path', active:'active',
     defaultAssignee:'default_assignee', updatedBy:'updated_by',
-    ringMode:'ring_mode', ringSeconds:'ring_seconds', hoursStart:'hours_start', hoursEnd:'hours_end', hoursDays:'hours_days'
+    ringMode:'ring_mode', ringSeconds:'ring_seconds', hoursStart:'hours_start', hoursEnd:'hours_end', hoursDays:'hours_days',
+    menuAudioPath:'menu_audio_path', menuAudioFor:'menu_audio_for',
+    spanishMenuAudioPath:'spanish_menu_audio_path', spanishMenuAudioFor:'spanish_menu_audio_for'
   },
   pi_hotline_extensions: {
     id:'id', hotlineId:'hotline_id', digit:'digit', projectId:'project_id',
@@ -1342,7 +1344,8 @@ function toSB(table, obj) {
 
 // Columns where a null the caller sends means "clear it": a hotline's or menu
 // option's ring/hours override set back to "use the default".
-const NULL_CLEARS_FIELDS = new Set(['ring_mode','ring_seconds','hours_start','hours_end','hours_days']);
+const NULL_CLEARS_FIELDS = new Set(['ring_mode','ring_seconds','hours_start','hours_end','hours_days',
+  'menu_audio_path','menu_audio_for','spanish_menu_audio_path','spanish_menu_audio_for']);
 
 // Convert Supabase row back to our internal format
 function fromSB(table, row) {
@@ -8772,17 +8775,27 @@ function _hotExts(hotlineId){
     .sort((a,b)=>String(a.digit).localeCompare(String(b.digit)));
 }
 function _hotMenuText(h, exts, lang){
-  const es=lang==='es', lines=[];
   // The Spanish offer first, right after the greeting (the receiver says it in the Spanish voice).
-  if(!es&&h.spanishEnabled) lines.push('Para español, oprima 9.');
-  if(exts.length){
-    exts.forEach(e=>{
-      const label=(es&&e.labelEs)||e.label||('project '+e.digit);
-      lines.push(es?'Para '+label+', oprima '+e.digit+'.':'For '+label+', press '+e.digit+'.');
-    });
-    lines.push(es?'Para dejar un mensaje general, oprima 0.':'To leave a general message, press 0.');
-  }
+  return [lang!=='es'&&h.spanishEnabled?'Para español, oprima 9.':'', _hotMenuOptions(exts,lang)].filter(Boolean).join(' ');
+}
+// The menu options alone — what a menu recording says, and what it is checked
+// against (the receiver's menuParts().options; test 89 asserts they agree).
+function _hotMenuOptions(exts, lang){
+  const es=lang==='es', lines=[];
+  if(!exts.length) return '';
+  exts.forEach(e=>{
+    const label=(es&&e.labelEs)||e.label||('project '+e.digit);
+    lines.push(es?'Para '+label+', oprima '+e.digit+'.':'For '+label+', press '+e.digit+'.');
+  });
+  lines.push(es?'Para dejar un mensaje general, oprima 0.':'To leave a general message, press 0.');
   return lines.join(' ');
+}
+// A menu recording: 'none' | 'current' | 'stale' (made for an older menu — the
+// receiver then uses the computer voice until a new one is uploaded).
+function _hotMenuRecState(h, exts, lang){
+  const path=lang==='es'?h.spanishMenuAudioPath:h.menuAudioPath, made=lang==='es'?h.spanishMenuAudioFor:h.menuAudioFor;
+  if(!path||!exts.length) return 'none';
+  return made===_hotMenuOptions(exts,lang)?'current':'stale';
 }
 // "Test Hotline" is read as "the Test hotline" — same rule as the receiver's hotName().
 function _hotName(name){ const n=String(name||'').trim(); return n.replace(/\s+hotline$/i,'').trim()||n; }
@@ -8933,7 +8946,7 @@ function renderHotlineCard(){
     return `<tr style="${h.active===false?'opacity:.5':''}">
       <td style="padding:6px 8px;color:var(--white)">${escHtml(h.name||'')}</td>
       <td style="padding:6px 8px;font-family:var(--mono)">${escHtml(_hotFmtPhone(h.phoneNumber))}</td>
-      <td style="padding:6px 8px">${where}</td>
+      <td style="padding:6px 8px">${where}${['en','es'].some(l=>(l==='en'||h.spanishEnabled)&&_hotMenuRecState(h,ex,l)==='stale')?'<div style="color:var(--amber,#e8a020)">⚠ Menu recording out of date — the computer voice reads the menu until a new one is uploaded</div>':''}</td>
       <td style="padding:6px 8px">${h.spanishEnabled?'Español (9)':'English only'}</td>
       <td style="padding:6px 8px">${escHtml(_hotRingSummary(_hotRingSettings(g,h,null)))}${ex.some(e=>e.ringMode||e.hoursStart)?' <span title="Some menu options have their own ringing or hours">*</span>':''}</td>
       <td style="padding:6px 8px;text-align:right"><button class="btn btn-sm" onclick="openHotlineModal('${escHtml(h.id)}')">Edit</button></td>
@@ -8998,6 +9011,7 @@ function openHotlineModal(id){
     <div style="font-size:11px;color:var(--fog);margin-bottom:6px">Key · project · what the menu says (“For <i>the 400 North project</i>, press 1”). 0 is always the general mailbox and 9 is Spanish, so keys 1–8 are available.</div>
     <div id="f-hl-exts">${ex.map(_hotExtRowHTML).join('')}</div>
     <button class="btn btn-sm" onclick="_hotAddExt()">+ Add extension</button>
+    ${_hotMenuRecHTML(h,'en')}
   </div>
   <div class="fr"><label>If the project has no PI Lead <span style="${lbl}">(and for the general mailbox), voicemails go to</span></label>
     <select id="f-hl-assignee"><option value="">— Nobody: leave them unassigned —</option>${_team(true).map(t=>`<option value="${escHtml(t.initials)}"${String(t.initials).toUpperCase()===String(h.defaultAssignee||'').toUpperCase()?' selected':''}>${escHtml(t.name)} (${escHtml(t.initials)})</option>`).join('')}</select></div>
@@ -9011,6 +9025,7 @@ function openHotlineModal(id){
   <div id="f-hl-es-wrap" style="${h.spanishEnabled?'':'display:none'}">
     <div class="fr"><label>Spanish greeting</label><textarea id="f-hl-gtext-es" rows="2" placeholder="${escHtml('Gracias por llamar a la línea de información del proyecto '+(_hotName(h.name)||'…')+'.')}" oninput="_hotPreview()">${escHtml(h.spanishGreetingText||'')}</textarea></div>
     <div class="fr"><label>Spanish recording <span style="${lbl}">(optional)${h.spanishGreetingAudioPath?' — one is uploaded':''}</span></label><input type="file" id="f-hl-gfile-es" accept="audio/mpeg,audio/mp3,audio/wav,audio/x-wav"></div>
+    <div id="f-hl-mes-wrap" style="${menu?'':'display:none'}">${_hotMenuRecHTML(h,'es')}</div>
   </div>
   <div class="fsec">When someone calls</div>
   <div class="fr" id="f-hl-ringwrap">
@@ -9027,10 +9042,24 @@ function openHotlineModal(id){
    <button class="btn btn-primary" onclick="saveHotline()">Save</button>`,true);
   _hotPreview();
 }
+// The menu-recording box: the script to read (kept current by _hotPreview),
+// whether the uploaded one still matches, an upload, and a way to remove it.
+function _hotMenuRecHTML(h, lang){
+  const es=lang==='es', sfx=es?'-es':'';
+  const has=es?h.spanishMenuAudioPath:h.menuAudioPath;
+  return `<div class="fr" style="margin-top:12px"><label>${es?'Spanish menu recording':'Menu recording'} <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--fog)">(MP3 or WAV, optional — without one the computer voice reads the menu${es?' in Spanish after 9':''})</span></label>
+    <div style="font-size:11px;color:var(--fog);margin-bottom:4px">Read exactly this${es?'':' (“Para español, oprima 9” is added before it by the computer’s Spanish voice)'}:</div>
+    <div id="f-hl-mscript${sfx}" style="font-size:12px;line-height:1.5;color:var(--mist);background:rgba(255,255,255,.04);border-radius:6px;padding:8px 10px;margin-bottom:6px"></div>
+    <div id="f-hl-mstate${sfx}" style="font-size:11px;margin-bottom:6px"></div>
+    <input type="file" id="f-hl-mfile${sfx}" accept="audio/mpeg,audio/mp3,audio/wav,audio/x-wav">
+    ${has?`<label style="display:flex;gap:6px;align-items:center;margin-top:6px;font-size:12px;color:var(--mist);text-transform:none;letter-spacing:0;font-weight:400"><input type="checkbox" id="f-hl-mrm${sfx}" onchange="_hotPreview()"> Remove the recording — use the computer voice</label>`:''}
+  </div>`;
+}
 function _hotModeChanged(){
   const menu=document.querySelector('input[name="f-hl-mode"]:checked')?.value==='menu';
   document.getElementById('f-hl-one').style.display=menu?'none':'';
   document.getElementById('f-hl-menu').style.display=menu?'':'none';
+  const mes=document.getElementById('f-hl-mes-wrap'); if(mes) mes.style.display=menu?'':'none';
   if(menu&&!document.querySelector('#f-hl-exts .hot-ext-row')) _hotAddExt();
   _hotPreview();
 }
@@ -9056,19 +9085,35 @@ function _hotPreview(){
   const ex=menu?_hotFormExts().filter(e=>e.projectId).sort((a,b)=>a.digit.localeCompare(b.digit)):[];
   const rec=v('f-hl-gmode')==='recording';
   const greet=rec?'<i>[your recording]</i>':escHtml(_hotGreeting(h,'en'));
-  const m=_hotMenuText(h,ex,'en');
-  let html=greet+(m?' '+escHtml(m):'');
+  // Menu recordings: the script to read, and whether the saved one still matches.
+  const saved=(DB.get('hotlines')||[]).find(x=>String(x.id)===String(S.editHotlineId))||{};
+  const mrec={};
+  ['en','es'].forEach(l=>{
+    const sfx=l==='es'?'-es':'', script=_hotMenuOptions(ex,l);
+    const sc=document.getElementById('f-hl-mscript'+sfx); if(sc) sc.textContent=script||'Add an extension first.';
+    const removing=!!document.getElementById('f-hl-mrm'+sfx)?.checked;
+    const st=removing?'none':_hotMenuRecState(saved,ex,l);
+    mrec[l]=st==='current';
+    const el=document.getElementById('f-hl-mstate'+sfx);
+    if(el) el.innerHTML=removing?'<span style="color:var(--fog)">The recording will be removed when you save.</span>'
+      :st==='current'?'<span style="color:var(--green)">✓ A recording of this menu is uploaded.</span>'
+      :st==='stale'?'<span style="color:var(--amber,#e8a020)">⚠ The uploaded recording was made for a different menu, so callers hear the computer voice. Record the script above and upload it.</span>'
+      :'';
+  });
+  const opts=_hotMenuOptions(ex,'en');
+  const m=[h.spanishEnabled?'Para español, oprima 9.':'', mrec.en&&opts?'[your menu recording]':opts].filter(Boolean).join(' ');
+  let html=greet+(m?' '+escHtml(m).replace('[your menu recording]','<i>[your menu recording]</i>'):'');
   const rst=_hotRingSettings(_hotRingGlobal(), document.getElementById('f-hl-ruse')?.value==='custom'?(()=>{const r=_hotReadRing(document.getElementById('f-hl-ring'),true)||{};return {ringMode:r.on?'on':'off',ringSeconds:r.seconds,hoursStart:r.start,hoursEnd:r.end,hoursDays:r.days};})():{}, null);
   if(rst.enabled) html+='<br><span style="color:var(--fog)">'+escHtml(_hotDaysLabel(rst.days)+' '+_hotTime12(rst.start)+'–'+_hotTime12(rst.end))+':</span> '+escHtml('Please hold while we connect you.')+' <i>[the PI Lead’s phone rings for '+rst.seconds+' seconds; if nobody takes it:]</i>';
   html+='<br><span style="color:var(--fog)">Then:</span> '+escHtml('Please leave your name, your phone number and your message after the tone. You have two minutes.');
-  if(h.spanishEnabled) html+='<br><span style="color:var(--fog)">Press 9:</span> '+(rec?'<i>[your Spanish recording, or the text]</i> ':escHtml(_hotGreeting(h,'es'))+' ')+escHtml(_hotMenuText(h,ex,'es'));
+  if(h.spanishEnabled) html+='<br><span style="color:var(--fog)">Press 9:</span> '+(rec?'<i>[your Spanish recording, or the text]</i> ':escHtml(_hotGreeting(h,'es'))+' ')+(mrec.es?'<i>[your Spanish menu recording]</i>':escHtml(_hotMenuText(h,ex,'es')));
   out.innerHTML=html;
 }
-async function _hotUploadGreeting(hotlineId, fileInput, lang){
+async function _hotUploadGreeting(hotlineId, fileInput, lang, folder){
   const f=fileInput&&fileInput.files&&fileInput.files[0]; if(!f) return null;
   if(!/^audio\/(mpeg|mp3|wav|x-wav)$/.test(f.type)){ alert('Please choose an MP3 or WAV file.'); return false; }
-  if(f.size>5*1024*1024){ alert('That recording is over 5 MB. A greeting should be well under a minute.'); return false; }
-  const path='greetings/'+hotlineId+'-'+lang+(/wav/.test(f.type)?'.wav':'.mp3');
+  if(f.size>5*1024*1024){ alert('That recording is over 5 MB. A greeting or menu should be well under a minute.'); return false; }
+  const path=(folder||'greetings')+'/'+hotlineId+'-'+lang+(/wav/.test(f.type)?'.wav':'.mp3');
   const h=getAuthHeaders(); delete h['Prefer'];
   const r=await fetch(SUPA_URL+'/storage/v1/object/'+HOT_AUDIO_BUCKET+'/'+path,{method:'POST',
     headers:{...h,'Content-Type':f.type,'x-upsert':'true'},body:f});
@@ -9105,6 +9150,20 @@ async function saveHotline(){
   const gp=await _hotUploadGreeting(hid,document.getElementById('f-hl-gfile'),'en');
   const gpEs=await _hotUploadGreeting(hid,document.getElementById('f-hl-gfile-es'),'es');
   if(gp||gpEs) await sbUpdate('hotlines',hid,{...(gp?{greetingAudioPath:gp}:{}),...(gpEs?{spanishGreetingAudioPath:gpEs}:{})});
+  // Menu recordings, stamped with the script they were made for. Changing the
+  // menu later leaves the stamp behind, so the old recording stops playing.
+  if(menu){
+    const sorted=ex.slice().sort((a,b)=>a.digit.localeCompare(b.digit));
+    const mp={};
+    for(const [l,col,forCol] of [['en','menuAudioPath','menuAudioFor'],['es','spanishMenuAudioPath','spanishMenuAudioFor']]){
+      const sfx=l==='es'?'-es':'';
+      if(document.getElementById('f-hl-mrm'+sfx)?.checked){ mp[col]=null; mp[forCol]=null; continue; }
+      const up=await _hotUploadGreeting(hid,document.getElementById('f-hl-mfile'+sfx),l,'menus');
+      if(up){ mp[col]=up; mp[forCol]=_hotMenuOptions(sorted,l); }
+    }
+    if(Object.keys(mp).length&&!await sbUpdate('hotlines',hid,mp))
+      showToast('The menu recording wasn’t saved. Has sql/2026-10-19_hotline_menu_recording.sql been run?','error',8000);
+  }
   // Extensions: a removed one is switched off, never deleted — old voicemails
   // still name the key that was pressed.
   const old=(DB.get('hotline_extensions')||[]).filter(e=>String(e.hotlineId)===String(hid)&&e.active!==false);

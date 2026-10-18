@@ -3185,7 +3185,8 @@ a Twilio trial + one number on DEV for a real call, then release.
   trial, but it must be on before live); (2) confirm Spanish transcription
   with Twilio — now Nova-3 live transcription, confirm on DEV calls; paste
   `sql/2026-10-17_hotline_live_transcript.sql` and
-  `sql/2026-10-18_hotline_junk_cleanup.sql` on LIVE too; (3) decide whether `hotline-audio` joins the nightly backup;
+  `sql/2026-10-18_hotline_junk_cleanup.sql` and
+  `sql/2026-10-19_hotline_menu_recording.sql` on LIVE too; (3) decide whether `hotline-audio` joins the nightly backup;
   (4) paste `sql/2026-10-12_hotlines.sql` on LIVE, set the LIVE secrets and
   point the real number(s) at the LIVE function; (5) add Twilio to "Outside
   services" and the Service Map; (6) **not before a long stretch of DEV
@@ -3315,6 +3316,22 @@ a Twilio trial + one number on DEV for a real call, then release.
     in Utah, not in every caller's state), retention (GRAMA), whether it
     only displays or also prefills the Log form (never auto-logged), and
     transcript-only vs. keeping audio. Don't build until Jeff says go.
+- **Menu recordings (2026-10-19, Jeff):** a MENU hotline can play an uploaded
+  recording of its options ("For … press 1 … press 0") instead of the computer
+  voice, English and (optional) Spanish after 9 —
+  `sql/2026-10-19_hotline_menu_recording.sql` (`menu_audio_path/_for`,
+  `spanish_menu_audio_path/_for`; applied to DEV, receiver v18). "Para
+  español, oprima 9" stays the computer's Spanish voice between greeting and
+  menu; everything after a key press stays computer voice. `*_for` = the exact
+  script the recording was made for: the receiver plays it only while
+  `menuRecordingPath` finds it equal to the current `menuParts().options`, so
+  adding/removing/renumbering a project falls back to the computer voice on its
+  own; Settings and the dialog say "out of date" and show the new script. The
+  dialog shows the script to read (`_hotMenuOptions`, asserted equal to the
+  receiver's), the upload (`menus/<id>-<lang>.mp3|wav`), and a Remove box.
+  A wrong key replays the recording without the greeting. Guarded by
+  `test/tests/89-hotline-menu-recording.test.js` (verified to fail without the
+  staleness check). Paste the SQL on LIVE at the hotline release.
 - **Fallback assignee (2026-10-12):** `pi_hotlines.default_assignee`
   (initials; "If the project has no PI Lead…" in the hotline dialog). The
   receiver assigns the project's active lead, else this person (also for the

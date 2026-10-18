@@ -170,6 +170,15 @@ export function menuParts(hotline, exts, lang) {
   }
   return { spanish, options: lines.join(' ') };
 }
+// The menu recording for this language, if one is uploaded AND was made for
+// the menu as it stands now. A recording made for an older menu (a project
+// since added, removed or renumbered) is never played.
+export function menuRecordingPath(hotline, exts, lang) {
+  const path = lang === 'es' ? hotline.spanish_menu_audio_path : hotline.menu_audio_path;
+  const made = lang === 'es' ? hotline.spanish_menu_audio_for : hotline.menu_audio_for;
+  if (!path || !exts.length) return '';
+  return made === menuParts(hotline, exts, lang).options ? path : '';
+}
 export function menuText(hotline, exts, lang) {
   const m = menuParts(hotline, exts, lang);
   return [m.spanish, m.options].filter(Boolean).join(' ');
@@ -177,10 +186,12 @@ export function menuText(hotline, exts, lang) {
 
 // The greeting + menu. A single-project number with Spanish off has no menu at
 // all and goes straight to the recording.
-export function voiceTwiml({ hotline, exts, lang, base, greetingUrl, retry = 0 }) {
+export function voiceTwiml({ hotline, exts, lang, base, greetingUrl, menuUrl, retry = 0 }) {
   const q = `h=${hotline.id}&l=${lang}`;
   const parts = menuParts(hotline, exts, lang);
-  const menu = say(parts.spanish, 'es') + say(parts.options, lang);
+  // The options from the uploaded menu recording when there is a current one;
+  // the Spanish offer is always the computer's Spanish voice.
+  const menu = say(parts.spanish, 'es') + (menuUrl && parts.options ? `<Play>${xmlEsc(menuUrl)}</Play>` : say(parts.options, lang));
   const greet = retry ? '' : greetingParts(hotline, lang, greetingUrl);
   if (!menu) return twiml(greet + recordParts({ hotline, lang, base, projectId: hotline.project_id, digit: '' }));
   const timeout = exts.length ? 6 : 3;
@@ -218,15 +229,15 @@ function recordParts({ hotline, lang, base, projectId, digit }) {
     + say(T[lang].noMessage, lang) + '<Hangup/>';
 }
 
-export function menuTwiml({ hotline, exts, lang, base, digits, retry, greetingUrl }) {
+export function menuTwiml({ hotline, exts, lang, base, digits, retry, greetingUrl, menuUrl }) {
   const r = route({ hotline, exts, lang, digits, retry });
   if (r.kind === 'spanish') {
     const esExts = exts;
-    return voiceTwiml({ hotline, exts: esExts, lang: 'es', base, greetingUrl });
+    return voiceTwiml({ hotline, exts: esExts, lang: 'es', base, greetingUrl, menuUrl });
   }
   if (r.kind === 'retry') {
     return twiml(say(T[lang].notOption, lang)
-      + voiceTwiml({ hotline, exts, lang, base, retry: 1 }).replace(/^.*?<Response>|<\/Response>$/g, ''));
+      + voiceTwiml({ hotline, exts, lang, base, menuUrl, retry: 1 }).replace(/^.*?<Response>|<\/Response>$/g, ''));
   }
   return twiml(recordParts({ hotline, lang, base, projectId: r.projectId, digit: r.digit }));
 }
@@ -363,6 +374,14 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
   async function greetingUrl(h, lang) {
     const path = lang === 'es' ? h.spanish_greeting_audio_path : h.greeting_audio_path;
     if (h.greeting_mode !== 'recording' || !path) return '';
+    return signAudio(path);
+  }
+  // The menu recording, only while it matches the current menu (see menuRecordingPath).
+  async function menuUrl(loaded, lang) {
+    const path = menuRecordingPath(loaded.h, loaded.exts, lang);
+    return path ? signAudio(path) : '';
+  }
+  async function signAudio(path) {
     try {
       const r = await fetchFn(`${SB}/storage/v1/object/sign/${AUDIO_BUCKET}/${path}`, {
         method: 'POST', headers: sbH({ 'Content-Type': 'application/json' }),
@@ -540,7 +559,7 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
         const t = await ringTarget(loaded, loaded.h.project_id, '');
         if (t) return xml(ringTwiml({ hotline: loaded.h, lang: 'en', base, projectId: loaded.h.project_id, digit: '', seconds: t.seconds, phone: t.phone, lead: t.lead, greet: greetingParts(loaded.h, 'en', gu) }));
       }
-      return xml(voiceTwiml({ hotline: loaded.h, exts: loaded.exts, lang: 'en', base, greetingUrl: gu }));
+      return xml(voiceTwiml({ hotline: loaded.h, exts: loaded.exts, lang: 'en', base, greetingUrl: gu, menuUrl: await menuUrl(loaded, 'en') }));
     }
     const loaded = await loadHotline(url.searchParams.get('h'));
     if (sub === '/menu') {
@@ -557,7 +576,9 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
         const t = await ringTarget(loaded, loaded.h.project_id, '');
         if (t) return xml(ringTwiml({ hotline: loaded.h, lang: 'es', base, projectId: loaded.h.project_id, digit: '', seconds: t.seconds, phone: t.phone, lead: t.lead, greet: greetingParts(loaded.h, 'es', gu) }));
       }
-      return xml(menuTwiml({ hotline: loaded.h, exts: loaded.exts, lang, base, digits, retry: url.searchParams.get('r'), greetingUrl: gu }));
+      // The menu is played again on a wrong key, or in Spanish after 9.
+      const mu = r.kind === 'spanish' ? await menuUrl(loaded, 'es') : r.kind === 'retry' ? await menuUrl(loaded, lang) : '';
+      return xml(menuTwiml({ hotline: loaded.h, exts: loaded.exts, lang, base, digits, retry: url.searchParams.get('r'), greetingUrl: gu, menuUrl: mu }));
     }
     if (sub === '/recorded') return xml(recordedTwiml(lang));
 

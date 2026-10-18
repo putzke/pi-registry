@@ -1909,6 +1909,8 @@ Field companion for logging interactions, managing contacts, follow-ups, and iss
 - **Status: current** — LEP, EJ (`underserved`), and `equityFormSubmitted` fields are all implemented
 - Has its own `SB_TABLES`, `SB_TO_INT`, `toSB()`, `fromSB()`, `sbGet/Add/Update/Delete()`, `loadAllData()`
 - Does NOT have the reports module — reports are desktop-only
+- **Hotline screen (Oct 2026, DEV)** — replaces Dashboard in the nav once a hotline
+  exists; see "The hotline on mobile" under Project hotlines.
 - **Follow-up assignment (Aug 2026):** mobile maps `followUpAssignedTo` and has its
   own `_fuOwner()` that must stay identical to index.html's. Its "Mine" filter
   compared `loggedBy` only, so a follow-up a teammate assigned to you on the
@@ -2089,7 +2091,7 @@ shipped. Grep the actual functions before planning work off this list.
 
 **Conference — UDOT, 2026-10-27:** a demo site for other PI firms (see "PLANNED — Conference demo site"). ON HOLD until Jeff says go; keep it minimal.
 
-**Next:** Twilio project hotlines — working end to end on DEV (2026-10-12); NOT for live until Jeff has tested it on DEV for a good while · desktop dialpad (release 1) WORKING on DEV (first real call 2026-10-13) → then the hotline on MOBILE (planned, see the hotline section) · outbound recorded call-back on hold ·
+**Next:** Twilio project hotlines — working end to end on DEV (2026-10-12); NOT for live until Jeff has tested it on DEV for a good while · desktop dialpad (release 1) WORKING on DEV (first real call 2026-10-13) · the hotline on MOBILE BUILT on DEV (2026-10-18) · outbound recorded call-back on hold ·
 Survey123 ingestion (blocked on a sample export) · ROW close-out TYPE.
 
 **Later:** county assessor owner lookup (Phase 3) · Google Sheets push ·
@@ -3217,7 +3219,7 @@ a Twilio trial + one number on DEV for a real call, then release.
   from a request; both numbers must be +1 NANP (`callableNumber`, 900/976
   refused); no `<Record>` anywhere. Unsigned bridge legs are confirmed as an
   `outbound-api` call FROM a hotline number. Nothing is logged — staff log it
-  themselves (+ Related contact). Not on mobile yet.
+  themselves (+ Related contact). On mobile too (2026-10-18).
 - **New call — the dialpad: release 1 BUILT on DEV (2026-10-12), NOT recorded.**
   **📞 New call** in the Hotline topbar → `hotNewCall` (Call from = active
   hotline · Project = that hotline's own or its menu's · Contact with a phone,
@@ -3260,26 +3262,43 @@ a Twilio trial + one number on DEV for a real call, then release.
   Jeff's cell rang from the hotline number, he pressed 1, and his Teams
   number rang (a Teams calling-plan number takes PSTN calls normally). Rows
   on DEV: call 4 answered (no 1 pressed), call 5 connected; both "Don't log".
-- **PLANNED — the hotline on mobile (agreed with Jeff 2026-10-12; build AFTER
-  his desktop dialpad testing).** Judged feasible, a medium lift (~1/3 of the
-  desktop build): the receiver, `/dial`, `/callback` and the call log are
-  reused unchanged. Plan:
-  - Bottom nav: **Hotline replaces Dashboard** (shown only when a hotline
-    exists; otherwise Dashboard stays), with a badge = voicemails waiting on me
-    + unassigned + my undecided calls (same as desktop). Move what matters off
-    the Dashboard first (its project picker, "Use full desktop site").
-    The bottom nav is copied 5× in `mobile.html` — make it one shared bar.
-  - Hotline screen, top to bottom: **Calls to decide** (Log / Don't log —
-    survives iPhone reloading the tab after the call, since it's server-side),
-    **New call** (line/project, contact or number, Ring me at — typed once,
-    remembered; a web page can't read the phone's own number), **Voicemails**
-    (play, transcript, Log, Call back, Dismiss; reassign stays desktop).
-  - Logging reuses mobile's own Log sheet, prefilled as on desktop.
-  - Needs: hotline tables in mobile's `SB_TABLES`/`SB_TO_INT`/`loadAllData`,
-    CSP `media-src` for both Supabase projects (the desktop "no play button"
-    bug), tests in the 82/83 style.
+- **The hotline on mobile — BUILT on DEV (2026-10-18), plan of 2026-10-12.**
+  The receiver, `/dial`, `/callback` and the call log are reused unchanged;
+  the screen is mobile's own (`screen-hotline`, `renderHotline`).
+  - **One bottom nav** (`renderBottomNavs`, `<nav class="bottom-nav"
+    data-active="…">` on every screen; badges by `data-badge` via
+    `_setBadges`). Once a hotline exists **Hotline replaces Dashboard** and the
+    phone opens on it; badge = voicemails waiting on me + unassigned + my calls
+    to decide (`updateHotBadges`). Dashboard and "Use full desktop site" are
+    links at the foot of the Hotline screen. No hotline → the nav is as before.
+  - Screen, top to bottom: **Calls to decide** (mine only — `_hotIsMe` on
+    `placedBy`; Log this call / Don't log), **Voicemails waiting** ("Mine &
+    unassigned" | "All waiting", oldest first; Play, transcript, Log, 📞 Call
+    back, Dismiss). **📞 New call** in the top bar (sheet `sheet-hot-call`,
+    shared with Call back; "Ring me at" remembered in localStorage
+    `cc_callback_phone`). Reassign, history and settings stay desktop-only.
+    Refreshes on show, on tab re-focus and every 30 s while open (not while a
+    sheet is open or a recording is playing).
+  - **Logging = mobile's own Log sheet, prefilled** (`_mobOpenLogPrefilled`,
+    `window._logOpts`): same fields as desktop `hotLog`/`hotCallLog`, follow-up
+    prefilled but unticked, phone matches offered as "Use …" (selects only;
+    `saveInteraction` links the contact to the project on save), "📞 Call me
+    now" inside the sheet, Spanish → "Mark the contact LEP". The button reads
+    "Save — no call-back needed" on an inbound hotline log with no follow-up
+    (`_mobSaveLabel`). **Save & log call-back** (`saveInteractionAndNext`)
+    opens a next contact (Outgoing, same project/contact, `relatedTo` = the
+    original; no follow-up box). `saveInteraction` now returns the real id or
+    false, and says so when the insert failed (it used to toast "logged ✓").
+  - Hotline writes are PARTIAL (`_hotPatch` → `sbUpdate`), never `DB.set`,
+    which would send the whole row with blank timestamps as ''.
+  - Mobile now maps `relatedTo` (gated by `window._relCol` exactly like
+    desktop, and never sent as ''), loads `pi_team_members` (for
+    `_myInitials`) and the four hotline tables (a 404 on LIVE before the
+    hotline SQL is pasted reads as empty — no toast). CSP gained `media-src`
+    for both projects. Helpers named `_hot*` mirror index.html's.
   - Not doing: in-browser calling (Twilio Voice SDK — bigger, unreliable on
-    iPhone). Hotline settings stay desktop-only.
+    iPhone). Guarded by `test/tests/90-mobile-hotline.test.js` (45 checks;
+    verified to fail without the call-back link).
 - **Ring-through — BUILT on DEV (2026-10-12), not recorded.** Within business
   hours a caller who reaches a project (one-project number, a menu key, or
   Spanish on a one-project number) hears "Please hold…" while the project's
@@ -3351,7 +3370,7 @@ a Twilio trial + one number on DEV for a real call, then release.
   size: our voicemail was ~4 KB/s (~14 MB per hour) — storage is not a
   constraint, but the receiver copies audio through memory, so stream it
   rather than buffer it before supporting hour-long calls.
-- Not on mobile or in the portal (hotline data is staff-only). The nightly
+- Not in the portal (hotline data is staff-only); on mobile since 2026-10-18. The nightly
   off-site backup reads `report-files` only — decide whether `hotline-audio`
   should be added (`backup.sh` in cirruscc-backups).
 - **Inbox layout (2026-10-14, Jeff's ask):** New call + project picker sit

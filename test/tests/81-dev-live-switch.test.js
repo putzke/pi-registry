@@ -22,9 +22,9 @@ module.exports = {
     for (const a of apps) {
       t.ok(/const SUPA_URL\s+= CC_SUPA\.url;/.test(src[a]) && /const SUPA_KEY\s+= CC_SUPA\.key;/.test(src[a]), `${a}: SUPA_URL / SUPA_KEY come from the block`);
       const outside = src[a].replace(block, '');
-      // index.html names both projects twice in its CSP (connect-src, and
-      // media-src for the hotline recording player); mobile/importer once.
-      t.eq((outside.match(new RegExp(LIVE + '|' + DEV, 'g')) || []).length, a === 'client-portal.html' ? 0 : a === 'index.html' ? 4 : 2,
+      // index.html and mobile.html name both projects twice in their CSP
+      // (connect-src, and media-src for the hotline recording player); the importer once.
+      t.eq((outside.match(new RegExp(LIVE + '|' + DEV, 'g')) || []).length, a === 'client-portal.html' ? 0 : a === 'importer.html' ? 2 : 4,
         `${a}: no project address outside the block except the CSP entries`);
       if (a !== 'client-portal.html') t.ok(new RegExp('connect-src[^;]*' + DEV).test(src[a]), `${a}: CSP allows the dev database`);
     }

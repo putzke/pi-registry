@@ -3,7 +3,7 @@
 <head>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHJvbGU9ImltZyIgYXJpYS1sYWJlbD0iQ2lycnVzIENjIHN5bWJvbCIgdmlld0JveD0iMCAwIDMyIDMyIj48cmVjdCB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHJ4PSI3IiBmaWxsPSIjMTQxQTI0Ij48L3JlY3Q+CjxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDYuNSw2LjUpIHNjYWxlKDAuMTkpIj48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSIzNyIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjRkZGRkZGIiBzdHJva2Utd2lkdGg9IjciPjwvY2lyY2xlPgo8cGF0aCBkPSJNNTAgMTMgQTM3IDM3IDAgMCAxIDg0LjUgMzYuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMzVBNkM5IiBzdHJva2Utd2lkdGg9IjEzIiBzdHJva2UtbGluZWNhcD0icm91bmQiPjwvcGF0aD4KPHBvbHlnb24gcG9pbnRzPSI3MCwzMCA1NCw1NCA0Niw0NiIgZmlsbD0iI0MyNEE0MiI+PC9wb2x5Z29uPgo8Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI3IiBmaWxsPSIjRkZGRkZGIj48L2NpcmNsZT48L2c+Cjwvc3ZnPgo=">
   <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://ncfbblhlsiglxkoiounv.supabase.co https://oxbonrnilvadszgfctfl.supabase.co; img-src 'self' data:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://ncfbblhlsiglxkoiounv.supabase.co https://oxbonrnilvadszgfctfl.supabase.co; img-src 'self' data:; media-src https://ncfbblhlsiglxkoiounv.supabase.co https://oxbonrnilvadszgfctfl.supabase.co;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -266,30 +266,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
       </div>
     </div>
     <!-- Bottom nav -->
-    <nav class="bottom-nav" id="nav-home">
-      <button class="nav-item active" onclick="showScreen('screen-home')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-        <span class="nav-label">Dashboard</span>
-      </button>
-      <button class="nav-item" onclick="showScreen('screen-contacts')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.85"/></svg>
-        <span class="nav-label">Contacts</span>
-      </button>
-      <button class="nav-item" onclick="showScreen('screen-interactions')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        <span class="nav-label">Log</span>
-      </button>
-      <button class="nav-item" onclick="showScreen('screen-followups')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
-        <span class="nav-label">Follow-ups</span>
-        <span class="nav-badge" id="fu-badge" style="display:none"></span>
-      </button>
-      <button class="nav-item" onclick="showScreen('screen-issues')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5"/><circle cx="12" cy="15.5" r=".8" fill="currentColor"/></svg>
-        <span class="nav-label">Issues</span>
-        <span class="nav-badge" id="iss-badge" style="display:none"></span>
-      </button>
-    </nav>
+    <nav class="bottom-nav" data-active="home"></nav>
   </div>
 
   <!-- ══════════════════════════════════════════
@@ -318,30 +295,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
       </div>
       <div class="card" style="border-radius:0;border-left:none;border-right:none;margin-top:8px" id="contacts-list"></div>
     </div>
-    <nav class="bottom-nav">
-      <button class="nav-item" onclick="showScreen('screen-home')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-        <span class="nav-label">Dashboard</span>
-      </button>
-      <button class="nav-item active" onclick="showScreen('screen-contacts')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.85"/></svg>
-        <span class="nav-label">Contacts</span>
-      </button>
-      <button class="nav-item" onclick="showScreen('screen-interactions')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        <span class="nav-label">Log</span>
-      </button>
-      <button class="nav-item" onclick="showScreen('screen-followups')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
-        <span class="nav-label">Follow-ups</span>
-        <span class="nav-badge" id="fu-badge2" style="display:none"></span>
-      </button>
-      <button class="nav-item" onclick="showScreen('screen-issues')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5"/><circle cx="12" cy="15.5" r=".8" fill="currentColor"/></svg>
-        <span class="nav-label">Issues</span>
-        <span class="nav-badge" id="iss-badge2" style="display:none"></span>
-      </button>
-    </nav>
+    <nav class="bottom-nav" data-active="contacts"></nav>
   </div>
 
   <!-- ══════════════════════════════════════════
@@ -381,30 +335,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
     <div style="overflow-y:auto;flex:1">
       <div class="card" style="border-radius:0;border-left:none;border-right:none" id="ints-list"></div>
     </div>
-    <nav class="bottom-nav">
-      <button class="nav-item" onclick="showScreen('screen-home')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-        <span class="nav-label">Dashboard</span>
-      </button>
-      <button class="nav-item" onclick="showScreen('screen-contacts')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.85"/></svg>
-        <span class="nav-label">Contacts</span>
-      </button>
-      <button class="nav-item active" onclick="showScreen('screen-interactions')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        <span class="nav-label">Log</span>
-      </button>
-      <button class="nav-item" onclick="showScreen('screen-followups')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
-        <span class="nav-label">Follow-ups</span>
-        <span class="nav-badge" id="fu-badge3" style="display:none"></span>
-      </button>
-      <button class="nav-item" onclick="showScreen('screen-issues')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5"/><circle cx="12" cy="15.5" r=".8" fill="currentColor"/></svg>
-        <span class="nav-label">Issues</span>
-        <span class="nav-badge" id="iss-badge3" style="display:none"></span>
-      </button>
-    </nav>
+    <nav class="bottom-nav" data-active="interactions"></nav>
   </div>
 
   <!-- ══════════════════════════════════════════
@@ -431,30 +362,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
     <div style="overflow-y:auto;flex:1">
       <div id="fu-list"></div>
     </div>
-    <nav class="bottom-nav">
-      <button class="nav-item" onclick="showScreen('screen-home')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-        <span class="nav-label">Dashboard</span>
-      </button>
-      <button class="nav-item" onclick="showScreen('screen-contacts')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.85"/></svg>
-        <span class="nav-label">Contacts</span>
-      </button>
-      <button class="nav-item" onclick="showScreen('screen-interactions')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        <span class="nav-label">Log</span>
-      </button>
-      <button class="nav-item active" onclick="showScreen('screen-followups')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
-        <span class="nav-label">Follow-ups</span>
-        <span class="nav-badge" id="fu-badge4" style="display:none"></span>
-      </button>
-      <button class="nav-item" onclick="showScreen('screen-issues')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5"/><circle cx="12" cy="15.5" r=".8" fill="currentColor"/></svg>
-        <span class="nav-label">Issues</span>
-        <span class="nav-badge" id="iss-badge4" style="display:none"></span>
-      </button>
-    </nav>
+    <nav class="bottom-nav" data-active="followups"></nav>
   </div>
 
   <!-- ══════════════════════════════════════════
@@ -495,30 +403,75 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
       </div>
       <div id="iss-detail-body" style="padding:16px"></div>
     </div>
-    <nav class="bottom-nav">
-      <button class="nav-item" onclick="showScreen('screen-home')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-        <span class="nav-label">Dashboard</span>
-      </button>
-      <button class="nav-item" onclick="showScreen('screen-contacts')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.85"/></svg>
-        <span class="nav-label">Contacts</span>
-      </button>
-      <button class="nav-item" onclick="showScreen('screen-interactions')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        <span class="nav-label">Log</span>
-      </button>
-      <button class="nav-item" onclick="showScreen('screen-followups')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
-        <span class="nav-label">Follow-ups</span>
-        <span class="nav-badge" id="fu-badge5" style="display:none"></span>
-      </button>
-      <button class="nav-item active" onclick="showScreen('screen-issues')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5"/><circle cx="12" cy="15.5" r=".8" fill="currentColor"/></svg>
-        <span class="nav-label">Issues</span>
-        <span class="nav-badge" id="iss-badge5" style="display:none"></span>
-      </button>
-    </nav>
+    <nav class="bottom-nav" data-active="issues"></nav>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SCREEN: HOTLINE (shown once a hotline exists; replaces Dashboard in the nav)
+  ══════════════════════════════════════════ -->
+  <div class="screen" id="screen-hotline">
+    <div class="topbar">
+      <div style="flex:1;display:flex;align-items:center;gap:10px"><div style="height:40px;display:flex;align-items:center"><div style="height:40px;width:auto;overflow:hidden"><div class="hdr-logo" role="img" aria-label="Cirrus Cc — Stakeholder Management"></div></div></div><div class="topbar-title" style="font-size:15px">Hotline</div></div>
+      <button class="topbar-action" onclick="mobHotNewCall()">📞 New call</button>
+    </div>
+    <div class="proj-selector">
+      <span class="proj-selector-label">Showing</span>
+      <select id="hot-who" onchange="renderHotline()">
+        <option value="mine">Mine &amp; unassigned</option>
+        <option value="all">All waiting</option>
+      </select>
+    </div>
+    <div class="content" style="gap:14px;overflow-y:auto" id="hot-body"></div>
+    <nav class="bottom-nav" data-active="hotline"></nav>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SHEET: HOTLINE CALL (Call back / New call)
+  ══════════════════════════════════════════ -->
+  <div class="sheet-overlay" id="sheet-hot-call" onclick="closeSheet('sheet-hot-call',event)">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <div class="sheet-title" id="hot-call-title">New call</div>
+        <button class="sheet-close" onclick="closeSheet('sheet-hot-call')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="sheet-body" id="hot-call-body"></div>
+      <div class="sheet-footer">
+        <button class="btn-primary" id="hot-call-go" onclick="mobHotCallGo()">📞 Call me now</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SHEET: DISMISS VOICEMAIL
+  ══════════════════════════════════════════ -->
+  <div class="sheet-overlay" id="sheet-hot-dismiss" onclick="closeSheet('sheet-hot-dismiss',event)">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <div class="sheet-title">Dismiss voicemail</div>
+        <button class="sheet-close" onclick="closeSheet('sheet-hot-dismiss')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="sheet-body">
+        <div style="font-size:13px;color:var(--text2);line-height:1.5">A dismissed voicemail never becomes an interaction. It stays under “Logged &amp; dismissed” on the desktop, with the reason.</div>
+        <div class="form-group">
+          <label class="form-label">Reason</label>
+          <select class="form-input form-select" id="hot-dis-reason"></select>
+          <div style="font-size:12px;color:var(--text3);margin-top:4px" id="hot-dis-hint"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Note (optional)</label>
+          <input type="text" class="form-input" id="hot-dis-note" maxlength="200">
+        </div>
+      </div>
+      <div class="sheet-footer">
+        <button class="btn-primary" onclick="mobHotDismissGo()">Dismiss</button>
+      </div>
+    </div>
   </div>
 
   <!-- ══════════════════════════════════════════
@@ -619,6 +572,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
             <option>Incoming</option><option>Outgoing</option><option>In-person</option>
           </select>
         </div>
+        <div id="log-hot" style="display:none"></div>
         <div class="form-group">
           <label class="form-label">Summary *</label>
           <textarea class="form-input" id="log-summary" placeholder="What was discussed…" rows="3"></textarea>
@@ -675,8 +629,9 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
           </div>
         </div>
             </div>
-      <div class="sheet-footer">
-        <button class="btn-primary" onclick="saveInteraction()">Save interaction</button>
+      <div class="sheet-footer" style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn-primary" id="log-save" onclick="saveInteraction()">Save interaction</button>
+        <button class="btn-secondary" id="log-save-next" style="display:none" onclick="saveInteractionAndNext()">Save &amp; log call-back</button>
       </div>
     </div>
   </div>
@@ -1231,7 +1186,12 @@ const SB_TABLES = {
   issue_interactions:   'pi_issue_interactions',
   dismissed_pairs:      'pi_dismissed_pairs',
   parcels:              'pi_parcels',
-  parcel_owners:        'pi_parcel_owners'
+  parcel_owners:        'pi_parcel_owners',
+  team_members:         'pi_team_members',
+  hotlines:             'pi_hotlines',
+  hotline_extensions:   'pi_hotline_extensions',
+  hotline_messages:     'pi_hotline_messages',
+  hotline_calls:        'pi_hotline_calls'
 };
 
 // Map our internal field names to Supabase column names
@@ -1272,7 +1232,40 @@ const SB_TO_INT = {
     nature:'nature', direction:'direction', summary:'summary',
     loggedBy:'logged_by', followUp:'follow_up', followUpDue:'follow_up_due',
     followUpNote:'follow_up_note', followUpDone:'follow_up_done', followUpResolved:'follow_up_resolved',
-    followUpAssignedTo:'follow_up_assigned_to', meetingId:'meeting_id'
+    followUpAssignedTo:'follow_up_assigned_to', meetingId:'meeting_id',
+    relatedTo:'related_to'
+  },
+  // The PI team (people, not logins) — read so "mine" matches the desktop's
+  // _myInitials(). Mobile never edits it.
+  pi_team_members: {
+    id:'id', name:'name', initials:'initials', title:'title', phone:'phone',
+    email:'email', active:'active'
+  },
+  // Project hotlines — same columns as index.html (the ones mobile reads).
+  // Mobile never edits a hotline; it logs, dismisses and calls back.
+  pi_hotlines: {
+    id:'id', name:'name', phoneNumber:'phone_number', projectId:'project_id',
+    spanishEnabled:'spanish_enabled', active:'active', defaultAssignee:'default_assignee'
+  },
+  pi_hotline_extensions: {
+    id:'id', hotlineId:'hotline_id', digit:'digit', projectId:'project_id',
+    label:'label', labelEs:'label_es', active:'active'
+  },
+  pi_hotline_messages: {
+    id:'id', hotlineId:'hotline_id', extensionDigit:'extension_digit', projectId:'project_id',
+    language:'language', callerNumber:'caller_number', callSid:'call_sid',
+    recordingSid:'recording_sid', recordingPath:'recording_path', recordingSeconds:'recording_seconds',
+    transcript:'transcript', transcriptStatus:'transcript_status', status:'status',
+    assignedTo:'assigned_to', assignedBy:'assigned_by', assignedAt:'assigned_at', receivedAt:'received_at',
+    loggedInteractionId:'logged_interaction_id', closedAt:'closed_at', closedBy:'closed_by',
+    dismissReason:'dismiss_reason', audioPurgeAfter:'audio_purge_after', audioDeletedAt:'audio_deleted_at'
+  },
+  pi_hotline_calls: {
+    id:'id', hotlineId:'hotline_id', projectId:'project_id', stakeholderId:'stakeholder_id',
+    toNumber:'to_number', ringNumber:'ring_number', placedBy:'placed_by', placedByEmail:'placed_by_email',
+    status:'status', outcome:'outcome', loggedInteractionId:'logged_interaction_id',
+    decidedAt:'decided_at', decidedBy:'decided_by', createdAt:'created_at',
+    direction:'direction', durationSeconds:'duration_seconds'
   },
   pi_deliverables: {
     id:'id', projectId:'project_id', type:'deliverable_type', scopeType:'scope_type',
@@ -1313,7 +1306,7 @@ function localToday(){
 const DATE_FIELDS = new Set(['interaction_date','follow_up_due','follow_up_resolved','due_date','start_date','end_date','precon_date','added_date','meeting_date','date_raised','date_resolved','last_exported']);
 
 // Integer FK columns that Supabase expects as numbers, not strings
-const SB_INT_FIELDS = new Set(['project_id','stakeholder_id','issue_id','interaction_id','meeting_id']);
+const SB_INT_FIELDS = new Set(['project_id','stakeholder_id','issue_id','interaction_id','meeting_id','related_to']);
 
 // Tables the DESKTOP app guards with optimistic concurrency (updated_at). The
 // mobile field app stays last-writer-wins (no conflict prompt — you don't nag a
@@ -1355,6 +1348,10 @@ function toSB(table, obj) {
       result[sbCol] = null;
     }
   }
+  // related_to (a next contact's original) is left out until the column is
+  // known to exist — same gate as index.html — and an empty one is never sent
+  // (the column is a number; '' would be refused).
+  if (sbTable === 'pi_interactions' && (!window._relCol || result.related_to === '')) delete result.related_to;
   return result;
 }
 
@@ -1367,6 +1364,8 @@ function fromSB(table, row) {
     if (intKey === 'id') { result.id = String(row.id || ''); continue; }
     result[intKey] = row[sbCol] !== undefined ? row[sbCol] : (intKey.startsWith('is') ? false : '');
   }
+  if (sbTable === 'pi_interactions' && row && row.related_to !== undefined) window._relCol = true;
+  if (sbTable === 'pi_interactions' && result.relatedTo != null && result.relatedTo !== '') result.relatedTo = String(result.relatedTo);
   // Normalize booleans
   ['isMaster','followUp','followUpDone','isArchived','equityFormSubmitted','lep','underserved','needsReview'].forEach(f => {
     if (result[f] !== undefined) result[f] = result[f] === true || result[f] === 1;
@@ -1449,7 +1448,8 @@ async function loadAllData() {
   // read anywhere in this file, so every boot fired a doomed request at
   // /rest/v1/undefined — a wasted round trip on cellular plus a console error
   // that masked real ones.
-  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','dismissed_pairs','parcels','parcel_owners'];
+  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','dismissed_pairs','parcels','parcel_owners',
+    'team_members','hotlines','hotline_extensions','hotline_messages','hotline_calls'];
   // One unreachable table must not lock the app, so each is loaded on its own;
   // but a failure is NAMED, and a reload keeps the last good copy rather than
   // emptying a list that was already on screen.
@@ -1470,7 +1470,8 @@ async function loadAllData() {
 }
 const _LOAD_LABELS = { projects:'projects', stakeholders:'contacts', project_stakeholders:'contacts',
   interactions:'interactions', deliverables:'deliverables', meetings:'events', issues:'issues',
-  issue_interactions:'issues', dismissed_pairs:'duplicate settings', parcels:'parcels', parcel_owners:'parcels' };
+  issue_interactions:'issues', dismissed_pairs:'duplicate settings', parcels:'parcels', parcel_owners:'parcels',
+  team_members:'the PI team list', hotlines:'hotlines', hotline_extensions:'hotlines', hotline_messages:'hotline voicemails', hotline_calls:'hotline calls' };
 
 // ── DB SHIM ────────────────────────────────────────────────────────
 const DB = {
@@ -1572,9 +1573,11 @@ function showScreen(id){
   if(id==='screen-interactions')renderInteractionsList();
   if(id==='screen-followups')renderFollowupsList();
   if(id==='screen-issues')renderIssuesList();
+  if(id==='screen-hotline'){ renderHotline(); _hotStartTimer(); _hotRefresh(); }
   // Keep the nav badges in sync on every screen change so counts never go stale.
   updateFUBadges();
   updateIssBadges();
+  updateHotBadges();
 }
 
 // ── SHEET MANAGEMENT ───────────────────────────────────────────────────
@@ -1589,6 +1592,7 @@ function closeSheet(id,e){
   // Always reset edit state when log sheet closes so "Log Interaction" starts fresh
   if(id==='sheet-log'){
     window._editIntId=null;
+    window._logOpts=null; _mobLogHotBox();
     const title=document.getElementById('sheet-log').querySelector('.sheet-title');
     if(title)title.textContent='Log Interaction';
   }
@@ -1625,22 +1629,12 @@ function populateProjectDropdowns(){
 // ── UPDATE FU BADGES ───────────────────────────────────────────────────
 function updateFUBadges(){
   const n=DB.get('interactions').filter(i=>i.followUp&&!i.followUpDone).length;
-  ['fu-badge','fu-badge2','fu-badge3','fu-badge4','fu-badge5'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(!el)return;
-    el.textContent=n;
-    el.style.display=n>0?'':'none';
-  });
+  _setBadges('fu',n);
 }
 
 function updateIssBadges(){
   const n=(DB.get('issues')||[]).filter(i=>i.status==='Open'||i.status==='In Progress').length;
-  ['iss-badge','iss-badge2','iss-badge3','iss-badge4','iss-badge5'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(!el)return;
-    el.textContent=n;
-    el.style.display=n>0?'':'none';
-  });
+  _setBadges('iss',n);
 }
 
 // ── ISSUES (read-only) ──────────────────────────────────────────────
@@ -2195,6 +2189,7 @@ function resolveFollowup(id,e){
 
 // ── LOG SHEET ──────────────────────────────────────────────────────────
 function prepLogSheet(){
+  window._logOpts=null; _mobLogHotBox();
   document.getElementById('log-date').value=today();
   clearStakePicker();
   updateLogStakeholders();
@@ -2365,7 +2360,9 @@ function toggleLogFU(){
   const checked=document.getElementById('log-fu').checked;
   const fields=document.getElementById('log-fu-fields');
   fields.style.display=checked?'flex':'none';
-  if(checked) document.getElementById('log-fu-date').value=today();
+  // Keep a prefilled due date (a hotline call-back's two working days).
+  if(checked&&!document.getElementById('log-fu-date').value) document.getElementById('log-fu-date').value=today();
+  if(typeof _mobSaveLabel==='function') _mobSaveLabel();
 }
 function _mobileToggleEquity(ch){
   const wrap=document.getElementById('log-equity-wrap');
@@ -2382,7 +2379,10 @@ function getAnonLabel(projectId, excludeId){
   return n === 1 ? 'Anonymous' : 'Anonymous ' + n;
 }
 
+// Returns the saved interaction's real id, or false.
 async function saveInteraction(){
+  const _o=window._logOpts||null;
+  const _lep=!!document.getElementById('log-hot-lep')?.checked;
   const projId=document.getElementById('log-proj').value;
   if(!projId){showToast('Please select a project','error');return;}
   const summary=document.getElementById('log-summary').value.trim();
@@ -2453,12 +2453,23 @@ async function saveInteraction(){
     followUpResolved:fuRDate,
     equityFormSubmitted:document.getElementById('log-equity')?.checked||false
   };
+  if(_o&&_o.relatedTo) data.relatedTo=_o.relatedTo;
+
+  // A contact picked from another project (a hotline number match) is linked
+  // to this one now, at save — the same rule as the desktop.
+  if(stakeId&&!window._editIntId){
+    const ps=DB.get('project_stakeholders');
+    if(!ps.some(x=>String(x.stakeholderId)===String(stakeId)&&String(x.projectId)===String(projId))){
+      ps.push({id:DB.uid(),projectId:projId,stakeholderId:stakeId,stakeholderRole:'External'});
+      await DB.set('project_stakeholders',ps);
+    }
+  }
 
   const ints=DB.get('interactions');
   window._lastLogWasEdit=!!window._editIntId;
   if(window._editIntId){
     const idx=ints.findIndex(x=>x.id===window._editIntId);
-    if(idx>-1){data.id=window._editIntId;ints[idx]=data;}
+    if(idx>-1){data.id=window._editIntId;if(ints[idx].relatedTo)data.relatedTo=ints[idx].relatedTo;ints[idx]=data;}
     window._editIntId=null;
     document.getElementById('sheet-log').querySelector('.sheet-title').textContent='Log Interaction';
   } else {
@@ -2486,10 +2497,18 @@ async function saveInteraction(){
 
   closeSheet('sheet-log');
   await saving;
+  const realId=/^\d+$/.test(String(data.id))?String(data.id):'';
+  if(!realId){
+    const left=_o&&_o.hotlineMsgId?' The voicemail is still waiting.':_o&&_o.hotlineCallId?' The call is still waiting.':'';
+    showToast("Couldn't save the interaction — check your connection and try again."+left,'error',8000); return false;
+  }
+  if(_o) await _mobHotAfterLog({..._o,lep:_lep},realId,stakeId);
   showToast(window._lastLogWasEdit?'Interaction updated ✓':'Interaction logged ✓');
   refreshHome();
   updateFUBadges();
   updateIssBadges();
+  if(document.getElementById('screen-hotline').classList.contains('active')) renderHotline(); else updateHotBadges();
+  return realId;
 }
 
 // ── ADD STAKEHOLDER SHEET ──────────────────────────────────────────────
@@ -2754,11 +2773,524 @@ function openLogEdit(id){
   openSheet('sheet-log');
 }
 
+// ── BOTTOM NAV (one bar, drawn into every screen) ──────────────────────
+// Five copies of the same markup drifted easily; now one renderer. Once a
+// hotline exists, Hotline takes Dashboard's place (the Dashboard stays one tap
+// away from the Hotline screen).
+const NAV_ICONS={
+  home:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  hotline:'<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>',
+  contacts:'<circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.85"/>',
+  interactions:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  followups:'<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/>',
+  issues:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5"/><circle cx="12" cy="15.5" r=".8" fill="currentColor"/>'
+};
+function _mobHasHotline(){ return (DB.get('hotlines')||[]).length>0; }
+function renderBottomNavs(){
+  const first=_mobHasHotline()?['hotline','Hotline','hot']:['home','Dashboard',''];
+  const items=[first,['contacts','Contacts',''],['interactions','Log',''],['followups','Follow-ups','fu'],['issues','Issues','iss']];
+  document.querySelectorAll('nav.bottom-nav').forEach(nav=>{
+    const act=nav.dataset.active;
+    nav.innerHTML=items.map(([k,label,b])=>`<button class="nav-item${k===act?' active':''}" onclick="showScreen('screen-${k}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${NAV_ICONS[k]}</svg>
+        <span class="nav-label">${label}</span>${b?`<span class="nav-badge" data-badge="${b}" style="display:none"></span>`:''}
+      </button>`).join('');
+  });
+  updateFUBadges(); updateIssBadges(); updateHotBadges();
+}
+function _setBadges(kind,n){
+  document.querySelectorAll('.nav-badge[data-badge="'+kind+'"]').forEach(el=>{ el.textContent=n; el.style.display=n>0?'':'none'; });
+}
+
+// ── HOTLINE (voicemails, calls to decide, call back, new call) ─────────
+// The same receiver, /callback, /dial and call log as the desktop Hotline view;
+// only the screen is mobile's own. Reassigning and hotline settings stay on
+// the desktop. Helpers below mirror index.html's _hot* ones of the same name.
+const HOT_DISMISS_REASONS=['Hang-up / no message','Wrong number','Spam / robocall','Duplicate of another message','Other'];
+const HOT_JUNK_REASONS=['Spam / robocall','Hang-up / no message'];
+const HOT_JUNK_KEEP_DAYS=90;
+const HOT_AUDIO_BUCKET='hotline-audio';
+const HOT_AUDIO_KEEP_DAYS=90;
+const HOT_FN_URL=SUPA_URL+'/functions/v1/hotline';
+const HOT_RING_ME_KEY='cc_callback_phone';
+const HOT_TRANSCRIPT_WAIT_MIN=10;
+const HOT_REFRESH_SEC=30;
+const HOT_NOT_US_AREA='242 246 264 268 284 345 441 473 649 658 664 721 758 767 784 809 829 849 868 869 876'.split(' ');
+const HOT_CALL_STATUS={placing:'Placing',ringing:'Ringing you',answered:'You answered',connected:'Connected',completed:'Call ended',cancelled:'Cancelled — nobody was dialled',failed:'Could not be placed'};
+function _hotNormPhone(p){
+  const s=String(p||'').trim(), d=s.replace(/\D/g,'');
+  if(!d) return '';
+  if(s.startsWith('+')) return '+'+d;
+  if(d.length===10) return '+1'+d;
+  return '+'+d;
+}
+function _hotCallable(p){
+  const n=_hotNormPhone(p);
+  return /^\+1[2-9]\d{9}$/.test(n)&&!/^\+1(900|976)/.test(n)&&!HOT_NOT_US_AREA.includes(n.slice(2,5))?n:'';
+}
+function _hotWhyNot(p,what){
+  const n=_hotNormPhone(p);
+  if(!/^\+1[2-9]\d{9}$/.test(n)) return 'Enter '+what+' as a 10-digit US number.';
+  if(/^\+1(900|976)/.test(n)) return '900 and 976 numbers can’t be called from a hotline.';
+  if(HOT_NOT_US_AREA.includes(n.slice(2,5))) return 'Area code '+n.slice(2,5)+' is outside the United States (Caribbean or Bermuda). Hotline calls are US only.';
+  return '';
+}
+function _hotFmtPhone(p){
+  const d=String(p||'').replace(/\D/g,'');
+  if(d.length===11&&d[0]==='1') return '('+d.slice(1,4)+') '+d.slice(4,7)+'-'+d.slice(7);
+  if(d.length===10) return '('+d.slice(0,3)+') '+d.slice(3,6)+'-'+d.slice(6);
+  return p||'';
+}
+function _hotName(name){ const n=String(name||'').trim(); return n.replace(/\s+hotline$/i,'').trim()||n; }
+function _hotProjName(id){
+  const p=(DB.get('projects')||[]).find(x=>String(x.id)===String(id));
+  return p?((p.pid?p.pid+' — ':'')+p.name):'';
+}
+function _hotLine(id){ return (DB.get('hotlines')||[]).find(x=>String(x.id)===String(id)); }
+// "Me": the PI team row with my login email, else my email initials — the
+// desktop's _myInitials(), so "mine" means the same on both.
+function _myInitials(){
+  const sess=getSession();
+  const em=(sess&&sess.user&&sess.user.email||'').toLowerCase();
+  if(em){
+    const m=(DB.get('team_members')||[]).find(x=>String(x.email||'').trim().toLowerCase()===em);
+    if(m&&m.initials) return String(m.initials).trim().toUpperCase();
+  }
+  return getLoggedBy();
+}
+function _hotIsMe(ini){
+  const v=String(ini||'').trim().toUpperCase(); if(!v) return false;
+  return v===String(_myInitials()||'').toUpperCase()||v===String(getLoggedBy()||'').toUpperCase();
+}
+function _hotWaiting(who){
+  return (DB.get('hotline_messages')||[]).filter(m=>m.status==='pending'&&(who==='all'||!m.assignedTo||_hotIsMe(m.assignedTo)))
+    .sort((a,b)=>String(a.receivedAt||'').localeCompare(String(b.receivedAt||'')));
+}
+// Calls I placed (or answered) that still need Log / Don't log.
+function _hotMyCallsToDecide(){
+  return (DB.get('hotline_calls')||[]).filter(c=>!c.outcome&&!['cancelled','failed'].includes(c.status)&&_hotIsMe(c.placedBy))
+    .sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+}
+function updateHotBadges(){ _setBadges('hot',_hotWaiting('mine').length+_hotMyCallsToDecide().length); }
+function _hotPhoneMatches(num, projectId){
+  const want=String(num||'').replace(/\D/g,'').slice(-10);
+  if(want.length<10) return [];
+  const onProj=s=>!projectId||(DB.get('project_stakeholders')||[]).some(l=>String(l.stakeholderId)===String(s.id)&&String(l.projectId)===String(projectId));
+  return DB.getActive('stakeholders').filter(s=>String(s.phone||'').replace(/\D/g,'').slice(-10)===want)
+    .sort((a,b)=>(onProj(b)?1:0)-(onProj(a)?1:0));
+}
+function _hotWhen(ts){
+  if(!ts) return '';
+  const d=new Date(ts);
+  return d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' · '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+}
+function _hotLocalDate(ts){
+  const d=ts?new Date(ts):new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function _hotDur(sec){ sec=Number(sec)||0; return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0'); }
+function _hotCallbackDue(ts){
+  const d=ts?new Date(ts):new Date(); let n=0;
+  while(n<2){ d.setDate(d.getDate()+1); const w=d.getDay(); if(w!==0&&w!==6) n++; }
+  return _hotLocalDate(d.toISOString());
+}
+function _hotHasTranscript(m){ return !!String((m&&m.transcript)||'').trim(); }
+function _hotTranscriptWaiting(m){
+  if(!m||m.transcriptStatus!=='pending') return false;
+  const t=Date.parse(m.receivedAt||'');
+  return !t||Date.now()-t<HOT_TRANSCRIPT_WAIT_MIN*60000;
+}
+function _hotMyPhone(){
+  let p=''; try{ p=localStorage.getItem(HOT_RING_ME_KEY)||''; }catch(e){}
+  if(p) return p;
+  const me=(DB.get('team_members')||[]).find(t=>String(t.initials||'').toUpperCase()===String(_myInitials()||'').toUpperCase());
+  return me&&me.phone||'';
+}
+function _hotFnHeaders(){
+  const sess=getSession();
+  return {'Content-Type':'application/json',apikey:SUPA_KEY,Authorization:'Bearer '+(sess?sess.access_token:SUPA_KEY)};
+}
+async function _hotReload(){
+  for(const t of ['hotlines','hotline_extensions','hotline_messages','hotline_calls']){
+    try{ cacheClear(t); _syncCache[t]=await sbGet(t,{strict:true}); }catch(e){ console.error('Hotline reload failed', t, e.message); }
+  }
+}
+// A partial write (only the columns that change) — never DB.set, which would
+// send the whole row back and turn blank timestamps into ''.
+async function _hotPatch(table, id, fields){
+  const ok=await sbUpdate(table,id,fields);
+  if(ok){ const row=(_syncCache[table]||[]).find(x=>String(x.id)===String(id)); if(row) Object.assign(row,fields); }
+  return ok;
+}
+
+function _hotCardHTML(m){
+  const h=_hotLine(m.hotlineId);
+  const es=m.language==='es';
+  const proj=m.projectId?escHtml(_hotProjName(m.projectId)||'Project '+m.projectId)
+    :'<span style="color:var(--amber)">General mailbox — choose the project when you log it</span>';
+  const matches=_hotPhoneMatches(m.callerNumber,m.projectId);
+  const tr=_hotHasTranscript(m)
+    ?`${es?'<div style="font-size:11px;color:var(--text3);margin-top:8px">Spanish — automatic transcript; listen before logging.</div>':''}<div style="font-size:14px;color:var(--text);line-height:1.5;margin-top:${es?4:8}px;white-space:pre-wrap">${escHtml(m.transcript)}</div>`
+    :`<div style="font-size:13px;color:var(--text3);font-style:italic;margin-top:8px">${_hotTranscriptWaiting(m)?'The transcript is on its way — or listen now.':'No transcript for this one — listen to the recording.'}</div>`;
+  const audio=m.recordingPath&&!m.audioDeletedAt
+    ?`<div id="hot-audio-${escHtml(m.id)}" style="margin-top:10px"><button class="btn-secondary" style="padding:9px;font-size:14px" onclick="mobHotPlay('${escHtml(m.id)}')">▶ Play recording${m.recordingSeconds?' ('+_hotDur(m.recordingSeconds)+')':''}</button></div>`
+    :`<div style="font-size:12px;color:var(--text3);margin-top:8px">${m.audioDeletedAt?'Recording removed after '+HOT_AUDIO_KEEP_DAYS+' days.':'The recording could not be saved — the transcript is what we have.'}</div>`;
+  const assigned=m.assignedTo?(_hotIsMe(m.assignedTo)?'Assigned to you':'Assigned to '+escHtml(m.assignedTo)):'Unassigned';
+  const canCall=!!_hotCallable(m.callerNumber)&&!!h&&h.active!==false;
+  return `<div class="card hot-card" data-id="${escHtml(m.id)}" style="padding:14px">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">
+      <div style="font-size:16px;font-weight:700;color:var(--text)">${escHtml(_hotFmtPhone(m.callerNumber)||'Unknown caller')}</div>
+      ${es?'<span class="badge" style="background:#FEF3E2;color:var(--amber)">Español · LEP</span>':''}
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-top:2px">${escHtml(_hotWhen(m.receivedAt))} · ${escHtml(h?h.name:'Hotline')}${m.extensionDigit&&m.extensionDigit!=='0'?' · pressed '+escHtml(m.extensionDigit):''} · ${assigned}</div>
+    <div style="font-size:13px;color:var(--text2);margin-top:4px">${proj}</div>
+    ${matches.length?`<div style="font-size:13px;color:var(--sky);margin-top:6px">Number matches ${matches.slice(0,3).map(s=>escHtml(dispName(s))).join('; ')} — suggested when you log it.</div>`:''}
+    ${tr}${audio}
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn-primary" style="padding:11px;font-size:14px;flex:1" onclick="mobHotLog('${escHtml(m.id)}')">Log</button>
+      ${canCall?`<button class="btn-secondary" style="padding:10px;font-size:14px;flex:1" onclick="mobHotCallBack('${escHtml(m.id)}')">📞 Call back</button>`:''}
+      <button class="btn-secondary" style="padding:10px;font-size:14px;flex:1" onclick="mobHotDismiss('${escHtml(m.id)}')">Dismiss</button>
+    </div>
+  </div>`;
+}
+function _hotCallCardHTML(c){
+  const h=_hotLine(c.hotlineId);
+  const inbound=c.direction==='inbound';
+  const stake=c.stakeholderId&&(DB.get('stakeholders')||[]).find(x=>String(x.id)===String(c.stakeholderId));
+  return `<div class="card hot-call" data-id="${escHtml(c.id)}" style="padding:14px">
+    <div style="font-size:15px;font-weight:700;color:var(--text)">${inbound?'⬇ From ':'⬆ To '}${escHtml(stake?dispName(stake):_hotFmtPhone(c.toNumber))}</div>
+    <div style="font-size:12px;color:var(--text3);margin-top:2px">${escHtml(_hotWhen(c.createdAt))} · ${escHtml(h?h.name:'Hotline')} · ${escHtml(HOT_CALL_STATUS[c.status]||c.status||'')}${c.durationSeconds?' · '+_hotDur(c.durationSeconds):''}</div>
+    ${c.projectId?`<div style="font-size:13px;color:var(--text2);margin-top:4px">${escHtml(_hotProjName(c.projectId))}</div>`:''}
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn-primary" style="padding:11px;font-size:14px;flex:1" onclick="mobHotCallLog('${escHtml(c.id)}')">Log this call</button>
+      <button class="btn-secondary" style="padding:10px;font-size:14px;flex:1" onclick="mobHotCallSkip('${escHtml(c.id)}')">Don’t log</button>
+    </div>
+  </div>`;
+}
+function renderHotline(){
+  const body=document.getElementById('hot-body'); if(!body) return;
+  const who=(document.getElementById('hot-who')||{}).value||'mine';
+  const msgs=_hotWaiting(who), calls=_hotMyCallsToDecide();
+  const head=t=>`<div style="font-size:14px;font-weight:700;color:var(--text)">${t}</div>`;
+  body.innerHTML=
+    (calls.length?`<div style="display:flex;flex-direction:column;gap:10px">${head('Calls to decide ('+calls.length+')')}
+        <div style="font-size:12px;color:var(--text3);margin-top:-4px">Hotline calls you made or answered — log each one, or don’t.</div>
+        ${calls.map(_hotCallCardHTML).join('')}</div>`:'')
+    +`<div style="display:flex;flex-direction:column;gap:10px">${head('Voicemails waiting ('+msgs.length+')')}
+        ${msgs.length?msgs.map(_hotCardHTML).join(''):`<div class="card" style="padding:18px;font-size:14px;color:var(--text3)">Nothing waiting${who==='mine'?' for you':''}.</div>`}</div>`
+    +`<div style="text-align:center;padding:10px 0 6px;font-size:13px;color:var(--text3);line-height:1.8">
+        Reassigning, history and hotline settings are on the desktop.<br>
+        <button class="btn-ghost" style="font-size:13px" onclick="showScreen('screen-home')">Dashboard</button> ·
+        <a href="index.html?desktop=1" style="font-size:13px;color:var(--text3);text-decoration:underline">Use full desktop site</a>
+      </div>`;
+  updateHotBadges();
+}
+// Refresh on show and every HOT_REFRESH_SEC while the screen is open — a new
+// voicemail appears without a reload (the desktop Hotline view does the same).
+let _hotTimer=null;
+async function _hotRefresh(){
+  const scr=document.getElementById('screen-hotline');
+  if(!scr||!scr.classList.contains('active')||document.hidden) return;
+  if(document.querySelector('.sheet-overlay.open')) return;
+  await _hotReload();
+  if(scr.classList.contains('active')&&!document.querySelector('.sheet-overlay.open')&&!document.querySelector('#hot-body audio')) renderHotline();
+}
+function _hotStartTimer(){ if(!_hotTimer) _hotTimer=setInterval(_hotRefresh,HOT_REFRESH_SEC*1000); }
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) _hotRefresh(); });
+
+async function mobHotPlay(id){
+  const m=(DB.get('hotline_messages')||[]).find(x=>String(x.id)===String(id)); if(!m||!m.recordingPath) return;
+  const box=document.getElementById('hot-audio-'+id); if(!box) return;
+  box.innerHTML='<span style="font-size:12px;color:var(--text3)">Loading…</span>';
+  try{
+    const h=getAuthHeaders(); delete h['Prefer'];
+    const r=await fetch(SUPA_URL+'/storage/v1/object/sign/'+HOT_AUDIO_BUCKET+'/'+m.recordingPath,{method:'POST',headers:h,body:JSON.stringify({expiresIn:600})});
+    if(!r.ok) throw new Error(r.status);
+    const j=await r.json();
+    box.innerHTML='<audio controls autoplay style="width:100%" src="'+escHtml(SUPA_URL+'/storage/v1'+j.signedURL)+'"></audio>';
+  }catch(e){ box.innerHTML='<span style="font-size:12px;color:var(--text3)">The recording could not be opened.</span>'; }
+}
+
+// ── Call back / New call (one sheet) ──
+// Twilio rings MY phone from the hotline number; I press 1 and it dials the
+// other side, also from the hotline number. Not recorded, nothing logged.
+let _hotCallMode=null; // {kind:'back', msgId} | {kind:'new'}
+function _hotRingMeHTML(){
+  return `<div class="form-group"><label class="form-label">Ring me at</label>
+    <input type="tel" class="form-input" id="hot-ring-me" value="${escHtml(_hotFmtPhone(_hotMyPhone()))}" placeholder="Your own phone" maxlength="20">
+    <div style="font-size:12px;color:var(--text3);margin-top:4px">Typed once and remembered on this phone — a web page can’t read the phone’s own number.</div></div>`;
+}
+function mobHotCallBack(id, fromLog){
+  const m=(DB.get('hotline_messages')||[]).find(x=>String(x.id)===String(id)); if(!m) return;
+  const h=_hotLine(m.hotlineId);
+  _hotCallMode={kind:'back',msgId:String(id),fromLog:!!fromLog};
+  document.getElementById('hot-call-title').textContent='Call back';
+  document.getElementById('hot-call-body').innerHTML=`<div style="font-size:14px;color:var(--text2);line-height:1.5">
+      Twilio rings <b>your phone</b> in a few seconds, showing the <b>${escHtml(h?h.name:'hotline')}</b> number ${escHtml(_hotFmtPhone(h&&h.phoneNumber))}.
+      Answer and <b>press 1</b> — then it calls <b>${escHtml(_hotFmtPhone(m.callerNumber))}</b>, who also sees the hotline number, never yours.</div>
+    ${_hotRingMeHTML()}
+    <div style="font-size:12px;color:var(--text3);line-height:1.5">The call is <b>not recorded</b>.${fromLog?' When you hang up, finish the log — <b>Save &amp; log call-back</b> links the call-back to this voicemail.':' Log it afterwards: Log the voicemail, then <b>Save &amp; log call-back</b>.'}</div>`;
+  _hotCallBtn(false);
+  openSheet('sheet-hot-call');
+}
+function _hotActiveLines(){
+  return (DB.get('hotlines')||[]).filter(h=>h.active!==false).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+}
+function _hotLineProjects(h){
+  if(!h) return [];
+  if(h.projectId) return [String(h.projectId)];
+  const exts=(DB.get('hotline_extensions')||[]).filter(e=>e.active!==false&&String(e.hotlineId)===String(h.id)&&/^[1-8]$/.test(e.digit));
+  return [...new Set(exts.sort((a,b)=>String(a.digit).localeCompare(String(b.digit))).map(e=>String(e.projectId)))];
+}
+function _hotProjPhoneContacts(projId){
+  if(!projId) return [];
+  const ids=new Set((DB.get('project_stakeholders')||[]).filter(l=>String(l.projectId)===String(projId)).map(l=>String(l.stakeholderId)));
+  return DB.getActive('stakeholders').filter(s=>ids.has(String(s.id))&&!!_hotCallable(s.phone)).sort((a,b)=>dispName(a).localeCompare(dispName(b)));
+}
+function mobHotNewCall(){
+  const lines=_hotActiveLines();
+  if(!lines.length){ showToast('No hotline is switched on — set one up on the desktop (Settings → Project hotlines).','error',6000); return; }
+  _hotCallMode={kind:'new'};
+  document.getElementById('hot-call-title').textContent='New call';
+  document.getElementById('hot-call-body').innerHTML=`<div style="font-size:14px;color:var(--text2);line-height:1.5">
+      Twilio rings <b>your phone</b>, showing the hotline number. Answer and <b>press 1</b> — then it dials the number below, who also sees the hotline number.</div>
+    <div class="form-group"><label class="form-label">Call from</label>
+      <select class="form-input form-select" id="hot-nc-line" onchange="_hotNcLine()">${lines.map(h=>`<option value="${escHtml(h.id)}">${escHtml(h.name)} · ${escHtml(_hotFmtPhone(h.phoneNumber))}</option>`).join('')}</select></div>
+    <div class="form-group"><label class="form-label">Project</label><select class="form-input form-select" id="hot-nc-proj" onchange="_hotNcProj()"></select></div>
+    <div class="form-group"><label class="form-label">Contact (optional — fills the number)</label><select class="form-input form-select" id="hot-nc-stake" onchange="_hotNcStake()"></select></div>
+    <div class="form-group"><label class="form-label">Number to call</label><input type="tel" class="form-input" id="hot-nc-to" placeholder="(801) 555-0123" maxlength="20" oninput="_hotNcKeyed()"></div>
+    ${_hotRingMeHTML()}
+    <div style="font-size:12px;color:var(--text3);line-height:1.5">Not recorded. When you hang up, the call waits at the top of this screen for <b>Log</b> or <b>Don’t log</b>. US numbers only.</div>`;
+  _hotCallBtn(false);
+  _hotNcLine();
+  openSheet('sheet-hot-call');
+}
+function _hotNcLine(){
+  const h=_hotLine(document.getElementById('hot-nc-line').value);
+  const ps=_hotLineProjects(h), sel=document.getElementById('hot-nc-proj');
+  sel.innerHTML=(ps.length===1?'':'<option value="">— No project —</option>')+ps.map(id=>`<option value="${escHtml(id)}">${escHtml(_hotProjName(id)||'Project '+id)}</option>`).join('');
+  _hotNcProj();
+}
+function _hotNcProj(){
+  const sel=document.getElementById('hot-nc-stake');
+  const cs=_hotProjPhoneContacts(document.getElementById('hot-nc-proj').value);
+  sel.innerHTML='<option value="">— None / not in the list —</option>'+cs.map(c=>`<option value="${escHtml(c.id)}">${escHtml(dispName(c))} · ${escHtml(_hotFmtPhone(c.phone))}</option>`).join('');
+  sel.disabled=!cs.length;
+}
+function _hotNcStake(){
+  const id=document.getElementById('hot-nc-stake').value;
+  const c=id&&(DB.get('stakeholders')||[]).find(x=>String(x.id)===String(id));
+  if(c) document.getElementById('hot-nc-to').value=_hotFmtPhone(c.phone);
+}
+// Typing a different number drops a picked contact, so the log never names the wrong person.
+function _hotNcKeyed(){
+  const sel=document.getElementById('hot-nc-stake'); if(!sel.value) return;
+  const c=(DB.get('stakeholders')||[]).find(x=>String(x.id)===String(sel.value));
+  const typed=String(document.getElementById('hot-nc-to').value||'').replace(/\D/g,'').slice(-10);
+  if(!c||String(c.phone||'').replace(/\D/g,'').slice(-10)!==typed) sel.value='';
+}
+function _hotCallBtn(busy, text){
+  const b=document.getElementById('hot-call-go'); if(!b) return;
+  b.disabled=!!busy; b.textContent=text||(busy?'Calling…':'📞 Call me now');
+}
+async function mobHotCallGo(){
+  const mode=_hotCallMode; if(!mode) return;
+  const meRaw=(document.getElementById('hot-ring-me').value||'').trim(), me=_hotNormPhone(meRaw);
+  let body, path, toRaw='';
+  if(mode.kind==='back'){
+    const why=_hotWhyNot(meRaw,'your own phone number'); if(why){ showToast(why,'error',6000); return; }
+    path='/callback'; body={messageId:Number(mode.msgId),ringMe:me};
+  } else {
+    toRaw=(document.getElementById('hot-nc-to').value||'').trim();
+    const to=_hotNormPhone(toRaw);
+    const why=_hotWhyNot(toRaw,'the number to call')||_hotWhyNot(meRaw,'your own phone number'); if(why){ showToast(why,'error',6000); return; }
+    if(to===me){ showToast('The number to call and your own phone must be different.','error',6000); return; }
+    path='/dial'; body={hotlineId:Number(document.getElementById('hot-nc-line').value),to,ringMe:me,
+      projectId:document.getElementById('hot-nc-proj').value||null,stakeholderId:document.getElementById('hot-nc-stake').value||null,placedBy:getLoggedBy()||null};
+  }
+  try{ localStorage.setItem(HOT_RING_ME_KEY, meRaw); }catch(e){}
+  _hotCallBtn(true);
+  let msg='';
+  try{
+    const r=await fetch(HOT_FN_URL+path,{method:'POST',headers:_hotFnHeaders(),body:JSON.stringify(body)});
+    const j=await r.json().catch(()=>({}));
+    if(r.ok&&j.ok){
+      document.getElementById('sheet-hot-call').classList.remove('open');
+      _hotCallMode=null; _hotCallBtn(false);
+      showToast('Your phone will ring in a few seconds — answer and press 1.','success',7000);
+      if(mode.kind==='new'){ await _hotReload(); renderHotline(); }
+      else if(mode.fromLog){ const n=document.getElementById('log-hot-cb'); if(n) n.textContent='📞 Ringing you — press 1'; }
+      return;
+    }
+    msg=j.error||('The call could not be placed ('+r.status+').');
+  }catch(e){ msg='The call could not be placed — the hotline service did not answer.'; }
+  _hotCallBtn(false);
+  showToast(msg,'error',12000);
+}
+
+// ── Dismiss ──
+let _hotDismissId=null;
+function mobHotDismiss(id){
+  _hotDismissId=String(id);
+  document.getElementById('hot-dis-reason').innerHTML=HOT_DISMISS_REASONS.map(r=>`<option>${escHtml(r)}</option>`).join('');
+  document.getElementById('hot-dis-note').value='';
+  document.getElementById('hot-dis-hint').textContent=HOT_JUNK_REASONS.map(r=>'“'+r+'”').join(' and ')+' are deleted after '+HOT_JUNK_KEEP_DAYS+' days; every other reason is kept.';
+  openSheet('sheet-hot-dismiss');
+}
+async function mobHotDismissGo(){
+  const id=_hotDismissId; if(!id) return;
+  const reason=document.getElementById('hot-dis-reason').value, note=(document.getElementById('hot-dis-note').value||'').trim();
+  const ok=await _hotPatch('hotline_messages',id,{status:'dismissed',dismissReason:note?reason+' — '+note:reason,
+    closedAt:new Date().toISOString(),closedBy:getLoggedBy()||null,audioPurgeAfter:new Date(Date.now()+HOT_AUDIO_KEEP_DAYS*864e5).toISOString()});
+  if(!ok){ showToast('Couldn’t dismiss the voicemail.','error',5000); return; }
+  _hotDismissId=null;
+  document.getElementById('sheet-hot-dismiss').classList.remove('open');
+  showToast('Voicemail dismissed');
+  renderHotline();
+}
+
+// ── Logging: the ordinary Log sheet, prefilled ──
+// window._logOpts carries what the save needs afterwards: the voicemail or
+// call to close out, the original a next contact belongs to, Spanish, and the
+// contacts whose phone matches (offered as "Use …" — never attached).
+function _mobOpenLogPrefilled(o){
+  window._detailStakeId=null; window._editIntId=null;
+  openSheet('sheet-log');
+  window._logOpts=o;
+  const projSel=document.getElementById('log-proj');
+  if(o.projectId&&![...projSel.options].some(op=>op.value===String(o.projectId))){
+    const op=document.createElement('option'); op.value=String(o.projectId); op.textContent=_hotProjName(o.projectId)||'Project '+o.projectId; projSel.appendChild(op);
+  }
+  projSel.value=o.projectId?String(o.projectId):'';
+  clearStakePicker();
+  if(o.stakeId){ const s=(DB.get('stakeholders')||[]).find(x=>String(x.id)===String(o.stakeId)); if(s) selectStake(String(s.id),dispName(s)); }
+  document.getElementById('log-date').value=o.date||today();
+  document.getElementById('log-channel').value=o.channel||'Phone';
+  document.getElementById('log-direction').value=o.direction||'Incoming';
+  document.getElementById('log-summary').value=o.summary||'';
+  const fu=o.followUp;
+  document.getElementById('log-fu').checked=!!(fu&&fu.checked);
+  toggleLogFU();
+  document.getElementById('log-fu-date').value=fu?fu.due||'':'';
+  document.getElementById('log-fu-note').value=fu?fu.note||'':'';
+  if(o.callerNumber&&!o.stakeId){ const ph=document.getElementById('caller-ph'); if(ph) ph.value=_hotFmtPhone(o.callerNumber).replace(/^\+1\s*/,''); }
+  _mobLogHotBox();
+}
+function _mobLogHotBox(){
+  const o=window._logOpts, box=document.getElementById('log-hot'), next=document.getElementById('log-save-next');
+  if(!box) return;
+  if(!o){ box.style.display='none'; box.innerHTML=''; if(next) next.style.display='none';
+    const fuCard=document.getElementById('log-fu').closest('.card'); if(fuCard) fuCard.style.display='';
+    _mobSaveLabel(); return; }
+  const parts=[];
+  if(o.relatedTo){
+    const root=(DB.get('interactions')||[]).find(x=>String(x.id)===String(o.relatedTo));
+    parts.push(`<div style="font-size:13px;color:var(--text2)">↳ Next contact on: <i>${escHtml(String(root&&root.summary||'').slice(0,90))}</i></div>`);
+  }
+  if((o.suggest||[]).length){
+    const all=DB.get('stakeholders')||[];
+    parts.push(`<div style="font-size:13px;color:var(--text2)">The caller’s number matches:</div><div style="display:flex;flex-wrap:wrap;gap:6px">${o.suggest.map(id=>{
+      const s=all.find(x=>String(x.id)===String(id)); if(!s) return '';
+      return `<button class="btn-secondary" style="width:auto;padding:7px 10px;font-size:13px" onclick="mobUseStake('${escHtml(s.id)}')">Use ${escHtml(dispName(s))}</button>`;
+    }).join('')}</div>`);
+  }
+  if(o.hotlineMsgId){
+    const m=(DB.get('hotline_messages')||[]).find(x=>String(x.id)===String(o.hotlineMsgId));
+    const h=m&&_hotLine(m.hotlineId);
+    if(m&&_hotCallable(m.callerNumber)&&h&&h.active!==false)
+      parts.push(`<button class="btn-secondary" id="log-hot-cb" style="padding:10px;font-size:14px" onclick="mobHotCallBack('${escHtml(m.id)}',true)">📞 Call me now — call back ${escHtml(_hotFmtPhone(m.callerNumber))}</button>`);
+  }
+  if(o.spanish) parts.push(`<label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--text2)"><input type="checkbox" id="log-hot-lep" checked> Mark the contact LEP (left the message in Spanish)</label>`);
+  box.innerHTML=parts.join('');
+  // A next contact carries no follow-up of its own — that lives on the original.
+  const fuCard=document.getElementById('log-fu').closest('.card'); if(fuCard) fuCard.style.display=o.relatedTo?'none':'';
+  box.style.cssText=parts.length?'display:flex;flex-direction:column;gap:8px;background:var(--surface2);border:1.5px solid var(--border2);border-radius:var(--radius-sm);padding:12px 14px':'display:none';
+  if(next) next.style.display=(o.hotlineMsgId||o.hotlineCallId||o.relatedTo)?'':'none';
+  _mobSaveLabel();
+}
+// An inbound hotline call saved with neither a follow-up nor a call-back is a
+// deliberate "no call-back needed" (the desktop's _intSaveLabel).
+function _mobSaveLabel(){
+  const b=document.getElementById('log-save'); if(!b) return;
+  const o=window._logOpts;
+  const hotIn=o&&!o.relatedTo&&(o.hotlineMsgId||(o.hotlineCallId&&o.direction==='Incoming'));
+  b.textContent=hotIn&&!document.getElementById('log-fu').checked?'Save — no call-back needed':'Save interaction';
+}
+// "Use …": selects the contact only. If they aren't on this project yet, the
+// link is made when the interaction is saved, under the project it is saved to.
+function mobUseStake(id){
+  const s=(DB.get('stakeholders')||[]).find(x=>String(x.id)===String(id)); if(s) selectStake(String(s.id),dispName(s));
+}
+function mobHotLog(id){
+  const m=(DB.get('hotline_messages')||[]).find(x=>String(x.id)===String(id)); if(!m) return;
+  const h=_hotLine(m.hotlineId);
+  const head='Hotline voicemail'+(h?' ('+h.name+(m.extensionDigit&&m.extensionDigit!=='0'?', pressed '+m.extensionDigit:'')+')':'')
+    +(m.recordingSeconds?', '+_hotDur(m.recordingSeconds):'')+(m.language==='es'?', in Spanish':'')+'.';
+  _mobOpenLogPrefilled({
+    hotlineMsgId:String(m.id), projectId:m.projectId||'', date:_hotLocalDate(m.receivedAt),
+    channel:'Phone', direction:'Incoming', summary:head+(_hotHasTranscript(m)?' '+m.transcript:''),
+    followUp:{checked:false, note:'Call back'+(m.callerNumber?' at '+_hotFmtPhone(m.callerNumber):''), due:_hotCallbackDue(m.receivedAt)},
+    callerNumber:m.callerNumber||'', spanish:m.language==='es', suggest:_hotPhoneMatches(m.callerNumber,m.projectId).map(s=>String(s.id))
+  });
+}
+function mobHotCallLog(id){
+  const c=(DB.get('hotline_calls')||[]).find(x=>String(x.id)===String(id)); if(!c) return;
+  const h=_hotLine(c.hotlineId);
+  const inbound=c.direction==='inbound';
+  const stake=c.stakeholderId&&(DB.get('stakeholders')||[]).find(x=>String(x.id)===String(c.stakeholderId));
+  _mobOpenLogPrefilled({
+    hotlineCallId:String(c.id), projectId:c.projectId||'', date:_hotLocalDate(c.createdAt), stakeId:stake?String(stake.id):'',
+    channel:'Phone', direction:inbound?'Incoming':'Outgoing',
+    summary:inbound
+      ?'Hotline call from '+_hotFmtPhone(c.toNumber)+' to the '+(h?_hotName(h.name)+' ':'')+'hotline'+(c.placedBy?', answered by '+c.placedBy:'')+(c.durationSeconds?' ('+_hotDur(c.durationSeconds)+')':'')+'. '
+      :'Called '+_hotFmtPhone(c.toNumber)+' from the '+(h?_hotName(h.name)+' ':'')+'hotline. ',
+    callerNumber:stake?'':c.toNumber,
+    suggest:inbound&&!stake?_hotPhoneMatches(c.toNumber,c.projectId).map(s=>String(s.id)):[]
+  });
+}
+async function mobHotCallSkip(id){
+  const ok=await _hotPatch('hotline_calls',id,{outcome:'not_logged',decidedAt:new Date().toISOString(),decidedBy:getLoggedBy()||null});
+  if(!ok){ showToast('Couldn’t save that choice.','error',5000); return; }
+  renderHotline();
+}
+// After the Log sheet saves: close the voicemail / call out against the interaction.
+async function _mobHotAfterLog(o, interactionId, stakeId){
+  if(!o) return;
+  if(!o.hotlineMsgId&&!o.hotlineCallId) return;
+  if(!interactionId){ showToast('The interaction was not saved, so the '+(o.hotlineMsgId?'voicemail':'call')+' is still waiting.','error',7000); return; }
+  const now=new Date().toISOString();
+  if(o.hotlineMsgId) await _hotPatch('hotline_messages',o.hotlineMsgId,{status:'logged',loggedInteractionId:interactionId,closedAt:now,closedBy:getLoggedBy()||null,
+    audioPurgeAfter:new Date(Date.now()+HOT_AUDIO_KEEP_DAYS*864e5).toISOString()});
+  if(o.hotlineCallId) await _hotPatch('hotline_calls',o.hotlineCallId,{outcome:'logged',loggedInteractionId:interactionId,decidedAt:now,decidedBy:getLoggedBy()||null});
+  if(o.spanish&&o.lep&&stakeId){
+    const all=DB.get('stakeholders'); const i=all.findIndex(s=>String(s.id)===String(stakeId));
+    if(i>-1&&!all[i].lep){ all[i]={...all[i],lep:true}; await DB.set('stakeholders',all); }
+  }
+}
+// A next contact (the call-back) on a just-saved interaction: Outgoing,
+// same project and contact, linked by relatedTo to the original.
+function _mobLogNext(rootId){
+  const all=DB.get('interactions')||[];
+  let r=all.find(x=>String(x.id)===String(rootId));
+  const seen=new Set();
+  while(r&&r.relatedTo&&!seen.has(String(r.id))){ seen.add(String(r.id)); const p=all.find(x=>String(x.id)===String(r.relatedTo)); if(!p) break; r=p; }
+  if(!r) return;
+  _mobOpenLogPrefilled({relatedTo:String(r.id), projectId:r.projectId, stakeId:r.stakeholderId?String(r.stakeholderId):'',
+    date:today(), channel:'Phone', direction:'Outgoing', summary:''});
+}
+async function saveInteractionAndNext(){
+  const id=await saveInteraction();
+  if(id) setTimeout(()=>_mobLogNext(id),350);
+}
+
 // ── INIT ───────────────────────────────────────────────────────────────
 function init(){
   document.getElementById('home-date').textContent=new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
   populateProjectDropdowns();
+  renderBottomNavs();
   refreshHome();
+  // With a hotline, the phone opens on it (Hotline takes Dashboard's place in the nav).
+  if(_mobHasHotline()&&document.getElementById('screen-home').classList.contains('active')) showScreen('screen-hotline');
   updateFUBadges();
   updateIssBadges();
 }

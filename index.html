@@ -8935,6 +8935,81 @@ function _hotToggleCustom(sel){
 }
 
 // ── Settings → Project hotlines ─────────────────────────────────────────────
+// ── LINK READER TEST (DEV only, Outreach log step 2a, Oct 2026) ──
+// Paste real Facebook / Instagram / X / news links and see what the
+// link-preview function can read from each: title, outlet, date, and any
+// public reaction / comment / share counts. Nothing is saved. This card is
+// temporary — it answers "what can be read automatically?" before the
+// Outreach log is designed around the answer.
+const LINK_FN_URL=SUPA_URL+'/functions/v1/link-preview';
+const LINK_TEST_MAX=25;
+var _linkTestRows=[];
+function _linkTestCardHTML(){
+  return '<div id="link-test-card" style="background:var(--navy-mid);border:1px dashed rgba(209,169,68,.55);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><div style="font-size:15px;font-weight:700;color:var(--white)">Link reader test</div><span class="badge b-amber" style="font-size:10px">DEV only · temporary</span></div>'
+    +'<div style="font-size:12px;color:var(--fog);margin-bottom:10px;line-height:1.5">Paste up to '+LINK_TEST_MAX+' links, one per line — Facebook and Instagram posts, X posts, news stories, press releases. Each is read the way a link preview reads it: title, outlet, date, and any reaction / comment / share counts the page shows publicly. Nothing is saved.</div>'
+    +'<textarea id="link-test-urls" rows="6" style="width:100%;box-sizing:border-box;font-size:12px;font-family:var(--mono,monospace)" placeholder="https://www.facebook.com/…&#10;https://www.ksl.com/article/…"></textarea>'
+    +'<div style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-primary btn-sm" id="link-test-go" onclick="linkTestRun()">Read links</button>'
+    +'<button class="btn btn-sm" onclick="linkTestCopy()">Copy results</button></div>'
+    +'<div id="link-test-out" style="margin-top:12px;font-size:12px"></div></div>';
+}
+function _linkTestUrls(){
+  var seen={};
+  return String((document.getElementById('link-test-urls')||{}).value||'').split(/\s+/)
+    .map(function(x){return x.trim();}).filter(function(x){if(!/^https?:\/\//i.test(x)||seen[x])return false;seen[x]=1;return true;}).slice(0,LINK_TEST_MAX);
+}
+function _linkTestEng(e){
+  e=e||{}; var k=['reactions','comments','shares','views'].filter(function(x){return e[x]!=null;});
+  return k.length?k.map(function(x){return _coFmtN(e[x])+' '+x;}).join(' · '):'';
+}
+function _linkTestRender(){
+  var out=document.getElementById('link-test-out'); if(!out) return;
+  if(!_linkTestRows.length){out.innerHTML='';return;}
+  var got=_linkTestRows.filter(function(r){return r.res&&r.res.ok;}).length;
+  var counts=_linkTestRows.filter(function(r){return r.res&&_linkTestEng(r.res.engagement);}).length;
+  out.innerHTML='<div style="margin-bottom:6px;color:var(--mist)">Read '+got+' of '+_linkTestRows.length+' · counts found on '+counts+'</div>'
+    +'<table class="dtable" style="font-size:12px;table-layout:fixed;width:100%"><colgroup><col style="width:11%"><col style="width:9%"><col style="width:30%"><col style="width:14%"><col style="width:12%"><col style="width:24%"></colgroup>'
+    +'<thead><tr><th>Platform</th><th>Result</th><th>Title</th><th>Outlet / author</th><th>Date</th><th>Counts / notes</th></tr></thead><tbody>'
+    +_linkTestRows.map(function(r){
+      var x=r.res, f=(x&&x.fields)||{};
+      var st=!x?'<span style="color:var(--fog)">reading…</span>':x.ok?'<span class="badge b-green">Read</span>':'<span class="badge b-red">Not read</span>';
+      var notes=x?[x.error].concat(x.notes||[]).filter(Boolean).join(' '):'';
+      return '<tr><td>'+escHtml((x&&x.platform)||'')+'<div style="font-size:10px;color:var(--fog);word-break:break-all">'+escHtml(r.url.replace(/^https?:\/\//,'').slice(0,60))+'</div></td>'
+        +'<td>'+st+(x&&x.status?'<div style="font-size:10px;color:var(--fog)">HTTP '+x.status+'</div>':'')+'</td>'
+        +'<td style="color:var(--white)">'+escHtml(f.title||'')+(f.description?'<div style="font-size:10px;color:var(--fog);margin-top:2px">'+escHtml(String(f.description).slice(0,160))+'</div>':'')+'</td>'
+        +'<td>'+escHtml([f.site,f.author].filter(Boolean).join(' · '))+'</td>'
+        +'<td>'+escHtml(f.published||'')+'</td>'
+        +'<td>'+(x&&_linkTestEng(x.engagement)?'<b style="color:var(--green)">'+escHtml(_linkTestEng(x.engagement))+'</b><div style="font-size:10px;color:var(--fog)">from '+escHtml(x.engagementSource||'')+'</div>':'')
+        +(notes?'<div style="font-size:10px;color:var(--fog)">'+escHtml(notes)+'</div>':'')+'</td></tr>';
+    }).join('')+'</tbody></table>';
+}
+async function linkTestRun(){
+  var urls=_linkTestUrls();
+  if(!urls.length){showToast('Paste at least one link that starts with http','warn');return;}
+  var btn=document.getElementById('link-test-go'); if(btn){btn.disabled=true;btn.textContent='Reading…';}
+  _linkTestRows=urls.map(function(u){return {url:u,res:null};}); _linkTestRender();
+  for(var i=0;i<_linkTestRows.length;i++){
+    var r=_linkTestRows[i];
+    try{
+      var resp=await fetch(LINK_FN_URL,{method:'POST',headers:Object.assign({},getAuthHeaders(),{'Content-Type':'application/json'}),body:JSON.stringify({url:r.url})});
+      var j=await resp.json().catch(function(){return {};});
+      r.res=resp.ok?j:{ok:false,error:(j&&j.error)||('the reader answered '+resp.status),notes:[]};
+    }catch(e){ r.res={ok:false,error:'the link reader could not be reached (is it deployed on this database?)',notes:[]}; }
+    _linkTestRender();
+  }
+  if(btn){btn.disabled=false;btn.textContent='Read links';}
+}
+function linkTestCopy(){
+  if(!_linkTestRows.length){showToast('Read some links first','warn');return;}
+  var head=['URL','Platform','Read','HTTP','Title','Outlet','Author','Date','Reactions','Comments','Shares','Views','Counts from','Notes'];
+  var lines=[head.join('\t')].concat(_linkTestRows.map(function(r){
+    var x=r.res||{}, f=x.fields||{}, e=x.engagement||{};
+    return [r.url,x.platform||'',x.ok?'yes':'no',x.status||'',f.title||'',f.site||'',f.author||'',f.published||'',e.reactions==null?'':e.reactions,e.comments==null?'':e.comments,e.shares==null?'':e.shares,e.views==null?'':e.views,x.engagementSource||'',[x.error].concat(x.notes||[]).filter(Boolean).join(' ')]
+      .map(function(v){return String(v).replace(/[\t\n]+/g,' ');}).join('\t');
+  }));
+  navigator.clipboard.writeText(lines.join('\n')).then(function(){showToast('Results copied — paste them into a spreadsheet or the chat','info',3000);},function(){showToast('The browser refused the clipboard','warn');});
+}
+
 function renderHotlineCard(){
   const el=document.getElementById('hotline-card-body'); if(!el) return;
   const hs=(DB.get('hotlines')||[]).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name)));
@@ -25444,6 +25519,7 @@ function renderSettings(m) {
       <div style="font-size:12px;color:var(--fog);margin-bottom:14px;line-height:1.5">Phone numbers the public calls to leave a voicemail. One number can serve one project, or several with a menu (press 1, 2, 3…). Voicemails land in the Hotline inbox, assigned to the project's PI Lead, and only become interactions when someone logs them.</div>
       <div id="hotline-card-body" style="font-size:13px;color:var(--fog)"></div>
     </div>
+${CC_ENV==='dev'?_linkTestCardHTML():''}
 
     <!-- Claude AI -->
     <div style="background:var(--navy-mid);border:1px solid rgba(74,155,232,.25);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">

@@ -3476,6 +3476,33 @@ test on a NEW Twilio number — Sunrise's current hotlines are Microsoft Teams
 numbers, which can be ported out (porting PIN in Teams admin) or forwarded
 to Twilio; decide at go-live.
 
+## Outreach log (Part B) — step 2a: the LINK TEST, on DEV (Oct 2026)
+Scoped with Jeff (Oct 2026): a dated log of outreach ACTIONS (press release,
+newsletter, website update, 511 alert, social post, news coverage, trucking/
+industry publication, agency/partner coordination, other) with campaigns, a
+URL + link preview, and dated engagement readings (reactions / comments /
+shares) read best-effort, from a screenshot, or typed. NO scraping, NO
+mention monitoring, NO comment themes. Desktop only, staff-only. Order: (2a)
+link test → (2b) table + Outreach view → (2c) PI report section + quick
+report → (3) close-out link-up. **Only 2a is built.**
+- **`supabase/functions/link-preview/`** (`logic.mjs` + `index.ts`, the
+  hotline pattern). POST `{url}` with a staff session (`pi_staff`, checked
+  inside; deployed to DEV with verify_jwt OFF for the CORS preflight). Reads
+  og:/twitter: meta, `<title>`, JSON-LD (headline, author, datePublished,
+  `interactionStatistic`), and counts written in the description ("1,234
+  likes, 56 comments"). X and YouTube also via their PUBLIC keyless oEmbed;
+  Facebook/Instagram oEmbed needs a Meta app token — not called.
+- **Honest reader:** User-Agent `LINK_UA` names Cirrus Cc; never pretends to be
+  facebookexternalhit/Twitterbot (asserted). A sign-in wall is reported as
+  such, with "read them from a screenshot or type them".
+- **Address rules (`urlProblem`)** at EVERY redirect hop (redirects followed
+  by hand, max 5): http(s) only, ports 80/443, no IP literals, localhost,
+  internal names or supabase hosts; 2 MB / 10 s caps. Stores nothing.
+- **Settings → "Link reader test" card, DEV only** (`CC_ENV==='dev'`,
+  `_linkTestCardHTML` / `linkTestRun` / `linkTestCopy`): paste up to 25 links,
+  results table, "Copy results" as tab-separated text. Temporary — remove when
+  2b ships. Guarded by `test/tests/92-link-preview.test.js`.
+
 ## PLANNED — Conference demo site (for the UDOT conference, 2026-10-27; ON HOLD)
 Agreed with Jeff 2026-10-14: a third environment where other PI firms try the
 app risk-free and leave feedback. **Not started — wait for Jeff's go, and build

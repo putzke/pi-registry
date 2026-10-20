@@ -3476,13 +3476,13 @@ test on a NEW Twilio number — Sunrise's current hotlines are Microsoft Teams
 numbers, which can be ported out (porting PIN in Teams admin) or forwarded
 to Twilio; decide at go-live.
 
-## Outreach log (Part B) — steps 2b + 2c BUILT on DEV (Oct 2026), not released
+## Outreach log (Part B) — steps 2b, 2c and 3 BUILT on DEV (Oct 2026), not released
 Scoped with Jeff (Oct 2026): a dated log of outreach ACTIONS with campaigns,
 a link + preview, and dated engagement readings. NO scraping, NO mention
 monitoring, NO comment themes. Desktop only, staff-only. Not interactions —
 nothing here counts as one (asserted). Steps: (2a) link test ✅ → (2b) table +
 Outreach view ✅ on DEV → (2c) PI report section + quick report → (3)
-close-out link-up ✅ 2c on DEV (2026-10-20). Step 3 waits for Jeff.
+close-out link-up — 2c and 3 ✅ on DEV (2026-10-20).
 - **`sql/2026-10-20_outreach_log.sql`** (applied to DEV 2026-10-20; paste on
   LIVE at release): `pi_outreach_campaigns` (project, name; unique per project,
   case-insensitive), `pi_outreach_actions` (date, type, party = who did it,
@@ -3558,7 +3558,37 @@ close-out link-up ✅ 2c on DEV (2026-10-20). Step 3 waits for Jeff.
     the `.docx` branch (aggregate lines always; titles only with "Include data
     table" — no itemized `else`). It is **period-scoped**: added to
     `PERIOD_SCOPED_TYPES` (test 31 updated) and `TABLE_ELIGIBLE_TYPES`.
+- **Step 3 — the close-out link-up (2026-10-20, Jeff: "limit the counts to
+  the dates too").** An INTERIM close-out has required "Dates this interim
+  covers" (`intake.periodFrom` / `periodTo`, field kind `period` in section 1;
+  changing them redraws the form, `_coSetPeriod`). `_coWindow(co)` (null for a
+  Final) + `_coInWin(date, w)`; `_coFactsFor(co)` = `_closeoutFacts(projId, w)`
+  + `interim`, and EVERY close-out path uses it: interactions/inbound calls by
+  date, events by `meeting_date`, issues by `date_raised`, commitments by
+  `date_made`, PI reports by `archived_at`, stakeholders = linked by the end
+  date (`added_date`), duration = the window. `_coFigures`, `_coHighlightFacts`
+  and `_coCommlogFacts` apply the same window; undated records are left out of
+  an interim. The title prints "Covering <dates>" (a highlighted hole when an
+  interim has none); Glance says "Period covered".
+  - **Sections 3–6 fill from the Outreach log** (`_coOutreach`, field kind
+    `outreach`, `CO_OUTREACH_MAP`): News coverage + Trucking/industry → news
+    links; Social post → social links with the counts read on or before the
+    window end; Newsletter → edition links and **Editions sent**
+    (`newsletterSource` 'outreach'; a final with no logged newsletters falls
+    back to the deliverables count; an interim falls back to the typed count);
+    Website update → the website highlight's facts only (not links); Press
+    release / 511 alert / Agency coordination / Other → the outreach / traffic /
+    coord highlights' AI facts. Logged items show read-only in the intake with
+    "Open Outreach" (`coGoOutreach`). The intake rows now add only what the log
+    doesn't have; `_coHighlightLinks(kind, it, f)` prints the log first and a
+    link in both ONCE (`_coUrlKey`: no protocol / www / trailing slash /
+    #fragment; the query string is kept), with a typed comment sample placed
+    under the matching logged post. Section pills read "From the Outreach log
+    (N)" / "+ your entries". Glance adds "Outreach logged (releases, posts,
+    coverage)".
 - Guarded by `test/tests/92-link-preview.test.js` (reader),
+  `test/tests/95-closeout-window-outreach.test.js` (interim window + close-out
+  link-up; fails when the window is ignored),
   `test/tests/93-outreach-log.test.js` (the view and dialog) and
   `test/tests/94-outreach-reports.test.js` (campaign manager, stats window,
   quick report, section preview = snapshot, .docx table toggle; verified to

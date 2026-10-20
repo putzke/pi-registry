@@ -11506,6 +11506,7 @@ const CLOSEOUT_TYPES = {
         feeds: 'cover letter address block, Re: line, salutation',
         fields: [
           { kind: 'project' },
+          { kind: 'period' },
           { key: 'route', label: 'Route', w: 2, ph: 'e.g. US-89 (Main Street)',
             hint: 'Leave blank if the project name already starts with the route.' },
           { key: 'startMp', label: 'Start MP', w: 1 },
@@ -11539,6 +11540,7 @@ const CLOSEOUT_TYPES = {
           { key: 'websiteUrl', label: 'Project website', kind: 'url', w: 2, ph: 'https://udotinput.utah.gov/…' },
           { key: 'projectEmail', label: 'Project email', kind: 'email', w: 1 },
           { key: 'hotline', label: 'Hotline', kind: 'tel', w: 1 },
+          { kind: 'outreach', key: 'website', types: 'Website update', prints: false },
           { kind: 'compass', fact: 'inboundCalls', label: 'Inbound calls', ovr: 'ovrInboundCalls',
             note: 'counted from Phone · Incoming interactions' },
           { kind: 'rows', key: 'visits', label: 'Website visits over time',
@@ -11550,7 +11552,8 @@ const CLOSEOUT_TYPES = {
       { id: 'news', title: 'News coverage',
         feeds: 'PI Highlights › early outreach & advertising',
         fields: [
-          { kind: 'rows', key: 'news',
+          { kind: 'outreach', key: 'news', types: 'News coverage or Trucking/industry publication', prints: true },
+          { kind: 'rows', key: 'news', label: 'Anything the Outreach log doesn’t have',
             hint: 'Each prints as a clickable label, (Outlet – what it covered), never a bare URL.',
             cols: [ { k: 'outlet', l: 'Outlet', ph: 'e.g. Cache Valley Daily', w: 170 },
                     { k: 'topic', l: 'What it covered', ph: 'e.g. nighttime closures announced', w: 240 },
@@ -11560,8 +11563,9 @@ const CLOSEOUT_TYPES = {
       { id: 'social', title: 'Social media',
         feeds: 'PI Highlights › UDOT & external social media',
         fields: [
-          { kind: 'rows', key: 'social',
-            hint: 'Engagement counts and a comment sample are optional, but the section reads stronger with them.',
+          { kind: 'outreach', key: 'social', types: 'Social post', prints: true },
+          { kind: 'rows', key: 'social', label: 'Anything the Outreach log doesn’t have, and comment samples',
+            hint: 'Engagement counts and a comment sample are optional, but the section reads stronger with them. A post with the same link as one in the Outreach log prints once, with your comment sample under it.',
             cols: [ { k: 'account', l: 'Account & platform', ph: 'e.g. Logan City – Facebook', w: 190 },
                     { k: 'url', l: 'Link', ph: 'https://…' },
                     { k: 'engagement', l: 'Engagement', ph: 'e.g. 4,111 likes', w: 130 },
@@ -11571,10 +11575,11 @@ const CLOSEOUT_TYPES = {
       { id: 'newsletters', title: 'Newsletters',
         feeds: 'PI Highlights › email updates, Program at a Glance',
         fields: [
+          { kind: 'outreach', key: 'editions', types: 'Newsletter', prints: true },
           { kind: 'newsletterCount', key: 'nlCount' },
           { key: 'subsStart', label: 'Subscribers at first send', w: 1, br: true },
           { key: 'subsEnd', label: 'Subscribers at completion', w: 1 },
-          { kind: 'rows', key: 'editions', label: 'Edition links',
+          { kind: 'rows', key: 'editions', label: 'Edition links the Outreach log doesn’t have',
             hint: 'Only editions with a link are listed in the report.',
             cols: [ { k: 'sent', l: 'Sent', ph: 'e.g. Dec 19, 2025', w: 130 },
                     { k: 'title', l: 'Title', ph: 'e.g. Winter Suspension', w: 280 },
@@ -11619,8 +11624,8 @@ const CLOSEOUT_TYPES = {
     outline: [
       ['Cover letter', 'project, PIN', 'recipient, route & mileposts, signature'],
       ['PI Program at a Glance', 'interactions, stakeholders, PI reports, issues', 'website visits, subscribers, your metrics'],
-      ['PI Highlights', 'interactions, events, PI reports', 'news, social & newsletter links'],
-      ['Stakeholder Communications Log Summary', 'every interaction, the whole project', ''],
+      ['PI Highlights', 'interactions, events, PI reports, the Outreach log (news, posts, newsletters, 511 alerts)', 'links the Outreach log doesn’t have, comment samples'],
+      ['Stakeholder Communications Log Summary', 'every interaction (an interim: only its dates)', ''],
       ['Commitments to the Public (if any)', 'commitments and whether each was kept', ''],
       ['Right-of-Way & Property Owner Outreach (if any parcels)', 'parcels, owners reached, who can sign, sentiment', 'optional narrative'],
       ['Lessons Learned & Recommendations', 'resolved issues, as context', 'your pointers'],
@@ -11647,14 +11652,74 @@ function _coList(projF) {
     });
 }
 
+// ── The dates a close-out covers (Oct 2026, Jeff) ──
+// A final covers the whole project (no window). An interim covers
+// intake.periodFrom … periodTo, and EVERY count, chart, AI fact and Outreach
+// log entry in it is limited to those dates. An undated record can't be placed
+// in a window, so an interim leaves it out.
+function _coIt(co) { return (_coWork && co && _coWork.id === co.id) ? _coWork.intake : ((co && co.intake) || {}); }
+function _coWindow(co) {
+  if (!co || co.label === 'Final') return null;
+  const it = _coIt(co);
+  const f = _coVal(it.periodFrom) ? String(it.periodFrom).slice(0, 10) : '', t = _coVal(it.periodTo) ? String(it.periodTo).slice(0, 10) : '';
+  return f || t ? { from: f, to: t } : null;
+}
+function _coInWin(d, w) {
+  if (!w) return true;
+  d = String(d || '').slice(0, 10);
+  if (!d) return false;
+  return (!w.from || d >= w.from) && (!w.to || d <= w.to);
+}
+function _coWinLabel(w) {
+  if (!w) return '';
+  return w.from && w.to ? _fmtDateRange(w.from, w.to) : w.from ? 'from ' + fmt(w.from) : 'through ' + fmt(w.to);
+}
+// The facts for ONE close-out: its window applied, and whether it is an interim.
+function _coFactsFor(co) {
+  return Object.assign(_closeoutFacts(co.projectId, _coWindow(co)), { interim: !!co && co.label !== 'Final' });
+}
+
+// ── The Outreach log in the close-out (step 3, Oct 2026) ──
+// Sections 3–6 fill themselves from the Outreach log, dated inside the
+// close-out's window; the intake rows only add what the log doesn't have.
+// Which outreach types feed which part of the report:
+const CO_OUTREACH_MAP = {
+  news: ['News coverage', 'Trucking/industry publication'], social: ['Social post'], editions: ['Newsletter'],
+  website: ['Website update'], release: ['Press release'], traffic: ['511 alert'],
+  coord: ['Agency/partner coordination'], other: ['Other']
+};
+function _coOutreach(projId, w) {
+  const st = _outreachStats(projId, (w && w.from) || '', (w && w.to) || '');
+  const out = { total: st.total, stats: st };
+  Object.keys(CO_OUTREACH_MAP).forEach(function (k) {
+    out[k] = st.rows.filter(function (x) { return CO_OUTREACH_MAP[k].indexOf(x.a.actionType) > -1; }).reverse();   // oldest first
+  });
+  return out;
+}
+// Two links to the same page print once: compared without protocol, "www.",
+// a trailing slash or a #fragment (the query string is kept — it often IS the post).
+function _coUrlKey(u) {
+  return String(u || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/#.*$/, '').replace(/\/+$/, '');
+}
+function _coOutreachLine(x) {
+  const a = x.a, c = x.r ? _outCountsText(x.r) : '';
+  return fmt(a.actionDate) + ': ' + String(a.title || '').trim() + (_coVal(a.outlet) ? ' (' + String(a.outlet).trim() + ')' : '')
+    + (c ? ' — ' + c + ' as of ' + fmt(x.r.readOn) : '');
+}
+
 // Everything the report counts, computed live. Every id is compared as a
 // String: project_id is bigint on some tables and text on others.
-function _closeoutFacts(projId) {
+// w = the close-out's window (null = the whole project).
+function _closeoutFacts(projId, w) {
   const pid = String(projId);
+  w = w || null;
   const mine = function (k) { return (DB.get(k) || []).filter(function (x) { return String(x.projectId) === pid; }); };
-  const ints = mine('interactions');
+  const ints = mine('interactions').filter(function (i) { return _coInWin(i.date, w); });
   const dates = ints.map(function (i) { return i.date; }).filter(Boolean).sort();
-  const issues = mine('issues'), comms = mine('commitments'), dels = mine('deliverables');
+  const issues = mine('issues').filter(function (i) { return _coInWin(i.dateRaised, w); });
+  const comms = mine('commitments').filter(function (c) { return _coInWin(c.dateMade, w); });
+  const dels = mine('deliverables');
+  const outreach = _coOutreach(pid, w);
   const nl = dels.filter(function (d) { return CLOSEOUT_NEWSLETTER_TYPES.indexOf(d.type) > -1; });
   const nlTracked = nl.filter(function (d) { return Number(d.contractedQty) > 0; });
   const proj = (DB.get('projects') || []).find(function (p) { return String(p.id) === pid; }) || {};
@@ -11664,27 +11729,33 @@ function _closeoutFacts(projId) {
     interactions: ints.length,
     intSpan: span(dates[0], dates[dates.length - 1]),
     inboundCalls: ints.filter(function (i) { return i.channel === 'Phone' && i.direction === 'Incoming'; }).length,
-    stakeholders: mine('project_stakeholders').length,
-    piReports: (_syncCache.report_archive || []).filter(function (r) { return String(r.projectId) === pid; }).length,
-    events: mine('meetings').length,
+    // The registry as it stood at the end of the window.
+    stakeholders: mine('project_stakeholders').filter(function (l) { return !(w && w.to) || !_coVal(l.addedDate) || String(l.addedDate).slice(0, 10) <= w.to; }).length,
+    piReports: (_syncCache.report_archive || []).filter(function (r) { return String(r.projectId) === pid && _coInWin(String(r.archivedAt || '').slice(0, 10), w); }).length,
+    events: mine('meetings').filter(function (m) { return _coInWin(m.date, w); }).length,
     issues: issues.length,
     issuesResolved: issues.filter(function (i) { return i.status === 'Resolved'; }).length,
     commitments: comms.length,
     commitmentsKept: comms.filter(function (c) { return c.status === 'Fulfilled'; }).length,
     deliverables: dels,
     deliverablesComplete: dels.filter(function (d) { return d.status === 'Complete'; }).length,
-    // null = Cirrus Cc can't count editions (no newsletter deliverable with a
-    // contracted quantity); the intake's typed count stands in.
-    newsletterEditions: nlTracked.length
-      ? nlTracked.reduce(function (s, d) { return s + (Number(d.deliveredCount) || 0); }, 0) : null,
+    // Editions sent: the Outreach log's newsletters in the window when there
+    // are any; otherwise (whole project only) the newsletter deliverables'
+    // delivered count. A deliverable count can't be dated, so an interim
+    // without logged newsletters falls back to the typed count (null here).
+    newsletterEditions: outreach.editions.length ? outreach.editions.length
+      : (!w && nlTracked.length ? nlTracked.reduce(function (s, d) { return s + (Number(d.deliveredCount) || 0); }, 0) : null),
+    newsletterSource: outreach.editions.length ? 'outreach' : (!w && nlTracked.length ? 'deliverables' : ''),
     newsletterUntracked: nl.filter(function (d) { return !(Number(d.contractedQty) > 0); }),
-    duration: span(proj.startDate, proj.endDate) || span(dates[0], dates[dates.length - 1]),
+    duration: w ? _coWinLabel(w) : (span(proj.startDate, proj.endDate) || span(dates[0], dates[dates.length - 1])),
     commitmentList: comms.slice().sort(function (a, b) {
       return String(a.dateMade || a.dueDate || '').localeCompare(String(b.dateMade || b.dueDate || ''));
     }),
     parcels: (DB.get('parcels') || []).filter(function (p) { return String(p.projectId) === pid; }).length,
     parcelOwners: rowF.owners,
-    row: rowF
+    row: rowF,
+    outreach: outreach,
+    window: w
   };
 }
 
@@ -11747,13 +11818,14 @@ function _closeoutTabHTML(projF) {
   }
   list.forEach(function (co) {
     const it = co.intake || {}, t = _coType(co);
-    const st = _coOverall(co, f);
+    const st = _coOverall(co, _coFactsFor(co));
     h += '<div style="background:#13284A;border:1px solid rgba(45,125,210,.32);border-radius:12px;padding:18px 20px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:16px;align-items:center">'
       + '<div style="flex:999 1 380px;min-width:0">'
       + '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:4px">'
       + '<span style="font-size:15px;font-weight:700;color:var(--white)">' + escHtml(co.label) + ' close-out</span>'
       + '<span class="co-chip" style="background:rgba(255,255,255,.08);color:var(--mist)">' + escHtml(t.label) + '</span></div>'
       + '<div style="font-size:12px;color:var(--slate)">' + (_coVal(it.scmName) ? 'To: ' + escHtml(it.scmName) : 'Recipient not entered yet')
+      + (_coWindow(co) ? ' · covers ' + escHtml(_coWinLabel(_coWindow(co))) : (co.label !== 'Final' ? ' · <span style="color:var(--amber)">dates not set</span>' : ''))
       + (co.updatedAt ? ' · last edited ' + escHtml(fmt(String(co.updatedAt).slice(0, 10))) : '') + '</div>'
       + '<div style="font-size:12px;margin-top:6px;color:' + (st.missing ? 'var(--amber)' : 'var(--teal)') + '">'
       + (st.missing ? 'Required fields missing' : 'Required fields complete') + ' · '
@@ -11844,10 +11916,12 @@ function _coOverall(co, facts) {
 }
 
 function _coSectionState(s, it, facts) {
-  let has = false;
+  let has = false, fromLog = 0;
   const missing = [];
   s.fields.forEach(function (fd) {
-    if (fd.kind === 'rows') { if ((it[fd.key] || []).some(_coRowHas)) has = true; }
+    if (fd.kind === 'period') { if (facts && facts.interim && !(_coVal(it.periodFrom) && _coVal(it.periodTo))) missing.push('Dates covered'); }
+    else if (fd.kind === 'outreach') { fromLog += ((facts && facts.outreach && facts.outreach[fd.key]) || []).length; }
+    else if (fd.kind === 'rows') { if ((it[fd.key] || []).some(_coRowHas)) has = true; }
     else if (fd.kind === 'compass') { if (_coVal(it[fd.ovr])) has = true; }
     else if (fd.kind === 'deliverables') {
       const d = it.deliverables || {};
@@ -11858,7 +11932,7 @@ function _coSectionState(s, it, facts) {
     }
   });
   const warns = s.warn ? s.warn(it, facts) : [];
-  return { state: missing.length ? 'missing' : (has || s.auto ? 'done' : 'empty'), missing: missing, warns: warns };
+  return { state: missing.length ? 'missing' : (has || fromLog || s.auto ? 'done' : 'empty'), missing: missing, warns: warns, fromLog: fromLog, typed: has };
 }
 
 // ── Start / open / close / delete ─────────────────────────────────────────
@@ -11990,7 +12064,7 @@ function renderCloseoutIntake(el, co) {
   if (!_coWork || _coWork.id !== co.id) _coWork = { id: co.id, intake: JSON.parse(JSON.stringify(co.intake || {})) };
   const t = _coType(co), it = _coWork.intake;
   const proj = (DB.get('projects') || []).find(function (p) { return String(p.id) === String(co.projectId); }) || {};
-  const facts = _closeoutFacts(co.projectId);
+  const facts = _coFactsFor(co);
   _coWork.facts = facts;
   _coWork.proj = proj;
   const nav = t.sections.map(function (s, i) {
@@ -12086,14 +12160,52 @@ function _coBlockField(fd, it, f, proj) {
       + '<div class="fr" style="flex:1 1 220px;margin:0"><input aria-label="Override ' + escHtml(fd.label) + '" data-k="' + fd.ovr + '" oninput="_coSet(this)" placeholder="Override (optional)" value="' + escHtml(it[fd.ovr]) + '"></div>'
       + '</div></div>';
   }
+  if (fd.kind === 'period') {
+    if (!f.interim) {
+      return '<div style="margin-bottom:12px">' + lbl('Dates covered' + cchip)
+        + '<div class="co-lock">The whole project. A final close-out counts everything; an interim covers the dates you set.</div></div>';
+    }
+    const dIn = function (k, l) {
+      return '<div class="fr" style="flex:1 1 160px;margin:0"><label for="co-f-' + k + '">' + l + '</label>'
+        + '<input type="date" id="co-f-' + k + '" data-k="' + k + '" onchange="_coSetPeriod(this)" value="' + escHtml(it[k]) + '"></div>';
+    };
+    return '<div style="margin-bottom:12px">' + lbl('Dates this interim covers <span style="color:var(--amber)">*</span>')
+      + '<div class="co-row" style="align-items:flex-end;gap:10px">' + dIn('periodFrom', 'From') + dIn('periodTo', 'To') + '</div>'
+      + '<div style="font-size:11px;color:var(--fog);margin-top:4px">Every count, chart, AI draft and Outreach log entry in this interim is limited to these dates. Undated records are left out.</div></div>';
+  }
+  if (fd.kind === 'outreach') {
+    const rows = (f.outreach && f.outreach[fd.key]) || [];
+    const head = lbl('From the Outreach log' + cchip);
+    const win = f.window ? ' dated ' + escHtml(_coWinLabel(f.window)) : '';
+    if (!rows.length) {
+      return '<div style="margin-bottom:12px">' + head + '<div style="font-size:12px;color:var(--fog)">Nothing logged as ' + escHtml(fd.types) + win
+        + ' yet. Anything logged that way in the Outreach view ' + (fd.prints ? 'prints here' : 'is used here') + ' automatically. '
+        + '<button type="button" class="btn btn-sm" onclick="coGoOutreach()">Open Outreach</button></div></div>';
+    }
+    return '<div style="margin-bottom:14px">' + head
+      + '<div style="font-size:12px;color:var(--slate);margin-bottom:6px">' + rows.length + ' ' + escHtml(fd.types.toLowerCase()) + (rows.length === 1 ? '' : ' entries') + win + '. '
+      + (fd.prints ? 'These print in the report automatically.' : 'These go into this heading’s AI draft (how often the site was updated); they are not listed as links.')
+      + ' To change one, edit it in the Outreach view. <button type="button" class="btn btn-sm" onclick="coGoOutreach()">Open Outreach</button></div>'
+      + '<div style="overflow-x:auto"><table class="co-tbl" style="min-width:560px"><thead><tr><th style="width:100px">Date</th><th>Title</th><th style="width:160px">Outlet</th><th style="width:190px">Engagement</th></tr></thead><tbody>'
+      + rows.map(function (x) {
+        const a = x.a, safe = /^https?:\/\//i.test(a.url || '');
+        return '<tr style="border-top:1px solid rgba(255,255,255,.07)"><td style="color:var(--mist);white-space:nowrap">' + escHtml(fmt(a.actionDate)) + '</td>'
+          + '<td style="color:var(--white)">' + (safe ? '<a href="' + escHtml(a.url) + '" target="_blank" rel="noopener noreferrer" style="color:var(--sky-lt)">' + escHtml(a.title || '') + ' ↗</a>' : escHtml(a.title || '') + (fd.prints ? ' <span style="color:var(--amber)">· no link</span>' : '')) + '</td>'
+          + '<td style="color:var(--mist)">' + escHtml(a.outlet || '—') + '</td>'
+          + '<td style="color:var(--mist)">' + (x.r ? escHtml(_outCountsText(x.r) || '—') + ' <span style="color:var(--fog)">· ' + escHtml(fmt(x.r.readOn)) + '</span>' : '—') + '</td></tr>';
+      }).join('') + '</tbody></table></div></div>';
+  }
   if (fd.kind === 'rows') return _coRowsHTML(fd, it);
   if (fd.kind === 'deliverables') return _coDeliverablesHTML(it, f);
   if (fd.kind === 'newsletterCount') {
     if (f.newsletterEditions !== null) {
       return '<div style="margin-bottom:12px">' + lbl('Editions sent' + cchip)
-        + '<div class="co-lock"><span style="font-family:var(--mono)">' + f.newsletterEditions + '</span> <span style="color:var(--slate)">counted from your newsletter deliverables</span></div></div>';
+        + '<div class="co-lock"><span style="font-family:var(--mono)">' + f.newsletterEditions + '</span> <span style="color:var(--slate)">'
+        + (f.newsletterSource === 'outreach' ? 'newsletters in the Outreach log' + (f.window ? ', dated ' + escHtml(_coWinLabel(f.window)) : '') : 'counted from your newsletter deliverables') + '</span></div></div>';
     }
-    const why = f.newsletterUntracked.length
+    const why = f.window
+      ? 'No newsletters are in the Outreach log for these dates. Log each edition there (type Newsletter) and this counts itself; until then, type the count.'
+      : f.newsletterUntracked.length
       ? '“' + escHtml(f.newsletterUntracked[0].title || f.newsletterUntracked[0].type) + '” has no contracted quantity in Deliverables, so Cirrus Cc can’t count editions. Set one there and this fills itself in; until then, type the count.'
       : 'There is no newsletter deliverable on this project. If newsletters went out, type the count.';
     return '<div style="background:rgba(232,160,32,.08);border:1px solid rgba(232,160,32,.3);border-radius:8px;padding:12px 14px;margin-bottom:12px">'
@@ -12204,6 +12316,21 @@ function _coSet(el) {
   _coSaveSoon();
 }
 
+// The dates an interim covers change every count, so the form is redrawn.
+function _coSetPeriod(el) {
+  if (!_coWork) return;
+  _coWork.intake[el.dataset.k] = el.value;
+  _coWork.facts = null;
+  _coSaveSoon();
+  _coRerender();
+}
+async function coGoOutreach() {
+  const co = (_syncCache.closeouts || []).find(function (c) { return _coWork && c.id === _coWork.id; });
+  await _coSave();
+  if (co) S.projectFilter = String(co.projectId);
+  setView('outreach');
+}
+
 function _coAddRow(key) {
   if (!_coWork) return;
   const rows = _coWork.intake[key] || (_coWork.intake[key] = []);
@@ -12252,13 +12379,14 @@ function _coRefreshStatus() {
   if (!_coWork) return;
   const co = (_syncCache.closeouts || []).find(function (c) { return c.id === _coWork.id; });
   if (!co) return;
-  const t = _coType(co), it = _coWork.intake, f = _coWork.facts || _closeoutFacts(co.projectId);
+  const t = _coType(co), it = _coWork.intake, f = _coWork.facts || _coFactsFor(co);
   t.sections.forEach(function (s) {
     const r = _coSectionState(s, it, f);
     let pill;
     if (r.state === 'missing') pill = '<span class="co-pill" style="background:rgba(232,160,32,.14);color:#F2B650">Needs ' + r.missing.join(', ') + '</span>';
     else if (r.warns.length) pill = '<span class="co-pill" style="background:rgba(232,160,32,.14);color:#F2B650">' + r.warns.length + ' gap' + (r.warns.length === 1 ? '' : 's') + '</span>';
-    else if (r.state === 'done') pill = '<span class="co-pill" style="background:rgba(29,158,117,.16);color:#5BD3A9">' + (s.auto ? 'Counted by Cirrus Cc' : 'Complete') + '</span>';
+    else if (r.state === 'done') pill = '<span class="co-pill" style="background:rgba(29,158,117,.16);color:#5BD3A9">'
+      + (r.fromLog ? 'From the Outreach log (' + r.fromLog + ')' + (r.typed ? ' + your entries' : '') : s.auto ? 'Counted by Cirrus Cc' : 'Complete') + '</span>';
     else pill = '<span class="co-pill" style="background:rgba(255,255,255,.06);color:var(--fog)">Left out of the report</span>';
     const p = document.getElementById('co-st-' + s.id); if (p) p.innerHTML = pill;
     const n = document.getElementById('co-nav-' + s.id);
@@ -12336,21 +12464,36 @@ function _coHole(label) { return { text: '[' + label + ']', hl: true }; }
 
 // The links printed under a highlight heading, from the intake. A row with a
 // label but no usable link still prints, flagged, rather than vanishing.
-function _coHighlightLinks(kind, it) {
-  const out = [];
+function _coHighlightLinks(kind, it, f) {
+  const out = [], seen = {};
+  const ol = (f && f.outreach) || {};
   const link = function (url, label) {
     const u = _coSafeUrl(url);
     return u ? { t: 'p', after: 2, runs: [{ text: label, link: u }] }
              : { t: 'p', after: 2, runs: [{ text: label + ' ' }, _coHole('link missing')] };
   };
+  // The Outreach log first (oldest first), then the intake rows; a link that
+  // is in both prints once.
+  const fresh = function (url) { const k = _coUrlKey(url); if (!k) return true; if (seen[k]) return false; seen[k] = 1; return true; };
   if (kind === 'news') {
+    (ol.news || []).forEach(function (x) {
+      if (!fresh(x.a.url)) return;
+      const label = '(' + [x.a.outlet, x.a.title].filter(_coVal).join(' – ') + ')';
+      out.push(link(x.a.url, label === '()' ? '(News article)' : label));
+    });
     (it.news || []).filter(_coRowHas).forEach(function (r) {
+      if (!fresh(r.url)) return;
       const label = '(' + [r.outlet, r.topic].filter(_coVal).join(' – ') + ')';
       out.push(link(r.url, label === '()' ? '(News article)' : label));
     });
   } else if (kind === 'editions') {
     // Only editions with a link are listed (the intake says so).
+    (ol.editions || []).filter(function (x) { return _coVal(x.a.url); }).forEach(function (x) {
+      if (!fresh(x.a.url)) return;
+      out.push(link(x.a.url, '(' + [fmt(x.a.actionDate), x.a.title].filter(_coVal).join(' – ') + ')'));
+    });
     (it.editions || []).filter(function (r) { return _coVal(r && r.url); }).forEach(function (r) {
+      if (!fresh(r.url)) return;
       const label = '(' + [r.sent, r.title].filter(_coVal).join(' – ') + ')';
       out.push(link(r.url, label === '()' ? '(Email update)' : label));
     });
@@ -12358,7 +12501,23 @@ function _coHighlightLinks(kind, it) {
     if (_coVal(it.websiteUrl)) out.push(link(it.websiteUrl, '(Project website)'));
     if (_coVal(it.projectEmail)) out.push(link(it.projectEmail, '(' + String(it.projectEmail).trim() + ')'));
   } else if (kind === 'social') {
-    (it.social || []).filter(_coRowHas).forEach(function (r) {
+    // A typed row with the same link as a logged post adds its comment sample
+    // under that post instead of printing the post twice.
+    const sample = function (r) {
+      const m = String(r.comment).trim().match(/^@?([^:\s][^:]{0,40}):\s*([\s\S]+)$/);
+      return { t: 'p', left: 720, after: 2, runs: m
+        ? [{ text: 'comment sample:  ' }, { text: m[1].trim(), b: true }, { text: '  ' + m[2].trim() }]
+        : [{ text: 'comment sample:  ' }, { text: String(r.comment).trim() }] };
+    };
+    const typed = (it.social || []).filter(_coRowHas);
+    (ol.social || []).forEach(function (x) {
+      if (!fresh(x.a.url)) return;
+      out.push(link(x.a.url, '(' + [x.a.outlet || x.a.author || 'Social post', x.r ? _outCountsText(x.r) : ''].filter(_coVal).join(' – ') + ')'));
+      const k = _coUrlKey(x.a.url);
+      typed.filter(function (r) { return k && _coUrlKey(r.url) === k && _coVal(r.comment); }).forEach(function (r) { out.push(sample(r)); });
+    });
+    typed.forEach(function (r) {
+      if (!fresh(r.url)) return;
       const label = '(' + [r.account || 'Social post', r.engagement].filter(_coVal).join(' – ') + ')';
       out.push(link(r.url, label));
       if (_coVal(r.comment)) {
@@ -12388,7 +12547,7 @@ function _coReportDoc(co) {
   const dr = it.draft || {};
   const rt = _coReportType(co);
   const proj = (DB.get('projects') || []).find(function (p) { return String(p.id) === String(co.projectId); }) || {};
-  const facts = _closeoutFacts(co.projectId);
+  const facts = _coFactsFor(co);
   const B = [], sections = [];
   const P = function (runs, o) { B.push(Object.assign({ t: 'p', runs: Array.isArray(runs) ? runs : [{ text: runs }] }, o || {})); };
   const txt = function (v, ph) { return _coVal(v) ? { text: String(v).trim() } : _coHole(ph); };
@@ -12432,6 +12591,8 @@ function _coReportDoc(co) {
   // ── Title ──
   const lbl = co.label && co.label !== 'Final' ? co.label + ' ' : '';
   B.push({ t: 'title', text: 'PIN #' + (proj.pid || '?') + ' ' + lbl + 'Public Involvement Close-Out Report' });
+  if (facts.window) B.push({ t: 'title', text: 'Covering ' + _coWinLabel(facts.window) });
+  else if (facts.interim) P([_coHole('Dates this interim covers — set them in the intake')], { align: 'center' });
   if (_coVal(it.reportDate)) B.push({ t: 'title', text: _fmtMDY(it.reportDate), after: 10 });
 
   // ── PI Program at a Glance ──
@@ -12445,7 +12606,7 @@ function _coReportDoc(co) {
     else if (show) gl.push([label, String(counted)]);
   };
   const gu = function (label, v) { if (_coVal(v)) { dag = true; gl.push([label, String(v).trim() + ' †']); } };
-  g('Program duration', facts.duration, 'ovrDuration', !!facts.duration);
+  g(facts.window ? 'Period covered' : 'Program duration', facts.duration, 'ovrDuration', !!facts.duration);
   g('PI reports issued', facts.piReports, 'ovrPiReports', facts.piReports > 0);
   g('Stakeholders in registry', facts.stakeholders, 'ovrStakeholders', true);
   g('Logged stakeholder interactions', facts.interactions + (facts.intSpan ? ' (' + facts.intSpan + ')' : ''), 'ovrInteractions', true);
@@ -12462,6 +12623,7 @@ function _coReportDoc(co) {
   }
   if (facts.newsletterEditions !== null) gl.push(['Email updates sent', String(facts.newsletterEditions)]);
   else gu('Email updates sent', it.nlCount);
+  if (facts.outreach.total) gl.push(['Outreach logged (releases, posts, coverage)', facts.outreach.total + ' (' + _outTallyText(facts.outreach.stats.byType, true) + ')']);
   if (facts.parcels > 0) gl.push(['Right-of-way parcels', facts.parcels + ' (' + facts.parcelOwners + ' owner' + (facts.parcelOwners === 1 ? '' : 's') + ' identified)']);
   (it.customMetrics || []).filter(function (r) { return r && _coVal(r.label) && _coVal(r.value); })
     .forEach(function (r) { gu(String(r.label).trim(), r.value); });
@@ -12474,7 +12636,7 @@ function _coReportDoc(co) {
   const hl = [];
   rt.highlights.forEach(function (h) {
     const paras = _coLines(dr['hl-' + h.id]);
-    const links = h.links ? _coHighlightLinks(h.links, it) : [];
+    const links = h.links ? _coHighlightLinks(h.links, it, facts) : [];
     if (!paras.length && !links.length) return;
     hl.push.apply(hl, _coRunIn(h.h, paras, 'narrative not written yet'));
     hl.push.apply(hl, links);
@@ -12504,7 +12666,7 @@ function _coReportDoc(co) {
   // ── Commitments to the Public — only when the project has any ──
   if (facts.commitments > 0) {
     B.push({ t: 'section', text: 'Commitments to the Public:' });
-    P(facts.commitments + ' commitment' + (facts.commitments === 1 ? ' was' : 's were') + ' made to the public during the project; '
+    P(facts.commitments + ' commitment' + (facts.commitments === 1 ? ' was' : 's were') + ' made to the public during ' + (facts.window ? 'this period' : 'the project') + '; '
       + facts.commitmentsKept + (facts.commitmentsKept === 1 ? ' was' : ' were') + ' kept'
       + (facts.commitments > facts.commitmentsKept ? ' and ' + (facts.commitments - facts.commitmentsKept) + ' remain' + (facts.commitments - facts.commitmentsKept === 1 ? 's' : '') + ' outstanding.' : '.'));
     B.push({ t: 'table', cols: [{ h: 'Commitment', w: 5000 }, { h: 'Made to', w: 2300 }, { h: 'Outcome', w: 2300 }],
@@ -12794,8 +12956,8 @@ function _coVisitPoints(rows) {
 // The figures and the two count tables, as report blocks. Returns the blocks
 // plus why anything was left out, for the report screen's section pill.
 function _coFigures(co, it) {
-  const pid = String(co.projectId);
-  const ints = (DB.get('interactions') || []).filter(function (i) { return String(i.projectId) === pid; });
+  const pid = String(co.projectId), w = _coWindow(co);
+  const ints = (DB.get('interactions') || []).filter(function (i) { return String(i.projectId) === pid && _coInWin(i.date, w); });
   const stakes = DB.get('stakeholders') || [];
   const blocks = [], out = [];
   let fig = 0;
@@ -12876,7 +13038,7 @@ function _coFigures(co, it) {
 
   // Issues escalated — titles, category and outcome. The client already sees
   // these in the portal; descriptions and resolution notes stay internal.
-  const issues = (DB.get('issues') || []).filter(function (x) { return String(x.projectId) === pid; })
+  const issues = (DB.get('issues') || []).filter(function (x) { return String(x.projectId) === pid && _coInWin(x.dateRaised, w); })
     .sort(function (a, b) { return String(a.dateRaised || '').localeCompare(String(b.dateRaised || '')); });
   if (issues.length) {
     tcap('Issues escalated to the project team');
@@ -13115,7 +13277,7 @@ function renderCloseoutReport(el, co) {
   const t = _coType(co), rt = _coReportType(co), it = _coWork.intake, dr = it.draft || {};
   const proj = (DB.get('projects') || []).find(function (p) { return String(p.id) === String(co.projectId); }) || {};
   _coWork.proj = proj;
-  _coWork.facts = _closeoutFacts(co.projectId);
+  _coWork.facts = _coFactsFor(co);
   const lh = it.letterhead || rt.letterhead;
   const slot = function (key, label, hint, rows, extra, btn) {
     return '<div class="fr" style="margin-bottom:14px">'
@@ -13220,10 +13382,14 @@ function _coCloseoutSystemPrompt() {
 // and the intake, notes = what the consultant typed in that heading's box.
 function _coHighlightFacts(co, hid) {
   const it = (_coWork && _coWork.id === co.id) ? _coWork.intake : (co.intake || {});
-  const pid = String(co.projectId);
-  const mine = function (k) { return (DB.get(k) || []).filter(function (x) { return String(x.projectId) === pid; }); };
+  const pid = String(co.projectId), w = _coWindow(co);
+  // Dated records only inside the window (an interim); everything for a final.
+  const DATE_OF = { interactions: 'date', meetings: 'date', issues: 'dateRaised' };
+  const mine = function (k) { return (DB.get(k) || []).filter(function (x) { return String(x.projectId) === pid && (!DATE_OF[k] || _coInWin(x[DATE_OF[k]], w)); }); };
   const proj = (DB.get('projects') || []).find(function (p) { return String(p.id) === pid; }) || {};
-  const f = _closeoutFacts(co.projectId);
+  const f = _coFactsFor(co);
+  const ol = f.outreach;
+  const olLines = function (arr, what, max) { arr.slice(0, max || 12).forEach(function (x) { L.push(what + ' — ' + _coOutreachLine(x) + '.'); }); if (arr.length > (max || 12)) L.push('(and ' + (arr.length - (max || 12)) + ' more ' + what.toLowerCase() + ' entries)'); };
   const ints = mine('interactions');
   const inbound = ints.filter(function (i) { return i.direction !== 'Outgoing'; });
   const outbound = ints.filter(function (i) { return i.direction === 'Outgoing'; });
@@ -13250,10 +13416,17 @@ function _coHighlightFacts(co, hid) {
     if (types) L.push('External stakeholders in the registry, by type: ' + types + '.');
     const early = events.filter(function (e) { return !/partnering|progress meeting|pre-construction/i.test(e.type || ''); }).slice(0, 8);
     early.forEach(function (e) { L.push('Event — ' + evLine(e) + '.'); });
+    olLines(ol.release, 'Press release');
+    olLines(ol.news, 'News coverage');
+    olLines(ol.other, 'Other outreach');
+    const logged = {}; ol.news.forEach(function (x) { const k = _coUrlKey(x.a.url); if (k) logged[k] = 1; });
     (it.news || []).filter(_coRowHas).forEach(function (r) {
+      if (logged[_coUrlKey(r.url)]) return;
       L.push('News coverage — ' + [r.outlet, r.topic].filter(_coVal).join(': ') + '.');
     });
   } else if (hid === 'website') {
+    if (ol.website.length) L.push('Website updates posted: ' + ol.website.length + '.');
+    olLines(ol.website, 'Website update', 8);
     if (_coVal(it.websiteUrl)) L.push('A dedicated project website was used (its link is printed under the paragraph).');
     if (_coVal(it.projectEmail)) L.push('A dedicated project email address was used (printed under the paragraph).');
     if (_coVal(it.hotline)) L.push('Project hotline: ' + String(it.hotline).trim() + '.');
@@ -13268,7 +13441,9 @@ function _coHighlightFacts(co, hid) {
     if (_coVal(it.subsEnd)) L.push('Subscribers at completion: ' + String(it.subsEnd).trim() + '.');
     const n = f.newsletterEditions !== null ? f.newsletterEditions : (_coVal(it.nlCount) ? String(it.nlCount).trim() : '');
     if (n !== '' && n !== null) L.push('Email update editions sent: ' + n + '.');
+    olLines(ol.editions, 'Edition');
     (it.editions || []).filter(_coRowHas).forEach(function (r) {
+      if (ol.editions.some(function (x) { return _coUrlKey(x.a.url) && _coUrlKey(x.a.url) === _coUrlKey(r.url); })) return;
       if (_coVal(r.title) || _coVal(r.sent)) L.push('Edition — ' + [r.sent, r.title].filter(_coVal).join(': ') + '.');
     });
   } else if (hid === 'concerns') {
@@ -13289,8 +13464,15 @@ function _coHighlightFacts(co, hid) {
     const trOut = tr.filter(function (i) { return i.direction === 'Outgoing'; }).length;
     if (trOut) L.push('Outbound traffic-related notifications logged: ' + trOut + '.');
     if (tr.length - trOut) L.push('Inbound traffic-related contacts logged: ' + (tr.length - trOut) + '.');
+    if (ol.traffic.length) L.push('511 alerts logged: ' + ol.traffic.length + '.');
+    olLines(ol.traffic, '511 alert');
   } else if (hid === 'social') {
+    olLines(ol.social, 'Social post');
     (it.social || []).filter(_coRowHas).forEach(function (r) {
+      if (_coUrlKey(r.url) && ol.social.some(function (x) { return _coUrlKey(x.a.url) === _coUrlKey(r.url); })) {
+        if (_coVal(r.comment)) L.push('A sample comment on one of those posts is quoted under the paragraph.');
+        return;
+      }
       L.push('Social post — ' + [r.account || 'an account', r.engagement].filter(_coVal).join(', ')
         + (_coVal(r.comment) ? ' (a sample comment is quoted under the paragraph)' : '') + '.');
     });
@@ -13298,6 +13480,7 @@ function _coHighlightFacts(co, hid) {
     if (f.piReports) L.push('PI reports issued to the project team: ' + (_coVal(it.ovrPiReports) ? String(it.ovrPiReports).trim() : f.piReports) + '.');
     events.filter(function (e) { return /partnering|progress meeting|pre-construction|site visit|agency coordination/i.test(e.type || ''); })
       .slice(0, 10).forEach(function (e) { L.push('Meeting — ' + evLine(e) + '.'); });
+    olLines(ol.coord, 'Agency / partner coordination');
   }
   const dr = it.draft || {};
   return { lines: L, notes: _coLines(dr['hl-' + hid]) };
@@ -13313,6 +13496,7 @@ function _coHighlightRequest(co, hid) {
   const user = 'Section heading (printed separately, do not repeat it): ' + h.h + '\n'
     + 'Project: ' + (proj.name || '') + (_coVal(it.route) ? ' (' + String(it.route).trim() + ')' : '') + '\n'
     + 'Task: ' + t.task + '\n'
+    + (_coWindow(co) ? 'This is an interim close-out covering ' + _coWinLabel(_coWindow(co)) + ' only; write about that period.\n' : '')
     + 'Length: about ' + t.words + ' words in a single paragraph; never more than ' + t.max + ' words.\n\n'
     + (fx.lines.length ? 'FACTS FROM THE PROJECT RECORD (authoritative):\n- ' + fx.lines.join('\n- ') + '\n\n' : '')
     + (fx.notes.length ? 'NOTES FROM THE PI TEAM (authoritative; include every point):\n- ' + fx.notes.join('\n- ') + '\n\n' : '')
@@ -13438,9 +13622,9 @@ function _coWho(i, stakes) {
 // { counts:[lines], issues:[lines], log:[{date, line, who}], notes:[lines], chars } or null when nothing is logged.
 function _coCommlogFacts(co) {
   const it = (_coWork && _coWork.id === co.id) ? _coWork.intake : (co.intake || {});
-  const pid = String(co.projectId);
+  const pid = String(co.projectId), w = _coWindow(co);
   const stakes = DB.get('stakeholders') || [];
-  const ints = (DB.get('interactions') || []).filter(function (i) { return String(i.projectId) === pid; })
+  const ints = (DB.get('interactions') || []).filter(function (i) { return String(i.projectId) === pid && _coInWin(i.date, w); })
     .slice().sort(function (a, b) { return String(a.date || '').localeCompare(String(b.date || '')); });
   if (!ints.length) return null;
   const tally = function (arr, fn) {
@@ -13461,6 +13645,7 @@ function _coCommlogFacts(co) {
   });
   const anon = ints.filter(function (i) { return !i.stakeholderId; }).length;
   const counts = [
+    w ? 'This is an interim close-out covering ' + _coWinLabel(w) + ' only; every count and the log below are limited to that period.' : '',
     'Total logged contacts: ' + ints.length + '.',
     first && last ? 'Span: ' + _fmtDateRange(first, last) + ' (about ' + months + ' month' + (months === 1 ? '' : 's') + ').' : '',
     'Outbound (the team reaching out): ' + out.length + '; inbound or in-person: ' + inn.length + '.',
@@ -13472,7 +13657,7 @@ function _coCommlogFacts(co) {
       + (anon ? '; contacts with members of the public who were not named: ' + anon : '') + '.',
     'By type of stakeholder: ' + tally(ints, function (i) { return _coWho(i, stakes).split(':')[0]; }) + '.'
   ].filter(Boolean);
-  const issues = (DB.get('issues') || []).filter(function (x) { return String(x.projectId) === pid; });
+  const issues = (DB.get('issues') || []).filter(function (x) { return String(x.projectId) === pid && _coInWin(x.dateRaised, w); });
   const il = issues.length
     ? ['Issues escalated to the project team: ' + issues.length + ' (' + issues.filter(function (x) { return x.status === 'Resolved'; }).length + ' resolved).']
         .concat(issues.map(function (x) {

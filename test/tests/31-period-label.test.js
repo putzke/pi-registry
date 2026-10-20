@@ -44,8 +44,10 @@ module.exports = {
       t.eq(rule.parcels, '', 'nor the parcel register');
       t.eq(rule.noDates, '', 'no dates, no claim');
       t.eq(rule.halfDates, '', 'and half a range is not a range');
-      t.eq(rule.list, ['auto-concerns'],
-           'exactly one section type is period-scoped');
+      // auto-outreach joined in Oct 2026: it lists only actions dated inside
+      // the period (with counts read on or before its end), so it IS bounded.
+      t.eq(rule.list, ['auto-concerns', 'auto-outreach'],
+           'only the section types that are really bounded by the period');
 
       // ── the live preview ─────────────────────────────────────────────────
       const SECS = [

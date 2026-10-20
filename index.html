@@ -9025,7 +9025,7 @@ function renderOutreach(m){
   let html=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
     <div><div style="font-size:20px;font-weight:700;color:var(--white)">Outreach log</div>
       <div style="font-size:12px;color:var(--slate)">Press releases, newsletters, website updates, 511 alerts, social posts and news coverage — and how each was received</div></div>
-    <button class="btn btn-primary" id="out-add" onclick="openOutreachModal()">+ Log outreach</button>
+    <div style="display:flex;gap:8px"><button class="btn" id="out-camps" onclick="openCampaignsModal()">Campaigns</button><button class="btn btn-primary" id="out-add" onclick="openOutreachModal()">+ Log outreach</button></div>
   </div>
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px">
     ${tile(rows.length,'Actions'+(filtered?' (filtered)':''),'')}
@@ -9279,6 +9279,133 @@ async function delOutreach(id){
   await DB.set('outreach_actions',DB.get('outreach_actions').filter(a=>String(a.id)!==String(id)));
   closeM(); render();
 }
+
+// ── Manage campaigns (rename, add, delete) ──
+// Deleting a campaign never deletes outreach: its actions stay in the log,
+// without a campaign. The actions are cleared FIRST, so no saved action is left
+// pointing at a campaign that no longer exists.
+function openCampaignsModal(){
+  const pid=S.projectFilter;
+  if(!pid){ showToast('Pick a project first — campaigns belong to a project.','warn',3500); return; }
+  const p=DB.get('projects').find(x=>String(x.id)===String(pid))||{};
+  openM('Campaigns — '+(p.name||''),
+    `<div style="font-size:12px;color:var(--fog);margin-bottom:12px;line-height:1.5">A campaign groups the outreach that belongs to one push — for example "I-84 closures, October 2026". Renaming changes it on every action; deleting keeps the actions and leaves them without a campaign.</div>
+     <div id="out-camp-list">${_outCampListHTML(pid)}</div>
+     <div style="display:flex;gap:8px;margin-top:12px"><input id="out-camp-new" placeholder="New campaign name" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();outAddCampaign();}">
+       <button class="btn" id="out-camp-add" onclick="outAddCampaign()">Add campaign</button></div>`,
+    '<button class="btn btn-primary" onclick="closeM()">Done</button>');
+}
+function _outCampListHTML(pid){
+  const cs=_outCampaigns(pid);
+  if(!cs.length) return '<div style="font-size:12px;color:var(--fog)">No campaigns on this project yet.</div>';
+  return cs.map(c=>{
+    const n=_outActions(pid).filter(a=>String(a.campaignId)===String(c.id)).length;
+    return `<div class="out-camp-row" data-camp="${escHtml(c.id)}" style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+      <input id="out-camp-name-${escHtml(c.id)}" value="${escHtml(c.name)}" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();outRenameCampaign('${escHtml(c.id)}');}">
+      <span style="font-size:11px;color:var(--fog);white-space:nowrap;min-width:70px">${n} action${n!==1?'s':''}</span>
+      <button class="btn btn-sm" onclick="outRenameCampaign('${escHtml(c.id)}')">Rename</button>
+      <button class="btn btn-sm btn-danger" onclick="outDelCampaign('${escHtml(c.id)}')">Delete</button></div>`;
+  }).join('');
+}
+function _outCampRefresh(){
+  const el=document.getElementById('out-camp-list'); if(el) el.innerHTML=_outCampListHTML(S.projectFilter);
+  if(S.view==='outreach') renderOutreach(document.getElementById('main'));
+}
+function _outCampDup(pid,name,exceptId){
+  return _outCampaigns(pid).find(c=>String(c.id)!==String(exceptId||'')&&String(c.name).trim().toLowerCase()===name.toLowerCase());
+}
+async function outAddCampaign(){
+  const pid=S.projectFilter, inp=document.getElementById('out-camp-new');
+  const name=((inp&&inp.value)||'').trim();
+  if(!pid||!name) return;
+  if(_outCampDup(pid,name)){ showToast('This project already has a campaign called "'+name+'"','warn'); return; }
+  await DB.set('outreach_campaigns',DB.get('outreach_campaigns').concat([{id:DB.uid(),projectId:pid,name,createdBy:getLoggedBy()||null}]));
+  if(inp) inp.value='';
+  _outCampRefresh();
+}
+async function outRenameCampaign(id){
+  const pid=S.projectFilter, inp=document.getElementById('out-camp-name-'+id);
+  const name=((inp&&inp.value)||'').trim();
+  if(!name){ showToast('A campaign needs a name','warn'); return; }
+  if(_outCampDup(pid,name,id)){ showToast('This project already has a campaign called "'+name+'"','warn'); return; }
+  const all=DB.get('outreach_campaigns'), i=all.findIndex(c=>String(c.id)===String(id));
+  if(i<0||all[i].name===name) return;
+  all[i]={...all[i],name};
+  await DB.set('outreach_campaigns',all);
+  showToast('Campaign renamed','info',1800);
+  _outCampRefresh();
+}
+async function outDelCampaign(id){
+  const c=(DB.get('outreach_campaigns')||[]).find(x=>String(x.id)===String(id)); if(!c) return;
+  const n=(DB.get('outreach_actions')||[]).filter(a=>String(a.campaignId)===String(id)).length;
+  if(!confirm('Delete the campaign "'+c.name+'"?'+(n?' Its '+n+' action'+(n>1?'s stay':' stays')+' in the outreach log, without a campaign.':''))) return;
+  if(n) await DB.set('outreach_actions',DB.get('outreach_actions').map(a=>String(a.campaignId)===String(id)?{...a,campaignId:null}:a));
+  await DB.set('outreach_campaigns',DB.get('outreach_campaigns').filter(x=>String(x.id)!==String(id)));
+  if(String(S.outCampaign)===String(id)) S.outCampaign='';
+  _outCampRefresh();
+}
+
+// ── Reporting: ONE set of numbers for the quick report and the PI report ──
+// Actions dated inside the window (both ends optional); each action's counts
+// are its newest reading taken ON OR BEFORE the window's end, so a report for
+// September never shows a reading taken in October.
+function _outreachStats(projF, pstart, pend){
+  const acts=(DB.get('outreach_actions')||[]).filter(a=>String(a.projectId)===String(projF)
+      &&(!pstart||String(a.actionDate)>=pstart)&&(!pend||String(a.actionDate)<=pend))
+    .sort((a,b)=>String(b.actionDate).localeCompare(String(a.actionDate))||Number(b.id)-Number(a.id));
+  const rows=acts.map(a=>({a, r:_outReadings(a.id).find(r=>!pend||String(r.readOn)<=pend)||null}));
+  const add=(t,r)=>{ if(r) OUT_COUNTS.forEach(([k])=>{ if(_outHas(r[k])) t[k]+=Number(r[k]); }); };
+  const zero=()=>({reactions:0,comments:0,shares:0,views:0});
+  const tally=fn=>{ const m={}; rows.forEach(x=>{ const k=fn(x); if(k) m[k]=(m[k]||0)+1; }); return m; };
+  const totals=zero(), camps={};
+  rows.forEach(x=>{
+    add(totals,x.r);
+    const name=_outCampaignName(x.a.campaignId); if(!name) return;
+    const c=camps[name]||(camps[name]={name,n:0,withCounts:0,...zero()});
+    c.n++; if(x.r){ c.withCounts++; add(c,x.r); }
+  });
+  return {rows,total:rows.length,withCounts:rows.filter(x=>x.r).length,totals,
+    byType:tally(x=>x.a.actionType),byParty:tally(x=>x.a.party),
+    campaigns:Object.values(camps).sort((a,b)=>b.n-a.n||a.name.localeCompare(b.name))};
+}
+// "3 press release, 2 social post" (types read lower-case; parties keep their case).
+function _outTallyText(m, lower){
+  return Object.keys(m).sort((a,b)=>m[b]-m[a]||a.localeCompare(b)).map(k=>m[k]+' '+(lower?k.toLowerCase():k)).join(', ');
+}
+// Totals with zeros left out: "2,400 reactions · 120 comments".
+function _outTotalsText(t){ return OUT_COUNTS.filter(([k])=>t[k]).map(([k,l])=>Number(t[k]).toLocaleString()+' '+l.toLowerCase()).join(' · '); }
+function _outReadingNote(r){ return r?('as of '+_fmtMDY(r.readOn)+', '+(OUT_SOURCES[r.source]||r.source||'').toLowerCase()):''; }
+// The facts every AI narrative about outreach is given. Counts are computed
+// here; the model narrates them.
+function _outreachFactLines(st){
+  if(!st.total) return [];
+  const L=['Outreach actions: '+st.total+' ('+_outTallyText(st.byType,true)+'). Done by: '+_outTallyText(st.byParty,false)+'.'];
+  L.push(st.withCounts?('Engagement recorded on '+st.withCounts+' of '+st.total+' actions, latest reading of each: '+(_outTotalsText(st.totals)||'no counts')+'. Counts are as of the date each was read.')
+    :'No engagement counts were recorded.');
+  st.campaigns.forEach(c=>L.push('Campaign "'+c.name+'": '+c.n+' action'+(c.n!==1?'s':'')+(_outTotalsText(c)?', '+_outTotalsText(c):'')+'.'));
+  st.rows.slice(0,40).forEach(x=>L.push('- '+x.a.actionDate+' · '+x.a.actionType+' · '+(x.a.party||'')+' · '+String(x.a.title||'').slice(0,140)
+    +(x.a.outlet?' ('+x.a.outlet+')':'')+(x.r&&_outCountsText(x.r)?' — '+_outCountsText(x.r):'')));
+  if(st.rows.length>40) L.push('(and '+(st.rows.length-40)+' earlier actions)');
+  return L;
+}
+// The table under the PI report section (inline-styled: it is frozen into the archive).
+function _outreachPreviewTable(st, thStyle, tdStyle){
+  if(!st.total) return '<tbody><tr><td style="'+tdStyle+';color:#aaa;font-style:italic">No outreach logged in this period.</td></tr>';
+  let h='<colgroup><col style="width:11%"><col style="width:14%"><col style="width:33%"><col style="width:12%"><col style="width:14%"><col style="width:16%"></colgroup>'
+    +'<thead><tr><th style="'+thStyle+'">Date</th><th style="'+thStyle+'">Type</th><th style="'+thStyle+'">Title</th><th style="'+thStyle+'">By</th><th style="'+thStyle+'">Campaign</th><th style="'+thStyle+'">Engagement</th></tr></thead><tbody>';
+  st.rows.forEach(x=>{
+    const a=x.a, safe=/^https?:\/\//i.test(a.url||'');
+    h+='<tr><td style="'+tdStyle+';white-space:nowrap">'+escHtml(_fmtMDY(a.actionDate))+'</td>'
+      +'<td style="'+tdStyle+'">'+escHtml(a.actionType||'')+'</td>'
+      +'<td style="'+tdStyle+'">'+(safe?'<a href="'+escHtml(a.url)+'" style="color:#1a5fa8">'+escHtml(a.title||'')+'</a>':escHtml(a.title||''))
+        +(a.outlet?'<div style="color:#666;font-size:10px">'+escHtml(a.outlet)+'</div>':'')+'</td>'
+      +'<td style="'+tdStyle+'">'+escHtml(a.party||'')+'</td>'
+      +'<td style="'+tdStyle+'">'+escHtml(_outCampaignName(a.campaignId)||'—')+'</td>'
+      +'<td style="'+tdStyle+'">'+(x.r?escHtml(_outCountsText(x.r)||'—')+'<div style="color:#666;font-size:10px">'+escHtml(_outReadingNote(x.r))+'</div>':'—')+'</td></tr>';
+  });
+  return h;   // the caller closes the tbody and table
+}
+
 
 // ── Settings → Project hotlines ─────────────────────────────────────────────
 function renderHotlineCard(){
@@ -11083,6 +11210,8 @@ function renderReports(el){
       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M12 2C8.686 2 6 4.686 6 8c0 5 6 12 6 12s6-7 6-12c0-3.314-2.686-6-6-6z"/><circle cx="12" cy="8" r="2"/></svg>'},
     {id:'events-log',name:'Events & outreach log',desc:'All logged public events and outreach activities with attendance and notes',
       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>'},
+    {id:'outreach-log',name:'Outreach log',desc:'Press releases, newsletters, website updates, 511 alerts, social posts and news coverage, by campaign, with the latest engagement counts',
+      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" style="width:22px;height:22px"><path d="M3 10v4h3l7 5V5L6 10H3z"/><path d="M17 8.5a5 5 0 0 1 0 7"/></svg>'},
     {id:'pi-summary',name:'PI Compliance Summary',desc:'FHWA/NEPA public involvement summary: NEPA checklist, public meetings, comment response rate, LEP/EJ outreach, and commitments — export as PDF',
       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h4"/><circle cx="8" cy="9" r="1" fill="currentColor"/></svg>'},
     {id:'nepa-compliance',name:'NEPA Compliance Report',desc:'Checklist progress by phase group, outstanding items, and comment period duration compliance — works for one project or the full portfolio',
@@ -14146,7 +14275,7 @@ function generateIssuesReport(opts){
 }
 
 function getReportTitle(type){
-  var titles={'contact-list':'Stakeholder contact list','interaction-log':'Interaction log','followup-status':'Follow-up status report','sentiment-summary':'Sentiment / support summary','deliverable-status':'Deliverable / scope status','comment-matrix':'Public comment matrix','events-log':'Events & outreach log'};
+  var titles={'contact-list':'Stakeholder contact list','interaction-log':'Interaction log','followup-status':'Follow-up status report','sentiment-summary':'Sentiment / support summary','deliverable-status':'Deliverable / scope status','comment-matrix':'Public comment matrix','events-log':'Events & outreach log','outreach-log':'Outreach log'};
   return titles[type]||type;
 }
 
@@ -14159,7 +14288,7 @@ function getReportTitle(type){
 var QR_TONE={navy:'#1a3a5c',blue:'#2a78d6',orange:'#c4551f',green:'#1a7a50',amber:'#b36b00',red:'#b32020',gray:'#595959'};
 var QR_SOON_DAYS=7;
 // The reports that offer "✦ AI summary" (facts from _buildPackageFacts).
-var QR_AI_REPORTS=['interaction-log','followup-status','comment-matrix','issues-report','events-log'];
+var QR_AI_REPORTS=['interaction-log','followup-status','comment-matrix','issues-report','events-log','outreach-log'];
 function _qrKpis(tiles){
   // A table, not flex: it lays out the same in the frame, the package and Word.
   var w=Math.floor(100/tiles.length);
@@ -14624,6 +14753,47 @@ function generateReport(type, opts){
     }
     body+='</tbody></table>';
 
+  } else if(type==='outreach-log'){
+    // The whole project history; the PI report section is the period-bounded view.
+    // The internal note on each action is never printed — this report goes to clients.
+    var ost=_outreachStats(projF);
+    var oTone={'PI team':QR_TONE.blue,'UDOT':QR_TONE.navy,'Media & third party':QR_TONE.orange};
+    var oKpi=[{v:ost.total,label:'Outreach actions',tone:'navy'}];
+    OUTREACH_PARTIES.forEach(function(pt){ oKpi.push({v:ost.byParty[pt]||0,label:pt==='PI team'?'By the PI team':pt==='UDOT'?'By UDOT':pt,tone:oTone[pt]}); });
+    oKpi.push({v:_coFmtN(ost.totals.reactions),label:'Reactions',sub:'latest reading of each',tone:'green'});
+    oKpi.push({v:_coFmtN(ost.totals.comments+ost.totals.shares),label:'Comments & shares',sub:_coFmtN(ost.totals.comments)+' comments · '+_coFmtN(ost.totals.shares)+' shares',tone:'green'});
+    body=_qrKpis(oKpi);
+    if(!ost.total){
+      body+='<div style="margin:18px 0;padding:26px;text-align:center;color:#444;border:1px dashed #ccd6e0;border-radius:8px">'
+        +'<div style="font-style:italic;margin-bottom:6px">No outreach has been logged for this project yet.</div>'
+        +'<div style="font-size:12px;color:#666">Log press releases, newsletters, posts and news coverage in the <strong>Outreach</strong> view.</div></div>';
+    } else {
+      if(ost.campaigns.length){
+        body+='<div style="font-size:12px;font-weight:700;color:#1a3a5c;margin:4px 0 6px">By campaign</div>'
+          +'<table class="dtable" style="font-size:13px;width:100%;margin-bottom:16px"><thead><tr><th>Campaign</th><th style="text-align:right">Actions</th><th style="text-align:right">Reactions</th><th style="text-align:right">Comments</th><th style="text-align:right">Shares</th><th style="text-align:right">Views</th></tr></thead><tbody>'
+          +ost.campaigns.map(function(c){ return '<tr><td style="font-weight:600;color:#111">'+escHtml(c.name)+'</td><td style="text-align:right">'+c.n+'</td>'
+            +['reactions','comments','shares','views'].map(function(k){ return '<td style="text-align:right">'+(c[k]?_coFmtN(c[k]):'—')+'</td>'; }).join('')+'</tr>'; }).join('')
+          +'</tbody></table>';
+      }
+      body+='<table class="dtable" style="font-size:13px;table-layout:fixed;width:100%">'
+        +'<colgroup><col style="width:11%"><col style="width:14%"><col style="width:33%"><col style="width:12%"><col style="width:13%"><col style="width:17%"></colgroup>'
+        +'<thead><tr><th>Date</th><th>Type</th><th>Title</th><th>By</th><th>Campaign</th><th>Engagement</th></tr></thead><tbody>';
+      ost.rows.forEach(function(x){
+        var a=x.a, safe=/^https?:\/\//i.test(a.url||''), pc=oTone[a.party]||QR_TONE.gray;
+        body+='<tr style="page-break-inside:avoid">'
+          +'<td class="td-mono" style="white-space:nowrap;vertical-align:top;border-left:3px solid '+pc+'!important">'+fmt(a.actionDate)+'</td>'
+          +'<td style="vertical-align:top"><span class="badge b-sky" style="font-size:10px">'+escHtml(a.actionType||'')+'</span></td>'
+          +'<td style="font-weight:600;color:#111;vertical-align:top">'+(safe?'<a href="'+escHtml(a.url)+'" style="color:#1a5fa8;text-decoration:none">'+escHtml(a.title||'')+'</a>':escHtml(a.title||''))
+            +(a.outlet||a.author?'<div style="font-size:11px;color:#666;font-weight:400">'+escHtml([a.outlet,a.author].filter(Boolean).join(' · '))+'</div>':'')+'</td>'
+          +'<td style="vertical-align:top">'+_qrPill(a.party||'—',pc)+'</td>'
+          +'<td style="font-size:12px;color:#444;vertical-align:top">'+escHtml(_outCampaignName(a.campaignId)||'—')+'</td>'
+          +'<td style="font-size:12px;vertical-align:top">'+(x.r?'<div style="color:#111">'+escHtml(_outCountsText(x.r)||'—')+'</div><div style="font-size:10px;color:#666">'+escHtml(_outReadingNote(x.r))+'</div>':'<span style="color:#888">—</span>')+'</td>'
+          +'</tr>';
+      });
+      body+='</tbody></table>'
+        +'<div style="font-size:10px;color:#666;margin-top:6px">Engagement counts are as of the date each was read — from the link itself, a screenshot of the post, or typed.</div>';
+    }
+
   } else if(type==='comment-matrix'){
     // Pull from the Comments feature (pi_public_comments), NOT interactions.
     var comments=(DB.get('public_comments')||[]).filter(function(c){return String(c.projectId)===String(projF)});
@@ -14705,7 +14875,8 @@ var PACKAGE_REPORTS=[
   {id:'deliverable-status',name:'Deliverable / scope status'},
   {id:'comment-matrix',name:'Public comment matrix'},
   {id:'issues-report',name:'Issues tracker report'},
-  {id:'events-log',name:'Events & outreach log'}
+  {id:'events-log',name:'Events & outreach log'},
+  {id:'outreach-log',name:'Outreach log'}
 ];
 
 function openReportSequenceModal(){
@@ -14950,6 +15121,11 @@ function _buildPackageFacts(projF, ids){
         ev.slice(0,10).forEach(function(m){ L.push('- '+(m.date||'')+': '+(m.title||m.type||'Event')+(m.attendanceCount?' ('+m.attendanceCount+' attended)':'')+'.'); });
       }
     }
+    else if(id==='outreach-log'){
+      var oL=_outreachFactLines(_outreachStats(projF));
+      if(!oL.length) L.push('No outreach actions are logged.');
+      else oL.slice(0,25).forEach(function(x){ L.push(x); });
+    }
     if(L.length) blocks.push({id:id,name:nameOf(id),lines:L});
   });
   return {phase:proj.phase||'',blocks:blocks,log:log};
@@ -15117,7 +15293,7 @@ function saveAsPdf(){
 }
 
 // Section types that have row-based data eligible for table output
-var TABLE_ELIGIBLE_TYPES = ['auto-concerns','auto-intlog','auto-del','auto-events','auto-followups','auto-comments','auto-commitments','auto-issues','auto-comment-matrix','auto-contacts','auto-pi-compliance'];
+var TABLE_ELIGIBLE_TYPES = ['auto-concerns','auto-intlog','auto-del','auto-events','auto-followups','auto-comments','auto-commitments','auto-issues','auto-comment-matrix','auto-contacts','auto-pi-compliance','auto-outreach'];
 
 // Section types whose rows are actually BOUNDED by the reporting period, and so
 // may carry the "N-day report period ·" prefix on their counts label.
@@ -15126,7 +15302,9 @@ var TABLE_ELIGIBLE_TYPES = ['auto-concerns','auto-intlog','auto-del','auto-event
 // dates in the header, and auto-intlog is the period's INVERSE — it lists
 // interactions from BEFORE pstart. Labelling those with the period claimed a
 // window over them that was never applied.
-var PERIOD_SCOPED_TYPES = ['auto-concerns'];
+// auto-outreach is too (Oct 2026): it lists the outreach actions dated inside
+// the period, with each one's counts as read on or before the period end.
+var PERIOD_SCOPED_TYPES = ['auto-concerns','auto-outreach'];
 
 // The report's prose voice — ONE declaration, shared by the overall summary and
 // every section narrative (which are the AI-drafted paragraphs). They had
@@ -15174,7 +15352,8 @@ function getAvailableSections(){
     {id:'commitments',title:'Commitments tracker',type:'auto-commitments'},
     {id:'pi-compliance',title:'PI Compliance Summary (FHWA/NEPA)',type:'auto-pi-compliance'},
     {id:'nepa-compliance',title:'NEPA Compliance — Checklist & Comment Periods',type:'auto-nepa-compliance'},
-    {id:'parcels',title:'Right-of-Way — Parcel Status',type:'auto-parcels'}
+    {id:'parcels',title:'Right-of-Way — Parcel Status',type:'auto-parcels'},
+    {id:'outreach',title:'Outreach — releases, posts and coverage',type:'auto-outreach'}
   ];
 }
 
@@ -15244,7 +15423,8 @@ function getSectionDesc(type){
     'auto-commitments':'Auto-populates open and fulfilled commitments made to stakeholders, grouped by category and status.',
     'auto-pi-compliance':'Auto-populates a FHWA/NEPA PI compliance summary: NEPA checklist progress, public meetings, comment response rate, LEP/EJ outreach, and commitment fulfillment.',
     'auto-nepa-compliance':'Auto-populates NEPA checklist progress by phase group, outstanding items, and comment period duration compliance. Supports AI-drafted narrative.',
-    'auto-parcels':'Auto-populates the right-of-way parcel register: notice and ownership coverage, acquisition status, and every parcel still missing an owner or a notice date. Supports AI-drafted narrative.'
+    'auto-parcels':'Auto-populates the right-of-way parcel register: notice and ownership coverage, acquisition status, and every parcel still missing an owner or a notice date. Supports AI-drafted narrative.',
+    'auto-outreach':'Auto-populates the outreach actions dated in the report period — press releases, newsletters, website updates, 511 alerts, social posts and news coverage — by campaign, with each one\'s latest engagement counts as of the period end. Supports AI-drafted narrative.'
   };
   return descs[type]||'';
 }
@@ -15594,6 +15774,19 @@ function _sectionAIRequest(secType, templateDraft) {
       // ~190 words is ~260 tokens; the headroom is so a slight overrun ends on a
       // finished sentence rather than being clipped mid-word by the ceiling.
       maxTokens: 450
+    };
+  }
+  if (secType === 'auto-outreach') {
+    return {
+      userContent: 'Write the narrative for the "Outreach" section of a public involvement progress report: '
+        + 'what the team and its partners put out during the period (press releases, newsletters, website updates, '
+        + '511 alerts, social posts, news coverage), through which channels, and how it was received where counts '
+        + 'were recorded.\n\nLENGTH: about 110 words, and no more than 130.\n\n'
+        + 'Group it by campaign where campaigns are given. Use the counts exactly as given and say they are as of '
+        + 'the date they were read; do not add counts together beyond the totals given, and do not call engagement '
+        + 'high or low. Do not list every item, do not quote web addresses, and refer to private individuals by role, '
+        + 'never by name. Base it strictly on these facts:\n\n' + (templateDraft || ''),
+      maxTokens: 300
     };
   }
   return {
@@ -16022,6 +16215,12 @@ function _buildSectionDraft(secType) {
     });
     var txt_pc = pcAll.length+' formal public comment'+(pcAll.length!==1?'s':'')+' received across '+Object.keys(pcCats).length+' topic'+(Object.keys(pcCats).length!==1?'s':'')+'. '+pcPending+' pending response. Categories: '+lines.join(' | ');
     return txt_pc;
+  }
+
+  if (secType === 'auto-outreach') {
+    var ostD = _outreachStats(projF, saved.periodStart, saved.periodEnd);
+    if (!ostD.total) return null;
+    return 'Outreach during ' + periodLabel + ':\n' + _outreachFactLines(ostD).join('\n');
   }
 
   if (secType === 'auto-parcels') {
@@ -16967,6 +17166,9 @@ function _buildSectionPreviewTable(secType, projF, pstart, pend, includeInternal
         +'<td style="'+tdStyle+';white-space:nowrap">'+(r[2]===null?'<span style="color:#999">—</span>':barHtml(r[2]))+'</td></tr>';
     });
 
+  } else if (secType === 'auto-outreach') {
+    tbl += _outreachPreviewTable(_outreachStats(projF, pstart, pend), thStyle, tdStyle);
+
   } else if (secType === 'auto-parcels') {
     var pm = _parcelStats(projF);
     if (!pm.total) {
@@ -17143,6 +17345,11 @@ function renderLivePreview() {
       if (sec.type === 'auto-contacts') {
         var extCt = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; }).length;
         counts.push(extCt + ' external contact' + (extCt !== 1 ? 's' : ''));
+      }
+      if (sec.type === 'auto-outreach') {
+        var _ost = _outreachStats(projF, pstart, pend);
+        counts.push(_ost.total + ' outreach action' + (_ost.total !== 1 ? 's' : ''));
+        if (_ost.withCounts) counts.push(_ost.withCounts + ' with engagement counts');
       }
       if (sec.type === 'auto-parcels') {
         var _pm = _parcelStats(projF);
@@ -17545,6 +17752,11 @@ function _buildReportSnapshot(projF, saved) {
       if (sec.type === 'auto-contacts') {
         var extCt = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; }).length;
         counts.push(extCt + ' external contact' + (extCt !== 1 ? 's' : ''));
+      }
+      if (sec.type === 'auto-outreach') {
+        var ostS = _outreachStats(projF, pstart, pend);
+        counts.push(ostS.total + ' outreach action' + (ostS.total !== 1 ? 's' : ''));
+        if (ostS.withCounts) counts.push(ostS.withCounts + ' with engagement counts');
       }
       if (sec.type === 'auto-parcels') {
         var pmS = _parcelStats(projF);
@@ -19504,6 +19716,30 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
         xml+=bullet('Fulfilled: '+_fulfilled);
         xml+=bullet('Open / pending: '+(_comms.length-_fulfilled));
       }
+      }
+
+    } else if(sec.type==='auto-outreach'){
+      var _ox=_outreachStats(proj.id,saved.periodStart,saved.periodEnd);
+      if(!_ox.total){
+        xml+=bullet('No outreach logged in this period.');
+      } else {
+        xml+=para(_ox.total+' outreach action'+(_ox.total!==1?'s':'')+' in the period: '+_outTallyText(_ox.byType,true));
+        xml+=bullet('Done by: '+_outTallyText(_ox.byParty,false));
+        if(_ox.withCounts) xml+=bullet('Engagement recorded on '+_ox.withCounts+' of '+_ox.total+' (latest reading of each): '+_outTotalsText(_ox.totals));
+        _ox.campaigns.forEach(function(c){ xml+=bullet('Campaign "'+c.name+'": '+c.n+' action'+(c.n!==1?'s':'')+(_outTotalsText(c)?' · '+_outTotalsText(c):'')); });
+        xml+=spacer();
+        if(sec.showTable){
+          var oxCols=[1200,1500,3060,1200,1200,1400]; var oxHdrs=['Date','Type','Title','By','Campaign','Engagement'];
+          var oxRows=tblHdrRow(oxHdrs,oxCols);
+          _ox.rows.forEach(function(x,ri){
+            var a=x.a;
+            oxRows+=tblDataRow([_fmtMDY(a.actionDate),a.actionType||'',String(a.title||'').slice(0,140)+(a.outlet?' ('+a.outlet+')':''),a.party||'',_outCampaignName(a.campaignId)||'—',
+              x.r?((_outCountsText(x.r)||'—')+' — '+_outReadingNote(x.r)):'—'],oxCols,ri%2!==0);
+          });
+          xml+=tblWrap(9560,oxCols,oxRows); xml+=spacer();
+        }
+        // No "else" — the aggregate lines above are all the .docx carries when
+        // the table is off (same rule as every other section).
       }
 
     } else if(sec.type==='auto-parcels'){

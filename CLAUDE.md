@@ -3476,13 +3476,13 @@ test on a NEW Twilio number — Sunrise's current hotlines are Microsoft Teams
 numbers, which can be ported out (porting PIN in Teams admin) or forwarded
 to Twilio; decide at go-live.
 
-## Outreach log (Part B) — step 2b BUILT on DEV (Oct 2026), not released
+## Outreach log (Part B) — steps 2b + 2c BUILT on DEV (Oct 2026), not released
 Scoped with Jeff (Oct 2026): a dated log of outreach ACTIONS with campaigns,
 a link + preview, and dated engagement readings. NO scraping, NO mention
 monitoring, NO comment themes. Desktop only, staff-only. Not interactions —
 nothing here counts as one (asserted). Steps: (2a) link test ✅ → (2b) table +
 Outreach view ✅ on DEV → (2c) PI report section + quick report → (3)
-close-out link-up. Don't start 2c until Jeff says.
+close-out link-up ✅ 2c on DEV (2026-10-20). Step 3 waits for Jeff.
 - **`sql/2026-10-20_outreach_log.sql`** (applied to DEV 2026-10-20; paste on
   LIVE at release): `pi_outreach_campaigns` (project, name; unique per project,
   case-insensitive), `pi_outreach_actions` (date, type, party = who did it,
@@ -3534,8 +3534,35 @@ close-out link-up. Don't start 2c until Jeff says.
   email via Proofpoint → title; X → author + exact date, no counts. So counts are
   automatic for Instagram only; Facebook and X counts come from a screenshot or
   typing.
-- Guarded by `test/tests/92-link-preview.test.js` (reader) and
-  `test/tests/93-outreach-log.test.js` (the view and dialog).
+- **Manage campaigns** (Jeff, 2026-10-20): "Campaigns" button on the Outreach
+  view → `openCampaignsModal` (needs a project): rename (`outRenameCampaign`;
+  a duplicate name in any capitals is refused), add (`outAddCampaign`), delete
+  (`outDelCampaign`) — the campaign's actions stay in the log with no campaign;
+  their `campaignId` is cleared FIRST, so no saved action points at a deleted
+  campaign (the FK also sets null).
+- **Step 2c — reports (2026-10-20).** `_outreachStats(projF, pstart, pend)` is
+  the ONE set of numbers: actions dated in the window, each with its newest
+  reading ON OR BEFORE `pend` (a September report never shows an October
+  reading); totals, by type, by party, by campaign. `_outreachFactLines` (AI
+  facts), `_outreachPreviewTable`, `_outTallyText`, `_outTotalsText`.
+  - **Quick report "Outreach log"** (`generateReport('outreach-log')`, card on
+    Quick Reports, in the package and `QR_AI_REPORTS`): headline numbers (actions,
+    by party, reactions, comments & shares), a by-campaign table, then every
+    action with its latest counts and when/how they were read. Whole project
+    history. **The internal note never prints** (reports go to clients).
+  - **PI report section `auto-outreach`** ("Outreach — releases, posts and
+    coverage"): all five hooks — `getAvailableSections`, `getSectionDesc`,
+    `_buildSectionDraft` + its own `_sectionAIRequest` branch (~110 words,
+    counts as given and "as of", no URLs, no names), `_buildSectionPreviewTable`,
+    the counts label in BOTH `renderLivePreview` and `_buildReportSnapshot`, and
+    the `.docx` branch (aggregate lines always; titles only with "Include data
+    table" — no itemized `else`). It is **period-scoped**: added to
+    `PERIOD_SCOPED_TYPES` (test 31 updated) and `TABLE_ELIGIBLE_TYPES`.
+- Guarded by `test/tests/92-link-preview.test.js` (reader),
+  `test/tests/93-outreach-log.test.js` (the view and dialog) and
+  `test/tests/94-outreach-reports.test.js` (campaign manager, stats window,
+  quick report, section preview = snapshot, .docx table toggle; verified to
+  fail when readings ignore the period end).
 
 ## PLANNED — Conference demo site (for the UDOT conference, 2026-10-27; ON HOLD)
 Agreed with Jeff 2026-10-14: a third environment where other PI firms try the

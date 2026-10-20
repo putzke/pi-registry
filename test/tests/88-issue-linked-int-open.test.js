@@ -26,6 +26,10 @@ module.exports = {
 
       // ── Project contacts → Issues ───────────────────────────────────────
       await app.page.evaluate(({ A, id }) => { S.projectFilter = A; S.skView = 'issues'; S.selIssue = id; setView('stakeholders'); }, { A, id: String(iss.id) });
+      // The app's own start-up refresh can redraw just after this; wait for the
+      // card rather than reading the page once (flaky ~1 run in 5 otherwise).
+      await app.page.waitForFunction(() => [...document.querySelectorAll('.iss-int')].some(c => /ORIGINAL CALL/.test(c.textContent)), null, { timeout: 5000 })
+        .catch(async () => { await app.page.evaluate(({ A, id }) => { S.projectFilter = A; S.skView = 'issues'; S.selIssue = id; setView('stakeholders'); }, { A, id: String(iss.id) }); });
       t.ok(await app.page.evaluate(() => { const c = [...document.querySelectorAll('.iss-int')].find(c => /ORIGINAL CALL/.test(c.textContent)); return !!c && /openEditIntModal/.test(c.getAttribute('onclick')) && getComputedStyle(c).cursor === 'pointer'; }),
         'Project contacts → Issues: the linked interaction is a clickable card');
       await app.page.evaluate(() => [...document.querySelectorAll('.iss-int')].find(c => /ORIGINAL CALL/.test(c.textContent)).click());

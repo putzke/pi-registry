@@ -483,6 +483,10 @@ window.gm_authFailure = function() {
       Hotline
       <span class="nav-badge warn hide" id="nb-hot">0</span>
     </button>
+    <button class="nav-btn" id="nav-outreach" onclick="setView('outreach')">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 6.5v3h2.5L10 13V3L4.5 6.5H2z"/><path d="M12.5 5.5a3.5 3.5 0 0 1 0 5"/></svg>
+      Outreach
+    </button>
     <button class="nav-btn" id="nav-commitments" onclick="setView('commitments')">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4z"/><path d="M2 4l2-3h8l2 3"/><path d="M6 8l2 2 4-4"/></svg>
       Commitments
@@ -1032,7 +1036,10 @@ const SB_TABLES = {
   hotline_extensions:   'pi_hotline_extensions',
   hotline_messages:     'pi_hotline_messages',
   hotline_calls:        'pi_hotline_calls',
-  hotline_settings:     'pi_hotline_settings'
+  hotline_settings:     'pi_hotline_settings',
+  outreach_campaigns:   'pi_outreach_campaigns',
+  outreach_actions:     'pi_outreach_actions',
+  outreach_readings:    'pi_outreach_readings'
 };
 
 // Map our internal field names to Supabase column names
@@ -1252,6 +1259,19 @@ const SB_TO_INT = {
   pi_hotline_settings: {
     id:'id', ringEnabled:'ring_enabled', ringSeconds:'ring_seconds', hoursStart:'hours_start',
     hoursEnd:'hours_end', hoursDays:'hours_days', timezone:'timezone', updatedBy:'updated_by'
+  },
+  // The Outreach log (sql/2026-10-20_outreach_log.sql), staff-only.
+  pi_outreach_campaigns: {
+    id:'id', projectId:'project_id', name:'name', notes:'notes', createdBy:'created_by', createdAt:'created_at'
+  },
+  pi_outreach_actions: {
+    id:'id', projectId:'project_id', campaignId:'campaign_id', actionDate:'action_date', actionType:'action_type',
+    party:'party', url:'url', title:'title', outlet:'outlet', author:'author', description:'description',
+    note:'note', loggedBy:'logged_by', createdAt:'created_at', updatedBy:'updated_by'
+  },
+  pi_outreach_readings: {
+    id:'id', actionId:'action_id', readOn:'read_on', reactions:'reactions', comments:'comments',
+    shares:'shares', views:'views', source:'source', loggedBy:'logged_by', createdAt:'created_at'
   }
 };
 
@@ -1284,10 +1304,10 @@ function localToday(){
   return y+'-'+m+'-'+day;
 }
 
-const DATE_FIELDS = new Set(['legal_desc_shared','exhibit_shared','interaction_date','follow_up_due','follow_up_resolved','due_date','start_date','end_date','precon_date','added_date','meeting_date','date_raised','date_resolved','date_made','fulfilled_date','last_exported','comment_date','response_date','notification_date','response_deadline','ura_notice_date','follow_up_date','period_start','period_end','hearing_date','first_ad_date','second_ad_date','federal_register_date','notice_date']);
+const DATE_FIELDS = new Set(['legal_desc_shared','exhibit_shared','interaction_date','follow_up_due','follow_up_resolved','due_date','start_date','end_date','precon_date','added_date','meeting_date','date_raised','date_resolved','date_made','fulfilled_date','last_exported','comment_date','response_date','notification_date','response_deadline','ura_notice_date','follow_up_date','period_start','period_end','hearing_date','first_ad_date','second_ad_date','federal_register_date','notice_date','action_date','read_on']);
 
 // Integer FK columns that Supabase expects as numbers
-const SB_INT_FIELDS = new Set(['project_id','stakeholder_id','issue_id','interaction_id','meeting_id','related_to','hotline_id','logged_interaction_id']);
+const SB_INT_FIELDS = new Set(['project_id','stakeholder_id','issue_id','interaction_id','meeting_id','related_to','hotline_id','logged_interaction_id','campaign_id','action_id']);
 
 // Tables guarded by optimistic concurrency (OCC): every UPDATE is conditional
 // on the row's updated_at matching the value we loaded, so a second user who
@@ -1344,7 +1364,7 @@ function toSB(table, obj) {
 
 // Columns where a null the caller sends means "clear it": a hotline's or menu
 // option's ring/hours override set back to "use the default".
-const NULL_CLEARS_FIELDS = new Set(['ring_mode','ring_seconds','hours_start','hours_end','hours_days',
+const NULL_CLEARS_FIELDS = new Set(['campaign_id','ring_mode','ring_seconds','hours_start','hours_end','hours_days',
   'menu_audio_path','menu_audio_for','spanish_menu_audio_path','spanish_menu_audio_for']);
 
 // Convert Supabase row back to our internal format
@@ -1663,7 +1683,7 @@ function cacheClear(k) { delete _cache[k]; delete _cacheTime[k]; }
 const _syncCache = {};
 
 async function loadAllData() {
-  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments','comment_periods','tribal_consultations','reports','report_archive','client_summaries','parcels','parcel_owners','parcel_outreach','closeouts','team_members','hotlines','hotline_extensions','hotline_messages','hotline_calls','hotline_settings'];
+  const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','commitments','groups','group_members','public_comments','comment_periods','tribal_consultations','reports','report_archive','client_summaries','parcels','parcel_owners','parcel_outreach','closeouts','team_members','hotlines','hotline_extensions','hotline_messages','hotline_calls','hotline_settings','outreach_campaigns','outreach_actions','outreach_readings'];
   // Boot stays tolerant — one unreachable table should not lock the app — but a
   // table that FAILED must not be presented as an empty one. An empty Master
   // List that is really a 401 is worse than an error message.
@@ -1714,7 +1734,8 @@ function _viewTables(v){
     meetings:     ['meetings','projects','stakeholders'],
     issues:       ['issues','interactions','projects'],
     team:         ['projects','interactions','team_members','client_summaries','report_archive'],
-    hotline:      ['hotline_messages','hotline_calls','hotlines','hotline_extensions','team_members','stakeholders','project_stakeholders']
+    hotline:      ['hotline_messages','hotline_calls','hotlines','hotline_extensions','team_members','stakeholders','project_stakeholders'],
+    outreach:     ['outreach_actions','outreach_readings','outreach_campaigns','projects']
   };
   return m[v] || [];   // views not listed (settings, map, reports) don't auto-refresh
 }
@@ -2331,7 +2352,7 @@ function initDashRows(){
     }
   });
 }
-function setView(v){if(v==='tribal'){showToast('Tribal consultation module is not available yet.','info',2500);return;}S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.showBulkAdd=false;S.showQuickLog=false;S.showEmailPanel=false;S.coId=null;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;S.cmtSearch='';S.cmtStatus='';S.cmtPeriod='';S.cmtPeriodId='';S.cmtTab='comments';S.parcSearch='';S.parcStatus='';S.commStatus=COMM_FILTER_DEFAULT;S.commCat='';
+function setView(v){if(v==='tribal'){showToast('Tribal consultation module is not available yet.','info',2500);return;}S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.showBulkAdd=false;S.showQuickLog=false;S.showEmailPanel=false;S.coId=null;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;S.cmtSearch='';S.cmtStatus='';S.cmtPeriod='';S.cmtPeriodId='';S.cmtTab='comments';S.parcSearch='';S.parcStatus='';S.commStatus=COMM_FILTER_DEFAULT;S.commCat='';S.outSearch='';S.outType='';S.outCampaign='';
   S.view=v;S.mapPicked=undefined;S.selStakeholder=null;S.selInteraction=null;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const navId=v==='commitments'?'nav-commitments':v==='comments'?'nav-comments':v==='tribal'?'nav-tribal':('nav-'+v);
@@ -2537,6 +2558,7 @@ function render(){
   else if(S.view==='settings')renderSettings(m);
   else if(S.view==='team')renderTeam(m);
   else if(S.view==='hotline')renderHotline(m);
+  else if(S.view==='outreach')renderOutreach(m);
   else if(S.view==='projects')renderProjects(m);
 }
 
@@ -8934,82 +8956,331 @@ function _hotToggleCustom(sel){
   _hotPreview();
 }
 
-// ── Settings → Project hotlines ─────────────────────────────────────────────
-// ── LINK READER TEST (DEV only, Outreach log step 2a, Oct 2026) ──
-// Paste real Facebook / Instagram / X / news links and see what the
-// link-preview function can read from each: title, outlet, date, and any
-// public reaction / comment / share counts. Nothing is saved. This card is
-// temporary — it answers "what can be read automatically?" before the
-// Outreach log is designed around the answer.
+// ── OUTREACH LOG (Part B, Oct 2026) ─────────────────────────────────────────
+// A dated log of outreach ACTIONS — press releases, newsletters, website
+// updates, 511 alerts, social posts, news coverage — grouped by optional
+// campaigns, with dated engagement READINGS. Not interactions: nothing here is
+// a conversation with a stakeholder, and nothing here counts as one.
+// Pasting a link fills in what the link-preview function can read (title,
+// outlet, date, public counts); staff check it before saving. Counts the link
+// does not show come from a screenshot (read by Claude, then checked) or are
+// typed. Every reading says which. Staff-only, desktop only.
 const LINK_FN_URL=SUPA_URL+'/functions/v1/link-preview';
-const LINK_TEST_MAX=25;
-var _linkTestRows=[];
-function _linkTestCardHTML(){
-  return '<div id="link-test-card" style="background:var(--navy-mid);border:1px dashed rgba(209,169,68,.55);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">'
-    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><div style="font-size:15px;font-weight:700;color:var(--white)">Link reader test</div><span class="badge b-amber" style="font-size:10px">DEV only · temporary</span></div>'
-    +'<div style="font-size:12px;color:var(--fog);margin-bottom:10px;line-height:1.5">Paste up to '+LINK_TEST_MAX+' links, one per line — Facebook and Instagram posts, X posts, news stories, press releases. Each is read the way a link preview reads it: title, outlet, date, and any reaction / comment / share counts the page shows publicly. Nothing is saved.</div>'
-    +'<textarea id="link-test-urls" rows="6" style="width:100%;box-sizing:border-box;font-size:12px;font-family:var(--mono,monospace)" placeholder="https://www.facebook.com/…&#10;https://www.ksl.com/article/…"></textarea>'
-    +'<div style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-primary btn-sm" id="link-test-go" onclick="linkTestRun()">Read links</button>'
-    +'<button class="btn btn-sm" onclick="linkTestCopy()">Copy results</button></div>'
-    +'<div id="link-test-out" style="margin-top:12px;font-size:12px"></div></div>';
+const OUTREACH_TYPES=['Press release','Newsletter','Website update','511 alert','Social post','News coverage','Trucking/industry publication','Agency/partner coordination','Other'];
+const OUTREACH_PARTIES=['PI team','UDOT','Media & third party'];
+const OUT_SOURCES={automatic:'Read from the link',screenshot:'From a screenshot',typed:'Typed'};
+const OUT_COUNTS=[['reactions','Reactions'],['comments','Comments'],['shares','Shares'],['views','Views']];
+
+function _outActions(projF){ return (DB.get('outreach_actions')||[]).filter(a=>!projF||String(a.projectId)===String(projF)); }
+function _outReadings(actionId){
+  return (DB.get('outreach_readings')||[]).filter(r=>String(r.actionId)===String(actionId))
+    .sort((a,b)=>String(b.readOn).localeCompare(String(a.readOn))||Number(b.id)-Number(a.id));
 }
-function _linkTestUrls(){
-  var seen={};
-  return String((document.getElementById('link-test-urls')||{}).value||'').split(/\s+/)
-    .map(function(x){return x.trim();}).filter(function(x){if(!/^https?:\/\//i.test(x)||seen[x])return false;seen[x]=1;return true;}).slice(0,LINK_TEST_MAX);
+function _outLatest(actionId){ return _outReadings(actionId)[0]||null; }
+function _outCampaigns(projF){
+  return (DB.get('outreach_campaigns')||[]).filter(c=>!projF||String(c.projectId)===String(projF))
+    .sort((a,b)=>String(a.name).localeCompare(String(b.name)));
 }
-function _linkTestEng(e){
-  e=e||{}; var k=['reactions','comments','shares','views'].filter(function(x){return e[x]!=null;});
-  return k.length?k.map(function(x){return _coFmtN(e[x])+' '+x;}).join(' · '):'';
+function _outCampaignName(id){ const c=(DB.get('outreach_campaigns')||[]).find(x=>String(x.id)===String(id)); return c?c.name:''; }
+function _outHas(v){ return v!==null&&v!==undefined&&v!==''; }
+function _outCountsText(r){
+  if(!r) return '';
+  return OUT_COUNTS.filter(([k])=>_outHas(r[k])).map(([k,l])=>Number(r[k]).toLocaleString()+' '+l.toLowerCase()).join(' · ');
 }
-function _linkTestRender(){
-  var out=document.getElementById('link-test-out'); if(!out) return;
-  if(!_linkTestRows.length){out.innerHTML='';return;}
-  var got=_linkTestRows.filter(function(r){return r.res&&r.res.ok;}).length;
-  var counts=_linkTestRows.filter(function(r){return r.res&&_linkTestEng(r.res.engagement);}).length;
-  out.innerHTML='<div style="margin-bottom:6px;color:var(--mist)">Read '+got+' of '+_linkTestRows.length+' · counts found on '+counts+'</div>'
-    +'<table class="dtable" style="font-size:12px;table-layout:fixed;width:100%"><colgroup><col style="width:11%"><col style="width:9%"><col style="width:30%"><col style="width:14%"><col style="width:12%"><col style="width:24%"></colgroup>'
-    +'<thead><tr><th>Platform</th><th>Result</th><th>Title</th><th>Outlet / author</th><th>Date</th><th>Counts / notes</th></tr></thead><tbody>'
-    +_linkTestRows.map(function(r){
-      var x=r.res, f=(x&&x.fields)||{};
-      var st=!x?'<span style="color:var(--fog)">reading…</span>':x.ok?'<span class="badge b-green">Read</span>':'<span class="badge b-red">Not read</span>';
-      var notes=x?[x.error].concat(x.notes||[]).filter(Boolean).join(' '):'';
-      return '<tr><td>'+escHtml((x&&x.platform)||'')+'<div style="font-size:10px;color:var(--fog);word-break:break-all">'+escHtml(r.url.replace(/^https?:\/\//,'').slice(0,60))+'</div></td>'
-        +'<td>'+st+(x&&x.status?'<div style="font-size:10px;color:var(--fog)">HTTP '+x.status+'</div>':'')+'</td>'
-        +'<td style="color:var(--white)">'+escHtml(f.title||'')+(f.description?'<div style="font-size:10px;color:var(--fog);margin-top:2px">'+escHtml(String(f.description).slice(0,160))+'</div>':'')+'</td>'
-        +'<td>'+escHtml([f.site,f.author].filter(Boolean).join(' · '))+'</td>'
-        +'<td>'+escHtml(f.published||'')+'</td>'
-        +'<td>'+(x&&_linkTestEng(x.engagement)?'<b style="color:var(--green)">'+escHtml(_linkTestEng(x.engagement))+'</b><div style="font-size:10px;color:var(--fog)">from '+escHtml(x.engagementSource||'')+'</div>':'')
-        +(notes?'<div style="font-size:10px;color:var(--fog)">'+escHtml(notes)+'</div>':'')+'</td></tr>';
-    }).join('')+'</tbody></table>';
+// A date the link gave ("2026-10-08T18:02:46Z", "October 3, 2026") as the
+// local calendar day, or '' when it can't be read.
+function _outIsoDate(s){
+  s=String(s||'').trim(); if(!s) return '';
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const d=new Date(s); if(isNaN(d)) return '';
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
-async function linkTestRun(){
-  var urls=_linkTestUrls();
-  if(!urls.length){showToast('Paste at least one link that starts with http','warn');return;}
-  var btn=document.getElementById('link-test-go'); if(btn){btn.disabled=true;btn.textContent='Reading…';}
-  _linkTestRows=urls.map(function(u){return {url:u,res:null};}); _linkTestRender();
-  for(var i=0;i<_linkTestRows.length;i++){
-    var r=_linkTestRows[i];
-    try{
-      var resp=await fetch(LINK_FN_URL,{method:'POST',headers:(function(){var ss=getSession();return {'Content-Type':'application/json',apikey:SUPA_KEY,Authorization:'Bearer '+(ss?ss.access_token:SUPA_KEY)};})(),body:JSON.stringify({url:r.url})});
-      var j=await resp.json().catch(function(){return {};});
-      r.res=resp.ok?j:{ok:false,error:(j&&j.error)||('the reader answered '+resp.status),notes:[]};
-    }catch(e){ r.res={ok:false,error:'the link reader could not be reached (is it deployed on this database?)',notes:[]}; }
-    _linkTestRender();
-  }
-  if(btn){btn.disabled=false;btn.textContent='Read links';}
-}
-function linkTestCopy(){
-  if(!_linkTestRows.length){showToast('Read some links first','warn');return;}
-  var head=['URL','Platform','Read','HTTP','Title','Outlet','Author','Date','Reactions','Comments','Shares','Views','Counts from','Notes'];
-  var lines=[head.join('\t')].concat(_linkTestRows.map(function(r){
-    var x=r.res||{}, f=x.fields||{}, e=x.engagement||{};
-    return [r.url,x.platform||'',x.ok?'yes':'no',x.status||'',f.title||'',f.site||'',f.author||'',f.published||'',e.reactions==null?'':e.reactions,e.comments==null?'':e.comments,e.shares==null?'':e.shares,e.views==null?'':e.views,x.engagementSource||'',[x.error].concat(x.notes||[]).filter(Boolean).join(' ')]
-      .map(function(v){return String(v).replace(/[\t\n]+/g,' ');}).join('\t');
-  }));
-  navigator.clipboard.writeText(lines.join('\n')).then(function(){showToast('Results copied — paste them into a spreadsheet or the chat','info',3000);},function(){showToast('The browser refused the clipboard','warn');});
+async function _outReadLink(url){
+  const ss=getSession();
+  const r=await fetch(LINK_FN_URL,{method:'POST',headers:{'Content-Type':'application/json',apikey:SUPA_KEY,Authorization:'Bearer '+(ss?ss.access_token:SUPA_KEY)},body:JSON.stringify({url})});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(j.error==='not staff'?'only staff can read links':j.error==='not signed in'?'your sign-in has expired — sign in again':('the link reader answered '+r.status));
+  return j;
 }
 
+function renderOutreach(m){
+  const projF=S.projectFilter||'';
+  const projs=DB.get('projects');
+  const camps=_outCampaigns(projF);
+  if(S.outCampaign&&!camps.some(c=>String(c.id)===String(S.outCampaign))) S.outCampaign='';
+  const q=(S.outSearch||'').trim().toLowerCase();
+  const scoped=_outActions(projF);
+  const rows=scoped.filter(a=>(!S.outType||a.actionType===S.outType)&&(!S.outCampaign||String(a.campaignId)===String(S.outCampaign))
+      &&(!q||[a.title,a.outlet,a.author,a.note,a.description,a.url].join(' ').toLowerCase().includes(q)))
+    .sort((a,b)=>String(b.actionDate).localeCompare(String(a.actionDate))||Number(b.id)-Number(a.id));
+  const latest=rows.map(a=>_outLatest(a.id)).filter(Boolean);
+  const sum=k=>latest.reduce((n,r)=>n+(_outHas(r[k])?Number(r[k]):0),0);
+  const byParty=OUTREACH_PARTIES.map(p=>rows.filter(a=>a.party===p).length);
+  const pName=id=>{const p=projs.find(x=>String(x.id)===String(id));return p?(p.pid?p.pid+' ':'')+p.name:'';};
+  const sel='font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)';
+  const rr='onchange="renderOutreach(document.getElementById(\'main\'))"';
+  const tile=(n,l,sub)=>`<div style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+      <div style="font-size:26px;font-weight:700;color:var(--white)">${n}</div><div style="font-size:11px;color:var(--fog);margin-top:2px">${l}</div>${sub?`<div style="font-size:10px;color:var(--slate);margin-top:3px">${sub}</div>`:''}</div>`;
+  const filtered=rows.length!==scoped.length;
+  let html=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+    <div><div style="font-size:20px;font-weight:700;color:var(--white)">Outreach log</div>
+      <div style="font-size:12px;color:var(--slate)">Press releases, newsletters, website updates, 511 alerts, social posts and news coverage — and how each was received</div></div>
+    <button class="btn btn-primary" id="out-add" onclick="openOutreachModal()">+ Log outreach</button>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px">
+    ${tile(rows.length,'Actions'+(filtered?' (filtered)':''),'')}
+    ${tile(byParty.join(' / '),'PI team / UDOT / Media','by who did it')}
+    ${tile(latest.length,'With engagement counts',rows.length?('of '+rows.length+' actions'):'')}
+    ${tile(sum('reactions').toLocaleString(),'Reactions','plus '+sum('comments').toLocaleString()+' comments · '+sum('shares').toLocaleString()+' shares, latest reading of each')}
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+    <select id="out-proj" style="${sel}" onchange="S.projectFilter=this.value;S.outCampaign='';renderOutreach(document.getElementById('main'))">
+      <option value="" ${!projF?'selected':''}>All projects</option>
+      ${projs.map(p=>`<option value="${p.id}" ${String(projF)===String(p.id)?'selected':''}>${escHtml(p.pid||'')} — ${escHtml(p.name||'')}</option>`).join('')}
+    </select>
+    <select id="out-type" style="${sel}" onchange="S.outType=this.value;renderOutreach(document.getElementById('main'))">
+      <option value="">All types</option>${OUTREACH_TYPES.map(t=>`<option ${S.outType===t?'selected':''}>${t}</option>`).join('')}
+    </select>
+    <select id="out-camp" style="${sel}" onchange="S.outCampaign=this.value;renderOutreach(document.getElementById('main'))">
+      <option value="">All campaigns</option>${camps.map(c=>`<option value="${c.id}" ${String(S.outCampaign)===String(c.id)?'selected':''}>${escHtml(c.name)}</option>`).join('')}
+    </select>
+    <input id="out-search" placeholder="Search title, outlet, note…" value="${escHtml(S.outSearch||'')}" style="${sel};min-width:220px"
+      oninput="S.outSearch=this.value;clearTimeout(window._outSrchT);window._outSrchT=setTimeout(()=>{renderOutreach(document.getElementById('main'));const e=document.getElementById('out-search');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length);}},250)">
+  </div>`;
+  if(!rows.length){
+    html+=`<div style="padding:40px;text-align:center;color:var(--fog);font-size:13px;border:1px dashed var(--border);border-radius:10px">
+      ${scoped.length?'No outreach matches these filters.':'No outreach logged'+(projF?' on this project':'')+' yet.'}
+      <div style="margin-top:10px"><button class="btn" onclick="openOutreachModal()">+ Log outreach</button></div></div>`;
+    m.innerHTML=html; return;
+  }
+  html+=`<div style="overflow-x:auto"><table class="dtable" id="out-table" style="width:100%"><thead><tr>
+    <th style="width:92px">Date</th>${projF?'':'<th>Project</th>'}<th>Type</th><th>Title</th><th>By</th><th>Campaign</th><th>Engagement</th><th></th></tr></thead><tbody>
+    ${rows.map(a=>{
+      const r=_outLatest(a.id), n=_outReadings(a.id).length;
+      const safe=/^https?:\/\//i.test(a.url||'');
+      return `<tr data-out="${escHtml(a.id)}">
+        <td style="white-space:nowrap">${fmt(a.actionDate)}</td>
+        ${projF?'':`<td style="font-size:11px;color:var(--fog)">${escHtml(pName(a.projectId))}</td>`}
+        <td><span class="badge">${escHtml(a.actionType||'')}</span></td>
+        <td><div style="font-weight:600;color:var(--white)">${safe?`<a href="${escHtml(a.url)}" target="_blank" rel="noopener noreferrer" style="color:var(--sky-lt);text-decoration:none">${escHtml(a.title||'')} ↗</a>`:escHtml(a.title||'')}</div>
+          ${a.outlet||a.author?`<div style="font-size:11px;color:var(--fog)">${escHtml([a.outlet,a.author].filter(Boolean).join(' · '))}</div>`:''}
+          ${a.note?`<div style="font-size:11px;color:var(--slate);margin-top:2px">${escHtml(a.note)}</div>`:''}</td>
+        <td style="font-size:12px">${escHtml(a.party||'')}</td>
+        <td style="font-size:12px">${escHtml(_outCampaignName(a.campaignId))}</td>
+        <td style="font-size:12px">${r?`<div style="color:var(--white)">${escHtml(_outCountsText(r))}</div>
+          <div style="font-size:10px;color:var(--fog)">as of ${fmt(r.readOn)} · ${escHtml((OUT_SOURCES[r.source]||r.source||'').toLowerCase())}${n>1?' · '+n+' readings':''}</div>`:'<span style="color:var(--slate)">—</span>'}</td>
+        <td><button class="btn btn-sm" onclick="openOutreachModal('${escHtml(a.id)}')">Open</button></td>
+      </tr>`;}).join('')}
+  </tbody></table></div>`;
+  m.innerHTML=html;
+}
+
+// ── the dialog ──
+function _outReadingsHTML(actionId){
+  if(!actionId) return '';
+  const rs=_outReadings(actionId);
+  if(!rs.length) return '<div style="font-size:12px;color:var(--fog);margin-bottom:8px">No readings yet.</div>';
+  return `<div style="margin-bottom:10px">${rs.map(r=>`<div class="out-reading" style="display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:12px;padding:6px 8px;border-bottom:1px solid var(--border)">
+      <span><b style="color:var(--white)">${fmt(r.readOn)}</b> · ${escHtml(_outCountsText(r)||'no counts')} <span style="color:var(--fog)">· ${escHtml((OUT_SOURCES[r.source]||r.source||'').toLowerCase())}</span></span>
+      <button class="btn btn-sm" title="Remove this reading" onclick="outDelReading('${escHtml(r.id)}')">×</button></div>`).join('')}</div>`;
+}
+function _outCampOpts(selId){
+  const el=document.getElementById('f-out-camp'); if(!el) return;
+  const pid=(document.getElementById('f-out-proj')||{}).value||'';
+  const cur=selId!==undefined?selId:el.value;
+  const cs=pid?_outCampaigns(pid):[];
+  el.innerHTML='<option value="">— None —</option>'+cs.map(c=>`<option value="${c.id}" ${String(cur)===String(c.id)?'selected':''}>${escHtml(c.name)}</option>`).join('')
+    +(pid?'<option value="__new">＋ New campaign…</option>':'');
+}
+function _outSetSource(src){
+  S._outSrc=src;
+  const el=document.getElementById('f-out-rsrc');
+  if(el) el.textContent=src?('Counts: '+OUT_SOURCES[src].toLowerCase()+(src==='typed'?'':' — check them before saving')):'';
+}
+function _outMsg(html,bad){ const el=document.getElementById('f-out-readmsg'); if(el){ el.innerHTML=html; el.style.color=bad?'var(--red)':'var(--fog)'; } }
+function _outFillCounts(e){
+  OUT_COUNTS.forEach(([k])=>{ const el=document.getElementById('f-out-r-'+k); if(el) el.value=_outHas(e&&e[k])?e[k]:''; });
+}
+function _outCountsEmpty(){ return OUT_COUNTS.every(([k])=>!(document.getElementById('f-out-r-'+k)||{}).value); }
+
+function openOutreachModal(id){
+  S.editId=id||null; S._outSrc=null;
+  const a=id?((DB.get('outreach_actions')||[]).find(x=>String(x.id)===String(id))||{}):{};
+  const projId=a.projectId||S.projectFilter||'';
+  const projs=DB.get('projects').filter(p=>p.status==='Active'||p.status==='On hold'||String(p.id)===String(projId));
+  const today=localToday();
+  const body=`
+    <div class="fsec">Link</div>
+    <div class="fr"><label>Web address <span style="color:var(--fog);font-weight:400">— optional; paste it and press Read link to fill in what it shows</span></label>
+      <div style="display:flex;gap:8px"><input id="f-out-url" value="${escHtml(a.url||'')}" placeholder="https://…" style="flex:1"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();outReadLink();}">
+      <button class="btn" id="f-out-read" onclick="outReadLink()">Read link</button></div>
+      <div id="f-out-readmsg" style="font-size:11px;color:var(--fog);margin-top:6px;line-height:1.5"></div>
+    </div>
+    <div class="fsec">What was done</div>
+    <div class="fgrid fg2f">
+      <div class="fr"><label>Date *</label><input type="date" id="f-out-date" value="${escHtml(a.actionDate||today)}" ${id?'data-touched="1"':''} oninput="this.dataset.touched='1'"></div>
+      <div class="fr"><label>Type *</label><select id="f-out-type" ${id?'data-touched="1"':''} onchange="this.dataset.touched='1'">
+        ${OUTREACH_TYPES.map(t=>`<option ${(a.actionType||'Press release')===t?'selected':''}>${t}</option>`).join('')}</select></div>
+    </div>
+    <div class="fgrid fg2f">
+      <div class="fr"><label>Done by *</label><select id="f-out-party">${OUTREACH_PARTIES.map(p=>`<option ${(a.party||'PI team')===p?'selected':''}>${p}</option>`).join('')}</select></div>
+      <div class="fr"><label>Project *</label><select id="f-out-proj" onchange="_outCampOpts('')">
+        <option value="">— Select project —</option>${projs.map(p=>`<option value="${p.id}" ${String(p.id)===String(projId)?'selected':''}>${escHtml(p.name)} (${escHtml(p.pid||'')})</option>`).join('')}</select></div>
+    </div>
+    <div class="fr"><label>Campaign</label><select id="f-out-camp" onchange="if(this.value==='__new')outNewCampaign()"></select></div>
+    <div class="fr"><label>Title *</label><input id="f-out-title" value="${escHtml(a.title||'')}" placeholder="Headline, subject line or the start of the post"></div>
+    <div class="fgrid fg2f">
+      <div class="fr"><label>Outlet</label><input id="f-out-outlet" value="${escHtml(a.outlet||'')}" placeholder="KSL.com, UDOT Facebook, the project newsletter…"></div>
+      <div class="fr"><label>Author</label><input id="f-out-author" value="${escHtml(a.author||'')}"></div>
+    </div>
+    <div class="fr"><label>Description</label><textarea id="f-out-desc" rows="3">${escHtml(a.description||'')}</textarea></div>
+    <div class="fr"><label>Note <span style="color:var(--fog);font-weight:400">— internal</span></label><textarea id="f-out-note" rows="2">${escHtml(a.note||'')}</textarea></div>
+    <div class="fsec">Engagement</div>
+    <div id="f-out-readings">${_outReadingsHTML(id)}</div>
+    <div style="font-size:12px;color:var(--fog);margin-bottom:8px">${id?'Add a reading':'First reading'} — leave blank if there are no counts to record.</div>
+    <div class="fgrid" style="grid-template-columns:1.3fr repeat(4,1fr);gap:8px">
+      <div class="fr"><label>Counts on</label><input type="date" id="f-out-ron" value="${today}"></div>
+      ${OUT_COUNTS.map(([k,l])=>`<div class="fr"><label>${l}</label><input type="number" min="0" step="1" id="f-out-r-${k}" oninput="_outSetSource('typed')"></div>`).join('')}
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-sm" id="f-out-readcounts" onclick="outReadCounts()">Read counts from the link</button>
+      <label class="btn btn-sm" style="cursor:pointer">From a screenshot…<input type="file" id="f-out-shot" accept="image/*" style="display:none" onchange="outScreenshot(this)"></label>
+      <span id="f-out-rsrc" style="font-size:11px;color:var(--fog)"></span>
+    </div>`;
+  openM(id?'Outreach action':'Log outreach',body,
+    `${id?`<button class="btn btn-danger" onclick="delOutreach('${escHtml(id)}')">Delete</button>`:''}
+     <button class="btn" onclick="closeM()">Cancel</button>
+     <button class="btn btn-primary" id="f-out-save" onclick="saveOutreach()">Save</button>`,true);
+  _outCampOpts(a.campaignId||'');
+}
+
+// Read the link and fill in what it shows. Never overwrites what was typed;
+// the date and type follow the link until someone changes them.
+async function outReadLink(){
+  const inp=document.getElementById('f-out-url'), btn=document.getElementById('f-out-read');
+  const url=((inp&&inp.value)||'').trim();
+  if(!/^https?:\/\//i.test(url)){ _outMsg('Paste a web address that starts with http:// or https://',true); return; }
+  if(btn){btn.disabled=true;btn.textContent='Reading…';}
+  _outMsg('Reading the link…');
+  try{
+    const x=await _outReadLink(url);
+    if(!document.getElementById('f-out-url')) return;   // dialog closed meanwhile
+    if(x.unwrapped&&x.url) inp.value=x.url;              // keep the real address, not an email-scanner wrapper
+    const f=x.fields||{}, got=[];
+    const fill=(id,v,label)=>{ const el=document.getElementById(id); if(el&&v&&!el.value.trim()){ el.value=v; got.push(label); } };
+    if(x.ok){
+      fill('f-out-title',f.title,'title'); fill('f-out-outlet',f.site,'outlet'); fill('f-out-author',f.author,'author'); fill('f-out-desc',f.description,'description');
+    }
+    const dEl=document.getElementById('f-out-date'), iso=_outIsoDate(f.published);
+    if(iso&&dEl&&!dEl.dataset.touched){ dEl.value=iso; got.push('date ('+fmt(iso)+' — check it)'); }
+    const tEl=document.getElementById('f-out-type');
+    if(tEl&&!tEl.dataset.touched&&x.platform&&x.platform!=='Web') tEl.value='Social post';
+    const e=x.engagement||{};
+    if(Object.keys(e).length&&_outCountsEmpty()){ _outFillCounts(e); _outSetSource('automatic'); got.push('counts'); }
+    const notes=[x.error].concat(x.notes||[]).filter(Boolean);
+    _outMsg((got.length?'<b style="color:var(--green)">Filled in:</b> '+escHtml(got.join(', '))+'.':(x.ok?'Nothing new to fill in.':'<b>Not read.</b>'))
+      +(x.partial?' <b>Page name only.</b>':'')+(notes.length?' '+escHtml(notes.join(' ')):''), !x.ok&&!got.length);
+  }catch(err){
+    _outMsg('The link could not be read: '+escHtml(err.message||'the link reader could not be reached')+'. Type the details instead.',true);
+  }finally{ if(btn){btn.disabled=false;btn.textContent='Read link';} }
+}
+async function outReadCounts(){
+  const url=((document.getElementById('f-out-url')||{}).value||'').trim();
+  if(!/^https?:\/\//i.test(url)){ _outMsg('Paste the link first.',true); return; }
+  const btn=document.getElementById('f-out-readcounts'); if(btn){btn.disabled=true;btn.textContent='Reading…';}
+  try{
+    const x=await _outReadLink(url);
+    const e=x.engagement||{};
+    if(Object.keys(e).length){ _outFillCounts(e); document.getElementById('f-out-ron').value=localToday(); _outSetSource('automatic'); _outMsg('Counts read from the link.'); }
+    else _outMsg((x.platform&&x.platform!=='Web'?x.platform:'This page')+' shows no counts to an outside reader — read them from a screenshot or type them.',true);
+  }catch(err){ _outMsg('The link could not be read: '+escHtml(err.message||'')+'.',true); }
+  finally{ if(btn){btn.disabled=false;btn.textContent='Read counts from the link';} }
+}
+// A screenshot of the post: Claude reads the numbers it shows, staff check them.
+async function outScreenshot(input){
+  const file=input&&input.files&&input.files[0]; if(!file) return;
+  input.value='';
+  const key=_getClaudeKey();
+  if(!key){ _outMsg('Reading a screenshot needs a Claude API key — add one in Settings (Claude AI Narrative Generation), or type the counts.',true); return; }
+  _outMsg('Reading the screenshot…');
+  try{
+    const img=await _downscaleImageToBase64(file,1600);
+    const num={type:['integer','null']};
+    const data=await _claudeRequest(key,{
+      model:CLAUDE_TEXT_MODEL, max_tokens:300,
+      system:'You read engagement counts from a screenshot of ONE social media post or web page. Return the numbers the page shows for reactions (likes, hearts or reactions, as the platform shows them), comments, shares (shares, reposts or retweets) and views. Convert abbreviations: 1.2K = 1200, 3M = 3000000. If a number is not visible, return null. Never estimate, and never add numbers together beyond what the platform itself shows.',
+      output_config:{format:{type:'json_schema',schema:{type:'object',properties:{reactions:num,comments:num,shares:num,views:num},required:['reactions','comments','shares','views'],additionalProperties:false}}},
+      messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:img.media_type,data:img.data}},{type:'text',text:'Read the engagement counts in this screenshot.'}]}]
+    });
+    const txt=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    const c=JSON.parse((txt.match(/\{[\s\S]*\}/)||['{}'])[0]);
+    const e={}; OUT_COUNTS.forEach(([k])=>{ if(Number.isInteger(c[k])&&c[k]>=0) e[k]=c[k]; });
+    if(!Object.keys(e).length){ _outMsg('No counts could be read from that screenshot — type them.',true); return; }
+    _outFillCounts(e); _outSetSource('screenshot');
+    _outMsg('Counts read from the screenshot — check them against it before saving.');
+  }catch(err){ _outMsg('The screenshot could not be read: '+escHtml(err.message||'')+'. Type the counts instead.',true); }
+}
+async function outNewCampaign(){
+  const pid=(document.getElementById('f-out-proj')||{}).value||'';
+  const name=(prompt('Name the campaign (for example "I-84 closures, October 2026"):','')||'').trim();
+  if(!pid||!name){ _outCampOpts(''); return; }
+  const dup=_outCampaigns(pid).find(c=>String(c.name).trim().toLowerCase()===name.toLowerCase());
+  if(dup){ _outCampOpts(dup.id); return; }
+  const c={id:DB.uid(),projectId:pid,name,createdBy:getLoggedBy()||null};
+  await DB.set('outreach_campaigns',DB.get('outreach_campaigns').concat([c]));
+  const saved=_outCampaigns(pid).find(x=>x.name===name&&!/^tmp_/.test(x.id));
+  if(!saved){ showToast('The campaign could not be saved','error'); _outCampOpts(''); return; }
+  _outCampOpts(saved.id);
+}
+
+async function saveOutreach(){
+  const v=id=>((document.getElementById(id)||{}).value||'').trim();
+  const editId=S.editId;
+  const date=v('f-out-date'), type=v('f-out-type'), party=v('f-out-party'), proj=v('f-out-proj'), title=v('f-out-title'), url=v('f-out-url');
+  if(!date){ alert('The date is required.'); return; }
+  if(!proj){ alert('Choose the project.'); return; }
+  if(!title){ alert('A title is required — the headline, subject line or the start of the post.'); return; }
+  if(url&&!/^https?:\/\//i.test(url)){ alert('The web address must start with http:// or https://'); return; }
+  const counts={}; let anyCount=false;
+  for(const [k,l] of OUT_COUNTS){
+    const raw=v('f-out-r-'+k);
+    if(raw===''){ counts[k]=null; continue; }
+    const n=Number(raw);
+    if(!Number.isInteger(n)||n<0){ alert(l+' must be a whole number, 0 or more.'); return; }
+    counts[k]=n; anyCount=true;
+  }
+  const camp=v('f-out-camp');
+  const all=DB.get('outreach_actions');
+  const old=editId?all.find(x=>String(x.id)===String(editId)):null;
+  const data={...(old||{}),id:editId||DB.uid(),projectId:proj,campaignId:camp&&camp!=='__new'?camp:null,actionDate:date,actionType:type,party,
+    url,title,outlet:v('f-out-outlet'),author:v('f-out-author'),description:v('f-out-desc'),note:v('f-out-note'),
+    loggedBy:(old&&old.loggedBy)||getLoggedBy()||null,updatedBy:getLoggedBy()||null};
+  const btn=document.getElementById('f-out-save'); if(btn) btn.disabled=true;
+  if(old){ const i=all.findIndex(x=>String(x.id)===String(editId)); all[i]=data; } else all.push(data);
+  await DB.set('outreach_actions',all);
+  if(/^tmp_/.test(String(data.id))){ if(btn) btn.disabled=false; return; }   // the insert failed; _syncFailed has said so
+  if(anyCount){
+    const rd={id:DB.uid(),actionId:data.id,readOn:v('f-out-ron')||localToday(),...counts,source:S._outSrc||'typed',loggedBy:getLoggedBy()||null};
+    await DB.set('outreach_readings',DB.get('outreach_readings').concat([rd]));
+  }
+  closeM(); render();
+  showToast(old?'Outreach updated':'Outreach logged','info',2000);
+}
+async function outDelReading(rid){
+  if(!confirm('Remove this reading?')) return;
+  await DB.set('outreach_readings',DB.get('outreach_readings').filter(r=>String(r.id)!==String(rid)));
+  const el=document.getElementById('f-out-readings'); if(el) el.innerHTML=_outReadingsHTML(S.editId);
+}
+async function delOutreach(id){
+  const n=_outReadings(id).length;
+  if(!confirm('Delete this outreach action'+(n?' and its '+n+' reading'+(n>1?'s':''):'')+'? This cannot be undone.')) return;
+  await DB.set('outreach_readings',DB.get('outreach_readings').filter(r=>String(r.actionId)!==String(id)));
+  await DB.set('outreach_actions',DB.get('outreach_actions').filter(a=>String(a.id)!==String(id)));
+  closeM(); render();
+}
+
+// ── Settings → Project hotlines ─────────────────────────────────────────────
 function renderHotlineCard(){
   const el=document.getElementById('hotline-card-body'); if(!el) return;
   const hs=(DB.get('hotlines')||[]).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name)));
@@ -25519,7 +25790,6 @@ function renderSettings(m) {
       <div style="font-size:12px;color:var(--fog);margin-bottom:14px;line-height:1.5">Phone numbers the public calls to leave a voicemail. One number can serve one project, or several with a menu (press 1, 2, 3…). Voicemails land in the Hotline inbox, assigned to the project's PI Lead, and only become interactions when someone logs them.</div>
       <div id="hotline-card-body" style="font-size:13px;color:var(--fog)"></div>
     </div>
-${CC_ENV==='dev'?_linkTestCardHTML():''}
 
     <!-- Claude AI -->
     <div style="background:var(--navy-mid);border:1px solid rgba(74,155,232,.25);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">

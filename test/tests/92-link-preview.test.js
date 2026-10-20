@@ -24,7 +24,7 @@ const NEWS_HTML = `<html><head><title>I-84 work begins | KSL.com</title>
 const FB_LOGIN = `<html><head><title>Log into Facebook</title></head><body>Log in</body></html>`;
 
 module.exports = {
-  name: 'link reader (DEV link test) — reads public previews, refuses internal addresses, staff only',
+  name: 'link reader — reads public previews, refuses internal addresses, staff only, tidies for the Outreach log',
   async run({ t }) {
     const L = await import(pathToFileURL(path.join(__dirname, '..', '..', 'supabase', 'functions', 'link-preview', 'logic.mjs')).href);
 
@@ -120,35 +120,27 @@ module.exports = {
     t.ok(outside.length > 0 && outside.every((s) => s.ua === L.LINK_UA), 'every outside request identifies itself as the Cirrus Cc link reader');
     t.ok(!/facebookexternalhit|Twitterbot|Googlebot/i.test(L.LINK_UA), 'never pretends to be another crawler');
 
-    // ── the DEV card ──
-    const app = await t.open('index.html', { email: 'putzke@demo.test' });
-    try {
-      await app.ready();
-      const posted = [], hdrs = [];
-      await app.page.route('**/functions/v1/link-preview', async (route) => {
-        const b = JSON.parse(route.request().postData() || '{}'); posted.push(b.url);
-        const h = route.request().headers(); hdrs.push(Object.keys(h).filter((k) => !['content-type', 'apikey', 'authorization', 'referer', 'user-agent', 'accept', 'origin'].includes(k) && !k.startsWith('sec-')));
-        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(
-          b.url.includes('instagram') ? { ok: true, platform: 'Instagram', status: 200, fields: { title: 'IGMARK post' }, engagement: { reactions: 1234, comments: 56 }, engagementSource: 'page description', notes: [] }
-            : { ok: false, platform: 'Facebook', status: 200, fields: {}, engagement: {}, notes: ['The site answered with a sign-in page, not the post.'] }) });
-      });
-      await app.page.evaluate(() => { setView('settings'); });
-      t.ok(await app.page.$('#link-test-card'), 'the card shows on DEV');
-      await app.page.fill('#link-test-urls', 'https://www.instagram.com/p/abc/\nnot a link\nhttps://www.facebook.com/udot/posts/9\nhttps://www.instagram.com/p/abc/');
-      await app.page.click('#link-test-go');
-      await t.until(() => app.page.evaluate(() => _linkTestRows.length === 2 && _linkTestRows.every((r) => r.res)), 'both links read');
-      t.eq(posted.length, 2, 'duplicates and non-links are skipped');
-      // The function's CORS allow-list must cover every header sent, or the
-      // browser stops at the preflight (seen live: Prefer was sent and refused).
-      const allowed = L.CORS['Access-Control-Allow-Headers'].split(/,\s*/);
-      t.ok(hdrs.every((ks) => ks.every((k) => allowed.includes(k))), 'every header the card sends is on the function’s CORS allow-list: ' + JSON.stringify(hdrs[0]));
-      const out = await app.page.textContent('#link-test-out');
-      t.ok(/IGMARK post/.test(out) && /1,234 reactions · 56 comments/.test(out), 'the read link shows its title and counts');
-      t.ok(/Read 1 of 2 · counts found on 1/.test(out), 'the summary line counts what was read');
-      t.ok(/sign-in page/.test(out), 'the refused link says why');
-      t.eq(app.errors, [], 'no page errors');
-    } finally { await app.close(); }
-    // On LIVE the card is never drawn (CC_ENV gate).
-    t.ok(/\$\{CC_ENV==='dev'\?_linkTestCardHTML\(\):''\}/.test(require('fs').readFileSync(path.join(__dirname, '..', '..', 'index.html'), 'utf8')), 'the card is gated to DEV');
+    // ── tidy: what the live DEV link test showed (Oct 2026) ──
+    const igT = L.tidy({ ok: true, fields: { title: 'UDOT on Instagram: "Mornin’. Here’s what you need to know for this weekend: lots of closures"',
+      description: '1,863 likes, 29 comments - udot on October 3, 2026: "Mornin’…"' }, engagement: { reactions: 1863, comments: 29 } }, 'Instagram', 'https://www.instagram.com/p/x/');
+    t.eq(igT.fields.published, 'October 3, 2026', 'Instagram: post date taken from the page text');
+    t.eq(igT.fields.author, 'UDOT', 'Instagram: account name moved to author');
+    t.ok(/^Mornin’/.test(igT.fields.title) && /^Mornin’/.test(igT.fields.description), 'Instagram: the caption is the title and the description');
+    const longT = L.tidy({ ok: true, fields: { title: 'word '.repeat(60).trim(), site: 'KSL.com' }, engagement: {} }, 'Web', 'https://www.ksl.com/a');
+    t.ok(longT.fields.title.length <= L.TITLE_MAX + 1 && /…$/.test(longT.fields.title), 'a long title is cut at a word');
+    t.ok(longT.fields.description.length > 200, 'and kept in full as the description');
+    const host = L.tidy({ ok: true, fields: { title: 'UDOT urges drivers to plan ahead' }, engagement: {} }, 'Web', 'https://connect.udot.utah.gov/2026/10/01/x/');
+    t.eq(host.fields.site, 'connect.udot.utah.gov', 'no outlet named → the site address');
+    t.ok(host.siteFromAddress, 'and says so');
+    const fbT = L.tidy({ ok: true, fields: { title: 'Utah DOT' }, engagement: {}, notes: [] }, 'Facebook', 'https://www.facebook.com/utahdot/posts/1');
+    t.ok(fbT.partial && fbT.notes.some((n) => /page name/.test(n)), 'Facebook with only a page name is flagged "page name only"');
+    const xT = L.tidy({ ok: true, fields: { title: 'Rikki Meece (@KSLRikki) on X', author: 'https://x.com/KSLRikki',
+      description: 'Crews closing I-84 tonight. — Rikki Meece (@KSLRikki) October 8, 2026' }, engagement: {} }, 'X', 'https://x.com/KSLRikki/status/1');
+    t.eq(xT.fields.title, 'Crews closing I-84 tonight.', 'X: the post text becomes the title, attribution trimmed');
+    t.eq(xT.fields.author, null, 'X: a profile URL is not kept as the author');
+    t.ok(!xT.partial, 'X with post text is not "page name only"');
+
+    // The temporary DEV test card is gone (the Outreach log replaced it).
+    t.ok(!/_linkTestCardHTML|linkTestRun/.test(require('fs').readFileSync(path.join(__dirname, '..', '..', 'index.html'), 'utf8')), 'the DEV link-test card was removed');
   },
 };

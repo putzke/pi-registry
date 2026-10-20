@@ -1,4 +1,4 @@
-// Supabase Edge Function: the Outreach log's link reader (DEV link test first).
+// Supabase Edge Function: the Outreach log's link reader.
 // All the logic is in logic.mjs (shared with the test harness, which runs it
 // under Node). Deployed with JWT verification OFF so the browser's CORS
 // preflight reaches it; every request then has to carry a signed-in session

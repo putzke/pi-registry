@@ -1,4 +1,4 @@
-// Link reader for the planned Outreach log (Part B, step 2a: the LINK TEST).
+// Link reader for the Outreach log: "Read link" in the outreach dialog.
 // Given one public URL, reads what a link preview can: title, outlet, date,
 // image, and any reaction / comment / share counts the page states publicly
 // (meta description, JSON-LD interactionStatistic). Nothing is stored; the
@@ -7,7 +7,7 @@
 // Deliberately NOT done: logging in anywhere, scraping comments, following
 // links inside the page, pretending to be another company's crawler. The
 // request identifies itself honestly (LINK_UA). Where a platform refuses an
-// unknown reader, the result says so — that refusal is what the test is for.
+// unknown reader, the result says so, and staff type or screenshot instead.
 //
 // Public, keyless oEmbed endpoints are used where a platform offers one
 // (X/Twitter, YouTube). Facebook and Instagram oEmbed need a Meta app token,
@@ -157,6 +157,52 @@ function ldAuthor(blocks) {
   return v;
 }
 
+// Cut long text at a word, with an ellipsis.
+export function shorten(s, n) {
+  s = String(s || '').trim();
+  if (s.length <= n) return s;
+  const cut = s.slice(0, n); const sp = cut.lastIndexOf(' ');
+  return (sp > n * 0.6 ? cut.slice(0, sp) : cut).replace(/[\s,;:.\-–—]+$/, '') + '…';
+}
+export const TITLE_MAX = 140;
+const SOCIAL = new Set(['Facebook', 'Instagram', 'X', 'LinkedIn', 'TikTok', 'Nextdoor', 'YouTube']);
+
+// Tidy what came back so it fits an outreach record: a short title with the
+// full text kept as the description, the post date where only the page text
+// carries it, the site's own address when it doesn't name itself, and a
+// "page name only" flag when a social site gave back nothing about the post.
+export function tidy(out, platform, url) {
+  const f = out.fields = out.fields || {};
+  const hadText = !!(f.description || f.published);
+  if (f.author && /^https?:\/\//i.test(f.author)) f.author = null;
+  if (platform === 'Instagram') {
+    // og:description: "1,863 likes, 29 comments - udot on October 3, 2026: "caption""
+    const d = (f.description || '').match(/\bon ([A-Z][a-z]+ \d{1,2}, \d{4})\s*:/);
+    if (d && !f.published) f.published = d[1];
+    // og:title: 'Name on Instagram: "caption"'
+    const m = (f.title || '').match(/^(.*?) on Instagram:\s*["“]([\s\S]*?)["”]?$/);
+    if (m) { if (!f.author) f.author = m[1]; f.description = m[2]; f.title = m[2]; }
+  }
+  if (platform === 'X' && f.description && (!f.title || / on X$/.test(f.title))) {
+    // The embed text ends "— Name (@handle) October 4, 2026"; the post is before it.
+    const post = f.description.replace(/\s*[—–-]\s*[^—–]*\(@\w+\)\s*[A-Z][a-z]+ \d{1,2}, \d{4}\s*$/, '').trim();
+    if (post) { f.description = post; f.title = post; }
+  }
+  if (f.title && f.title.length > TITLE_MAX) {
+    if (!f.description) f.description = f.title;
+    f.title = shorten(f.title, TITLE_MAX);
+  }
+  if (!f.site) {
+    try { f.site = new URL(url).hostname.replace(/^www\./, ''); out.siteFromAddress = true; } catch { /* keep blank */ }
+  }
+  const hasCounts = out.engagement && Object.keys(out.engagement).length;
+  if (SOCIAL.has(platform) && out.ok && !hadText && !hasCounts) {
+    out.partial = true;
+    (out.notes = out.notes || []).push('Only the page name came back, not the post itself — type the title and date.');
+  }
+  return out;
+}
+
 // Everything a link preview can say about one page.
 export function readPage(html, url) {
   const meta = metaTags(html);
@@ -286,6 +332,7 @@ export function createHandler({ env, fetchFn }) {
         out.ok = out.ok || !!(oe.title || oe.text);
       }
     }
+    tidy(out, platform, out.finalUrl || url);
     if (!out.engagement || !Object.keys(out.engagement).length) {
       out.notes = out.notes || [];
       out.notes.push(platform === 'Web' ? 'No public counts on this page.' : platform + ' shows no counts to an outside reader; read them from a screenshot or type them.');

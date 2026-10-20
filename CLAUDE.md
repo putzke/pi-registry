@@ -819,7 +819,7 @@ now, so clearing it there would unscope the whole app. If you add a list view,
 give it a selector and wire it to `S.projectFilter` — nothing else.
 
 ### Navigation views
-`dashboard | projects | master | stakeholders | interactions | followups | commitments | comments | tribal | deliverables | meetings | issues | map | reports | settings`
+`dashboard | projects | master | stakeholders | interactions | followups | hotline | outreach | commitments | comments | tribal | deliverables | meetings | issues | map | team | reports | settings`
 
 ### Key functions (search `function <name>(` — line numbers drift with every edit, so none are kept here)
 - `render()` — main dispatch
@@ -3476,32 +3476,66 @@ test on a NEW Twilio number — Sunrise's current hotlines are Microsoft Teams
 numbers, which can be ported out (porting PIN in Teams admin) or forwarded
 to Twilio; decide at go-live.
 
-## Outreach log (Part B) — step 2a: the LINK TEST, on DEV (Oct 2026)
-Scoped with Jeff (Oct 2026): a dated log of outreach ACTIONS (press release,
-newsletter, website update, 511 alert, social post, news coverage, trucking/
-industry publication, agency/partner coordination, other) with campaigns, a
-URL + link preview, and dated engagement readings (reactions / comments /
-shares) read best-effort, from a screenshot, or typed. NO scraping, NO
-mention monitoring, NO comment themes. Desktop only, staff-only. Order: (2a)
-link test → (2b) table + Outreach view → (2c) PI report section + quick
-report → (3) close-out link-up. **Only 2a is built.**
+## Outreach log (Part B) — step 2b BUILT on DEV (Oct 2026), not released
+Scoped with Jeff (Oct 2026): a dated log of outreach ACTIONS with campaigns,
+a link + preview, and dated engagement readings. NO scraping, NO mention
+monitoring, NO comment themes. Desktop only, staff-only. Not interactions —
+nothing here counts as one (asserted). Steps: (2a) link test ✅ → (2b) table +
+Outreach view ✅ on DEV → (2c) PI report section + quick report → (3)
+close-out link-up. Don't start 2c until Jeff says.
+- **`sql/2026-10-20_outreach_log.sql`** (applied to DEV 2026-10-20; paste on
+  LIVE at release): `pi_outreach_campaigns` (project, name; unique per project,
+  case-insensitive), `pi_outreach_actions` (date, type, party = who did it,
+  url, title, outlet, author, description, internal note, campaign),
+  `pi_outreach_readings` (read_on, reactions / comments / shares / views —
+  NULL = not shown, never 0 — and `source` automatic | screenshot | typed).
+  Readings are added, never overwritten, so counts read "as of" a date.
+  Staff-only (hotline pattern: `*_staff_all` + restrictive `pi_staff_or_client`,
+  anon revoked). Types `OUTREACH_TYPES`, parties `OUTREACH_PARTIES` ('PI team' /
+  'UDOT' / 'Media & third party').
+- **Nav "Outreach"** → `renderOutreach` (scoped by `S.projectFilter`, filters
+  `S.outType` / `S.outCampaign` / `S.outSearch`): tiles (actions, by party,
+  with counts, latest reactions/comments/shares), table with the LATEST reading
+  of each action, its date and source. `openOutreachModal` / `saveOutreach` /
+  `delOutreach` (readings deleted first) / `outDelReading`; "＋ New campaign…"
+  in the dialog (`outNewCampaign`).
+- **Read link** (`outReadLink`) fills only EMPTY fields — never over what was
+  typed; the date and type follow the link until someone changes them
+  (`data-touched`); a Proofpoint-wrapped address is replaced by the real one;
+  counts fill the first reading as "read from the link". **Read counts from the
+  link** takes a new reading. **From a screenshot…** (`outScreenshot`) sends the
+  image to `CLAUDE_TEXT_MODEL` with a json_schema (nullable ints; "never
+  estimate"); the numbers fill the inputs for checking, marked "from a
+  screenshot". The screenshot itself is not kept. Typing a count marks the
+  reading "typed". No API key → a message, no call.
 - **`supabase/functions/link-preview/`** (`logic.mjs` + `index.ts`, the
-  hotline pattern). POST `{url}` with a staff session (`pi_staff`, checked
-  inside; deployed to DEV with verify_jwt OFF for the CORS preflight). Reads
-  og:/twitter: meta, `<title>`, JSON-LD (headline, author, datePublished,
-  `interactionStatistic`), and counts written in the description ("1,234
-  likes, 56 comments"). X and YouTube also via their PUBLIC keyless oEmbed;
-  Facebook/Instagram oEmbed needs a Meta app token — not called.
+  hotline pattern; DEV v3, verify_jwt OFF, staff checked inside via
+  `pi_staff`). Reads og:/twitter: meta, `<title>`, JSON-LD (headline, author,
+  datePublished, `interactionStatistic`) and counts written in the description;
+  X and YouTube via their public keyless oEmbed (Facebook/Instagram oEmbed needs
+  a Meta app token — not called). `tidy()` shapes it for a record: Instagram
+  post date from the page text and caption as title; X post text as title
+  (attribution trimmed); titles over `TITLE_MAX` (140) cut at a word with the
+  full text kept as the description; no outlet → the site's address
+  (`siteFromAddress`); a social link with only a page name → `partial` ("page
+  name only"). `unwrapLink()` unwraps urldefense v2/v3.
 - **Honest reader:** User-Agent `LINK_UA` names Cirrus Cc; never pretends to be
-  facebookexternalhit/Twitterbot (asserted). A sign-in wall is reported as
-  such, with "read them from a screenshot or type them".
-- **Address rules (`urlProblem`)** at EVERY redirect hop (redirects followed
-  by hand, max 5): http(s) only, ports 80/443, no IP literals, localhost,
-  internal names or supabase hosts; 2 MB / 10 s caps. Stores nothing.
-- **Settings → "Link reader test" card, DEV only** (`CC_ENV==='dev'`,
-  `_linkTestCardHTML` / `linkTestRun` / `linkTestCopy`): paste up to 25 links,
-  results table, "Copy results" as tab-separated text. Temporary — remove when
-  2b ships. Guarded by `test/tests/92-link-preview.test.js`.
+  facebookexternalhit/Twitterbot (asserted). A sign-in wall is reported as such.
+- **Address rules (`urlProblem`)** at EVERY redirect hop (followed by hand, max
+  5): http(s) only, ports 80/443, no IP literals, localhost, internal names or
+  supabase hosts; 2 MB / 10 s caps. Stores nothing.
+- **CORS lesson (first live test, 2026-10-20):** the browser sent only the
+  preflight because the request carried `Prefer` (from `getAuthHeaders()`),
+  which the function didn't allow — every link read "could not be reached".
+  Calls to our own functions send only Authorization / apikey / Content-Type
+  (as the hotline calls do); test 93 asserts no `prefer` header.
+- **What the live link test showed** (5 real links): UDOT Connect → title only;
+  Facebook → page name only; Instagram → caption + reactions + comments; PI
+  email via Proofpoint → title; X → author + exact date, no counts. So counts are
+  automatic for Instagram only; Facebook and X counts come from a screenshot or
+  typing.
+- Guarded by `test/tests/92-link-preview.test.js` (reader) and
+  `test/tests/93-outreach-log.test.js` (the view and dialog).
 
 ## PLANNED — Conference demo site (for the UDOT conference, 2026-10-27; ON HOLD)
 Agreed with Jeff 2026-10-14: a third environment where other PI firms try the

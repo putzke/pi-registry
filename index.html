@@ -10862,15 +10862,18 @@ function _coHatchDef(id) {
 function _coTextW(s, size) { return String(s).length * (size || 11) * 0.56; }
 
 // Stacked columns, one per period: outbound at the baseline, inbound above it.
+// o.allTotals (quick reports): a total over every column, a taller plot and
+// wider bars. The close-out keeps its one direct label (the peak).
 function _coSvgStacked(o) {
-  const W = CO_CHART.w, H = 272, n = o.labels.length;
+  const W = CO_CHART.w, H = o.allTotals ? 320 : 272, n = o.labels.length;
   const tot = o.a.map(function (v, i) { return v + o.b[i]; });
   const max = Math.max.apply(null, tot.concat([1]));
   const ticks = _coTicks(max, 4), top = ticks[ticks.length - 1];
   const padL = Math.ceil(_coTextW(_coFmtN(top)) + 14), padR = 8, padT = 44, padB = 30;
   const pw = W - padL - padR, ph = H - padT - padB, base = padT + ph;
   const y = function (v) { return base - v / top * ph; };
-  const band = pw / n, bw = Math.max(3, Math.min(24, band * 0.64));
+  const band = pw / n, bw = Math.max(3, Math.min(o.allTotals ? 30 : 24, band * (o.allTotals ? 0.74 : 0.64)));
+  const totSize = Math.max(7.5, Math.min(10.5, band * 0.5));
   let s = _coSvgOpen(W, H, o.alt) + _coHatchDef(o.id + '-h');
   // legend, top-left
   s += '<rect x="' + padL + '" y="6" width="11" height="11" rx="2" fill="' + CO_CHART.s1 + '"/>' + _coSvgText(padL + 16, 15.5, o.aName, { fill: CO_CHART.ink });
@@ -10892,7 +10895,8 @@ function _coSvgStacked(o) {
       s += '<path d="' + _coBarPath(x, yb, bw, hh, 'up') + '" fill="url(#' + o.id + '-h)"/>';
     }
     if ((n - 1 - i) % every === 0) s += _coSvgText(cx, base + 16, lab, { anchor: 'middle', size: 10.5 });
-    if (i === peak && tot[i]) s += _coSvgText(cx, y(tot[i]) - 6, _coFmtN(tot[i]), { anchor: 'middle', fill: CO_CHART.ink, bold: true });
+    if (o.allTotals) { if (tot[i]) s += _coSvgText(cx, y(tot[i]) - 4, _coFmtN(tot[i]), { anchor: 'middle', fill: CO_CHART.ink, bold: i === peak, size: i === peak ? totSize + 1 : totSize }); }
+    else if (i === peak && tot[i]) s += _coSvgText(cx, y(tot[i]) - 6, _coFmtN(tot[i]), { anchor: 'middle', fill: CO_CHART.ink, bold: true });
   });
   s += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + base + '" y2="' + base + '" stroke="' + CO_CHART.base + '" stroke-width="1"/>';
   return { svg: s + '</svg>', w: W, h: H };
@@ -12740,8 +12744,14 @@ function generateReport(type, opts){
     if(logInts.length){
       var ilMon=_coMonthly(logInts);
       if(ilMon) body+=_qrFigure((ilMon.quarterly?'Contacts per quarter':'Contacts per month')+' — outbound and inbound',
-        _coSvgStacked({id:'qr-ilog',labels:ilMon.labels,a:ilMon.a,b:ilMon.b,aName:'Outbound',bName:'Inbound & in-person',alt:'Contacts per month, outbound and inbound'}),
-        ilMon.undated?ilMon.undated+' undated interaction'+(ilMon.undated!==1?'s':'')+' not shown.':'');
+        _coSvgStacked({id:'qr-ilog',labels:ilMon.labels,a:ilMon.a,b:ilMon.b,aName:'Outbound',bName:'Inbound & in-person',alt:'Contacts per month, outbound and inbound',allTotals:true}),
+        (function(){
+          var per=ilMon.quarterly?'quarter':'month', tot=ilMon.a.map(function(v,i){return v+ilMon.b[i];}), pk=0;
+          tot.forEach(function(v,i){if(v>tot[pk])pk=i;});
+          var avg=Math.round(tot.reduce(function(a,v){return a+v;},0)/tot.length*10)/10;
+          return 'Busiest '+per+': '+ilMon.labels[pk].replace('’','20')+' — '+tot[pk]+' contacts ('+ilMon.a[pk]+' outbound, '+ilMon.b[pk]+' inbound). Average '+avg+' per '+per+' over '+tot.length+' '+per+'s.'
+            +(ilMon.undated?' '+ilMon.undated+' undated interaction'+(ilMon.undated!==1?'s':'')+' not shown.':'');
+        })());
       body+=_qrFigure('Contacts by channel',_qrHBars(_qrTally(logInts,function(i){return i.channel||'Not recorded';},8),'Contacts by channel'),
         _qrMore(logInts,function(i){return i.channel||'Not recorded';},8,'contacts','channels'));
     }

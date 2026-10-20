@@ -838,6 +838,9 @@ above `generateReport`; colours in `QR_TONE`.
   attendance by event only. Follow-ups and issues have NO charts — the tiles
   and the coloured table say it; "Events by type" was dropped too. Don't add
   them back without asking.
+- The contacts-per-month chart passes `allTotals:true` to `_coSvgStacked`
+  (a total over every column, taller, wider bars) and a caption names the
+  busiest month and the average. The close-out keeps its single peak label.
 - **Inline hex only** in report bodies: `_openRptPopup` turns
   `rgba(255,255,255,…)` into `#ccc` and a CSS variable means nothing in the
   frame. The comment matrix's comment rows used to print grey for that reason.

@@ -56,6 +56,12 @@ module.exports = {
       const il = await open('interaction-log');
       t.ok(/Outbound<\/div>/.test(il.html) && /Inbound &amp; in-person<\/div>/.test(il.html), 'outbound and inbound tiles');
       t.ok(/Contacts per (month|quarter)/.test(il.html), 'contacts-over-time chart');
+      // Every month carries its total, not just the busiest one (Jeff, Oct 2026).
+      const ilAt = il.html.indexOf('Contacts per ');
+      const ilFig = il.html.slice(ilAt, il.html.indexOf('</svg>', ilAt));
+      const totals = (ilFig.match(/<text [^>]*text-anchor="middle"[^>]*font-weight="700"|<text [^>]*text-anchor="middle"[^>]*>\d+<\/text>/g) || []).length;
+      t.ok(totals >= 6, `a total over each month (${totals} labels)`);
+      t.ok(/Busiest month: [A-Z][a-z]{2} 20\d\d — \d+ contacts \(\d+ outbound, \d+ inbound\)\. Average [\d.]+ per month/.test(il.html), 'busiest month and average are stated under the chart');
 
       // A report that is not one of the five gets no AI button.
       const cl = await open('contact-list');

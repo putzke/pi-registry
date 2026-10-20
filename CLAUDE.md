@@ -886,6 +886,41 @@ gathered every report type regardless of the selection, and the call used
 - Guarded by `test/tests/72-package-exec-summary.test.js` (18 checks;
   `_claudeNarrative` stubbed; verified to fail on the old code).
 
+### Quick reports: headline numbers, charts, colours, ✦ AI summary (Oct 2026)
+Jeff asked for the five working quick reports to print as something a client
+reads at a glance. Interaction log, Follow-up status, Public comment matrix,
+Issues tracker (`exportIssuesPdf`) and Events & outreach log now open with a
+row of headline numbers (`_qrKpis`), one or two charts (`_qrFigure` around the
+close-out's `_coSvgStacked` / `_coSvgHBars`, `_coMonthly`), then the table with
+status colours (`_qrPill`, a coloured left rule per row). Helpers sit just
+above `generateReport`; colours in `QR_TONE`.
+- **Which charts (Jeff, after trying them):** interaction log = contacts per
+  month + by channel; comment matrix = by response status + by topic; events =
+  attendance by event only. Follow-ups and issues have NO charts — the tiles
+  and the coloured table say it; "Events by type" was dropped too. Don't add
+  them back without asking.
+- The contacts-per-month chart passes `allTotals:true` to `_coSvgStacked`
+  (a total over every column, taller, wider bars) and a caption names the
+  busiest month and the average. The close-out keeps its single peak label.
+- **Inline hex only** in report bodies: `_openRptPopup` turns
+  `rgba(255,255,255,…)` into `#ccc` and a CSS variable means nothing in the
+  frame. The comment matrix's comment rows used to print grey for that reason.
+- One rule per state: follow-ups `_qrFuState` (Overdue / Due within
+  `QR_SOON_DAYS` / Open / Resolved), events `_qrEventState` (Held / Upcoming /
+  Cancelled / date passed), `QR_COMMENT_COLORS`, `QR_ISSUE_COLORS`. The table
+  pill, the tiles and the chart all read the same rule.
+- The follow-up table's last column is now **Owner** (`_fuOwner`), not Logged by.
+- **✦ AI summary** (report frame toolbar, the five reports only —
+  `QR_AI_REPORTS`): the report leaves `window._qrAINext` just before it opens;
+  `showInlineReport` takes it as `_qrAICtx` and shows the button. `qrAISummary`
+  sends `_buildPackageFacts(projF,[id])` through `_pkgSummaryRequest(f, true)`
+  (the package's rules, worded for one report), then reopens the report with
+  the text in the Summary block, which is `contenteditable` — an edit there is
+  what prints. Issues: only from the project-scoped quick report, not the
+  Issues view's filtered export. The package path is unchanged (it never sets
+  the context). Follow-up facts gained due-soon, owners and the open items.
+- Guarded by `test/tests/91-quick-report-figures.test.js`.
+
 ### The report-period label belongs to ONE section (`_periodLabel`, Aug 2026)
 The counts chip under every auto section was prefixed "19-day report period · ".
 Only **`auto-concerns`** is actually bounded by `pstart`/`pend`. Deliverables,

@@ -10550,7 +10550,7 @@ function escHtml(str){
   return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function exportIssuesPdf(){
+function exportIssuesPdf(opts){
   const issues=DB.get('issues')||[];
   const projs=DB.get('projects')||[];
   const ints=DB.get('interactions')||[];
@@ -10627,8 +10627,22 @@ function exportIssuesPdf(){
     '</div>';
   }
 
+  const isOpen=x=>x.status!=='Resolved';
+  const today=localToday();
+  const openAges=filtered.filter(x=>isOpen(x)&&/^\d{4}-\d{2}-\d{2}/.test(x.dateRaised||'')).map(x=>Math.max(0,_qrDaysBetween(String(x.dateRaised).slice(0,10),today)));
+  const nSt=k=>filtered.filter(x=>(x.status||'Open')===k).length;
+  const hiOpen=filtered.filter(x=>isOpen(x)&&x.priority==='High').length;
+  const issKpis=_qrKpis([
+    {v:filtered.length,label:'Issues',tone:'navy'},
+    {v:nSt('Open'),label:'Open',tone:nSt('Open')?'red':'gray'},
+    {v:nSt('In Progress'),label:'In progress',tone:'amber'},
+    {v:nSt('Monitoring'),label:'Monitoring',tone:'blue'},
+    {v:nSt('Resolved'),label:'Resolved',tone:'green'},
+    {v:hiOpen,label:'High priority, unresolved',sub:openAges.length?'oldest unresolved: '+Math.max.apply(null,openAges)+' days':'',tone:hiOpen?'red':'gray'}
+  ]);
+
   const bodyHtml='<div style="font-family:Arial,sans-serif;font-size:10px;color:#111;line-height:1.4">'+
-    '<div style="font-size:10px;color:#555;margin-bottom:8px">'+filtered.length+' issue'+(filtered.length!==1?'s':'')+' &bull; '+filtered.filter(x=>x.status==='Open'||x.status==='In Progress').length+' open</div>'+
+    issKpis+
     filterLine+
     '<table style="width:100%;border-collapse:collapse;margin-bottom:24px;table-layout:fixed"><thead><tr>'+
       '<th style="width:28%">Title</th><th style="width:9%">Status</th><th style="width:9%">Priority</th><th style="width:14%">Category</th><th style="width:22%">Project</th><th style="width:12%;white-space:nowrap">Date Raised</th><th style="width:6%">Links</th>'+
@@ -10648,7 +10662,7 @@ function exportIssuesPdf(){
     window._rptCollector.push({title:'Issues Tracker',distBlock:'',body:bodyHtml});
     return;
   }
-  _openRptPopup(bodyHtml,'Issues Tracker',issProjLabel,issDateStr);
+  _openRptPopup(bodyHtml,'Issues Tracker',issProjLabel,issDateStr,(opts&&opts.summary)||'');
 }
 
 function renderReports(el){
@@ -12160,15 +12174,18 @@ function _coHatchDef(id) {
 function _coTextW(s, size) { return String(s).length * (size || 11) * 0.56; }
 
 // Stacked columns, one per period: outbound at the baseline, inbound above it.
+// o.allTotals (quick reports): a total over every column, a taller plot and
+// wider bars. The close-out keeps its one direct label (the peak).
 function _coSvgStacked(o) {
-  const W = CO_CHART.w, H = 272, n = o.labels.length;
+  const W = CO_CHART.w, H = o.allTotals ? 320 : 272, n = o.labels.length;
   const tot = o.a.map(function (v, i) { return v + o.b[i]; });
   const max = Math.max.apply(null, tot.concat([1]));
   const ticks = _coTicks(max, 4), top = ticks[ticks.length - 1];
   const padL = Math.ceil(_coTextW(_coFmtN(top)) + 14), padR = 8, padT = 44, padB = 30;
   const pw = W - padL - padR, ph = H - padT - padB, base = padT + ph;
   const y = function (v) { return base - v / top * ph; };
-  const band = pw / n, bw = Math.max(3, Math.min(24, band * 0.64));
+  const band = pw / n, bw = Math.max(3, Math.min(o.allTotals ? 30 : 24, band * (o.allTotals ? 0.74 : 0.64)));
+  const totSize = Math.max(7.5, Math.min(10.5, band * 0.5));
   let s = _coSvgOpen(W, H, o.alt) + _coHatchDef(o.id + '-h');
   // legend, top-left
   s += '<rect x="' + padL + '" y="6" width="11" height="11" rx="2" fill="' + CO_CHART.s1 + '"/>' + _coSvgText(padL + 16, 15.5, o.aName, { fill: CO_CHART.ink });
@@ -12190,7 +12207,8 @@ function _coSvgStacked(o) {
       s += '<path d="' + _coBarPath(x, yb, bw, hh, 'up') + '" fill="url(#' + o.id + '-h)"/>';
     }
     if ((n - 1 - i) % every === 0) s += _coSvgText(cx, base + 16, lab, { anchor: 'middle', size: 10.5 });
-    if (i === peak && tot[i]) s += _coSvgText(cx, y(tot[i]) - 6, _coFmtN(tot[i]), { anchor: 'middle', fill: CO_CHART.ink, bold: true });
+    if (o.allTotals) { if (tot[i]) s += _coSvgText(cx, y(tot[i]) - 4, _coFmtN(tot[i]), { anchor: 'middle', fill: CO_CHART.ink, bold: i === peak, size: i === peak ? totSize + 1 : totSize }); }
+    else if (i === peak && tot[i]) s += _coSvgText(cx, y(tot[i]) - 6, _coFmtN(tot[i]), { anchor: 'middle', fill: CO_CHART.ink, bold: true });
   });
   s += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + base + '" y2="' + base + '" stroke="' + CO_CHART.base + '" stroke-width="1"/>';
   return { svg: s + '</svg>', w: W, h: H };
@@ -12200,7 +12218,7 @@ function _coSvgHBars(o) {
   const W = CO_CHART.w, rowH = 26, bh = 16, padT = 6, padB = 6;
   const H = padT + o.rows.length * rowH + padB;
   const labs = o.rows.map(function (r) { const t = String(r[0]); return t.length > 34 ? t.slice(0, 33) + '…' : t; });
-  const labW = Math.min(230, Math.ceil(Math.max.apply(null, labs.map(function (l) { return _coTextW(l, 11.5); }))) + 12);
+  const labW = Math.min(230, Math.ceil(Math.max.apply(null, labs.map(function (l) { return _coTextW(l, 11.5); }))) + 16);
   const max = Math.max.apply(null, o.rows.map(function (r) { return r[1]; }).concat([1]));
   const x0 = labW, pw = W - x0 - 8 - _coTextW(_coFmtN(max), 11) - 10;
   let s = _coSvgOpen(W, H, o.alt);
@@ -13767,7 +13785,7 @@ function generateParcelReport(){
   showInlineReport(html, 'Right-of-Way Parcel Report');
 }
 
-function generateIssuesReport(){
+function generateIssuesReport(opts){
   // Behave like the other quick reports: render the PDF inline in the shared
   // letterhead frame, scoped to the current project only (no Word option — that
   // lives in the PI Report Editor). Temporarily neutralize the Issues-view
@@ -13775,8 +13793,10 @@ function generateIssuesReport(){
   // then restore them so the Issues view is unaffected.
   var _pv=S.projectFilter,_sv=S.issViewStatus,_cv=S.issViewCat,_pr=S.issViewPri;
   S.issViewStatus='';S.issViewCat='';S.issViewPri='';
-  try{ exportIssuesPdf(); }
-  finally{ S.projectFilter=_pv;S.issViewStatus=_sv;S.issViewCat=_cv;S.issViewPri=_pr; }
+  // "✦ AI summary" is offered on a project-scoped report only (its facts are per project).
+  if(_pv&&!window._rptCollector) window._qrAINext={id:'issues-report',projF:_pv,has:!!(opts&&opts.summary)};
+  try{ exportIssuesPdf(opts); }
+  finally{ window._qrAINext=null; S.projectFilter=_pv;S.issViewStatus=_sv;S.issViewCat=_cv;S.issViewPri=_pr; }
 }
 
 function getReportTitle(type){
@@ -13784,7 +13804,95 @@ function getReportTitle(type){
   return titles[type]||type;
 }
 
-function generateReport(type){
+// ── QUICK REPORTS: headline numbers, charts, colour-coded rows (Oct 2026) ──
+// The five working reports (interaction log, follow-ups, comment matrix,
+// issues, events) open with a row of headline numbers and one or two charts
+// drawn by the close-out's SVG helpers, so the PDF reads at a glance before the
+// table. Everything here is inline-styled hex: _openRptPopup turns
+// rgba(255,255,255,…) into #ccc, and a CSS variable means nothing in the frame.
+var QR_TONE={navy:'#1a3a5c',blue:'#2a78d6',orange:'#c4551f',green:'#1a7a50',amber:'#b36b00',red:'#b32020',gray:'#595959'};
+var QR_SOON_DAYS=7;
+// The reports that offer "✦ AI summary" (facts from _buildPackageFacts).
+var QR_AI_REPORTS=['interaction-log','followup-status','comment-matrix','issues-report','events-log'];
+function _qrKpis(tiles){
+  // A table, not flex: it lays out the same in the frame, the package and Word.
+  var w=Math.floor(100/tiles.length);
+  return '<table class="qr-kpis" style="width:100%;border-collapse:separate;border-spacing:6px 0;table-layout:fixed;margin:0 0 14px"><tr>'
+    +tiles.map(function(t){
+      var c=QR_TONE[t.tone]||t.tone||QR_TONE.navy;
+      return '<td style="width:'+w+'%;padding:8px 9px!important;background:#f4f7fa;border:1px solid #dde3ea!important;border-top:3px solid '+c+'!important;vertical-align:top!important">'
+        +'<div style="font-size:19px;font-weight:700;color:'+c+';line-height:1.15">'+t.v+'</div>'
+        +'<div style="font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#444;margin-top:3px">'+t.label+'</div>'
+        +(t.sub?'<div style="font-size:8.5px;color:#666;margin-top:2px">'+t.sub+'</div>':'')
+        +'</td>';
+    }).join('')+'</tr></table>';
+}
+function _qrFigure(title, ch, note){
+  if(!ch) return '';
+  var svg=ch.svg.replace('<svg ','<svg style="display:block;width:100%;max-width:'+ch.w+'px;height:auto" ');
+  return '<div class="qr-fig" style="page-break-inside:avoid;break-inside:avoid;margin:0 0 14px">'
+    +'<div style="font-size:10px;font-weight:700;color:#1a3a5c;margin-bottom:4px">'+escHtml(title)+'</div>'+svg
+    +(note?'<div style="font-size:8.5px;color:#666;font-style:italic;margin-top:3px">'+escHtml(note)+'</div>':'')
+    +'</div>';
+}
+function _qrPill(text, hex){
+  return '<span style="display:inline-block;background:'+hex+'1f;color:'+hex+';border:1px solid '+hex+'55;border-radius:4px;padding:1px 6px;font-size:8.5px;font-weight:700;white-space:nowrap">'+escHtml(text)+'</span>';
+}
+// Counts by key, largest first, as hbar rows [[label, n, colour]].
+function _qrTally(arr, fn, top, colorFn){
+  var m={};
+  arr.forEach(function(x){var k=fn(x); if(k) m[k]=(m[k]||0)+1;});
+  return Object.keys(m).sort(function(a,b){return m[b]-m[a]||a.localeCompare(b);}).slice(0,top||8)
+    .map(function(k){return [k,m[k],colorFn?colorFn(k):undefined];});
+}
+function _qrHBars(rows, alt){ return rows.length?_coSvgHBars({rows:rows, alt:alt}):null; }
+function _qrMore(arr, fn, shown, noun, groups){
+  var m={}; arr.forEach(function(x){var k=fn(x); if(k) m[k]=(m[k]||0)+1;});
+  var keys=Object.keys(m); if(keys.length<=shown) return '';
+  var rest=keys.sort(function(a,b){return m[b]-m[a]||a.localeCompare(b);}).slice(shown);
+  var n=rest.reduce(function(a,k){return a+m[k];},0);
+  return 'Plus '+n+' more '+noun+' across '+rest.length+' other '+groups+'.';
+}
+function _qrDaysBetween(a,b){ return Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/864e5); }
+function _qrAddDays(d,n){ var x=new Date(d+'T00:00:00'); x.setDate(x.getDate()+n); return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'); }
+
+// Follow-up state: the one rule for the table pill, the KPI tiles and the chart.
+function _qrFuState(i, today){
+  if(i.followUpDone) return {k:'Resolved', c:QR_TONE.green};
+  if(i.followUpDue&&i.followUpDue<today) return {k:'Overdue', c:QR_TONE.red};
+  if(i.followUpDue&&i.followUpDue<=_qrAddDays(today,QR_SOON_DAYS)) return {k:'Due within '+QR_SOON_DAYS+' days', c:QR_TONE.amber};
+  return {k:i.followUpDue?'Open — due later':'Open — no due date', c:QR_TONE.blue};
+}
+var QR_COMMENT_COLORS={'Responded':QR_TONE.green,'In progress':QR_TONE.blue,'Pending':QR_TONE.amber,'No response needed':QR_TONE.gray};
+var QR_ISSUE_COLORS={'Open':QR_TONE.red,'In Progress':QR_TONE.amber,'Monitoring':QR_TONE.blue,'Resolved':QR_TONE.green};
+function _qrEventState(m, today){
+  if(m.status==='Completed') return {k:'Held', c:QR_TONE.green};
+  if(m.status==='Cancelled') return {k:'Cancelled', c:QR_TONE.red};
+  if(m.date&&m.date>=today) return {k:'Upcoming', c:QR_TONE.blue};
+  return {k:(m.status||'Planned')+' — date passed', c:QR_TONE.amber};
+}
+
+// "✦ AI summary" on a quick report: the same facts and request as the report
+// package's executive summary, for this one report. The summary prints at the
+// top of the report and can be edited there before printing.
+async function qrAISummary(btn){
+  var c=window._qrAICtx; if(!c) return;
+  if(!_getClaudeKey()){showToast('Add your Claude API key in Settings (Claude AI Narrative Generation) to use AI','warn',5000);return;}
+  var facts=_buildPackageFacts(c.projF,[c.id]);
+  if(!facts||!facts.blocks.length){showToast('Not enough project data to summarize yet','warn');return;}
+  var req=_pkgSummaryRequest(facts,true);
+  var orig=btn?btn.innerHTML:'';
+  if(btn){btn.disabled=true;btn.textContent='Writing summary…';}
+  var text=await _claudeNarrative(req.system, req.user, req.maxTokens);
+  if(!text){ if(btn){btn.disabled=false;btn.innerHTML=orig;} return; }
+  var prev=S.projectFilter; S.projectFilter=c.projF;
+  try{ if(c.id==='issues-report') generateIssuesReport({summary:text.trim()}); else generateReport(c.id,{summary:text.trim()}); }
+  finally{ S.projectFilter=prev; }
+  showToast('AI summary added — click it in the report to edit before printing','info',4000);
+}
+
+function generateReport(type, opts){
+  opts=opts||{};
   var projF=S.projectFilter;
   if(!projF)return;
   var projs=DB.get('projects');
@@ -13932,8 +14040,36 @@ function generateReport(type){
     if(sortedStakes.length===0)body='<div style="padding:32px;text-align:center;color:var(--fog)">No stakeholders match the selected report distribution.</div>';
 
   } else if(type==='interaction-log'){
-    var sorted=logInts.slice().sort(function(a,b){return b.date.localeCompare(a.date)});
-    body='<table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">'
+    var sorted=logInts.slice().sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''))});
+    var ilOut=logInts.filter(function(i){return i.direction==='Outgoing'}).length;
+    var ilNamed={};logInts.forEach(function(i){if(i.stakeholderId)ilNamed[String(i.stakeholderId)]=1;});
+    var ilAnon=logInts.filter(function(i){return !i.stakeholderId}).length;
+    var ilSince=_qrAddDays(localToday(),-30);
+    body=_qrKpis([
+      {v:logInts.length,label:'Interactions',sub:includeInternal?'internal contacts included':'external &amp; public',tone:'navy'},
+      {v:ilOut,label:'Outbound',sub:'from the team',tone:'blue'},
+      {v:logInts.length-ilOut,label:'Inbound &amp; in-person',sub:'from stakeholders',tone:'orange'},
+      {v:Object.keys(ilNamed).length,label:'Contacts reached',sub:'named stakeholders',tone:'navy'},
+      {v:ilAnon,label:'Members of the public',sub:'not named',tone:'gray'},
+      {v:logInts.filter(function(i){return String(i.date||'')>=ilSince}).length,label:'Last 30 days',tone:'green'}
+    ]);
+    if(logInts.length){
+      var ilMon=_coMonthly(logInts);
+      if(ilMon) body+=_qrFigure((ilMon.quarterly?'Contacts per quarter':'Contacts per month')+' — outbound and inbound',
+        _coSvgStacked({id:'qr-ilog',labels:ilMon.labels,a:ilMon.a,b:ilMon.b,aName:'Outbound',bName:'Inbound & in-person',alt:'Contacts per month, outbound and inbound',allTotals:true}),
+        (function(){
+          var per=ilMon.quarterly?'quarter':'month', tot=ilMon.a.map(function(v,i){return v+ilMon.b[i];}), pk=0;
+          tot.forEach(function(v,i){if(v>tot[pk])pk=i;});
+          var avg=Math.round(tot.reduce(function(a,v){return a+v;},0)/tot.length*10)/10;
+          return 'Busiest '+per+': '+ilMon.labels[pk].replace('’','20')+' — '+tot[pk]+' contacts ('+ilMon.a[pk]+' outbound, '+ilMon.b[pk]+' inbound). Average '+avg+' per '+per+' over '+tot.length+' '+per+'s.'
+            +(ilMon.undated?' '+ilMon.undated+' undated interaction'+(ilMon.undated!==1?'s':'')+' not shown.':'');
+        })());
+      body+=_qrFigure('Contacts by channel',_qrHBars(_qrTally(logInts,function(i){return i.channel||'Not recorded';},8),'Contacts by channel'),
+        _qrMore(logInts,function(i){return i.channel||'Not recorded';},8,'contacts','channels'));
+    }
+    body+='<div style="font-size:9px;color:#444;margin:2px 0 6px"><span style="display:inline-block;width:9px;height:9px;background:'+QR_TONE.blue+';vertical-align:-1px;margin-right:4px"></span>Outbound'
+      +'<span style="display:inline-block;width:9px;height:9px;background:'+QR_TONE.orange+';vertical-align:-1px;margin:0 4px 0 14px"></span>Inbound / in-person</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">'
       +'<colgroup><col style="width:12%"><col style="width:17%"><col style="width:12%"><col style="width:49%"><col style="width:10%"></colgroup>'
       +'<thead><tr>'
       +'<th style="padding:7px 8px;background:#1a3a5c;color:#fff;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px">Date</th>'
@@ -13946,14 +14082,16 @@ function generateReport(type){
       var s=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
       var sName=s?dispName(s):(i.anonLabel||'Anonymous');
       var sOrg=s?(s.org||''):'';
+      var ilC=i.direction==='Outgoing'?QR_TONE.blue:QR_TONE.orange;
       body+='<tr style="page-break-inside:avoid">'
-        +'<td style="padding:8px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:11px;white-space:nowrap">'+fmt(i.date)+'</td>'
+        +'<td style="padding:8px;border-bottom:1px solid #e0e0e0;border-left:3px solid '+ilC+'!important;vertical-align:top;font-size:11px;white-space:nowrap">'+fmt(i.date)+'</td>'
         +'<td style="padding:8px;border-bottom:1px solid #e0e0e0;vertical-align:top">'
         +'<div style="font-weight:700;font-size:12px;color:#222">'+sName+'</div>'
         +(sOrg?'<div style="font-size:10px;color:#595959;margin-top:1px">'+sOrg+'</div>':'')
         +'</td>'
-        +'<td style="padding:8px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:12px">'+(i.channel||'—')+'</td>'
-        +'<td style="padding:8px;border-bottom:1px solid #e0e0e0;vertical-align:top;line-height:1.6;font-size:12px">'+i.summary+'</td>'
+        +'<td style="padding:8px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:12px">'+(i.channel||'—')
+        +'<div style="font-size:9px;font-weight:700;color:'+ilC+';margin-top:2px">'+(i.direction==='Outgoing'?'Outbound':i.direction==='In-person'?'In person':'Inbound')+'</div></td>'
+        +'<td style="padding:8px;border-bottom:1px solid #e0e0e0;vertical-align:top;line-height:1.6;font-size:12px">'+(i.summary||'')+'</td>'
         +'<td style="padding:8px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:11px;color:#555">'+(i.loggedBy||'—')+'</td>'
         +'</tr>';
     });
@@ -13961,26 +14099,39 @@ function generateReport(type){
 
   } else if(type==='followup-status'){
     var fuItems=ints.filter(function(i){return i.followUp}); // all interactions, not just external
-    var overdue=fuItems.filter(function(i){return !i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<now}).length;
-    var openCt=fuItems.filter(function(i){return !i.followUpDone}).length;
-    var resolvedCt=fuItems.filter(function(i){return i.followUpDone}).length;
-    body='<div style="display:flex;gap:12px;margin-bottom:16px">'
-      +'<div class="scope-stat"><b style="color:var(--amber)">'+openCt+'</b><span style="font-size:12px;color:var(--slate)">Open</span></div>'
-      +'<div class="scope-stat"><b style="color:var(--red)">'+overdue+'</b><span style="font-size:12px;color:var(--slate)">Overdue</span></div>'
-      +'<div class="scope-stat"><b style="color:var(--green)">'+resolvedCt+'</b><span style="font-size:12px;color:var(--slate)">Resolved</span></div></div>'
-      +'<table class="dtable" style="font-size:13px"><thead><tr>'
-      +'<th>Due date</th><th>Action</th><th>Stakeholder</th><th>Status</th><th>Log date</th><th>Logged by</th></tr></thead><tbody>';
+    var fuToday=localToday();
+    var fuSt=function(i){return _qrFuState(i,fuToday);};
+    var fuOpen=fuItems.filter(function(i){return !i.followUpDone});
+    var overdue=fuOpen.filter(function(i){return fuSt(i).k==='Overdue'}).length;
+    var fuSoon=fuOpen.filter(function(i){return fuSt(i).c===QR_TONE.amber}).length;
+    var fuRes=fuItems.filter(function(i){return i.followUpDone});
+    var fuTimed=fuRes.filter(function(i){return i.followUpResolved&&i.date&&/^\d{4}-\d{2}-\d{2}/.test(i.followUpResolved)});
+    var fuAvg=fuTimed.length?Math.round(fuTimed.reduce(function(a,i){return a+Math.max(0,_qrDaysBetween(String(i.date).slice(0,10),String(i.followUpResolved).slice(0,10)));},0)/fuTimed.length):null;
+    var fuDueRes=fuRes.filter(function(i){return i.followUpDue&&i.followUpResolved});
+    var fuOnTime=fuDueRes.filter(function(i){return String(i.followUpResolved).slice(0,10)<=i.followUpDue}).length;
+    body=_qrKpis([
+      {v:fuItems.length,label:'Follow-ups',tone:'navy'},
+      {v:fuOpen.length,label:'Open',tone:'blue'},
+      {v:overdue,label:'Overdue',tone:overdue?'red':'gray'},
+      {v:fuSoon,label:'Due within '+QR_SOON_DAYS+' days',tone:fuSoon?'amber':'gray'},
+      {v:fuRes.length,label:'Resolved',sub:fuDueRes.length?fuOnTime+' of '+fuDueRes.length+' on time':'',tone:'green'},
+      {v:fuAvg===null?'—':fuAvg+(fuAvg===1?' day':' days'),label:'Average time to resolve',sub:fuTimed.length?'from the day it was logged':'',tone:'navy'}
+    ]);
+    body+='<table class="dtable" style="font-size:13px;table-layout:fixed;width:100%">'
+      +'<colgroup><col style="width:12%"><col style="width:32%"><col style="width:18%"><col style="width:16%"><col style="width:12%"><col style="width:10%"></colgroup>'
+      +'<thead><tr><th>Due date</th><th>Action</th><th>Stakeholder</th><th>Status</th><th>Log date</th><th>Owner</th></tr></thead><tbody>';
     fuItems.sort(function(a,b){if(!a.followUpDone&&b.followUpDone)return -1;if(a.followUpDone&&!b.followUpDone)return 1;return(a.followUpDue||'9999').localeCompare(b.followUpDue||'9999')});
+    var fuTint={};fuTint[QR_TONE.red]='#fdf1f1';fuTint[QR_TONE.amber]='#fff8e8';fuTint[QR_TONE.green]='#f3faf6';fuTint[QR_TONE.blue]='#ffffff';
     fuItems.forEach(function(i){
       var s=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
-      var od=!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<now;
-      body+='<tr style="'+(od?'background:rgba(217,64,64,.06)':'')+(i.followUpDone?'opacity:.65':'')+'">'
-        +'<td style="font-weight:600;color:'+(od?'var(--red)':i.followUpDone?'var(--green)':'var(--amber)')+'">'+(i.followUpDue||'No date')+(od?' OVERDUE':'')+'</td>'
-        +'<td style="font-weight:500;color:var(--white)">'+(i.followUpNote||'—')+_fuResNoteLine(i)+'</td>'
+      var st=fuSt(i);
+      body+='<tr style="background:'+fuTint[st.c]+'">'
+        +'<td style="font-weight:600;color:'+st.c+';border-left:3px solid '+st.c+'!important;white-space:nowrap">'+(i.followUpDue?fmt(i.followUpDue):'No date')+'</td>'
+        +'<td style="font-weight:500;color:#111">'+(i.followUpNote||'—')+_fuResNoteLine(i)+'</td>'
         +'<td>'+(s?dispName(s):(i.anonLabel||'Anonymous'))+'</td>'
-        +'<td>'+(i.followUpDone?'<span class="badge b-green">Resolved</span>'+(i.followUpResolved?'<div style="font-size:10px;color:var(--green);margin-top:2px">'+new Date(i.followUpResolved+'T00:00:00').toLocaleDateString('en-US',{month:"short",day:"numeric",year:"numeric"})+'</div>':''):'<span class="badge b-amber">Open</span>')+'</td>'
-        +'<td class="td-mono">'+fmt(i.date)+'</td>'
-        +'<td style="font-size:12px;color:var(--slate)">'+(i.loggedBy||'—')+'</td></tr>';
+        +'<td>'+_qrPill(st.k,st.c)+(i.followUpDone&&i.followUpResolved?'<div style="font-size:9px;color:'+QR_TONE.green+';margin-top:2px">'+fmt(String(i.followUpResolved).slice(0,10))+'</div>':'')+'</td>'
+        +'<td class="td-mono" style="white-space:nowrap">'+fmt(i.date)+'</td>'
+        +'<td style="font-size:12px;color:#444">'+(_fuOwner(i)||'—')+'</td></tr>';
     });
     body+='</tbody></table>';
 
@@ -14084,23 +14235,44 @@ function generateReport(type){
 
   } else if(type==='events-log'){
     var evts=(DB.get('meetings')||[]).filter(function(m){return String(m.projectId)===String(S.projectFilter);});
-    evts.sort(function(a,b){return b.date.localeCompare(a.date);});
-    body='<div style="margin-bottom:12px;font-size:13px;color:var(--slate)">'+evts.length+' event'+(evts.length!==1?'s':'')+' logged</div>'
-      +'<table class="dtable" style="font-size:13px;table-layout:fixed;width:100%">'
-      +'<colgroup><col style="width:10%"><col style="width:22%"><col style="width:15%"><col style="width:11%"><col style="width:7%"><col style="width:8%"><col style="width:27%"></colgroup>'
+    evts.sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));});
+    var evToday=localToday();
+    var evN=function(x){var n=parseInt(x,10);return isFinite(n)?n:0;};
+    var evHeld=evts.filter(function(m){return m.status==='Completed'});
+    var evUp=evts.filter(function(m){return _qrEventState(m,evToday).k==='Upcoming'});
+    var evAtt=evts.reduce(function(a,m){return a+evN(m.attendanceCount)},0);
+    var evCards=evts.reduce(function(a,m){return a+evN(m.commentCards)},0);
+    var evHeldAtt=evHeld.filter(function(m){return evN(m.attendanceCount)>0});
+    body=_qrKpis([
+      {v:evts.length,label:'Events logged',tone:'navy'},
+      {v:evHeld.length,label:'Held',tone:'green'},
+      {v:evUp.length,label:'Upcoming',sub:evUp.length?'next '+fmt(evUp[evUp.length-1].date):'',tone:'blue'},
+      {v:_coFmtN(evAtt),label:'Total attendance',tone:'navy'},
+      {v:evHeldAtt.length?_coFmtN(Math.round(evHeldAtt.reduce(function(a,m){return a+evN(m.attendanceCount)},0)/evHeldAtt.length)):'—',label:'Average attendance',sub:'per event held',tone:'navy'},
+      {v:_coFmtN(evCards),label:'Comment cards',tone:'orange'}
+    ]);
+    if(evts.length){
+      var evAttRows=evts.filter(function(m){return evN(m.attendanceCount)>0}).slice(0,10)
+        .map(function(m){return [(m.date?_fmtMDY(m.date)+' · ':'')+(m.title||m.type||'Event'),evN(m.attendanceCount),QR_TONE.blue];});
+      if(evAttRows.length) body+=_qrFigure('Attendance by event',_qrHBars(evAttRows,'Attendance by event'),
+        evts.filter(function(m){return evN(m.attendanceCount)>0}).length>10?'The ten most recent events with attendance recorded.':'');
+    }
+    body+='<table class="dtable" style="font-size:13px;table-layout:fixed;width:100%">'
+      +'<colgroup><col style="width:10%"><col style="width:22%"><col style="width:15%"><col style="width:12%"><col style="width:7%"><col style="width:8%"><col style="width:26%"></colgroup>'
       +'<thead><tr><th>Date</th><th>Event</th><th>Type</th><th>Status</th><th>Attend.</th><th>Comments</th><th>Notes</th></tr></thead><tbody>';
     if(evts.length===0){
-      body+='<tr><td colspan="7" style="text-align:center;color:var(--fog);padding:20px">No events logged for this project.</td></tr>';
+      body+='<tr><td colspan="7" style="text-align:center;color:#666;padding:20px">No events logged for this project.</td></tr>';
     } else {
       evts.forEach(function(m){
-        body+='<tr>'
-          +'<td class="td-mono" style="white-space:nowrap;vertical-align:top">'+fmt(m.date)+'</td>'
-          +'<td style="font-weight:600;color:var(--white);vertical-align:top">'+m.title+'<div style="font-size:11px;color:var(--fog);font-weight:400">'+( m.location||'')+'</div></td>'
-          +'<td style="vertical-align:top"><span class="badge b-sky" style="font-size:10px">'+( m.type||'Other')+'</span></td>'
-          +'<td style="vertical-align:top;white-space:nowrap"><span class="badge '+(m.status==='Completed'?'b-green':m.status==='Cancelled'?'b-red':'b-amber')+'" style="font-size:10px">'+(m.status||'Planned')+'</span></td>'
+        var es=_qrEventState(m,evToday);
+        body+='<tr style="'+(es.k==='Upcoming'?'background:#f1f6fd':'')+'">'
+          +'<td class="td-mono" style="white-space:nowrap;vertical-align:top;border-left:3px solid '+es.c+'!important">'+fmt(m.date)+'</td>'
+          +'<td style="font-weight:600;color:#111;vertical-align:top">'+(m.title||'')+'<div style="font-size:11px;color:#666;font-weight:400">'+(m.location||'')+'</div></td>'
+          +'<td style="vertical-align:top"><span class="badge b-sky" style="font-size:10px">'+(m.type||'Other')+'</span></td>'
+          +'<td style="vertical-align:top">'+_qrPill(es.k,es.c)+'</td>'
           +'<td style="text-align:center;vertical-align:top">'+(m.attendanceCount||'—')+'</td>'
           +'<td style="text-align:center;vertical-align:top">'+(m.commentCards||'—')+'</td>'
-          +'<td style="font-size:11px;color:var(--slate);vertical-align:top">'+(m.notes||'—')+'</td>'
+          +'<td style="font-size:11px;color:#444;vertical-align:top">'+(m.notes||'—')+'</td>'
           +'</tr>';
       });
     }
@@ -14111,30 +14283,45 @@ function generateReport(type){
     var comments=(DB.get('public_comments')||[]).filter(function(c){return String(c.projectId)===String(projF)});
     comments.sort(function(a,b){return (b.commentDate||'').localeCompare(a.commentDate||'')});
     if(comments.length===0){
-      body='<div style="margin:18px 0;padding:26px;text-align:center;color:var(--slate);border:1px dashed var(--border);border-radius:8px">'
+      body='<div style="margin:18px 0;padding:26px;text-align:center;color:#444;border:1px dashed #ccd6e0;border-radius:8px">'
         +'<div style="font-style:italic;margin-bottom:6px">No public comments have been logged for this project yet.</div>'
-        +'<div style="font-size:12px;color:var(--fog)">Log formal public comments in the <strong>Comments</strong> view — this matrix reads from there.</div>'
+        +'<div style="font-size:12px;color:#666">Log formal public comments in the <strong>Comments</strong> view — this matrix reads from there.</div>'
         +'</div>';
     } else {
-      var _stCls=function(st){return st==='Responded'?'b-green':st==='In progress'?'b-sky':st==='No response needed'?'b-dark':'b-amber';};
-      body='<div style="margin-bottom:12px;font-size:13px;color:var(--slate)">'+comments.length+' public comment'+(comments.length!==1?'s':'')+' found</div>'
-        +'<table class="dtable" style="font-size:13px;table-layout:fixed;width:100%">'
+      var cmSt=function(c){return c.responseStatus||'Pending';};
+      var cmCol=function(k){return QR_COMMENT_COLORS[k]||QR_TONE.gray;};
+      var cmN=function(k){return comments.filter(function(c){return cmSt(c)===k}).length;};
+      var cmNeed=comments.length-cmN('No response needed');
+      body=_qrKpis([
+        {v:comments.length,label:'Comments received',tone:'navy'},
+        {v:cmN('Responded'),label:'Responded',tone:'green'},
+        {v:cmN('In progress'),label:'In progress',tone:'blue'},
+        {v:cmN('Pending'),label:'Pending',tone:cmN('Pending')?'amber':'gray'},
+        {v:cmN('No response needed'),label:'No response needed',tone:'gray'},
+        {v:cmNeed?Math.round(cmN('Responded')/cmNeed*100)+'%':'—',label:'Response rate',sub:'of comments needing one',tone:'green'}
+      ]);
+      body+=_qrFigure('Comments by response status',_qrHBars(_qrTally(comments,cmSt,8,cmCol),'Comments by response status'));
+      if(comments.some(function(c){return c.category;}))
+        body+=_qrFigure('Comments by topic',_qrHBars(_qrTally(comments,function(c){return c.category||'No topic';},8),'Comments by topic'),
+          _qrMore(comments,function(c){return c.category||'No topic';},8,'comments','topics'));
+      body+='<table class="dtable" style="font-size:13px;table-layout:fixed;width:100%">'
         +'<colgroup><col style="width:11%"><col style="width:16%"><col style="width:18%"><col style="width:13%"><col style="width:15%"><col style="width:27%"></colgroup>'
         +'<thead><tr><th>Date</th><th>Commenter</th><th>Organization</th><th>Method</th><th>Response status</th><th>Topic</th></tr></thead><tbody>';
       comments.forEach(function(c){
+        var sc=cmCol(cmSt(c));
         body+='<tr style="page-break-inside:avoid">'
-          +'<td class="td-mono" style="white-space:nowrap;vertical-align:middle">'+(c.commentDate?fmt(c.commentDate):'&mdash;')+'</td>'
-          +'<td style="font-weight:600;color:var(--white);vertical-align:middle">'+(c.commenter||'Anonymous')+'</td>'
+          +'<td class="td-mono" style="white-space:nowrap;vertical-align:middle;border-left:3px solid '+sc+'!important">'+(c.commentDate?fmt(c.commentDate):'&mdash;')+'</td>'
+          +'<td style="font-weight:600;color:#111;vertical-align:middle">'+(c.commenter||'Anonymous')+'</td>'
           +'<td style="vertical-align:middle">'+(c.affiliation||'&mdash;')+'</td>'
           +'<td style="vertical-align:middle">'+(c.channel?'<span class="badge '+chCls(c.channel)+'">'+c.channel+'</span>':'&mdash;')+'</td>'
-          +'<td style="vertical-align:middle"><span class="badge '+_stCls(c.responseStatus)+'">'+(c.responseStatus||'Pending')+'</span></td>'
-          +'<td style="font-size:12px;color:var(--slate);vertical-align:middle">'+(c.category||'&mdash;')+'</td>'
+          +'<td style="vertical-align:middle">'+_qrPill(cmSt(c),sc)+'</td>'
+          +'<td style="font-size:12px;color:#444;vertical-align:middle">'+(c.category||'&mdash;')+'</td>'
           +'</tr>'
           +'<tr style="page-break-inside:avoid">'
-          +'<td colspan="6" style="padding:8px 14px 16px;background:rgba(255,255,255,.03);border-bottom:2px solid var(--border);font-size:13px;line-height:1.65;color:var(--mist)">'
-          +'<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);display:block;margin-bottom:4px">Comment</span>'
+          +'<td colspan="6" style="padding:8px 14px 16px;background:#f7f9fb;border-left:3px solid '+sc+'!important;border-bottom:2px solid #dde3ea!important;font-size:13px;line-height:1.65;color:#222">'
+          +'<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#444;display:block;margin-bottom:4px">Comment</span>'
           +(c.summary||'&mdash;')
-          +(c.responseText?'<div style="margin-top:10px"><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#28A870;display:block;margin-bottom:4px">Formal response'+(c.respondedBy?' &mdash; '+c.respondedBy:'')+(c.responseDate?' ('+fmt(c.responseDate)+')':'')+'</span>'+c.responseText+'</div>':'')
+          +(c.responseText?'<div style="margin-top:10px"><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#1a7a50;display:block;margin-bottom:4px">Formal response'+(c.respondedBy?' &mdash; '+c.respondedBy:'')+(c.responseDate?' ('+fmt(c.responseDate)+')':'')+'</span>'+c.responseText+'</div>':'')
           +'</td></tr>';
       });
       body+='</tbody></table>';
@@ -14154,7 +14341,8 @@ function generateReport(type){
     window._rptCollector.push({title:getReportTitle(type),distBlock:distBlock,body:body});
     return;
   }
-  _openRptPopup(bodyForPopup, getReportTitle(type), proj.pid+' — '+proj.name, dateStr, summaryTxtVal2);
+  if(QR_AI_REPORTS.indexOf(type)>=0) window._qrAINext={id:type,projF:projF,has:!!opts.summary};
+  _openRptPopup(bodyForPopup, getReportTitle(type), proj.pid+' — '+proj.name, dateStr, opts.summary||summaryTxtVal2);
 }
 
 // ── REPORT PACKAGE (stitch multiple quick reports into one document) ──────
@@ -14365,6 +14553,14 @@ function _buildPackageFacts(projF, ids){
       var open=fu.filter(function(i){return !i.followUpDone;});
       var od=open.filter(function(i){return i.followUpDue&&i.followUpDue<today;}).length;
       L.push('Follow-ups: '+fu.length+' total, '+open.length+' open ('+od+' overdue), '+(fu.length-open.length)+' resolved.');
+      var soon=open.filter(function(i){return i.followUpDue&&i.followUpDue>=today&&i.followUpDue<=_qrAddDays(today,QR_SOON_DAYS);}).length;
+      if(soon) L.push('Open follow-ups due within the next '+QR_SOON_DAYS+' days: '+soon+'.');
+      var own=tally(open,function(i){return _fuOwner(i)||'unassigned';}); if(own) L.push('Open follow-ups by person responsible (initials): '+own+'.');
+      open.slice().sort(function(a,b){return String(a.followUpDue||'9999').localeCompare(String(b.followUpDue||'9999'));}).slice(0,10).forEach(function(i){
+        var t=String(i.followUpNote||'').replace(/\s+/g,' ').trim();
+        if(t.length>PKG_SUMMARY_LINE_CHARS) t=t.slice(0,PKG_SUMMARY_LINE_CHARS)+'…';
+        L.push('- open'+(i.followUpDue?', due '+i.followUpDue+(i.followUpDue<today?' (overdue)':''):', no due date')+': '+(t||'(no action noted)')+'.');
+      });
     }
     else if(id==='sentiment-summary'){
       var ch=extPS.filter(function(lk){return lk.support==='Champion';}).length;
@@ -14414,9 +14610,14 @@ function _buildPackageFacts(projF, ids){
 }
 
 // The one place the package summary is requested.
-function _pkgSummaryRequest(f){
+// single: the summary that opens ONE quick report (qrAISummary), same facts and rules.
+function _pkgSummaryRequest(f, single){
   var words=40+f.blocks.reduce(function(a,b){return a+(b.id==='interaction-log'?140:60);},0);
-  var userContent='Write the executive summary that opens a public involvement report package. The package contains '
+  var userContent=single
+    ? 'Write the short summary that opens a public involvement report: the '+f.blocks[0].name+'.\n\n'
+      +'Structure: one opening sentence that orients the reader to where the project stands'+(f.phase?' (it is in the '+f.phase+' phase)':'')+', '
+      +'then one or two short paragraphs on what this report shows: what stands out, what is outstanding, what changed recently. '
+    : 'Write the executive summary that opens a public involvement report package. The package contains '
     +'these reports, in this order: '+f.blocks.map(function(b){return b.name;}).join('; ')+'.\n\n'
     +'Structure: one opening sentence that orients the reader to where the project stands'+(f.phase?' (it is in the '+f.phase+' phase)':'')+', '
     +'then ONE short paragraph per report above, in the same order, each summarizing what that report shows. '
@@ -14488,10 +14689,12 @@ function _openRptPopup(rawHtml, rptTitle, rptProjLabel, dateStr, summaryTxt){
   // Build summary block if present
   var summaryBlock='';
   if(summaryTxt){
-    summaryBlock='<div style="margin-bottom:16px;padding:10px 14px;background:#f0f4f8;border-left:4px solid #1a3a5c;border-radius:0 6px 6px 0;font-size:10px;color:#222;line-height:1.7;white-space:pre-wrap;word-wrap:break-word">'
-      +'<div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#1a3a5c;margin-bottom:5px">Summary</div>'
-      +summaryTxt.replace(/</g,'&lt;').replace(/>/g,'&gt;')
-      +'</div>';
+    // Editable in place: a change made here is what prints.
+    summaryBlock='<div style="margin-bottom:16px;padding:10px 14px;background:#f0f4f8;border-left:4px solid #1a3a5c;border-radius:0 6px 6px 0;font-size:10px;color:#222;line-height:1.7;word-wrap:break-word">'
+      +'<div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#1a3a5c;margin-bottom:5px">Summary <span class="no-print" style="font-weight:400;text-transform:none;letter-spacing:0;color:#666">— click to edit before printing</span></div>'
+      +'<div id="rpt-summary-body" contenteditable="true" spellcheck="true" style="white-space:pre-wrap;outline:none">'
+      +summaryTxt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      +'</div></div>';
   }
 
   var footerLabel=(rptProjLabel?(rptProjLabel+' · '):'')+rptTitle;
@@ -19096,6 +19299,11 @@ function openImportTool(projectId) {
 function showInlineReport(html, title) {
   const existing = document.getElementById('inline-rpt-overlay');
   if (existing) existing.remove();
+  // A quick report that can carry an AI summary leaves its context in
+  // window._qrAINext just before it opens; anything else clears it.
+  const ai = window._qrAINext || null;
+  window._qrAINext = null;
+  window._qrAICtx = ai;
   const overlay = document.createElement('div');
   overlay.id = 'inline-rpt-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(6,14,24,.75);display:flex;flex-direction:column;align-items:center;padding:24px 0';
@@ -19103,6 +19311,7 @@ function showInlineReport(html, title) {
     '<div style="width:min(1100px,94vw);height:100%;display:flex;flex-direction:column;background:#0e1e30;border:1px solid rgba(255,255,255,.15);border-radius:10px;overflow:hidden">'
     + '<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.12);background:#132840;flex-shrink:0">'
     + '<div style="flex:1;font-size:13px;font-weight:600;color:var(--white)">' + (title || 'Report') + '</div>'
+    + (ai ? '<button class="btn btn-sm" id="qr-ai-btn" onclick="qrAISummary(this)" title="Claude writes a short summary from this report\'s figures; it prints at the top and can be edited">' + (ai.has ? '✦ Rewrite AI summary' : '✦ AI summary') + '</button>' : '')
     + '<button class="btn btn-sm" onclick="document.getElementById(\'inline-rpt-frame\').contentWindow.print()">Print</button>'
     + '<button class="btn btn-sm" onclick="document.getElementById(\'inline-rpt-overlay\').remove()">Close</button>'
     + '</div>'

@@ -2767,8 +2767,8 @@ held portal token — except `pi_issue_interactions`: `anon_all` FOR ALL USING
 issue↔interaction links on any project (id pairs only, no names). The portal
 never reads it. `sql/2026-10-20_issue_interactions_lockdown.sql` revokes anon,
 drops the three `using (true)` policies and adds a staff-only one (a portal
-client sees none). DEV: anon revoked + new policy added via the connector; the
-drops timed out, so the file still needs pasting on DEV (idempotent) and LIVE.
+client sees none). Pasted by Jeff on DEV and LIVE 2026-10-20; verified after:
+two policies, no anon grant, and no `using (true)` anon policy left anywhere.
 Guarded by `test/tests/96-issue-interactions-lockdown.test.js` (role-switched;
 verified to fail without the file).
 

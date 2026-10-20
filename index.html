@@ -8991,7 +8991,7 @@ async function linkTestRun(){
   for(var i=0;i<_linkTestRows.length;i++){
     var r=_linkTestRows[i];
     try{
-      var resp=await fetch(LINK_FN_URL,{method:'POST',headers:Object.assign({},getAuthHeaders(),{'Content-Type':'application/json'}),body:JSON.stringify({url:r.url})});
+      var resp=await fetch(LINK_FN_URL,{method:'POST',headers:(function(){var ss=getSession();return {'Content-Type':'application/json',apikey:SUPA_KEY,Authorization:'Bearer '+(ss?ss.access_token:SUPA_KEY)};})(),body:JSON.stringify({url:r.url})});
       var j=await resp.json().catch(function(){return {};});
       r.res=resp.ok?j:{ok:false,error:(j&&j.error)||('the reader answered '+resp.status),notes:[]};
     }catch(e){ r.res={ok:false,error:'the link reader could not be reached (is it deployed on this database?)',notes:[]}; }

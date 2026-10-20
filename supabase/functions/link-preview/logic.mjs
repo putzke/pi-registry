@@ -18,12 +18,28 @@ export const MAX_BYTES = 2 * 1024 * 1024;
 export const TIMEOUT_MS = 10000;
 export const MAX_REDIRECTS = 5;
 
-const CORS = {
+export const CORS = {
   'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info',
+  'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info, prefer',
 };
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...CORS } });
+}
+
+// Email security wrappers (Proofpoint urldefense v2/v3) hide the real link in
+// the address. Unwrap it so the reader reads the post, not the wrapper.
+export function unwrapLink(raw) {
+  let u; try { u = new URL(raw); } catch { return raw; }
+  if (!/(^|\.)urldefense(\.proofpoint)?\.com$/i.test(u.hostname)) return raw;
+  try {
+    if (/^\/v2\//.test(u.pathname) && u.searchParams.get('u')) {
+      const t = u.searchParams.get('u').replace(/_/g, '/').replace(/-/g, '%');
+      return decodeURIComponent(t);
+    }
+    const m = /^\/v3\/__(.+?)__;/.exec(u.pathname + u.search);
+    if (m) return m[1];
+  } catch {}
+  return raw;
 }
 
 // Only ordinary public web addresses: http(s), default ports, a real host name.
@@ -246,12 +262,13 @@ export function createHandler({ env, fetchFn }) {
     } catch { return { error: 'oEmbed could not be reached' }; }
   }
 
-  async function read(url) {
+  async function read(given) {
+    const url = unwrapLink(given);
     const bad = urlProblem(url);
     if (bad) return { ok: false, url, error: bad };
     const platform = platformOf(url);
     const page = await fetchPage(url);
-    const out = { ok: false, url, platform, status: page.status || null, finalUrl: page.finalUrl || null, redirects: (page.hops || []).length };
+    const out = { ok: false, url, unwrapped: url !== given ? given : undefined, platform, status: page.status || null, finalUrl: page.finalUrl || null, redirects: (page.hops || []).length };
     if (page.html) {
       const p = readPage(page.html, page.finalUrl);
       Object.assign(out, { fields: p.fields, engagement: p.engagement, engagementSource: p.engagementSource, notes: p.notes, ok: !!p.fields.title });

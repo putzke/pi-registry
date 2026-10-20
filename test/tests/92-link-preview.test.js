@@ -36,6 +36,9 @@ module.exports = {
       t.eq(L.urlProblem(ok), null, `allowed: ${ok}`);
     t.eq(L.platformOf('https://m.facebook.com/x'), 'Facebook', 'platform: Facebook');
     t.eq(L.platformOf('https://x.com/udot/status/1'), 'X', 'platform: X');
+    t.eq(L.unwrapLink('https://urldefense.proofpoint.com/v2/url?u=https-3A__publicinput.com_udot-2Di84&d=DwMF&c=x'), 'https://publicinput.com/udot-i84', 'Proofpoint v2 link unwrapped');
+    t.eq(L.unwrapLink('https://urldefense.com/v3/__https://www.ksl.com/article/1__;!!abc$'), 'https://www.ksl.com/article/1', 'Proofpoint v3 link unwrapped');
+    t.eq(L.unwrapLink('https://www.ksl.com/a'), 'https://www.ksl.com/a', 'an ordinary link is left alone');
     t.eq(L.parseCount('1.2K'), 1200, '1.2K → 1200');
     t.eq(L.parseCount('12,345'), 12345, '12,345 → 12345');
 
@@ -83,6 +86,11 @@ module.exports = {
     t.eq(ig.body.engagement, { reactions: 1234, comments: 56 }, 'Instagram counts read from the description');
     t.eq(ig.body.engagementSource, 'page description', 'says where the counts came from');
 
+    // ── a Proofpoint-wrapped link reads the real page ──
+    const wrapped = await call('https://urldefense.proofpoint.com/v2/url?u=https-3A__www.instagram.com_p_abc_&d=x');
+    t.ok(wrapped.body.ok && wrapped.body.url === 'https://www.instagram.com/p/abc/', 'wrapped link read at its real address');
+    t.ok(!seen.some((s) => s.u.includes('urldefense')), 'the wrapper itself is never fetched');
+
     // ── news: a redirect is followed, structured data wins ──
     const news = await call('https://short.example/ksl');
     t.eq(news.body.finalUrl, 'https://www.ksl.com/article/1', 'redirect followed');
@@ -116,9 +124,10 @@ module.exports = {
     const app = await t.open('index.html', { email: 'putzke@demo.test' });
     try {
       await app.ready();
-      const posted = [];
+      const posted = [], hdrs = [];
       await app.page.route('**/functions/v1/link-preview', async (route) => {
         const b = JSON.parse(route.request().postData() || '{}'); posted.push(b.url);
+        const h = route.request().headers(); hdrs.push(Object.keys(h).filter((k) => !['content-type', 'apikey', 'authorization', 'referer', 'user-agent', 'accept', 'origin'].includes(k) && !k.startsWith('sec-')));
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(
           b.url.includes('instagram') ? { ok: true, platform: 'Instagram', status: 200, fields: { title: 'IGMARK post' }, engagement: { reactions: 1234, comments: 56 }, engagementSource: 'page description', notes: [] }
             : { ok: false, platform: 'Facebook', status: 200, fields: {}, engagement: {}, notes: ['The site answered with a sign-in page, not the post.'] }) });
@@ -129,6 +138,10 @@ module.exports = {
       await app.page.click('#link-test-go');
       await t.until(() => app.page.evaluate(() => _linkTestRows.length === 2 && _linkTestRows.every((r) => r.res)), 'both links read');
       t.eq(posted.length, 2, 'duplicates and non-links are skipped');
+      // The function's CORS allow-list must cover every header sent, or the
+      // browser stops at the preflight (seen live: Prefer was sent and refused).
+      const allowed = L.CORS['Access-Control-Allow-Headers'].split(/,\s*/);
+      t.ok(hdrs.every((ks) => ks.every((k) => allowed.includes(k))), 'every header the card sends is on the function’s CORS allow-list: ' + JSON.stringify(hdrs[0]));
       const out = await app.page.textContent('#link-test-out');
       t.ok(/IGMARK post/.test(out) && /1,234 reactions · 56 comments/.test(out), 'the read link shows its title and counts');
       t.ok(/Read 1 of 2 · counts found on 1/.test(out), 'the summary line counts what was read');

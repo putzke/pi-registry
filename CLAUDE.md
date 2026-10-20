@@ -2759,6 +2759,19 @@ with header + Bearer → 200, without the header → 400. Staff and OTP clients 
   request. Verified to fail against the old function and against a portal
   that omits the header. Tests 47 and 49 now set the header as a visitor would.
 
+### `pi_issue_interactions` was still open to the anon key (fixed Oct 2026)
+A live audit on 2026-10-20 (Jeff asked "are our tables private?") found every
+`pi_` table with RLS and the staff rule, and 13 anon policies all scoped to the
+held portal token — except `pi_issue_interactions`: `anon_all` FOR ALL USING
+(true) plus a full anon grant, so the public key could read, add or delete
+issue↔interaction links on any project (id pairs only, no names). The portal
+never reads it. `sql/2026-10-20_issue_interactions_lockdown.sql` revokes anon,
+drops the three `using (true)` policies and adds a staff-only one (a portal
+client sees none). DEV: anon revoked + new policy added via the connector; the
+drops timed out, so the file still needs pasting on DEV (idempotent) and LIVE.
+Guarded by `test/tests/96-issue-interactions-lockdown.test.js` (role-switched;
+verified to fail without the file).
+
 ### Staff are a LIST — `pi_staff` (Oct 2026)
 `sql/2026-10-06_staff_allowlist.sql`. Found while building two-step sign-in:
 every staff policy reads `not pi_is_portal_client()`, so "staff" meant ANY

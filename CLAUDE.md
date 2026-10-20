@@ -833,6 +833,11 @@ row of headline numbers (`_qrKpis`), one or two charts (`_qrFigure` around the
 close-out's `_coSvgStacked` / `_coSvgHBars`, `_coMonthly`), then the table with
 status colours (`_qrPill`, a coloured left rule per row). Helpers sit just
 above `generateReport`; colours in `QR_TONE`.
+- **Which charts (Jeff, after trying them):** interaction log = contacts per
+  month + by channel; comment matrix = by response status + by topic; events =
+  attendance by event only. Follow-ups and issues have NO charts — the tiles
+  and the coloured table say it; "Events by type" was dropped too. Don't add
+  them back without asking.
 - **Inline hex only** in report bodies: `_openRptPopup` turns
   `rgba(255,255,255,…)` into `#ccc` and a CSS variable means nothing in the
   frame. The comment matrix's comment rows used to print grey for that reason.

@@ -9328,13 +9328,10 @@ function exportIssuesPdf(opts){
     {v:nSt('Resolved'),label:'Resolved',tone:'green'},
     {v:hiOpen,label:'High priority, unresolved',sub:openAges.length?'oldest unresolved: '+Math.max.apply(null,openAges)+' days':'',tone:hiOpen?'red':'gray'}
   ]);
-  const issFigs=_qrFigure('Issues by status',_qrHBars(_qrTally(filtered,x=>x.status||'Open',8,k=>QR_ISSUE_COLORS[k]||QR_TONE.gray),'Issues by status'))
-    +(filtered.some(x=>x.category)?_qrFigure('Issues by category',_qrHBars(_qrTally(filtered,x=>x.category||'Uncategorized',8),'Issues by category'),_qrMore(filtered,x=>x.category||'Uncategorized',8,'issues','categories')):'');
 
   const bodyHtml='<div style="font-family:Arial,sans-serif;font-size:10px;color:#111;line-height:1.4">'+
     issKpis+
     filterLine+
-    issFigs+
     '<table style="width:100%;border-collapse:collapse;margin-bottom:24px;table-layout:fixed"><thead><tr>'+
       '<th style="width:28%">Title</th><th style="width:9%">Status</th><th style="width:9%">Priority</th><th style="width:14%">Category</th><th style="width:22%">Project</th><th style="width:12%;white-space:nowrap">Date Raised</th><th style="width:6%">Links</th>'+
     '</tr></thead><tbody>'+rows+'</tbody></table>'+
@@ -12798,19 +12795,6 @@ function generateReport(type, opts){
       {v:fuRes.length,label:'Resolved',sub:fuDueRes.length?fuOnTime+' of '+fuDueRes.length+' on time':'',tone:'green'},
       {v:fuAvg===null?'—':fuAvg+(fuAvg===1?' day':' days'),label:'Average time to resolve',sub:fuTimed.length?'from the day it was logged':'',tone:'navy'}
     ]);
-    if(fuItems.length){
-      var fuOrder=['Overdue','Due within '+QR_SOON_DAYS+' days','Open — due later','Open — no due date','Resolved'];
-      var fuRows=fuOrder.map(function(k){
-        var hit=fuItems.filter(function(i){return fuSt(i).k===k});
-        return hit.length?[k,hit.length,fuSt(hit[0]).c]:null;
-      }).filter(Boolean);
-      body+=_qrFigure('Follow-ups by status',_qrHBars(fuRows,'Follow-ups by status'));
-      if(fuOpen.length) body+=_qrFigure('Open follow-ups by person responsible',
-        _qrHBars(_qrTally(fuOpen,function(i){return _fuOwner(i)||'Unassigned';},8,null).map(function(r){
-          var od=fuOpen.some(function(i){return (_fuOwner(i)||'Unassigned')===r[0]&&fuSt(i).k==='Overdue';});
-          return [r[0],r[1],od?QR_TONE.red:QR_TONE.blue];
-        }),'Open follow-ups by person responsible'),'Red bars: that person has at least one overdue follow-up.');
-    }
     body+='<table class="dtable" style="font-size:13px;table-layout:fixed;width:100%">'
       +'<colgroup><col style="width:12%"><col style="width:32%"><col style="width:18%"><col style="width:16%"><col style="width:12%"><col style="width:10%"></colgroup>'
       +'<thead><tr><th>Due date</th><th>Action</th><th>Stakeholder</th><th>Status</th><th>Log date</th><th>Owner</th></tr></thead><tbody>';
@@ -12950,8 +12934,6 @@ function generateReport(type, opts){
         .map(function(m){return [(m.date?_fmtMDY(m.date)+' · ':'')+(m.title||m.type||'Event'),evN(m.attendanceCount),QR_TONE.blue];});
       if(evAttRows.length) body+=_qrFigure('Attendance by event',_qrHBars(evAttRows,'Attendance by event'),
         evts.filter(function(m){return evN(m.attendanceCount)>0}).length>10?'The ten most recent events with attendance recorded.':'');
-      body+=_qrFigure('Events by type',_qrHBars(_qrTally(evts,function(m){return m.type||'Other';},8),'Events by type'),
-        _qrMore(evts,function(m){return m.type||'Other';},8,'events','types'));
     }
     body+='<table class="dtable" style="font-size:13px;table-layout:fixed;width:100%">'
       +'<colgroup><col style="width:10%"><col style="width:22%"><col style="width:15%"><col style="width:12%"><col style="width:7%"><col style="width:8%"><col style="width:26%"></colgroup>'

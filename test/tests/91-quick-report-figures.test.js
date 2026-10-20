@@ -34,9 +34,12 @@ module.exports = {
         const r = await open(id);
         t.ok(r.overlay, `${id}: opens in the report frame`);
         t.ok(/class="qr-kpis"/.test(r.html), `${id}: headline numbers`);
+        // Charts were kept only where Jeff found them worth the space (Oct 2026):
+        // none on follow-ups or issues; attendance only on events.
         const figs = (r.html.match(/class="qr-fig"/g) || []).length;
-        t.ok(figs >= 1, `${id}: at least one chart (${figs})`);
-        t.ok(/<svg [^>]*role="img"/.test(r.html), `${id}: the chart is an SVG drawing`);
+        const want = { 'interaction-log': 2, 'comment-matrix': 2, 'events-log': 1, 'followup-status': 0, 'issues-report': 0 }[id];
+        t.eq(figs, want, `${id}: ${want} chart(s)`);
+        if (want) t.ok(/<svg [^>]*role="img"/.test(r.html), `${id}: the chart is an SVG drawing`);
         t.ok(!/var\(--/.test(r.html.split('</style>')[1] || ''), `${id}: no CSS variables in the body (they mean nothing in the frame)`);
         t.ok(r.ai && r.ctx && r.ctx.id === id && String(r.ctx.projF) === P, `${id}: offers ✦ AI summary for this project`);
       }
@@ -46,6 +49,8 @@ module.exports = {
       t.ok(/ODMARK[\s\S]*?Overdue|Overdue[\s\S]*?ODMARK/.test(fu.html), 'the overdue follow-up is marked Overdue');
       t.ok(/Due within 7 days/.test(fu.html), 'a follow-up due tomorrow is marked due within 7 days');
       t.ok(/#b32020/.test(fu.html) && /#b36b00/.test(fu.html), 'red and amber are used');
+      const ev = await open('events-log');
+      t.ok(/Attendance by event/.test(ev.html) && !/Events by type/.test(ev.html), 'events: attendance chart only');
 
       // Interaction log: outbound and inbound counted and coloured separately.
       const il = await open('interaction-log');

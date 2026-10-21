@@ -56,10 +56,14 @@ module.exports = {
       t.ok(/OUTMARK-IN/.test(qr.html) && /OUTMARK-LATER/.test(qr.html) && /900 reactions/.test(qr.html), 'every action, with its latest counts');
       t.ok(!/NOTEMARK/.test(qr.html), 'the internal note never prints');
       t.ok(qr.ai, 'the ✦ AI summary button is offered');
+      // "Done by: Client" reads as the project's client (this row was saved as
+      // the old "UDOT" value, which also reads as Client).
+      t.ok(/By Logan City Engineering/.test(qr.html) && !/By UDOT/.test(qr.html), 'the client tile names the project’s client');
       await P_.evaluate(() => { const o = document.getElementById('inline-rpt-overlay'); if (o) o.remove(); });   // Close, as the button does
       const facts = await P_.evaluate((p) => _buildPackageFacts(p, ['outreach-log']), P);
       t.ok(facts.blocks[0].lines.some((l) => /Outreach actions: 3/.test(l)) && facts.blocks[0].lines.some((l) => /Campaign "Fall closures"/.test(l)), 'package/AI facts carry the computed counts and campaigns');
       t.ok(!facts.blocks[0].lines.join(' ').includes('NOTEMARK'), 'and never the internal note');
+      t.ok(/Done by: .*1 Logan City Engineering/.test(facts.blocks[0].lines[0]), 'AI facts name the client, not "Client" or "UDOT": ' + facts.blocks[0].lines[0]);
 
       // ── PI report section: label, table, snapshot ──
       const sec = await P_.evaluate((p) => {

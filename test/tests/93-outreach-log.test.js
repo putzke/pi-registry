@@ -42,6 +42,12 @@ module.exports = {
 
       // ── a new action from a link ──
       await P.evaluate(() => openOutreachModal());
+      const party = await P.evaluate((b) => { const o = [...document.querySelectorAll('#f-out-party option')].map((x) => [x.value, x.textContent]);
+        const pj = document.getElementById('f-out-proj'); pj.value = b; pj.dispatchEvent(new Event('change'));
+        return { o, after: document.querySelector('#f-out-party option[value="Client"]').textContent, want: _outClientName(b) }; }, B);
+      t.eq(party.o.map((x) => x[0]), ['PI team', 'Client', 'Media & third party'], 'Done by: PI team / Client / Media — no "UDOT"');
+      t.ok(party.after.includes(party.want), 'the Client option names the selected project’s client, and follows a project change');
+      await P.evaluate((a) => { const pj = document.getElementById('f-out-proj'); pj.value = a; pj.dispatchEvent(new Event('change')); }, A);
       await P.fill('#f-out-outlet', 'TYPED OUTLET');
       linkReply = { ok: true, platform: 'Instagram', url: 'https://www.instagram.com/p/abc/', unwrapped: 'https://urldefense.proofpoint.com/v2/url?u=x',
         fields: { title: 'Mornin’. Closures this weekend', site: 'Instagram', author: 'UDOT', description: 'Mornin’. Closures this weekend on I-15', published: 'October 3, 2026' },

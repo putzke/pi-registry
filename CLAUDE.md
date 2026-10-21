@@ -3505,7 +3505,17 @@ close-out link-up — 2c and 3 ✅ on DEV (2026-10-20).
   Readings are added, never overwritten, so counts read "as of" a date.
   Staff-only (hotline pattern: `*_staff_all` + restrictive `pi_staff_or_client`,
   anon revoked). Types `OUTREACH_TYPES`, parties `OUTREACH_PARTIES` ('PI team' /
-  'UDOT' / 'Media & third party').
+  'Client' / 'Media & third party').
+- **"Client", not "UDOT" (2026-10-21, Jeff: the product will serve clients
+  other than UDOT).** `party` stores 'Client'; every surface shows the
+  project's own `client` (`_outPartyName` / `_outClientName` / `_outPartyTally`;
+  "Client" when blank), so SR-154 reads "UDOT Region 2" and Logan "Logan City
+  Engineering". A stored 'UDOT' reads as Client (`_outPartyKey`); the migration
+  ends with an update renaming them (DEV row 1 renamed via the connector).
+  **Non-UDOT close-out TYPES and out-of-state firms are deliberately deferred**:
+  a general close-out type when the first non-UDOT final report is due (from a
+  real past report), other states with the 2027 multi-firm work. The UDOT
+  close-out type stays UDOT — never generalize it.
 - **Nav "Outreach"** → `renderOutreach` (scoped by `S.projectFilter`, filters
   `S.outType` / `S.outCampaign` / `S.outSearch`): tiles (actions, by party,
   with counts, latest reactions/comments/shares), table with the LATEST reading

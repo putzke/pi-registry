@@ -8967,7 +8967,25 @@ function _hotToggleCustom(sel){
 // typed. Every reading says which. Staff-only, desktop only.
 const LINK_FN_URL=SUPA_URL+'/functions/v1/link-preview';
 const OUTREACH_TYPES=['Press release','Newsletter','Website update','511 alert','Social post','News coverage','Trucking/industry publication','Agency/partner coordination','Other'];
-const OUTREACH_PARTIES=['PI team','UDOT','Media & third party'];
+const OUTREACH_PARTIES=['PI team','Client','Media & third party'];
+// "Client" is stored; it shows as the project's own client ("UDOT", "Logan
+// City"), so the log fits any client. An early DEV row saved as "UDOT" reads
+// as Client.
+function _outPartyKey(p){ return p==='UDOT'?'Client':(p||''); }
+function _outClientName(projId){
+  const p=(DB.get('projects')||[]).find(x=>String(x.id)===String(projId));
+  return (p&&String(p.client||'').trim())||'Client';
+}
+function _outPartyName(p, projId){ const k=_outPartyKey(p); return k==='Client'?_outClientName(projId):k; }
+// A party tally ({key:n}) with the client named.
+function _outPartyTally(m, projId){ const o={}; Object.keys(m).forEach(k=>{ const n=_outPartyName(k,projId); o[n]=(o[n]||0)+m[k]; }); return o; }
+function _outPartyOpts(sel, projId){
+  return OUTREACH_PARTIES.map(p=>`<option value="${p}" ${_outPartyKey(sel||'PI team')===p?'selected':''}>${p==='Client'?'Client'+(projId&&_outClientName(projId)!=='Client'?' ('+escHtml(_outClientName(projId))+')':''):p}</option>`).join('');
+}
+function _outPartyRelabel(){
+  const s=document.getElementById('f-out-party'), pj=document.getElementById('f-out-proj');
+  if(s&&pj){ const v=s.value; s.innerHTML=_outPartyOpts(v, pj.value); }
+}
 const OUT_SOURCES={automatic:'Read from the link',screenshot:'From a screenshot',typed:'Typed'};
 const OUT_COUNTS=[['reactions','Reactions'],['comments','Comments'],['shares','Shares'],['views','Views']];
 
@@ -9015,7 +9033,7 @@ function renderOutreach(m){
     .sort((a,b)=>String(b.actionDate).localeCompare(String(a.actionDate))||Number(b.id)-Number(a.id));
   const latest=rows.map(a=>_outLatest(a.id)).filter(Boolean);
   const sum=k=>latest.reduce((n,r)=>n+(_outHas(r[k])?Number(r[k]):0),0);
-  const byParty=OUTREACH_PARTIES.map(p=>rows.filter(a=>a.party===p).length);
+  const byParty=OUTREACH_PARTIES.map(p=>rows.filter(a=>_outPartyKey(a.party)===p).length);
   const pName=id=>{const p=projs.find(x=>String(x.id)===String(id));return p?(p.pid?p.pid+' ':'')+p.name:'';};
   const sel='font-size:12px;padding:6px 10px;background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white)';
   const rr='onchange="renderOutreach(document.getElementById(\'main\'))"';
@@ -9029,7 +9047,7 @@ function renderOutreach(m){
   </div>
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px">
     ${tile(rows.length,'Actions'+(filtered?' (filtered)':''),'')}
-    ${tile(byParty.join(' / '),'PI team / UDOT / Media','by who did it')}
+    ${tile(byParty.join(' / '),'PI team / '+escHtml(projF?_outClientName(projF):'Client')+' / Media','by who did it')}
     ${tile(latest.length,'With engagement counts',rows.length?('of '+rows.length+' actions'):'')}
     ${tile(sum('reactions').toLocaleString(),'Reactions','plus '+sum('comments').toLocaleString()+' comments · '+sum('shares').toLocaleString()+' shares, latest reading of each')}
   </div>
@@ -9065,7 +9083,7 @@ function renderOutreach(m){
         <td><div style="font-weight:600;color:var(--white)">${safe?`<a href="${escHtml(a.url)}" target="_blank" rel="noopener noreferrer" style="color:var(--sky-lt);text-decoration:none">${escHtml(a.title||'')} ↗</a>`:escHtml(a.title||'')}</div>
           ${a.outlet||a.author?`<div style="font-size:11px;color:var(--fog)">${escHtml([a.outlet,a.author].filter(Boolean).join(' · '))}</div>`:''}
           ${a.note?`<div style="font-size:11px;color:var(--slate);margin-top:2px">${escHtml(a.note)}</div>`:''}</td>
-        <td style="font-size:12px">${escHtml(a.party||'')}</td>
+        <td style="font-size:12px">${escHtml(_outPartyName(a.party,a.projectId))}</td>
         <td style="font-size:12px">${escHtml(_outCampaignName(a.campaignId))}</td>
         <td style="font-size:12px">${r?`<div style="color:var(--white)">${escHtml(_outCountsText(r))}</div>
           <div style="font-size:10px;color:var(--fog)">as of ${fmt(r.readOn)} · ${escHtml((OUT_SOURCES[r.source]||r.source||'').toLowerCase())}${n>1?' · '+n+' readings':''}</div>`:'<span style="color:var(--slate)">—</span>'}</td>
@@ -9124,8 +9142,8 @@ function openOutreachModal(id){
         ${OUTREACH_TYPES.map(t=>`<option ${(a.actionType||'Press release')===t?'selected':''}>${t}</option>`).join('')}</select></div>
     </div>
     <div class="fgrid fg2f">
-      <div class="fr"><label>Done by *</label><select id="f-out-party">${OUTREACH_PARTIES.map(p=>`<option ${(a.party||'PI team')===p?'selected':''}>${p}</option>`).join('')}</select></div>
-      <div class="fr"><label>Project *</label><select id="f-out-proj" onchange="_outCampOpts('')">
+      <div class="fr"><label>Done by *</label><select id="f-out-party">${_outPartyOpts(a.party,projId)}</select></div>
+      <div class="fr"><label>Project *</label><select id="f-out-proj" onchange="_outCampOpts('');_outPartyRelabel()">
         <option value="">— Select project —</option>${projs.map(p=>`<option value="${p.id}" ${String(p.id)===String(projId)?'selected':''}>${escHtml(p.name)} (${escHtml(p.pid||'')})</option>`).join('')}</select></div>
     </div>
     <div class="fr"><label>Campaign</label><select id="f-out-camp" onchange="if(this.value==='__new')outNewCampaign()"></select></div>
@@ -9364,8 +9382,8 @@ function _outreachStats(projF, pstart, pend){
     const c=camps[name]||(camps[name]={name,n:0,withCounts:0,...zero()});
     c.n++; if(x.r){ c.withCounts++; add(c,x.r); }
   });
-  return {rows,total:rows.length,withCounts:rows.filter(x=>x.r).length,totals,
-    byType:tally(x=>x.a.actionType),byParty:tally(x=>x.a.party),
+  return {projF,rows,total:rows.length,withCounts:rows.filter(x=>x.r).length,totals,
+    byType:tally(x=>x.a.actionType),byParty:tally(x=>_outPartyKey(x.a.party)),
     campaigns:Object.values(camps).sort((a,b)=>b.n-a.n||a.name.localeCompare(b.name))};
 }
 // "3 press release, 2 social post" (types read lower-case; parties keep their case).
@@ -9379,11 +9397,11 @@ function _outReadingNote(r){ return r?('as of '+_fmtMDY(r.readOn)+', '+(OUT_SOUR
 // here; the model narrates them.
 function _outreachFactLines(st){
   if(!st.total) return [];
-  const L=['Outreach actions: '+st.total+' ('+_outTallyText(st.byType,true)+'). Done by: '+_outTallyText(st.byParty,false)+'.'];
+  const L=['Outreach actions: '+st.total+' ('+_outTallyText(st.byType,true)+'). Done by: '+_outTallyText(_outPartyTally(st.byParty,st.projF),false)+'.'];
   L.push(st.withCounts?('Engagement recorded on '+st.withCounts+' of '+st.total+' actions, latest reading of each: '+(_outTotalsText(st.totals)||'no counts')+'. Counts are as of the date each was read.')
     :'No engagement counts were recorded.');
   st.campaigns.forEach(c=>L.push('Campaign "'+c.name+'": '+c.n+' action'+(c.n!==1?'s':'')+(_outTotalsText(c)?', '+_outTotalsText(c):'')+'.'));
-  st.rows.slice(0,40).forEach(x=>L.push('- '+x.a.actionDate+' · '+x.a.actionType+' · '+(x.a.party||'')+' · '+String(x.a.title||'').slice(0,140)
+  st.rows.slice(0,40).forEach(x=>L.push('- '+x.a.actionDate+' · '+x.a.actionType+' · '+_outPartyName(x.a.party,x.a.projectId)+' · '+String(x.a.title||'').slice(0,140)
     +(x.a.outlet?' ('+x.a.outlet+')':'')+(x.r&&_outCountsText(x.r)?' — '+_outCountsText(x.r):'')));
   if(st.rows.length>40) L.push('(and '+(st.rows.length-40)+' earlier actions)');
   return L;
@@ -9399,7 +9417,7 @@ function _outreachPreviewTable(st, thStyle, tdStyle){
       +'<td style="'+tdStyle+'">'+escHtml(a.actionType||'')+'</td>'
       +'<td style="'+tdStyle+'">'+(safe?'<a href="'+escHtml(a.url)+'" style="color:#1a5fa8">'+escHtml(a.title||'')+'</a>':escHtml(a.title||''))
         +(a.outlet?'<div style="color:#666;font-size:10px">'+escHtml(a.outlet)+'</div>':'')+'</td>'
-      +'<td style="'+tdStyle+'">'+escHtml(a.party||'')+'</td>'
+      +'<td style="'+tdStyle+'">'+escHtml(_outPartyName(a.party,a.projectId))+'</td>'
       +'<td style="'+tdStyle+'">'+escHtml(_outCampaignName(a.campaignId)||'—')+'</td>'
       +'<td style="'+tdStyle+'">'+(x.r?escHtml(_outCountsText(x.r)||'—')+'<div style="color:#666;font-size:10px">'+escHtml(_outReadingNote(x.r))+'</div>':'—')+'</td></tr>';
   });
@@ -14942,9 +14960,9 @@ function generateReport(type, opts){
     // The whole project history; the PI report section is the period-bounded view.
     // The internal note on each action is never printed — this report goes to clients.
     var ost=_outreachStats(projF);
-    var oTone={'PI team':QR_TONE.blue,'UDOT':QR_TONE.navy,'Media & third party':QR_TONE.orange};
+    var oTone={'PI team':QR_TONE.blue,'Client':QR_TONE.navy,'Media & third party':QR_TONE.orange};
     var oKpi=[{v:ost.total,label:'Outreach actions',tone:'navy'}];
-    OUTREACH_PARTIES.forEach(function(pt){ oKpi.push({v:ost.byParty[pt]||0,label:pt==='PI team'?'By the PI team':pt==='UDOT'?'By UDOT':pt,tone:oTone[pt]}); });
+    OUTREACH_PARTIES.forEach(function(pt){ oKpi.push({v:ost.byParty[pt]||0,label:pt==='PI team'?'By the PI team':pt==='Client'?'By '+_outClientName(projF):pt,tone:oTone[pt]}); });
     oKpi.push({v:_coFmtN(ost.totals.reactions),label:'Reactions',sub:'latest reading of each',tone:'green'});
     oKpi.push({v:_coFmtN(ost.totals.comments+ost.totals.shares),label:'Comments & shares',sub:_coFmtN(ost.totals.comments)+' comments · '+_coFmtN(ost.totals.shares)+' shares',tone:'green'});
     body=_qrKpis(oKpi);
@@ -14964,13 +14982,13 @@ function generateReport(type, opts){
         +'<colgroup><col style="width:11%"><col style="width:14%"><col style="width:33%"><col style="width:12%"><col style="width:13%"><col style="width:17%"></colgroup>'
         +'<thead><tr><th>Date</th><th>Type</th><th>Title</th><th>By</th><th>Campaign</th><th>Engagement</th></tr></thead><tbody>';
       ost.rows.forEach(function(x){
-        var a=x.a, safe=/^https?:\/\//i.test(a.url||''), pc=oTone[a.party]||QR_TONE.gray;
+        var a=x.a, safe=/^https?:\/\//i.test(a.url||''), pc=oTone[_outPartyKey(a.party)]||QR_TONE.gray;
         body+='<tr style="page-break-inside:avoid">'
           +'<td class="td-mono" style="white-space:nowrap;vertical-align:top;border-left:3px solid '+pc+'!important">'+fmt(a.actionDate)+'</td>'
           +'<td style="vertical-align:top"><span class="badge b-sky" style="font-size:10px">'+escHtml(a.actionType||'')+'</span></td>'
           +'<td style="font-weight:600;color:#111;vertical-align:top">'+(safe?'<a href="'+escHtml(a.url)+'" style="color:#1a5fa8;text-decoration:none">'+escHtml(a.title||'')+'</a>':escHtml(a.title||''))
             +(a.outlet||a.author?'<div style="font-size:11px;color:#666;font-weight:400">'+escHtml([a.outlet,a.author].filter(Boolean).join(' · '))+'</div>':'')+'</td>'
-          +'<td style="vertical-align:top">'+_qrPill(a.party||'—',pc)+'</td>'
+          +'<td style="vertical-align:top">'+_qrPill(_outPartyName(a.party,a.projectId)||'—',pc)+'</td>'
           +'<td style="font-size:12px;color:#444;vertical-align:top">'+escHtml(_outCampaignName(a.campaignId)||'—')+'</td>'
           +'<td style="font-size:12px;vertical-align:top">'+(x.r?'<div style="color:#111">'+escHtml(_outCountsText(x.r)||'—')+'</div><div style="font-size:10px;color:#666">'+escHtml(_outReadingNote(x.r))+'</div>':'<span style="color:#888">—</span>')+'</td>'
           +'</tr>';
@@ -19909,7 +19927,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
         xml+=bullet('No outreach logged in this period.');
       } else {
         xml+=para(_ox.total+' outreach action'+(_ox.total!==1?'s':'')+' in the period: '+_outTallyText(_ox.byType,true));
-        xml+=bullet('Done by: '+_outTallyText(_ox.byParty,false));
+        xml+=bullet('Done by: '+_outTallyText(_outPartyTally(_ox.byParty,proj.id),false));
         if(_ox.withCounts) xml+=bullet('Engagement recorded on '+_ox.withCounts+' of '+_ox.total+' (latest reading of each): '+_outTotalsText(_ox.totals));
         _ox.campaigns.forEach(function(c){ xml+=bullet('Campaign "'+c.name+'": '+c.n+' action'+(c.n!==1?'s':'')+(_outTotalsText(c)?' · '+_outTotalsText(c):'')); });
         xml+=spacer();
@@ -19918,7 +19936,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
           var oxRows=tblHdrRow(oxHdrs,oxCols);
           _ox.rows.forEach(function(x,ri){
             var a=x.a;
-            oxRows+=tblDataRow([_fmtMDY(a.actionDate),a.actionType||'',String(a.title||'').slice(0,140)+(a.outlet?' ('+a.outlet+')':''),a.party||'',_outCampaignName(a.campaignId)||'—',
+            oxRows+=tblDataRow([_fmtMDY(a.actionDate),a.actionType||'',String(a.title||'').slice(0,140)+(a.outlet?' ('+a.outlet+')':''),_outPartyName(a.party,a.projectId),_outCampaignName(a.campaignId)||'—',
               x.r?((_outCountsText(x.r)||'—')+' — '+_outReadingNote(x.r)):'—'],oxCols,ri%2!==0);
           });
           xml+=tblWrap(9560,oxCols,oxRows); xml+=spacer();

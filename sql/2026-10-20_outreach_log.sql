@@ -36,7 +36,7 @@ create table if not exists pi_outreach_actions (
   campaign_id  bigint references pi_outreach_campaigns(id) on delete set null,
   action_date  date   not null,
   action_type  text   not null,
-  party        text   not null default 'PI team',  -- 'PI team' | 'UDOT' | 'Media & third party'
+  party        text   not null default 'PI team',  -- 'PI team' | 'Client' (shown as the project's client) | 'Media & third party'
   url          text,
   title        text   not null,
   outlet       text,
@@ -89,3 +89,7 @@ grant usage, select on all sequences in schema public to authenticated;
 -- Verify (expect 3 tables × 2 policies, rls on):
 -- select tablename, policyname, permissive from pg_policies
 --  where tablename like 'pi_outreach_%' order by 1, 2;
+
+-- "UDOT" became "Client" (Oct 2026) so the log fits any client; the app shows
+-- the project's own client name. Renames rows saved on DEV before the change.
+update public.pi_outreach_actions set party = 'Client' where party = 'UDOT';

@@ -3516,6 +3516,28 @@ close-out link-up — 2c and 3 ✅ on DEV (2026-10-20).
   a general close-out type when the first non-UDOT final report is due (from a
   real past report), other states with the 2027 multi-firm work. The UDOT
   close-out type stays UDOT — never generalize it.
+- **Outreach vs events (2026-10-22, Jeff).** EVENT = a gathering (people
+  together at a set time, in person or live online: attendance, attendees,
+  Title VI form). OUTREACH = something sent, posted or published (a flyer,
+  mailer, newsletter, email, post, story). INTERACTION = one-to-one. A
+  hand-delivered flyer is outreach; a talk at a door is an interaction. Both
+  dialogs say so under Type. "Email distribution" left `MEETING_TYPES` (an
+  older event keeps its type in its own dialog); `OUTREACH_TYPES` gained Email
+  blast, Flyer / door hanger, Mailer / postcard, and "Shared with a partner to
+  distribute" (renamed from "Agency/partner coordination"; the migration
+  renames rows). New columns `delivery` (`OUT_DELIVERY`: Hand-delivered /
+  Mailed / Emailed / Posted online / Posted on site) and `reach` (integer),
+  both in `NULL_CLEARS_FIELDS`; `_outReachText` shows "Hand-delivered · 450
+  reached" in the log, quick report, PI report table, .docx, AI facts
+  ("Reach recorded on N of M … in all", `st.reached`) and close-out lines
+  (`CO_OUTREACH_MAP.print` → outreach highlight, `.blast` → email highlight).
+  The bulk-email tool's button is now **Log in Outreach** (`logEmailAsOutreach`:
+  Email blast, Emailed, reach = addresses, recipients in the internal note) —
+  it used to make an "Email distribution" event that put every recipient
+  under "Events attended". LIVE had 4 distributions logged as 0-attendance
+  events (ids 172, 179, 206, 209, project 16): paste
+  `sql/fixes/2026-10-22_move_flyer_events_to_outreach.sql` on LIVE AFTER the
+  Outreach release. Guarded by `test/tests/97-outreach-vs-events.test.js`.
 - **Nav "Outreach"** → `renderOutreach` (scoped by `S.projectFilter`, filters
   `S.outType` / `S.outCampaign` / `S.outSearch`): tiles (actions, by party,
   with counts, latest reactions/comments/shares), table with the LATEST reading

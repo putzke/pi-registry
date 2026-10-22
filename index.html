@@ -1267,7 +1267,7 @@ const SB_TO_INT = {
   pi_outreach_actions: {
     id:'id', projectId:'project_id', campaignId:'campaign_id', actionDate:'action_date', actionType:'action_type',
     party:'party', url:'url', title:'title', outlet:'outlet', author:'author', description:'description',
-    note:'note', loggedBy:'logged_by', createdAt:'created_at', updatedBy:'updated_by'
+    note:'note', delivery:'delivery', reach:'reach', loggedBy:'logged_by', createdAt:'created_at', updatedBy:'updated_by'
   },
   pi_outreach_readings: {
     id:'id', actionId:'action_id', readOn:'read_on', reactions:'reactions', comments:'comments',
@@ -1364,7 +1364,7 @@ function toSB(table, obj) {
 
 // Columns where a null the caller sends means "clear it": a hotline's or menu
 // option's ring/hours override set back to "use the default".
-const NULL_CLEARS_FIELDS = new Set(['campaign_id','ring_mode','ring_seconds','hours_start','hours_end','hours_days',
+const NULL_CLEARS_FIELDS = new Set(['campaign_id','delivery','reach','ring_mode','ring_seconds','hours_start','hours_end','hours_days',
   'menu_audio_path','menu_audio_for','spanish_menu_audio_path','spanish_menu_audio_for']);
 
 // Convert Supabase row back to our internal format
@@ -3329,40 +3329,38 @@ function _emailOpenOutlook() {
   window.location.href = uri;
 }
 
-async function logEmailAsEvent() {
+// A bulk email is a SENDING, so it is logged in the Outreach log as an
+// "Email blast" (2026-10-22; it used to be an "Email distribution" event,
+// which also listed every recipient under "Events attended"). The recipients'
+// names go in the internal note, which no report prints.
+async function logEmailAsOutreach() {
   var proj = S.projectFilter ? DB.get('projects').find(function(p){ return p.id===S.projectFilter; }) : null;
   if(!proj){ alert('No project selected.'); return; }
   var addrs = _emailGetAddresses();
   if(!addrs.length){ alert('No email addresses to log.'); return; }
   var subj = S._emailSubject || (document.getElementById('email-subj-input')||{}).value || (proj.pid+' — '+proj.name);
-  // Resolve the selected recipients to stakeholder records so we can link them as attendees.
   var contacts = _emailGetContacts();
-  var recipientIds = [];
   var names = [];
   Object.keys(S._emailSelected).forEach(function(id){
     var c = contacts.find(function(x){ return String(x.id)===String(id); });
     if(!c) return;
-    recipientIds.push(c.id);
     names.push(((c.firstName||'')+' '+(c.lastName||'')).trim() || c.org || 'Unknown');
   });
-  var shown = names.slice(0,5);
-  var extra = names.length > 5 ? ' +' + (names.length - 5) + ' others' : '';
   var issNote = '';
   if(S._emailIssue){
     var iss = (DB.get('issues')||[]).find(function(i){ return String(i.id)===String(S._emailIssue); });
     if(iss) issNote = '\nRelated issue: [' + iss.status + '] ' + iss.title;
   }
-  var evt = {
-    id: DB.uid(), projectId: S.projectFilter, title: subj, date: localToday(),
-    type: 'Email distribution', status: 'Completed', format: 'Virtual', location: '',
-    attendanceCount: addrs.length, commentCards: 0, handouts: '', attendeeIds: recipientIds,
-    agenda: '', keyConcerns: '', actionItems: '',
-    notes: 'Bulk email distribution — Recipients (' + names.length + '): ' + shown.join(', ') + extra + issNote,
-    createdAt: new Date().toISOString()
+  var act = {
+    id: DB.uid(), projectId: S.projectFilter, actionDate: localToday(), actionType: 'Email blast', party: 'PI team',
+    title: subj, delivery: 'Emailed', reach: addrs.length, campaignId: null,
+    note: 'Recipients (' + names.length + '): ' + names.join(', ') + issNote,
+    loggedBy: getLoggedBy()||null, updatedBy: getLoggedBy()||null
   };
-  var all = DB.get('meetings'); all.push(evt);
-  await DB.set('meetings', all);
+  await DB.set('outreach_actions', DB.get('outreach_actions').concat([act]));
+  if(/^tmp_/.test(String(act.id))) return;   // the insert failed; _syncFailed has said so
   S._emailLogged = true; _emailRerender();
+  showToast('Logged in the Outreach log as an email blast to ' + addrs.length, 'success', 2500);
 }
 
 function _emailRerender() {
@@ -3480,8 +3478,8 @@ function renderEmailPanel(el) {
     +       '<button id="email-copy-btn" class="btn btn-primary" onclick="_emailCopyAll();S._emailSent=true;setTimeout(_emailRerender,100)" '+(addrs.length===0?'disabled style="opacity:.4"':'')+'>📋 Copy all emails</button>'
     +       '<button class="btn" onclick="_emailOpenOutlook();S._emailSent=true;setTimeout(_emailRerender,100)" '+(overLimit||addrs.length===0?'disabled style="opacity:.4;cursor:not-allowed" title="'+(overLimit?'Reduce to 10 or fewer addresses':'No addresses selected')+'"':'')+'>↗ Open in Outlook</button>'
     +       '<button class="btn btn-ghost" onclick="S._emailSelected={};S._emailSent=false;S._emailLogged=false;S._emailIssue=\'\';S._emailSubject=\'\';S._emailCc=\'\';_emailRerender()">\u2715 Clear</button>'
-    +       (S._emailSent && !S._emailLogged ? '<button class="btn" style="background:rgba(40,168,112,.2);border-color:rgba(40,168,112,.5);color:#28A870" onclick="logEmailAsEvent()">&#10003; Log as event</button>' : '')
-    +       (S._emailLogged ? '<span style="font-size:12px;color:#28A870;padding:4px 8px">&#10003; Event logged</span>' : '')
+    +       (S._emailSent && !S._emailLogged ? '<button class="btn" style="background:rgba(40,168,112,.2);border-color:rgba(40,168,112,.5);color:#28A870" onclick="logEmailAsOutreach()">&#10003; Log in Outreach</button>' : '')
+    +       (S._emailLogged ? '<span style="font-size:12px;color:#28A870;padding:4px 8px">&#10003; Logged in Outreach</span>' : '')
     +     '</div>'
     +     '<div style="font-size:11px;color:var(--fog);padding:8px 10px;background:rgba(74,155,232,.06);border-left:3px solid var(--sky);border-radius:0 4px 4px 0;line-height:1.5">'
     +       '<strong style="color:var(--mist)">Open in Outlook</strong> works best with <strong style="color:var(--mist)">10 or fewer addresses.</strong> For larger lists, use <strong style="color:var(--mist)">Copy all emails</strong> and paste into Outlook\'s TO field. Contacts without an email are skipped automatically.'
@@ -8966,7 +8964,14 @@ function _hotToggleCustom(sel){
 // does not show come from a screenshot (read by Claude, then checked) or are
 // typed. Every reading says which. Staff-only, desktop only.
 const LINK_FN_URL=SUPA_URL+'/functions/v1/link-preview';
-const OUTREACH_TYPES=['Press release','Newsletter','Website update','511 alert','Social post','News coverage','Trucking/industry publication','Agency/partner coordination','Other'];
+// Outreach = something sent, posted or published that people take in on their
+// own time. A gathering (in person or live online) is an Event; a one-to-one
+// conversation is an Interaction (Jeff, 2026-10-22). A hand-delivered flyer is
+// outreach — record how it went out and how many it reached.
+const OUTREACH_TYPES=['Press release','Newsletter','Email blast','Flyer / door hanger','Mailer / postcard','Website update','511 alert','Social post','News coverage','Trucking/industry publication','Shared with a partner to distribute','Other'];
+const OUT_DELIVERY=['Hand-delivered','Mailed','Emailed','Posted online','Posted on site'];
+// "Hand-delivered · 450 reached"
+function _outReachText(a){ return [a.delivery||'', _outHas(a.reach)?Number(a.reach).toLocaleString()+' reached':''].filter(Boolean).join(' · '); }
 const OUTREACH_PARTIES=['PI team','Client','Media & third party'];
 // "Client" is stored; it shows as the project's own client ("UDOT", "Logan
 // City"), so the log fits any client. An early DEV row saved as "UDOT" reads
@@ -9081,7 +9086,7 @@ function renderOutreach(m){
         ${projF?'':`<td style="font-size:11px;color:var(--fog)">${escHtml(pName(a.projectId))}</td>`}
         <td><span class="badge">${escHtml(a.actionType||'')}</span></td>
         <td><div style="font-weight:600;color:var(--white)">${safe?`<a href="${escHtml(a.url)}" target="_blank" rel="noopener noreferrer" style="color:var(--sky-lt);text-decoration:none">${escHtml(a.title||'')} ↗</a>`:escHtml(a.title||'')}</div>
-          ${a.outlet||a.author?`<div style="font-size:11px;color:var(--fog)">${escHtml([a.outlet,a.author].filter(Boolean).join(' · '))}</div>`:''}
+          ${a.outlet||a.author||_outReachText(a)?`<div style="font-size:11px;color:var(--fog)">${escHtml([a.outlet,a.author,_outReachText(a)].filter(Boolean).join(' · '))}</div>`:''}
           ${a.note?`<div style="font-size:11px;color:var(--slate);margin-top:2px">${escHtml(a.note)}</div>`:''}</td>
         <td style="font-size:12px">${escHtml(_outPartyName(a.party,a.projectId))}</td>
         <td style="font-size:12px">${escHtml(_outCampaignName(a.campaignId))}</td>
@@ -9139,8 +9144,9 @@ function openOutreachModal(id){
     <div class="fgrid fg2f">
       <div class="fr"><label>Date *</label><input type="date" id="f-out-date" value="${escHtml(a.actionDate||today)}" ${id?'data-touched="1"':''} oninput="this.dataset.touched='1'"></div>
       <div class="fr"><label>Type *</label><select id="f-out-type" ${id?'data-touched="1"':''} onchange="this.dataset.touched='1'">
-        ${OUTREACH_TYPES.map(t=>`<option ${(a.actionType||'Press release')===t?'selected':''}>${t}</option>`).join('')}</select></div>
+        ${(OUTREACH_TYPES.indexOf(a.actionType)<0&&a.actionType?[a.actionType]:[]).concat(OUTREACH_TYPES).map(t=>`<option ${(a.actionType||'Press release')===t?'selected':''}>${escHtml(t)}</option>`).join('')}</select></div>
     </div>
+    <div style="font-size:11px;color:var(--fog);margin:-4px 0 10px;line-height:1.5">Outreach is something sent, posted or published — a flyer, mailer, newsletter, post or story. A gathering of people (in person or online) is an <strong>Event</strong>; a one-to-one conversation is an <strong>Interaction</strong>.</div>
     <div class="fgrid fg2f">
       <div class="fr"><label>Done by *</label><select id="f-out-party">${_outPartyOpts(a.party,projId)}</select></div>
       <div class="fr"><label>Project *</label><select id="f-out-proj" onchange="_outCampOpts('');_outPartyRelabel()">
@@ -9151,6 +9157,10 @@ function openOutreachModal(id){
     <div class="fgrid fg2f">
       <div class="fr"><label>Outlet</label><input id="f-out-outlet" value="${escHtml(a.outlet||'')}" placeholder="KSL.com, UDOT Facebook, the project newsletter…"></div>
       <div class="fr"><label>Author</label><input id="f-out-author" value="${escHtml(a.author||'')}"></div>
+    </div>
+    <div class="fgrid fg2f">
+      <div class="fr"><label>How it went out</label><select id="f-out-deliv"><option value="">—</option>${(a.delivery&&OUT_DELIVERY.indexOf(a.delivery)<0?[a.delivery]:[]).concat(OUT_DELIVERY).map(d=>`<option ${a.delivery===d?'selected':''}>${escHtml(d)}</option>`).join('')}</select></div>
+      <div class="fr"><label>Reached / quantity</label><input type="number" min="0" step="1" id="f-out-reach" value="${_outHas(a.reach)?escHtml(String(a.reach)):''}" placeholder="450 doors, 2,300 subscribers…"></div>
     </div>
     <div class="fr"><label>Description</label><textarea id="f-out-desc" rows="3">${escHtml(a.description||'')}</textarea></div>
     <div class="fr"><label>Note <span style="color:var(--fog);font-weight:400">— internal</span></label><textarea id="f-out-note" rows="2">${escHtml(a.note||'')}</textarea></div>
@@ -9268,11 +9278,13 @@ async function saveOutreach(){
     if(!Number.isInteger(n)||n<0){ alert(l+' must be a whole number, 0 or more.'); return; }
     counts[k]=n; anyCount=true;
   }
+  const reachRaw=v('f-out-reach'); let reach=null;
+  if(reachRaw!==''){ reach=Number(reachRaw); if(!Number.isInteger(reach)||reach<0){ alert('Reached / quantity must be a whole number, 0 or more.'); return; } }
   const camp=v('f-out-camp');
   const all=DB.get('outreach_actions');
   const old=editId?all.find(x=>String(x.id)===String(editId)):null;
   const data={...(old||{}),id:editId||DB.uid(),projectId:proj,campaignId:camp&&camp!=='__new'?camp:null,actionDate:date,actionType:type,party,
-    url,title,outlet:v('f-out-outlet'),author:v('f-out-author'),description:v('f-out-desc'),note:v('f-out-note'),
+    url,title,outlet:v('f-out-outlet'),author:v('f-out-author'),description:v('f-out-desc'),note:v('f-out-note'),delivery:v('f-out-deliv')||null,reach,
     loggedBy:(old&&old.loggedBy)||getLoggedBy()||null,updatedBy:getLoggedBy()||null};
   const btn=document.getElementById('f-out-save'); if(btn) btn.disabled=true;
   if(old){ const i=all.findIndex(x=>String(x.id)===String(editId)); all[i]=data; } else all.push(data);
@@ -9382,7 +9394,7 @@ function _outreachStats(projF, pstart, pend){
     const c=camps[name]||(camps[name]={name,n:0,withCounts:0,...zero()});
     c.n++; if(x.r){ c.withCounts++; add(c,x.r); }
   });
-  return {projF,rows,total:rows.length,withCounts:rows.filter(x=>x.r).length,totals,
+  return {projF,rows,total:rows.length,reached:rows.reduce((n,x)=>n+(_outHas(x.a.reach)?Number(x.a.reach):0),0),reachedN:rows.filter(x=>_outHas(x.a.reach)).length,withCounts:rows.filter(x=>x.r).length,totals,
     byType:tally(x=>x.a.actionType),byParty:tally(x=>_outPartyKey(x.a.party)),
     campaigns:Object.values(camps).sort((a,b)=>b.n-a.n||a.name.localeCompare(b.name))};
 }
@@ -9398,11 +9410,12 @@ function _outReadingNote(r){ return r?('as of '+_fmtMDY(r.readOn)+', '+(OUT_SOUR
 function _outreachFactLines(st){
   if(!st.total) return [];
   const L=['Outreach actions: '+st.total+' ('+_outTallyText(st.byType,true)+'). Done by: '+_outTallyText(_outPartyTally(st.byParty,st.projF),false)+'.'];
+  if(st.reachedN) L.push('Reach recorded on '+st.reachedN+' of '+st.total+' actions (flyers delivered, mailers sent, recipients): '+st.reached.toLocaleString()+' in all.');
   L.push(st.withCounts?('Engagement recorded on '+st.withCounts+' of '+st.total+' actions, latest reading of each: '+(_outTotalsText(st.totals)||'no counts')+'. Counts are as of the date each was read.')
     :'No engagement counts were recorded.');
   st.campaigns.forEach(c=>L.push('Campaign "'+c.name+'": '+c.n+' action'+(c.n!==1?'s':'')+(_outTotalsText(c)?', '+_outTotalsText(c):'')+'.'));
   st.rows.slice(0,40).forEach(x=>L.push('- '+x.a.actionDate+' · '+x.a.actionType+' · '+_outPartyName(x.a.party,x.a.projectId)+' · '+String(x.a.title||'').slice(0,140)
-    +(x.a.outlet?' ('+x.a.outlet+')':'')+(x.r&&_outCountsText(x.r)?' — '+_outCountsText(x.r):'')));
+    +(x.a.outlet?' ('+x.a.outlet+')':'')+(_outReachText(x.a)?' ['+_outReachText(x.a)+']':'')+(x.r&&_outCountsText(x.r)?' — '+_outCountsText(x.r):'')));
   if(st.rows.length>40) L.push('(and '+(st.rows.length-40)+' earlier actions)');
   return L;
 }
@@ -9416,7 +9429,7 @@ function _outreachPreviewTable(st, thStyle, tdStyle){
     h+='<tr><td style="'+tdStyle+';white-space:nowrap">'+escHtml(_fmtMDY(a.actionDate))+'</td>'
       +'<td style="'+tdStyle+'">'+escHtml(a.actionType||'')+'</td>'
       +'<td style="'+tdStyle+'">'+(safe?'<a href="'+escHtml(a.url)+'" style="color:#1a5fa8">'+escHtml(a.title||'')+'</a>':escHtml(a.title||''))
-        +(a.outlet?'<div style="color:#666;font-size:10px">'+escHtml(a.outlet)+'</div>':'')+'</td>'
+        +(a.outlet||_outReachText(a)?'<div style="color:#666;font-size:10px">'+escHtml([a.outlet,_outReachText(a)].filter(Boolean).join(' · '))+'</div>':'')+'</td>'
       +'<td style="'+tdStyle+'">'+escHtml(_outPartyName(a.party,a.projectId))+'</td>'
       +'<td style="'+tdStyle+'">'+escHtml(_outCampaignName(a.campaignId)||'—')+'</td>'
       +'<td style="'+tdStyle+'">'+(x.r?escHtml(_outCountsText(x.r)||'—')+'<div style="color:#666;font-size:10px">'+escHtml(_outReadingNote(x.r))+'</div>':'—')+'</td></tr>';
@@ -11704,7 +11717,8 @@ function _coFactsFor(co) {
 const CO_OUTREACH_MAP = {
   news: ['News coverage', 'Trucking/industry publication'], social: ['Social post'], editions: ['Newsletter'],
   website: ['Website update'], release: ['Press release'], traffic: ['511 alert'],
-  coord: ['Agency/partner coordination'], other: ['Other']
+  print: ['Flyer / door hanger', 'Mailer / postcard'], blast: ['Email blast'],
+  coord: ['Shared with a partner to distribute', 'Agency/partner coordination'], other: ['Other']
 };
 function _coOutreach(projId, w) {
   const st = _outreachStats(projId, (w && w.from) || '', (w && w.to) || '');
@@ -11722,6 +11736,7 @@ function _coUrlKey(u) {
 function _coOutreachLine(x) {
   const a = x.a, c = x.r ? _outCountsText(x.r) : '';
   return fmt(a.actionDate) + ': ' + String(a.title || '').trim() + (_coVal(a.outlet) ? ' (' + String(a.outlet).trim() + ')' : '')
+    + (_outReachText(a) ? ' [' + _outReachText(a) + ']' : '')
     + (c ? ' — ' + c + ' as of ' + fmt(x.r.readOn) : '');
 }
 
@@ -13435,6 +13450,7 @@ function _coHighlightFacts(co, hid) {
     const early = events.filter(function (e) { return !/partnering|progress meeting|pre-construction/i.test(e.type || ''); }).slice(0, 8);
     early.forEach(function (e) { L.push('Event — ' + evLine(e) + '.'); });
     olLines(ol.release, 'Press release');
+    olLines(ol.print, 'Flyer or mailer');
     olLines(ol.news, 'News coverage');
     olLines(ol.other, 'Other outreach');
     const logged = {}; ol.news.forEach(function (x) { const k = _coUrlKey(x.a.url); if (k) logged[k] = 1; });
@@ -13460,6 +13476,7 @@ function _coHighlightFacts(co, hid) {
     const n = f.newsletterEditions !== null ? f.newsletterEditions : (_coVal(it.nlCount) ? String(it.nlCount).trim() : '');
     if (n !== '' && n !== null) L.push('Email update editions sent: ' + n + '.');
     olLines(ol.editions, 'Edition');
+    olLines(ol.blast, 'Email blast');
     (it.editions || []).filter(_coRowHas).forEach(function (r) {
       if (ol.editions.some(function (x) { return _coUrlKey(x.a.url) && _coUrlKey(x.a.url) === _coUrlKey(r.url); })) return;
       if (_coVal(r.title) || _coVal(r.sent)) L.push('Edition — ' + [r.sent, r.title].filter(_coVal).join(': ') + '.');
@@ -13498,7 +13515,7 @@ function _coHighlightFacts(co, hid) {
     if (f.piReports) L.push('PI reports issued to the project team: ' + (_coVal(it.ovrPiReports) ? String(it.ovrPiReports).trim() : f.piReports) + '.');
     events.filter(function (e) { return /partnering|progress meeting|pre-construction|site visit|agency coordination/i.test(e.type || ''); })
       .slice(0, 10).forEach(function (e) { L.push('Meeting — ' + evLine(e) + '.'); });
-    olLines(ol.coord, 'Agency / partner coordination');
+    olLines(ol.coord, 'Shared with a partner to distribute');
   }
   const dr = it.draft || {};
   return { lines: L, notes: _coLines(dr['hl-' + hid]) };
@@ -14987,7 +15004,7 @@ function generateReport(type, opts){
           +'<td class="td-mono" style="white-space:nowrap;vertical-align:top;border-left:3px solid '+pc+'!important">'+fmt(a.actionDate)+'</td>'
           +'<td style="vertical-align:top"><span class="badge b-sky" style="font-size:10px">'+escHtml(a.actionType||'')+'</span></td>'
           +'<td style="font-weight:600;color:#111;vertical-align:top">'+(safe?'<a href="'+escHtml(a.url)+'" style="color:#1a5fa8;text-decoration:none">'+escHtml(a.title||'')+'</a>':escHtml(a.title||''))
-            +(a.outlet||a.author?'<div style="font-size:11px;color:#666;font-weight:400">'+escHtml([a.outlet,a.author].filter(Boolean).join(' · '))+'</div>':'')+'</td>'
+            +(a.outlet||a.author||_outReachText(a)?'<div style="font-size:11px;color:#666;font-weight:400">'+escHtml([a.outlet,a.author,_outReachText(a)].filter(Boolean).join(' · '))+'</div>':'')+'</td>'
           +'<td style="vertical-align:top">'+_qrPill(_outPartyName(a.party,a.projectId)||'—',pc)+'</td>'
           +'<td style="font-size:12px;color:#444;vertical-align:top">'+escHtml(_outCampaignName(a.campaignId)||'—')+'</td>'
           +'<td style="font-size:12px;vertical-align:top">'+(x.r?'<div style="color:#111">'+escHtml(_outCountsText(x.r)||'—')+'</div><div style="font-size:10px;color:#666">'+escHtml(_outReadingNote(x.r))+'</div>':'<span style="color:#888">—</span>')+'</td>'
@@ -19936,7 +19953,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
           var oxRows=tblHdrRow(oxHdrs,oxCols);
           _ox.rows.forEach(function(x,ri){
             var a=x.a;
-            oxRows+=tblDataRow([_fmtMDY(a.actionDate),a.actionType||'',String(a.title||'').slice(0,140)+(a.outlet?' ('+a.outlet+')':''),_outPartyName(a.party,a.projectId),_outCampaignName(a.campaignId)||'—',
+            oxRows+=tblDataRow([_fmtMDY(a.actionDate),a.actionType||'',String(a.title||'').slice(0,140)+(a.outlet?' ('+a.outlet+')':'')+(_outReachText(a)?' — '+_outReachText(a):''),_outPartyName(a.party,a.projectId),_outCampaignName(a.campaignId)||'—',
               x.r?((_outCountsText(x.r)||'—')+' — '+_outReadingNote(x.r)):'—'],oxCols,ri%2!==0);
           });
           xml+=tblWrap(9560,oxCols,oxRows); xml+=spacer();
@@ -20749,7 +20766,10 @@ refreshBadges();render();
 
 
 // ── MEETINGS VIEW ──────────────────────────────────────────────────────────
-const MEETING_TYPES=['Public open house','Public hearing','Scoping meeting','Agency coordination meeting','Elected official briefing','Partnering meeting','Property owner / ROW discussion','Pre-construction meeting','Progress meeting','Community advisory committee','Media briefing / press conference','Pop-up / information booth','School or business outreach','Site visit','Webinar / virtual meeting','Email distribution','Other'];
+const MEETING_TYPES=['Public open house','Public hearing','Scoping meeting','Agency coordination meeting','Elected official briefing','Partnering meeting','Property owner / ROW discussion','Pre-construction meeting','Progress meeting','Community advisory committee','Media briefing / press conference','Pop-up / information booth','School or business outreach','Site visit','Webinar / virtual meeting','Other'];
+// An event is a gathering — people together at a set time, in person or live
+// online. "Email distribution" left this list (2026-10-22): a sending is
+// outreach. An older event still carrying it keeps it in its own dialog.
 
 function renderMeetings(el){
   const pF=S.projectFilter;
@@ -20926,7 +20946,8 @@ function openMeetingModal(id){
   </div>
   <div class="fgrid fg2f">
     <div class="fr"><label>Project</label><select id="f-mp" onchange="rebuildMeetingAttendeePicker(this.value)">${projs.map(p=>`<option value="${p.id}"${(m.projectId||pF)===p.id?' selected':''}>${p.pid} — ${p.name}</option>`).join('')}</select></div>
-    <div class="fr"><label>Event type</label><select id="f-mty">${MEETING_TYPES.map(t=>`<option${m.type===t?' selected':''}>${t}</option>`).join('')}</select></div>
+    <div class="fr"><label>Event type</label><select id="f-mty">${(m.type&&MEETING_TYPES.indexOf(m.type)<0?[m.type]:[]).concat(MEETING_TYPES).map(t=>`<option${m.type===t?' selected':''}>${escHtml(t)}</option>`).join('')}</select>
+      <div style="font-size:11px;color:var(--fog);margin-top:4px;line-height:1.5">An event is a gathering — people together at a set time, in person or online. A flyer, mailer, email or post is <strong>Outreach</strong>; a one-to-one conversation is an <strong>Interaction</strong>.</div></div>
   </div>
   <div class="fgrid fg2f">
     <div class="fr"><label>Location / venue</label><input id="f-ml" value="${m.location||''}"></div>

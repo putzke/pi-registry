@@ -43,6 +43,8 @@ create table if not exists pi_outreach_actions (
   author       text,
   description  text,
   note         text,
+  delivery     text,                                -- how it went out: Hand-delivered | Mailed | Emailed | Posted online | Posted on site
+  reach        integer check (reach >= 0),          -- how many it reached: doors, mailers, recipients
   logged_by    text,
   created_at   timestamptz default now(),
   updated_at   timestamptz default now(),
@@ -93,3 +95,10 @@ grant usage, select on all sequences in schema public to authenticated;
 -- "UDOT" became "Client" (Oct 2026) so the log fits any client; the app shows
 -- the project's own client name. Renames rows saved on DEV before the change.
 update public.pi_outreach_actions set party = 'Client' where party = 'UDOT';
+
+-- Outreach vs events (2026-10-22): a flyer, mailer or email blast is outreach,
+-- with how it went out and how many it reached. For a database where this file
+-- already ran before those columns existed (DEV):
+alter table public.pi_outreach_actions add column if not exists delivery text;
+alter table public.pi_outreach_actions add column if not exists reach integer check (reach >= 0);
+update public.pi_outreach_actions set action_type = 'Shared with a partner to distribute' where action_type = 'Agency/partner coordination';

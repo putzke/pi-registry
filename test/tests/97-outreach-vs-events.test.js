@@ -40,6 +40,18 @@ module.exports = {
         await page.evaluate(() => closeM());
       }
 
+      // ── the Email blast tip: shown for that type only; its link goes to Email contacts in this tab ──
+      await page.evaluate((p) => { S.projectFilter = p; setView('outreach'); openOutreachModal(); }, P);
+      t.ok(!(await page.isVisible('#f-out-emailtip')), 'the tip is hidden for other types');
+      await page.selectOption('#f-out-type', 'Email blast');
+      t.ok(await page.isVisible('#f-out-emailtip') && /^Send to project contacts\? Suggest Email contacts for simple outreach\.$/.test((await page.textContent('#f-out-emailtip')).trim()), 'Email blast shows the one-line tip');
+      await page.fill('#f-out-title', 'half typed');
+      await page.evaluate(() => { window.confirm = () => false; outGoEmail(); window.confirm = () => true; });
+      t.ok(await page.isVisible('#f-out-title') && (await page.inputValue('#f-out-title')) === 'half typed', 'with something typed, it asks first; No keeps the entry');
+      const went = await page.evaluate(() => { outGoEmail(); return { view: S.view, panel: !!S.showEmailPanel, proj: S.projectFilter, open: document.getElementById('modal-ov').classList.contains('open') }; });
+      t.eq(went, { view: 'stakeholders', panel: true, proj: P, open: false }, 'Yes goes to Email contacts for the same project, in this tab');
+      t.ok(/Email contacts/.test(await page.textContent('#main')), 'the Email contacts screen is showing');
+
       // ── a hand-delivered flyer ──
       await page.evaluate((p) => { S.projectFilter = p; setView('outreach'); openOutreachModal(); }, P);
       t.ok(/A gathering of people/.test(await page.textContent('body')), 'the outreach dialog says what belongs in Events');
@@ -95,6 +107,7 @@ module.exports = {
       t.ok(blast.action_type === 'Email blast' && blast.delivery === 'Emailed' && blast.reach === 3, 'an Email blast, Emailed, reaching every address');
       t.ok(/Ann Able, Bo Bell/.test(blast.note), 'recipients go in the internal note');
       t.eq((await t.sql(`select count(*)::int n from pi_meetings`))[0].n, evBefore, 'no event is created');
+      t.eq(await page.evaluate(() => { const el = document.getElementById('f-out-title'); return el ? el.value : null; }), 'BLASTMARK construction update', 'the new entry opens so the rest can be filled in');
       t.eq(app.errors, [], 'no page errors');
     } finally { await app.close(); }
 

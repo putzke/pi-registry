@@ -3532,12 +3532,20 @@ close-out link-up — 2c and 3 ✅ on DEV (2026-10-20).
   ("Reach recorded on N of M … in all", `st.reached`) and close-out lines
   (`CO_OUTREACH_MAP.print` → outreach highlight, `.blast` → email highlight).
   The bulk-email tool's button is now **Log in Outreach** (`logEmailAsOutreach`:
-  Email blast, Emailed, reach = addresses, recipients in the internal note) —
+  Email blast, Emailed, reach = addresses, recipients in the internal note,
+  then OPENS the new entry so campaign/description are finished at once) —
   it used to make an "Email distribution" event that put every recipient
   under "Events attended". LIVE had 4 distributions logged as 0-attendance
   events (ids 172, 179, 206, 209, project 16): paste
   `sql/fixes/2026-10-22_move_flyer_events_to_outreach.sql` on LIVE AFTER the
   Outreach release. Guarded by `test/tests/97-outreach-vs-events.test.js`.
+  **Email blast tip (2026-10-22, Jeff's wording):** a NEW entry with type Email
+  blast shows "Send to project contacts? Suggest Email contacts for simple
+  outreach." (`#f-out-emailtip`, `_outTypeTip`). The link (`outGoEmail`) goes
+  to Email contacts for the same project IN THIS TAB, asking first if anything
+  was typed — deliberately not a new window: a second copy of the app holds
+  its own data copy, and logging there plus saving here would log one email
+  twice.
 - **Nav "Outreach"** → `renderOutreach` (scoped by `S.projectFilter`, filters
   `S.outType` / `S.outCampaign` / `S.outSearch`): tiles (actions, by party,
   with counts, latest reactions/comments/shares), table with the LATEST reading

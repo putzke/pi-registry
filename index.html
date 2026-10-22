@@ -3360,7 +3360,9 @@ async function logEmailAsOutreach() {
   await DB.set('outreach_actions', DB.get('outreach_actions').concat([act]));
   if(/^tmp_/.test(String(act.id))) return;   // the insert failed; _syncFailed has said so
   S._emailLogged = true; _emailRerender();
-  showToast('Logged in the Outreach log as an email blast to ' + addrs.length, 'success', 2500);
+  // Open the new entry so the rest of it (campaign, description) is filled in now.
+  openOutreachModal(String(act.id));
+  showToast('Logged in Outreach as an email blast to ' + addrs.length + ' — add anything else and Save', 'success', 3000);
 }
 
 function _emailRerender() {
@@ -9143,9 +9145,10 @@ function openOutreachModal(id){
     <div class="fsec">What was done</div>
     <div class="fgrid fg2f">
       <div class="fr"><label>Date *</label><input type="date" id="f-out-date" value="${escHtml(a.actionDate||today)}" ${id?'data-touched="1"':''} oninput="this.dataset.touched='1'"></div>
-      <div class="fr"><label>Type *</label><select id="f-out-type" ${id?'data-touched="1"':''} onchange="this.dataset.touched='1'">
+      <div class="fr"><label>Type *</label><select id="f-out-type" ${id?'data-touched="1"':''} onchange="this.dataset.touched='1';_outTypeTip()">
         ${(OUTREACH_TYPES.indexOf(a.actionType)<0&&a.actionType?[a.actionType]:[]).concat(OUTREACH_TYPES).map(t=>`<option ${(a.actionType||'Press release')===t?'selected':''}>${escHtml(t)}</option>`).join('')}</select></div>
     </div>
+    ${id?'':`<div id="f-out-emailtip" style="display:${a.actionType==='Email blast'?'block':'none'};font-size:12px;color:var(--sky-lt);margin:-4px 0 8px">Send to project contacts? Suggest <a href="#" onclick="outGoEmail();return false" style="color:var(--sky-lt);font-weight:600">Email contacts</a> for simple outreach.</div>`}
     <div style="font-size:11px;color:var(--fog);margin:-4px 0 10px;line-height:1.5">Outreach is something sent, posted or published — a flyer, mailer, newsletter, post or story. A gathering of people (in person or online) is an <strong>Event</strong>; a one-to-one conversation is an <strong>Interaction</strong>.</div>
     <div class="fgrid fg2f">
       <div class="fr"><label>Done by *</label><select id="f-out-party">${_outPartyOpts(a.party,projId)}</select></div>
@@ -9260,6 +9263,27 @@ async function outNewCampaign(){
   const saved=_outCampaigns(pid).find(x=>x.name===name&&!/^tmp_/.test(x.id));
   if(!saved){ showToast('The campaign could not be saved','error'); _outCampOpts(''); return; }
   _outCampOpts(saved.id);
+}
+
+// The Email blast tip (new entries only). The link goes to Email contacts in
+// THIS tab — not a new window: a second copy of the app would hold its own
+// copy of the data, and "Log in Outreach" there plus a Save here would log the
+// same email twice. After sending, "Log in Outreach" opens the new entry so
+// the rest of it (campaign, description) is finished in one place.
+function _outTypeTip(){
+  const t=document.getElementById('f-out-emailtip');
+  const v=(document.getElementById('f-out-type')||{}).value;
+  if(t) t.style.display=v==='Email blast'?'block':'none';
+}
+function outGoEmail(){
+  const pid=((document.getElementById('f-out-proj')||{}).value)||S.projectFilter;
+  if(!pid){ showToast('Choose the project first','warn'); return; }
+  const typed=['f-out-title','f-out-desc','f-out-note','f-out-url'].some(id=>((document.getElementById(id)||{}).value||'').trim());
+  if(typed&&!confirm('Leave this entry? What you have typed here is not saved. After you send, "Log in Outreach" creates the entry for you.')) return;
+  closeM();
+  S.projectFilter=String(pid);
+  setView('stakeholders');
+  openEmailPanel();
 }
 
 async function saveOutreach(){

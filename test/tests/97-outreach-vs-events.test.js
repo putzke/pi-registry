@@ -54,7 +54,8 @@ module.exports = {
 
       // ── a hand-delivered flyer ──
       await page.evaluate((p) => { S.projectFilter = p; setView('outreach'); openOutreachModal(); }, P);
-      t.ok(/A gathering of people/.test(await page.textContent('body')), 'the outreach dialog says what belongs in Events');
+      t.ok(/A gathering of people/.test(await page.textContent('#out-defn')), 'the Outreach log header says what belongs in Events');
+      t.ok(!/A gathering of people/.test(await page.textContent('#modal-ov')), 'and the dialog no longer repeats it');
       await page.selectOption('#f-out-type', 'Flyer / door hanger');
       await page.fill('#f-out-title', 'FLYERMARK lane closure flyer');
       await page.selectOption('#f-out-deliv', 'Hand-delivered');

@@ -3520,8 +3520,9 @@ close-out link-up — 2c and 3 ✅ on DEV (2026-10-20).
   together at a set time, in person or live online: attendance, attendees,
   Title VI form). OUTREACH = something sent, posted or published (a flyer,
   mailer, newsletter, email, post, story). INTERACTION = one-to-one. A
-  hand-delivered flyer is outreach; a talk at a door is an interaction. Both
-  dialogs say so under Type. "Email distribution" left `MEETING_TYPES` (an
+  hand-delivered flyer is outreach; a talk at a door is an interaction. The
+  event dialog says so under Type; the Outreach log view says it under its
+  title (`#out-defn`), not the Log outreach dialog (Jeff, 2026-10-23). "Email distribution" left `MEETING_TYPES` (an
   older event keeps its type in its own dialog); `OUTREACH_TYPES` gained Email
   blast, Flyer / door hanger, Mailer / postcard, and "Shared with a partner to
   distribute" (renamed from "Agency/partner coordination"; the migration

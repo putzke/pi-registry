@@ -9049,7 +9049,8 @@ function renderOutreach(m){
   const filtered=rows.length!==scoped.length;
   let html=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
     <div><div style="font-size:20px;font-weight:700;color:var(--white)">Outreach log</div>
-      <div style="font-size:12px;color:var(--slate)">Press releases, newsletters, website updates, 511 alerts, social posts and news coverage — and how each was received</div></div>
+      <div style="font-size:12px;color:var(--slate)">Press releases, newsletters, website updates, 511 alerts, social posts and news coverage — and how each was received</div>
+      <div id="out-defn" style="font-size:11px;color:var(--fog);margin-top:3px;line-height:1.5">Outreach is something sent, posted or published — a flyer, mailer, newsletter, post or story. A gathering of people (in person or online) is an <strong>Event</strong>; a one-to-one conversation is an <strong>Interaction</strong>.</div></div>
     <div style="display:flex;gap:8px"><button class="btn" id="out-camps" onclick="openCampaignsModal()">Campaigns</button><button class="btn btn-primary" id="out-add" onclick="openOutreachModal()">+ Log outreach</button></div>
   </div>
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px">
@@ -9149,7 +9150,6 @@ function openOutreachModal(id){
         ${(OUTREACH_TYPES.indexOf(a.actionType)<0&&a.actionType?[a.actionType]:[]).concat(OUTREACH_TYPES).map(t=>`<option ${(a.actionType||'Press release')===t?'selected':''}>${escHtml(t)}</option>`).join('')}</select></div>
     </div>
     ${id?'':`<div id="f-out-emailtip" style="display:${a.actionType==='Email blast'?'block':'none'};font-size:12px;color:var(--sky-lt);margin:-4px 0 8px">Send to project contacts? Suggest <a href="#" onclick="outGoEmail();return false" style="color:var(--sky-lt);font-weight:600">Email contacts</a> for simple outreach.</div>`}
-    <div style="font-size:11px;color:var(--fog);margin:-4px 0 10px;line-height:1.5">Outreach is something sent, posted or published — a flyer, mailer, newsletter, post or story. A gathering of people (in person or online) is an <strong>Event</strong>; a one-to-one conversation is an <strong>Interaction</strong>.</div>
     <div class="fgrid fg2f">
       <div class="fr"><label>Done by *</label><select id="f-out-party">${_outPartyOpts(a.party,projId)}</select></div>
       <div class="fr"><label>Project *</label><select id="f-out-proj" onchange="_outCampOpts('');_outPartyRelabel()">

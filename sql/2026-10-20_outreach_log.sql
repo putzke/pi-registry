@@ -102,3 +102,13 @@ update public.pi_outreach_actions set party = 'Client' where party = 'UDOT';
 alter table public.pi_outreach_actions add column if not exists delivery text;
 alter table public.pi_outreach_actions add column if not exists reach integer check (reach >= 0);
 update public.pi_outreach_actions set action_type = 'Shared with a partner to distribute' where action_type = 'Agency/partner coordination';
+
+-- The link reader (Edge Function link-preview) runs as service_role and checks
+-- the caller against pi_staff. On LIVE service_role had no SELECT on pi_staff
+-- (checked 2026-10-24; on DEV the hotline SQL granted it), so every read would
+-- be refused as "not staff". Read-only, one table.
+do $$ begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    grant select on public.pi_staff to service_role;
+  end if;
+end $$;

@@ -87,6 +87,11 @@ module.exports = {
         t.ok(!u.includes(absent), `nothing from another report ("${absent}")`);
       t.ok(!u.includes('report package'), 'worded for one report, not a package');
       t.ok(!u.includes(proj.name), 'the project is not named');
+      // The rules reach a single report too (they used to apply to the package only).
+      t.ok(/About 100 words in total/.test(u) && /Counts below are authoritative/.test(u) && /never by its name/.test(u)
+        && /never by name, phone or email/.test(u) && /9th-10th grade/.test(u), 'the single-report request carries the word limit and every rule');
+      t.ok(!/what changed recently/.test(u) && /never say what information was or was not provided/.test(u), 'no request for change data it is never given');
+      t.ok(ai.calls[0].max < 600, 'the length budget is one report\'s, not unbounded');
       t.ok(/id="rpt-summary-body" contenteditable="true"[^>]*>AIMARK summary text\./.test(ai.html), 'the summary prints at the top and can be edited');
       t.ok(/Rewrite AI summary/.test(ai.btn || ''), 'the button now offers a rewrite');
 

@@ -13301,15 +13301,20 @@ function _buildPackageFacts(projF, ids){
 // single: the summary that opens ONE quick report (qrAISummary), same facts and rules.
 function _pkgSummaryRequest(f, single){
   var words=40+f.blocks.reduce(function(a,b){return a+(b.id==='interaction-log'?140:60);},0);
-  var userContent=single
+  // The opening differs; the RULES below apply to both. (They used to sit inside
+  // the package branch of a ternary, so a single quick report's ✦ AI summary got
+  // none of them — no word limit, no "this project", no counts rule.)
+  var userContent=(single
     ? 'Write the short summary that opens a public involvement report: the '+f.blocks[0].name+'.\n\n'
       +'Structure: one opening sentence that orients the reader to where the project stands'+(f.phase?' (it is in the '+f.phase+' phase)':'')+', '
-      +'then one or two short paragraphs on what this report shows: what stands out, what is outstanding, what changed recently. '
+      +'then one or two short paragraphs on what this report shows: what stands out and what is outstanding. '
+      +'Cover only the facts below. Do not name the report or describe the document ("this report", "this matrix"), '
+      +'and never say what information was or was not provided — if something is not in the facts, leave it out.\n'
     : 'Write the executive summary that opens a public involvement report package. The package contains '
-    +'these reports, in this order: '+f.blocks.map(function(b){return b.name;}).join('; ')+'.\n\n'
-    +'Structure: one opening sentence that orients the reader to where the project stands'+(f.phase?' (it is in the '+f.phase+' phase)':'')+', '
-    +'then ONE short paragraph per report above, in the same order, each summarizing what that report shows. '
-    +'Cover ONLY these reports — never mention a report, or a fact, that is not listed below. '
+      +'these reports, in this order: '+f.blocks.map(function(b){return b.name;}).join('; ')+'.\n\n'
+      +'Structure: one opening sentence that orients the reader to where the project stands'+(f.phase?' (it is in the '+f.phase+' phase)':'')+', '
+      +'then ONE short paragraph per report above, in the same order, each summarizing what that report shows. '
+      +'Cover ONLY these reports — never mention a report, or a fact, that is not listed below.\n')
     +'Refer to the project as "this project", never by its name.\n'
     +'For the interaction log, describe what the contact was actually about: the main topics and concerns, '
     +'notable exchanges and how they were handled, and the outreach the team did. A large outbound count with '

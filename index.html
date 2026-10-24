@@ -15242,6 +15242,11 @@ function generateReportSequence(){
 // rule the close-out comm-log uses.
 var PKG_SUMMARY_LOG_LINES=60;      // newest interactions the model reads
 var PKG_SUMMARY_LINE_CHARS=220;    // per-summary trim
+var PKG_SUMMARY_TEXT_ITEMS=40;     // newest comments / issues / events whose TEXT the model reads
+// Reports whose own text (comments, issue descriptions, event notes) is sent, so
+// the summary can say what people raised, not just how many. Bigger word budget.
+var PKG_SUMMARY_TEXT_REPORTS=['comment-matrix','issues-report','events-log'];
+function _pkgTrim(t){ t=String(t||'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim(); return t.length>PKG_SUMMARY_LINE_CHARS?t.slice(0,PKG_SUMMARY_LINE_CHARS)+'…':t; }
 
 // The ids the user has numbered in the open package modal, in package order.
 function _pkgSelectedIds(){
@@ -15345,6 +15350,17 @@ function _buildPackageFacts(projF, ids){
       else {
         L.push('Formal public comments: '+cm.length+'; response status '+tally(cm,function(c){return c.responseStatus||'Pending';})+'.');
         var cat=tally(cm,function(c){return c.category;}); if(cat) L.push('By category: '+cat+'.');
+        // What was said: the same text the matrix prints. Never the commenter's name.
+        var withText=cm.filter(function(c){return _pkgTrim(c.summary);})
+          .sort(function(a,b){return String(b.commentDate||'').localeCompare(String(a.commentDate||''));}).slice(0,PKG_SUMMARY_TEXT_ITEMS);
+        if(withText.length){
+          L.push('THE COMMENTS, newest first (read them for what people said and how the team answered; do not count from them):');
+          withText.forEach(function(c){
+            var r=_pkgTrim(c.responseText);
+            L.push('- '+(c.commentDate||'undated')+' · '+(c.category||'uncategorized')+' · '+(c.responseStatus||'Pending')
+              +' · from '+(c.affiliation?_pkgTrim(c.affiliation):'a member of the public')+': '+_pkgTrim(c.summary)+(r?' — Response: '+r:''));
+          });
+        }
       }
     }
     else if(id==='issues-report'){
@@ -15352,7 +15368,11 @@ function _buildPackageFacts(projF, ids){
       if(!is.length){ L.push('No issues are tracked.'); }
       else {
         L.push('Issues: '+is.length+'; status '+tally(is,function(i){return i.status;})+'.');
-        is.slice(0,12).forEach(function(i){ L.push('- '+(i.title||'Untitled')+' ('+(i.status||'')+(i.category?', '+i.category:'')+').'); });
+        is.slice(0,PKG_SUMMARY_TEXT_ITEMS).forEach(function(i){
+          var d=_pkgTrim(i.description), r=_pkgTrim(i.resolutionSummary);
+          L.push('- '+(i.title||'Untitled')+' ('+(i.status||'')+(i.category?', '+i.category:'')+(i.priority?', '+i.priority+' priority':'')+')'
+            +(d?': '+d:'')+(r?' — Resolution: '+r:'')+'.');
+        });
       }
     }
     else if(id==='events-log'){
@@ -15362,7 +15382,10 @@ function _buildPackageFacts(projF, ids){
       else {
         var att=ev.reduce(function(a,m){return a+(parseInt(m.attendanceCount,10)||0);},0);
         L.push('Events: '+ev.length+'; by type '+tally(ev,function(m){return m.type;})+'; total recorded attendance '+att+'.');
-        ev.slice(0,10).forEach(function(m){ L.push('- '+(m.date||'')+': '+(m.title||m.type||'Event')+(m.attendanceCount?' ('+m.attendanceCount+' attended)':'')+'.'); });
+        ev.slice(0,PKG_SUMMARY_TEXT_ITEMS).forEach(function(m){
+          var n=_pkgTrim(m.notes);
+          L.push('- '+(m.date||'')+': '+(m.title||m.type||'Event')+(m.attendanceCount?' ('+m.attendanceCount+' attended)':'')+(n?' — Notes: '+n:'')+'.');
+        });
       }
     }
     else if(id==='outreach-log'){
@@ -15378,7 +15401,7 @@ function _buildPackageFacts(projF, ids){
 // The one place the package summary is requested.
 // single: the summary that opens ONE quick report (qrAISummary), same facts and rules.
 function _pkgSummaryRequest(f, single){
-  var words=40+f.blocks.reduce(function(a,b){return a+(b.id==='interaction-log'?140:60);},0);
+  var words=40+f.blocks.reduce(function(a,b){return a+(b.id==='interaction-log'?140:PKG_SUMMARY_TEXT_REPORTS.indexOf(b.id)>=0?110:60);},0);
   // The opening differs; the RULES below apply to both. (They used to sit inside
   // the package branch of a ternary, so a single quick report's ✦ AI summary got
   // none of them — no word limit, no "this project", no counts rule.)
@@ -15397,6 +15420,9 @@ function _pkgSummaryRequest(f, single){
     +'For the interaction log, describe what the contact was actually about: the main topics and concerns, '
     +'notable exchanges and how they were handled, and the outreach the team did. A large outbound count with '
     +'few inbound contacts is the normal shape of early outreach — state the numbers plainly, never call it an imbalance. '
+    +'Where the facts include what people actually wrote or said (comments, issue descriptions, event notes), '
+    +'read it and say what it was about: group it into the main themes, name notable specific points, and say '
+    +'how the team responded or resolved them. Paraphrase; do not quote at length. Keep the numbers brief.\n'
     +'Refer to private individuals by role or organization, never by name, phone or email.\n'
     +'Counts below are authoritative: use them exactly and do not count anything yourself. Do not invent facts.\n'
     +'Write at about a 9th-10th grade reading level: short sentences, everyday words. Plain paragraphs separated by '

@@ -95,6 +95,35 @@ module.exports = {
       t.ok(/id="rpt-summary-body" contenteditable="true"[^>]*>AIMARK summary text\./.test(ai.html), 'the summary prints at the top and can be edited');
       t.ok(/Rewrite AI summary/.test(ai.btn || ''), 'the button now offers a rewrite');
 
+      // Comment matrix, issues, events: the model reads the TEXT the report prints,
+      // so the summary can say what was raised — never a commenter's name.
+      const [sr] = await t.sql(`select id from pi_projects where pid='25-154-001'`);
+      const rich = await app.page.evaluate(async (pid) => {
+        const out = {};
+        const real = window._claudeNarrative; const realKey = window._getClaudeKey;
+        window._getClaudeKey = () => 'sk-test';
+        try {
+          for (const id of ['comment-matrix', 'issues-report', 'events-log']) {
+            S.projectFilter = pid; if (id === 'issues-report') generateIssuesReport(); else generateReport(id);
+            window._claudeNarrative = async (sys, user) => { out[id] = user; return 'x'; };
+            await qrAISummary(document.getElementById('qr-ai-btn'));
+          }
+        } finally { window._claudeNarrative = real; window._getClaudeKey = realKey; }
+        const c = DB.get('public_comments').find((x) => String(x.projectId) === String(pid) && x.summary && x.commenter && x.responseText);
+        const i = DB.get('issues').find((x) => String(x.projectId) === String(pid) && x.description);
+        const m = DB.get('meetings').find((x) => String(x.projectId) === String(pid) && x.notes);
+        const clip = (t) => String(t).replace(/\s+/g, ' ').trim().slice(0, 60);
+        return { out, c: c && { s: clip(c.summary), r: clip(c.responseText), who: c.commenter }, i: i && clip(i.description), m: m && clip(m.notes) };
+      }, String(sr.id));
+      t.ok(rich.c && rich.i && rich.m, 'the demo project has a comment with a response, an issue description and event notes to read');
+      if (rich.c) {
+        t.ok(rich.out['comment-matrix'].includes(rich.c.s) && rich.out['comment-matrix'].includes(rich.c.r), 'the comment matrix summary reads the comments and the responses');
+        t.ok(!rich.out['comment-matrix'].includes(rich.c.who), 'never the commenter\'s name');
+      }
+      t.ok(/About 150 words in total/.test(rich.out['comment-matrix']) && /group it into the main themes/.test(rich.out['comment-matrix']), 'a longer budget and the ask to say what was raised');
+      if (rich.i) t.ok(rich.out['issues-report'].includes(rich.i), 'the issues summary reads the descriptions');
+      if (rich.m) t.ok(rich.out['events-log'].includes(rich.m), 'the events summary reads the event notes');
+
       // No key → no call.
       const nokey = await app.page.evaluate(async (pid) => {
         S.projectFilter = pid; generateReport('events-log');

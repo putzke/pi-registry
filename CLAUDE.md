@@ -919,6 +919,22 @@ above `generateReport`; colours in `QR_TONE`.
   what prints. Issues: only from the project-scoped quick report, not the
   Issues view's filtered export. The package path is unchanged (it never sets
   the context). Follow-up facts gained due-soon, owners and the open items.
+- **One rule set for one report and for the package (fixed on LIVE
+  2026-10-24).** `_pkgSummaryRequest` kept its rules (word limit, "this
+  project", counts authoritative, no private names, reading level) inside the
+  package branch of a ternary, so a single quick report's ✦ AI summary got
+  none of them, plus an ask for "what changed recently" with no change data.
+  Now only the opening differs; the single-report opening also forbids naming
+  the document or saying what data was missing.
+- **The summary reads the TEXT, not just the counts (DEV, 2026-10-24, Jeff).**
+  For `PKG_SUMMARY_TEXT_REPORTS` (comment matrix, issues, events) the facts
+  carry the same text the report prints, newest `PKG_SUMMARY_TEXT_ITEMS` (40),
+  each trimmed by `_pkgTrim` (220 chars): each comment's summary + formal
+  response (from its affiliation, never the commenter's name), each issue's
+  description + resolution, each event's notes. The request asks for themes,
+  notable points and how the team responded; budget 110 words per such
+  report (150 for one alone). Interaction log already read its log;
+  follow-ups already sent the open actions.
 - Guarded by `test/tests/91-quick-report-figures.test.js`.
 
 ### The report-period label belongs to ONE section (`_periodLabel`, Aug 2026)

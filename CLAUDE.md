@@ -935,6 +935,15 @@ above `generateReport`; colours in `QR_TONE`.
   notable points and how the team responded; budget 110 words per such
   report (150 for one alone). Interaction log already read its log;
   follow-ups already sent the open actions.
+- **The Interaction log's own summary scales with the log (DEV, 2026-10-24,
+  Jeff).** `QR_INTLOG_TIERS`: up to 25 interactions → ~150 words (1-2
+  paragraphs), 100 → 250 (2-3), 300 → 350 (3-4), more → 450 (4-5, the
+  ceiling). `qrAISummary` builds facts with `{fullLog:true}`, so it reads the
+  WHOLE log (each line trimmed as before), in a set order: where outreach
+  stands, themes the public raised, notable exchanges and how they were
+  handled, last 30 days vs earlier. Over `QR_INTLOG_DEEP_AT` (300): medium
+  effort and a cost confirm first (`_coCommlogCost`). The report package keeps
+  its ~140-word paragraph and the newest 60 lines.
 - Guarded by `test/tests/91-quick-report-figures.test.js`.
 
 ### The report-period label belongs to ONE section (`_periodLabel`, Aug 2026)
@@ -3504,6 +3513,18 @@ separate follow-up table; audio kept 90 days after logging, transcript kept;
 test on a NEW Twilio number — Sunrise's current hotlines are Microsoft Teams
 numbers, which can be ported out (porting PIN in Teams admin) or forwarded
 to Twilio; decide at go-live.
+
+## Release 2026-10-24: everything on develop EXCEPT the hotline
+`var HOTLINE_ON = CC_ENV !== 'live'` (index.html + mobile.html, right after the
+ENVIRONMENT block, which stays byte-identical). Off = the hotline tables
+(`HOTLINE_TABLES`) are not loaded, no Hotline nav, `setView('hotline')`
+refuses, the Settings card is hidden, `_hotReload` does nothing, the
+"Hotline: …" follow-up filter options are gone; mobile's `_mobHasHotline()`
+is false. To release the hotline later: flip the switch to `true` (or delete
+it) after the hotline SQL and secrets are on LIVE. `related_to` ("Log next
+contact") was split out of the hotline SQL into
+`sql/2026-10-24_interaction_related_to.sql` so it can go live alone. Guarded
+by `test/tests/98-hotline-off-on-live.test.js`.
 
 ## Outreach log (Part B) — steps 2b, 2c and 3 BUILT on DEV (Oct 2026), not released
 Scoped with Jeff (Oct 2026): a dated log of outreach ACTIONS with campaigns,

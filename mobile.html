@@ -782,6 +782,11 @@ if (CC_ENV === 'dev') (function () {
   if (document.body) show(); else document.addEventListener('DOMContentLoaded', show);
 })();
 // ── ENVIRONMENT (end) ───────────────────────────────────────────────
+// Project hotlines stay on DEV until Jeff releases them (2026-10-24: the rest of
+// develop went live without them). Off on LIVE = no hotline tables are read, and
+// no nav item, view or Settings card. A var so a test can switch it off.
+var HOTLINE_ON = CC_ENV !== 'live';
+const HOTLINE_TABLES = ['hotlines','hotline_extensions','hotline_messages','hotline_calls','hotline_settings'];
 const SUPA_URL = CC_SUPA.url;
 // ── MIGRATION NOTE ─────────────────────────────────────────────────
 // The isAnonymous flag has been removed from stakeholder entry.
@@ -1449,7 +1454,7 @@ async function loadAllData() {
   // /rest/v1/undefined — a wasted round trip on cellular plus a console error
   // that masked real ones.
   const tables = ['projects','stakeholders','project_stakeholders','interactions','deliverables','meetings','issues','issue_interactions','dismissed_pairs','parcels','parcel_owners',
-    'team_members','hotlines','hotline_extensions','hotline_messages','hotline_calls'];
+    'team_members','hotlines','hotline_extensions','hotline_messages','hotline_calls'].filter(t=>HOTLINE_ON||HOTLINE_TABLES.indexOf(t)<0);
   // One unreachable table must not lock the app, so each is loaded on its own;
   // but a failure is NAMED, and a reload keeps the last good copy rather than
   // emptying a list that was already on screen.
@@ -2785,7 +2790,7 @@ const NAV_ICONS={
   followups:'<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/>',
   issues:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5"/><circle cx="12" cy="15.5" r=".8" fill="currentColor"/>'
 };
-function _mobHasHotline(){ return (DB.get('hotlines')||[]).length>0; }
+function _mobHasHotline(){ return HOTLINE_ON&&(DB.get('hotlines')||[]).length>0; }
 function renderBottomNavs(){
   const first=_mobHasHotline()?['hotline','Hotline','hot']:['home','Dashboard',''];
   const items=[first,['contacts','Contacts',''],['interactions','Log',''],['followups','Follow-ups','fu'],['issues','Issues','iss']];
@@ -2918,6 +2923,7 @@ function _hotFnHeaders(){
   return {'Content-Type':'application/json',apikey:SUPA_KEY,Authorization:'Bearer '+(sess?sess.access_token:SUPA_KEY)};
 }
 async function _hotReload(){
+  if(!HOTLINE_ON) return;
   for(const t of ['hotlines','hotline_extensions','hotline_messages','hotline_calls']){
     try{ cacheClear(t); _syncCache[t]=await sbGet(t,{strict:true}); }catch(e){ console.error('Hotline reload failed', t, e.message); }
   }

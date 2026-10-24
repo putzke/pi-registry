@@ -124,6 +124,35 @@ module.exports = {
       if (rich.i) t.ok(rich.out['issues-report'].includes(rich.i), 'the issues summary reads the descriptions');
       if (rich.m) t.ok(rich.out['events-log'].includes(rich.m), 'the events summary reads the event notes');
 
+      // Interaction log: the length scales with the log, it reads the WHOLE log,
+      // and a big log gets medium effort and a cost confirm first.
+      const il2 = await app.page.evaluate(async (pid) => {
+        const real = window._claudeNarrative, realKey = window._getClaudeKey, realC = window.confirm;
+        const calls = []; let asked = 0;
+        window._getClaudeKey = () => 'sk-test';
+        window._claudeNarrative = async (sys, user, max, model, opts) => { calls.push({ user, max, opts }); return 'x'; };
+        try {
+          S.projectFilter = pid; generateReport('interaction-log');
+          window.confirm = () => { asked++; return false; };
+          await qrAISummary(document.getElementById('qr-ai-btn'));
+          window.confirm = () => { asked++; return true; };
+          await qrAISummary(document.getElementById('qr-ai-btn'));
+        } finally { window._claudeNarrative = real; window._getClaudeKey = realKey; window.confirm = realC; }
+        const f = _buildPackageFacts(pid, ['interaction-log'], { fullLog: true });
+        const n = f.blocks[0].count;
+        const pkg = _pkgSummaryRequest(_buildPackageFacts(pid, ['interaction-log']), false);
+        return { calls, asked, n, logLines: f.log.length, pkgUser: pkg.user,
+          tiers: [10, 25, 26, 100, 101, 300, 301, 5000].map((x) => _qrIntlogTier(x)[1]) };
+      }, String(sr.id));
+      t.eq(il2.tiers, [150, 150, 250, 250, 350, 350, 450, 450], 'length tiers: 150 / 250 / 350 / 450 words by count');
+      t.ok(il2.n > 300 && il2.logLines === il2.n, `the quick report reads the whole log (${il2.logLines} of ${il2.n})`);
+      t.eq(il2.asked, 2, 'over 300 interactions the cost is shown first');
+      t.eq(il2.calls.length, 1, 'No makes no call; Yes makes one');
+      const c2 = il2.calls[0];
+      t.ok(/About 450 words in total/.test(c2.user) && /4-5 paragraphs/.test(c2.user) && /What the last 30 days looked like/.test(c2.user), 'the 300+ tier: 450 words, 4-5 paragraphs, the set order');
+      t.eq(c2.opts && c2.opts.effort, 'medium', 'a big log gets medium effort');
+      t.ok(/About 180 words in total/.test(il2.pkgUser) && (il2.pkgUser.match(/^- \d{4}-|^- undated/gm) || []).length <= 60, 'the package keeps its shorter paragraph and the newest 60');
+
       // No key → no call.
       const nokey = await app.page.evaluate(async (pid) => {
         S.projectFilter = pid; generateReport('events-log');

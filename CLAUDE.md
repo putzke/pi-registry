@@ -3267,12 +3267,15 @@ a Twilio trial + one number on DEV for a real call, then release.
   point the real number(s) at the LIVE function; (5) add Twilio to "Outside
   services" and the Service Map; (6) **not before a long stretch of DEV
   testing — Jeff, 2026-10-12: "we will want to test everything frequently in
-  dev first"**; (7) a **Sunrise-owned Twilio account with a Business
-  compliance profile** for the real numbers (the DEV test number,
-  (801) 683-1089, is on Jeff's personal account, Individual profile); (8) the
-  outgoing-call registrations (SHAKEN/STIR, Voice Integrity, CNAM) on that
-  account once the call-back below exists — skipped on DEV because the
-  number only receives.
+  dev first"**; (7) Jeff's OWN Twilio account (he owns the product;
+  decided 2026-10-25 — not a Sunrise account), upgraded from its Individual
+  profile to a **Business profile with an EIN or DUNS** — CNAM and full
+  SHAKEN/STIR need one; (8) the outgoing-call registrations (SHAKEN/STIR,
+  Voice Integrity, CNAM) on that account. **CNAM rules (Twilio):** at most 15
+  characters, starts with a letter, letters/numbers/spaces/periods/commas only,
+  unique, not generic — so "Public Information" (18) is too long and a generic
+  "PUBLIC INFO" is likely refused; something tied to the business (e.g. "CIRRUS
+  CC PI") is the safe choice. Mobiles often don't show CNAM at all.
 - **First real test, 2026-10-11/12 on DEV:** voicemail → transcript → inbox →
   Log as interaction → thread all worked. Bugs found and fixed: the trial
   number posts unsigned webhooks (see above); service_role had no read on

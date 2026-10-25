@@ -320,6 +320,31 @@ updates it. So the bar repeated the status back as a fake percentage.
 - Guarded by `test/tests/67-deliverable-no-target.test.js` (13 checks; verified
   to fail against the old code).
 
+### ONE rule for deliverable progress and past due (Oct 2026)
+Reported live on SR-201: the Deliverables header bar read 100% (35 delivered
+vs 13 contracted, capped — open-ended items and social posts at 6 of 2 inflated
+it) while the AI summary said 55% (items marked Complete) and called two
+deliverables past due that weren't (an open-ended press release; a recurring
+report on pace whose contract-window date had passed). Now, next to
+`_delOpenEnded`:
+- `_delProgress(dels)` — progress = delivered vs contracted, each item counted
+  up to its own target, open-ended items OUT of the % (reported as a count),
+  cancelled items out; plus status counts, `over`, `pastDue`.
+- `_delPastDue(d)` — only an item with a target, not Complete / Cancelled /
+  On hold, not fully delivered, whose date has passed; a recurring item by its
+  pace (`_delPace`, which the table's Pace column also uses), never an
+  open-ended one.
+- `_delFactLines(dels)` — the facts every AI narrative gets (section draft,
+  overall summary, package/quick-report summary): the %, status counts, which
+  items are ongoing (never "unfinished"), over-delivery as extra.
+- A project where NO item has a target falls back to the share marked
+  Complete (`completeShare`), labelled "N of M complete".
+- Used by the Deliverables header, dashboard donut, Reports tab card, quick
+  report, `_buildOverallDraft`, `_buildStatusMetrics`; the portal has the same
+  rule as `devProgress()` (Overview tile, project cards, health card).
+- Guarded by `test/tests/101-deliverable-progress-rule.test.js` (fails on the
+  old code).
+
 ### Flags that updated only after a refresh (Oct 2026)
 Reported live: exporting 1200 South Wastewater (PIN 700) left its card without
 "Exported today" until a reload. `exportProject` / `exportPortfolio` wrote

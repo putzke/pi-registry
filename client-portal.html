@@ -896,6 +896,26 @@ function projBanner() {
   return `<div class="proj-banner"><h1>${esc(p.name || 'Project')}</h1><div class="proj-meta">${meta}</div>${nepaBanner(p)}</div>`;
 }
 
+// Progress = delivered against contracted, each item counted only up to its own
+// target; items with no contracted number and cancelled items are left out.
+// Same rule as index.html's _delProgress (Oct 2026) — the old figure was the
+// share of items marked Complete, which called ongoing work unfinished.
+function devProgress(devs) {
+  let contracted = 0, delivered = 0, open = 0;
+  (devs || []).forEach(d => {
+    if (/cancel/i.test(d.status || '')) return;
+    const q = parseInt(d.contracted_qty, 10) || 0;
+    const n = parseInt(d.delivered_count, 10) || 0;
+    if (q > 0) { contracted += q; delivered += Math.min(n, q); } else open++;
+  });
+  const all = devs || [], done = all.filter(d => isComplete(d.status)).length;
+  // No item has a contracted number at all → the share marked Complete,
+  // labelled as such (completeShare), rather than no figure.
+  return { contracted, delivered, open, done, total: all.length,
+    pct: contracted ? Math.round(delivered / contracted * 100) : null,
+    completeShare: all.length ? Math.round(done / all.length * 100) : 0 };
+}
+
 // ── Multi-project cards grid (for Overview) ───────────────────────────────────
 function projCardsGrid() {
   if (_projects.length < 2) return '';
@@ -903,7 +923,8 @@ function projCardsGrid() {
     const devs  = _deliverables.filter(d => String(d.project_id) === String(p.id));
     const total = devs.length;
     const done  = devs.filter(d => isComplete(d.status)).length;
-    const pct   = total ? Math.round(done / total * 100) : 0;
+    const _pr   = devProgress(devs);
+    const pct   = _pr.pct === null ? _pr.completeShare : _pr.pct;
     const active = p.id === _projId;
     const meta   = [p.client, p.phase].filter(Boolean).join(' · ');
     return `<div class="proj-card${active ? ' pc-active' : ''}" onclick="switchProject(${p.id})">
@@ -1062,8 +1083,8 @@ async function openReportDeepLink(reportId) {
 async function renderOverview() {
   const projDevs = _deliverables.filter(d => String(d.project_id) === String(_projId));
   const totalD = projDevs.length;
-  const doneD  = projDevs.filter(d => isComplete(d.status)).length;
-  const pctD   = totalD ? Math.round(doneD / totalD * 100) : 0;
+  const progD  = devProgress(projDevs);
+  const pctD   = progD.pct === null ? progD.completeShare : progD.pct;
 
   setContent(`${projCardsGrid()}${projBanner()}
     <div id="ov-contact"></div>
@@ -1071,10 +1092,10 @@ async function renderOverview() {
     <div id="ov-attention"></div>
     <div class="stat-row">
       <div class="stat-tile stat-blue">
-        <div class="stat-num">${doneD}/${totalD}</div>
-        <div class="stat-lbl">Deliverables Complete</div>
-        <div class="stat-sub">${pctD}% overall</div>
-        <div class="tile-meter" role="img" aria-label="${pctD} percent of deliverables complete">
+        <div class="stat-num">${progD.pct === null ? progD.done + '/' + totalD : pctD + '%'}</div>
+        <div class="stat-lbl">${progD.pct === null ? 'Deliverables Complete' : 'Deliverables Delivered'}</div>
+        <div class="stat-sub">${progD.pct === null ? pctD + '% overall' : progD.delivered + ' of ' + progD.contracted + ' contracted'}</div>
+        <div class="tile-meter" role="img" aria-label="${pctD} percent of contracted deliverables delivered">
           <div class="tile-meter-fill" style="width:${pctD}%"></div>
         </div>
       </div>
@@ -1373,16 +1394,17 @@ function deliverableHealth(devs) {
   const done    = devs.filter(d => isComplete(d.status)).length;
   const active  = devs.filter(d => !isComplete(d.status) && /progress|review|active/i.test(d.status || '')).length;
   const pending = total - done - active;
-  const pct     = Math.round(done / total * 100);
+  const prog    = devProgress(devs);
+  const pct     = prog.pct === null ? prog.completeShare : prog.pct;
   return `<div class="card">
     <div class="card-title">Overall Progress</div>
     <div class="del-health">
       <div>
         <div class="del-health-num">${pct}%</div>
-        <div class="del-health-lbl">${done} of ${total} complete</div>
+        <div class="del-health-lbl">${prog.pct === null ? done + ' of ' + total + ' complete' : prog.delivered + ' of ' + prog.contracted + ' contracted delivered' + (prog.open ? ' · ' + prog.open + ' ongoing' : '')}</div>
       </div>
       <div class="del-health-bar">
-        <div class="del-health-track" role="img" aria-label="${pct} percent of deliverables complete">
+        <div class="del-health-track" role="img" aria-label="${pct} percent of contracted deliverables delivered">
           <div class="del-health-fill" style="width:${pct}%"></div>
         </div>
         <div class="del-health-legend">

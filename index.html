@@ -2676,7 +2676,7 @@ function renderDash(el){
   const completeDels=dels.filter(d=>d.status==='Complete').length;
   const inProgDels=dels.filter(d=>d.status==='In progress').length;
   const notStartedDels=dels.filter(d=>d.status==='Not started').length;
-  const delPct=totalDels>0?Math.round(completeDels/totalDels*100):0;
+  const _dg=_delProgress(dels), delPct=_dg.pct===null?_dg.completeShare:_dg.pct;   // delivered vs contracted (_delProgress)
   const channels={};
   ints.forEach(i=>{channels[i.channel]=(channels[i.channel]||0)+1});
   const chSorted=Object.entries(channels).sort((a,b)=>b[1]-a[1]);
@@ -2995,7 +2995,7 @@ function renderDash(el){
       <div class="dash-anim" style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:var(--radius-lg);padding:12px 14px;animation-delay:240ms">
         <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:9px">Deliverable progress</div>
         <div style="display:flex;align-items:center;gap:16px">
-          ${donut(delPct,delPct>=75?'#28A870':delPct>=40?'#5BA4CF':'#D9A544',82,'complete')}
+          ${donut(delPct,delPct>=75?'#28A870':delPct>=40?'#5BA4CF':'#D9A544',82,'delivered')}
           <div style="display:flex;flex-direction:column;gap:10px;flex:1">
             <div style="display:flex;gap:0;justify-content:space-around">
               <div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--green);line-height:1">${completeDels}</div><div style="font-size:11px;color:var(--fog);margin-top:2px">done</div></div>
@@ -6252,16 +6252,16 @@ function renderDelScope(pF){
     const total=dels.length,done=dels.filter(d=>d.status==='Complete').length;
     const inprog=dels.filter(d=>d.status==='In progress').length;
     const cancelled=dels.filter(d=>d.status==='Cancelled').length;
-    const totC=dels.reduce((a,d)=>a+(d.contractedQty||0),0);
-    const totD=dels.reduce((a,d)=>a+(d.deliveredCount||0),0);
-    const rawPctTot=totC>0?Math.round(totD/totC*100):0;
-    const pct=Math.min(rawPctTot,100);
-    const anyOver=dels.some(function(d){return d.contractedQty>0&&(d.deliveredCount||0)>d.contractedQty;});
+    // _delProgress: each item counted up to its own target; open-ended items
+    // are not in the % (they used to push this bar to 100%).
+    const _g=_delProgress(dels);
+    const pct=_g.pct===null?0:_g.pct;
+    const anyOver=_g.over.length>0;
     return`<div class="del-card" style="margin-bottom:16px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
         <div><div style="font-weight:600;font-size:15px">${proj.name}</div><div style="font-size:12px;color:var(--fog);font-family:var(--mono)">${proj.pid} · ${proj.client||''}</div></div>
         <div style="display:flex;align-items:center;gap:8px">
-          <span style="font-size:12px;color:var(--slate)">${pct}%</span>
+          <span style="font-size:12px;color:var(--slate)" title="Delivered against contracted quantities, each item counted up to its own target">${_g.pct===null?'no targets':pct+'%'}</span>
           <div class="pbar" title="${anyOver?'Over scope':''}" style="width:80px"><div class="pfill ${anyOver?'amber':pct===100?'green':''}" style="width:${pct}%"></div></div>
         </div>
       </div>
@@ -6270,7 +6270,8 @@ function renderDelScope(pF){
         <div class="scope-stat"><b style="color:var(--green)">${done}</b><span style="font-size:12px;color:var(--slate)">complete</span></div>
         <div class="scope-stat"><b style="color:var(--amber)">${inprog}</b><span style="font-size:12px;color:var(--slate)">in progress</span></div>
         <div class="scope-stat"><b style="color:var(--red)">${cancelled}</b><span style="font-size:12px;color:var(--slate)">cancelled</span></div>
-        <div class="scope-stat"><b>${totD}/${totC}</b><span style="font-size:12px;color:var(--slate)">qty delivered</span></div>
+        <div class="scope-stat" title="Each item counted up to its contracted number; items with no set number are not included"><b>${_g.delivered}/${_g.contracted}</b><span style="font-size:12px;color:var(--slate)">delivered vs contracted</span></div>
+        ${_g.open.length?`<div class="scope-stat" title="${escHtml(_g.open.map(x=>(x.deliveredCount||0)+' '+(x.title||x.type)).join(', '))}"><b>${_g.openDelivered}</b><span style="font-size:12px;color:var(--slate)">ongoing · no set number</span></div>`:''}
       </div>
       ${dels.length===0?`<div style="text-align:center;padding:12px;color:var(--fog);font-size:13px">No deliverables yet. <button class="btn btn-sm btn-primary" style="margin-left:8px" onclick="openTplApply('${proj.id}')">Apply template</button></div>`:`
       <div style="overflow-x:auto"><table class="dtable">
@@ -6287,30 +6288,16 @@ function renderDelScope(pF){
           try{
             if(d.status==='Complete'){
               _paceHTML='<span style="font-size:11px;color:var(--green)">✓ Complete</span>';
-            } else if(d.status!=='Cancelled'&&d.scopeType==='recurring'&&d.contractedQty>0){
-              var _freqDays={'Weekly':7,'Bi-weekly':14,'Monthly':30,'Quarterly':91}[d.freq]||0;
-              var _projStart=proj.preconDate||proj.startDate;
-              if(_freqDays>0&&_projStart){
-                var _start=new Date(_projStart+'T00:00:00');
-                var _now=new Date();
-                var _delivered=d.deliveredCount||0;
-                var _remaining=d.contractedQty-_delivered;
-                if(_remaining<=0){
-                  _paceHTML='<span style="font-size:11px;color:var(--green)">Done</span>';
-                } else {
-                  var _nextDueDate=new Date(_start.getTime()+((_delivered+1)*_freqDays*86400000));
-                  var _daysToNext=Math.round((_nextDueDate-_now)/86400000);
-                  var _elapsedDays=(_now-_start)/86400000;
-                  var _expectedByNow=Math.floor(_elapsedDays/_freqDays);
-                  var _behind=_delivered<_expectedByNow-1;
-                  var _ahead=_delivered>_expectedByNow;
-                  var _pastDue=_daysToNext<0;
-                  var _paceColor=(_behind||_pastDue)?'var(--red)':_daysToNext<14?'var(--amber)':'var(--green)';
-                  var _paceLabel=(_behind||_pastDue)?'Past due':_ahead?'Ahead':'On pace';
-                  var _nextDueFmt=_nextDueDate.toLocaleDateString('en-US',{month:'short',day:'numeric'});
-                  _paceHTML='<div style="font-size:11px;color:'+_paceColor+';font-weight:500">'+_nextDueFmt+'</div>'
-                    +'<div style="font-size:10px;color:'+_paceColor+'">'+_paceLabel+'</div>';
-                }
+            } else if(d.status!=='Cancelled'){
+              var _p=_delPace(d,proj);
+              if(_p&&_p.done){
+                _paceHTML='<span style="font-size:11px;color:var(--green)">Done</span>';
+              } else if(_p){
+                var _paceColor=(_p.behind||_p.pastDue)?'var(--red)':_p.daysToNext<14?'var(--amber)':'var(--green)';
+                var _paceLabel=(_p.behind||_p.pastDue)?'Past due':_p.ahead?'Ahead':'On pace';
+                var _nextDueFmt=_p.next.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+                _paceHTML='<div style="font-size:11px;color:'+_paceColor+';font-weight:500">'+_nextDueFmt+'</div>'
+                  +'<div style="font-size:10px;color:'+_paceColor+'">'+_paceLabel+'</div>';
               }
               // Per phase / As needed / unrecognised freq → stays '—'
             }
@@ -6723,6 +6710,73 @@ function confirmTplDelete(tplId){
 // bar used to fall back to was a placeholder saveDel() derives from the status
 // (In progress = 50), never a measurement. Show the count instead.
 function _delOpenEnded(d){ return !(d.contractedQty>0); }
+// ── ONE rule for deliverable progress (Oct 2026, Jeff) ──────────────────
+// Reported live on SR-201: the Deliverables header read 100% (35 of 13
+// delivered, capped) while the AI said 55% (6 of 11 items Complete), and
+// called two deliverables past due that were not. Now everything reads this:
+//  - progress % = delivered against contracted, each item counted only up to
+//    its own target (over-delivery never fills another item's gap), items
+//    with no target (open-ended) left out of the % and reported as a count,
+//    cancelled items left out entirely;
+//  - past due = an item WITH a target, not Complete / Cancelled / On hold,
+//    not fully delivered, whose date has passed — a recurring item by its
+//    pace (next due), never an open-ended one.
+// The recurring pace: next due = project start + (delivered+1) × cadence.
+var DEL_FREQ_DAYS={'Weekly':7,'Bi-weekly':14,'Monthly':30,'Quarterly':91};
+function _delPace(d, proj, now){
+  if(!d||d.scopeType!=='recurring'||!(d.contractedQty>0)) return null;
+  var freq=DEL_FREQ_DAYS[d.freq]||0, startIso=proj&&(proj.preconDate||proj.startDate);
+  if(!freq||!startIso) return null;
+  var delivered=d.deliveredCount||0;
+  if(d.contractedQty-delivered<=0) return {done:true};
+  now=now||new Date();
+  var start=new Date(startIso+'T00:00:00');
+  var next=new Date(start.getTime()+((delivered+1)*freq*86400000));
+  var daysToNext=Math.round((next-now)/86400000);
+  var expected=Math.floor(((now-start)/86400000)/freq);
+  return {next:next, daysToNext:daysToNext, behind:delivered<expected-1, ahead:delivered>expected, pastDue:daysToNext<0};
+}
+function _delPastDue(d, today, proj){
+  if(!d||_delOpenEnded(d)) return false;
+  if(d.status==='Complete'||d.status==='Cancelled'||d.status==='On hold') return false;
+  if((d.deliveredCount||0)>=d.contractedQty) return false;
+  if(proj===undefined) proj=(DB.get('projects')||[]).find(function(p){ return String(p.id)===String(d.projectId); })||null;
+  var pace=_delPace(d, proj);
+  if(pace) return !pace.done && (pace.pastDue||pace.behind);
+  return !!d.dueDate && d.dueDate < (today||localToday());
+}
+function _delProgress(dels, today){
+  dels=dels||[];
+  var live=dels.filter(function(d){ return d.status!=='Cancelled'; });
+  var tgt=live.filter(function(d){ return !_delOpenEnded(d); });
+  var open=live.filter(_delOpenEnded);
+  var contracted=0, delivered=0;
+  tgt.forEach(function(d){ contracted+=d.contractedQty; delivered+=Math.min(d.deliveredCount||0, d.contractedQty); });
+  var st=function(x){ return dels.filter(function(d){ return String(d.status||'Not started').toLowerCase()===x; }).length; };
+  return {
+    total:dels.length, withTarget:tgt.length, contracted:contracted, delivered:delivered,
+    pct: contracted ? Math.round(delivered/contracted*100) : null,
+    // no item has a target at all → the share marked Complete (label it so)
+    completeShare: dels.length ? Math.round(st('complete')/dels.length*100) : 0,
+    open:open, openDelivered:open.reduce(function(n,d){ return n+(d.deliveredCount||0); },0),
+    over:tgt.filter(function(d){ return (d.deliveredCount||0)>d.contractedQty; }),
+    pastDue:tgt.filter(function(d){ return _delPastDue(d, today); }),
+    complete:st('complete'), inProgress:st('in progress'), notStarted:st('not started'), onHold:st('on hold'), cancelled:st('cancelled')
+  };
+}
+// The facts every AI narrative about deliverables is given.
+function _delFactLines(dels){
+  var g=_delProgress(dels), L=[];
+  if(!g.total) return L;
+  L.push(g.total+' deliverable'+(g.total!==1?'s':'')+' tracked: '+g.complete+' complete, '+g.inProgress+' in progress, '+g.notStarted+' not started'
+    +(g.onHold?', '+g.onHold+' on hold':'')+(g.cancelled?', '+g.cancelled+' cancelled':'')+'.');
+  if(g.pct!==null) L.push('Progress against contracted quantities: '+g.delivered+' of '+g.contracted+' delivered ('+g.pct+'%), each item counted up to its own target.');
+  if(g.open.length) L.push(g.open.length+' ongoing item'+(g.open.length!==1?'s':'')+' with no set number (they do not count toward the percentage and are never "unfinished"): '
+    +g.open.map(function(d){ return (d.deliveredCount||0)+' '+(d.title||d.type||'item'); }).join(', ')+' delivered so far.');
+  if(g.over.length) L.push('Delivered beyond the contracted number: '+g.over.map(function(d){ return (d.title||d.type)+' ('+d.deliveredCount+' of '+d.contractedQty+')'; }).join(', ')+'.');
+  L.push(g.pastDue.length ? 'Past due: '+g.pastDue.map(function(d){ return d.title||d.type; }).join(', ')+'.' : 'No deliverable is past due.');
+  return L;
+}
 function _delNoTargetHTML(lead){
   return `<span style="font-size:11px;color:var(--slate)" title="No contracted quantity, so there is no target to measure a percentage against">${lead?lead+' · ':''}no target</span>`;
 }
@@ -11456,7 +11510,7 @@ el.innerHTML=topbar
   var champCt=extPS.filter(function(x){return x.support==='Champion'}).length;
   var neutCt=extPS.filter(function(x){return x.support==='Neutral'}).length;
   var oppCt=extPS.filter(function(x){return x.support==='Opponent'}).length;
-  var delPctR=projDels.length>0?Math.round(doneDels/projDels.length*100):0;
+  var _dgR=_delProgress(projDels), delPctR=_dgR.pct===null?_dgR.completeShare:_dgR.pct;
   var overdueFU=projInts.filter(function(i){return i.followUp&&!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<new Date()}).length;
 
   // Mini donut for deliverables
@@ -14996,12 +15050,12 @@ function generateReport(type, opts){
   } else if(type==='deliverable-status'){
     var complete=dels.filter(function(d){return d.status==='Complete'}).length;
     var inprog=dels.filter(function(d){return d.status==='In progress'}).length;
-    var totC=dels.reduce(function(a,d){return a+(d.contractedQty||0)},0);
-    var totD=dels.reduce(function(a,d){return a+(d.deliveredCount||0)},0);
+    var _g=_delProgress(dels);
     body='<div style="display:flex;gap:12px;margin-bottom:16px">'
       +'<div class="scope-stat"><b style="color:var(--green)">'+complete+'</b><span style="font-size:12px;color:var(--slate)">Complete</span></div>'
       +'<div class="scope-stat"><b style="color:var(--sky-lt)">'+inprog+'</b><span style="font-size:12px;color:var(--slate)">In progress</span></div>'
-      +'<div class="scope-stat"><b>'+totD+'/'+totC+'</b><span style="font-size:12px;color:var(--slate)">Qty delivered</span></div></div>'
+      +'<div class="scope-stat"><b>'+_g.delivered+'/'+_g.contracted+(_g.pct!==null?' ('+_g.pct+'%)':'')+'</b><span style="font-size:12px;color:var(--slate)">Delivered vs contracted</span></div>'
+      +(_g.open.length?'<div class="scope-stat"><b>'+_g.openDelivered+'</b><span style="font-size:12px;color:var(--slate)">Ongoing · no set number</span></div>':'')+'</div>'
       +'<table class="dtable" style="font-size:13px"><thead><tr>'
       +'<th>Type</th><th>Title</th><th>Scope</th><th>Contracted</th><th>Delivered</th><th>Status</th><th>Due</th><th>Milestone</th></tr></thead><tbody>';
     dels.forEach(function(d){
@@ -15411,7 +15465,7 @@ function _buildPackageFacts(projF, ids, opts){
       var dl=(DB.get('deliverables')||[]).filter(function(d){return String(d.projectId)===String(projF);});
       if(!dl.length){ L.push('No deliverables are tracked.'); }
       else {
-        L.push('Deliverables: '+dl.length+' tracked; status '+tally(dl,function(d){return d.status||'Not started';})+'.');
+        _delFactLines(dl).forEach(function(x){ L.push(x); });
         dl.slice(0,15).forEach(function(d){
           var q=d.contractedQty>0?(d.deliveredCount||0)+' of '+d.contractedQty+' delivered':(d.deliveredCount||0)+' delivered (no contracted quantity)';
           L.push('- '+(d.title||d.type||'Deliverable')+': '+(d.status||'Not started')+', '+q+'.');
@@ -16630,14 +16684,7 @@ function _buildSectionDraft(secType) {
 
   if (secType === 'auto-del') {
     if (dels.length === 0) return null;
-    var complete = dels.filter(function(d){ return d.status==='Complete'; }).length;
-    var inProg   = dels.filter(function(d){ return String(d.status||'').toLowerCase()==='in progress'; }).length;
-    var pct      = dels.length > 0 ? Math.round(complete/dels.length*100) : 0;
-    var txt4 = complete+' of '+dels.length+' contracted deliverable'+(dels.length!==1?'s are':' is')+' complete ('+pct+'%).';
-    if (inProg > 0) txt4 += ' '+inProg+' item'+(inProg!==1?'s are':' is')+' currently in progress.';
-    var overdue = dels.filter(function(d){ return d.status!=='Complete' && d.dueDate && d.dueDate < new Date().toISOString().slice(0,10); }).length;
-    if (overdue > 0) txt4 += ' '+overdue+' deliverable'+(overdue!==1?'s are':' is')+' past the scheduled due date.';
-    return txt4;
+    return _delFactLines(dels).join(' ');
   }
 
   if (secType === 'auto-followups') {
@@ -17019,16 +17066,12 @@ function _buildOverallDraft() {
 
   // Part 2: Deliverable progress
   if (dels.length > 0) {
-    var complete = dels.filter(function(d){ return d.status==='Complete'; }).length;
-    var inProg   = dels.filter(function(d){ return String(d.status||'').toLowerCase()==='in progress'; }).length;
-    var pct      = Math.round(complete/dels.length*100);
-    var today    = new Date().toISOString().slice(0,10);
-    var overdueDels = dels.filter(function(d){
-      return d.status !== 'Complete' && d.dueDate && d.dueDate < today;
-    });
-    var s6 = 'deliverable progress stands at '+complete+' of '+dels.length+' items complete ('+pct+'%)';
-    if (inProg > 0) s6 += ', with '+inProg+' in progress';
-    if (overdueDels.length > 0) s6 += ', '+overdueDels.length+' item'+(overdueDels.length!==1?'s':'')+' past due';
+    var g = _delProgress(dels);
+    var s6 = 'deliverable progress stands at '+(g.pct!==null ? g.delivered+' of '+g.contracted+' contracted items delivered ('+g.pct+'%)' : 'no contracted quantities set')
+      +', '+g.complete+' of '+g.total+' deliverables complete';
+    if (g.inProgress > 0) s6 += ', with '+g.inProgress+' in progress';
+    if (g.open.length > 0) s6 += ', '+g.open.length+' ongoing with no set number';
+    if (g.pastDue.length > 0) s6 += ', '+g.pastDue.length+' item'+(g.pastDue.length!==1?'s':'')+' past due';
     snapshotParts.push(s6);
   }
 
@@ -18920,7 +18963,7 @@ function _buildStatusMetrics(projF, archives) {
   // ── Deliverables ──
   var dels = DB.get('deliverables').filter(function(d){ return String(d.projectId)===String(projF); });
   var delDone = dels.filter(function(d){ return /complet/i.test(d.status||''); }).length;
-  var delPct = dels.length ? Math.round(delDone/dels.length*100) : 0;
+  var _dgS = _delProgress(dels), delPct = dels.length ? (_dgS.pct===null?_dgS.completeShare:_dgS.pct) : 0;   // delivered vs contracted
   var delLeft = dels.length - delDone;
 
   // Projected completion at the observed rate since project start.

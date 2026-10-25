@@ -70,8 +70,8 @@ module.exports = {
       t.eq(styles.section.height, styles.overall.height, 'same line height');
       t.eq(styles.section.style, 'normal',
            'and the AI-drafted narrative is no longer italic');
-      t.ok(/Georgia/.test(styles.section.family),
-           'both sit in the report\'s serif face, not the app UI\'s');
+      t.ok(/^Arial/.test(styles.section.family),
+           'both sit in the report\'s face (Arial), not the app UI\'s');
 
       // The two are still visually distinct — sameness of TYPE was the ask, not
       // sameness of container. Losing the section rule would merge narrative
@@ -96,7 +96,7 @@ module.exports = {
           snapshot: { sections: secs.map(s => ({ ...s, countsLabel: '', tableHtml: '' })) },
         }, { name: 'x', pid: 'x' });
         const el = document.createElement('div');
-        el.style.cssText = 'font-family:Georgia,serif;font-size:13px';
+        el.style.cssText = 'font-family:serif;font-size:13px';   // the frame's own face must not leak in
         el.innerHTML = html; document.body.appendChild(el);
         const read = marker => {
           const d = [...el.querySelectorAll('div')]

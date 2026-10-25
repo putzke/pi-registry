@@ -1009,6 +1009,19 @@ label, the "interactions prior to…" note, the export footer. Guarded by
 two, unzips the generated `.docx` for the third, and diffs the portal's copy as
 text.
 
+### The PI report prints in ARIAL everywhere (DEV, Oct 2026, Jeff)
+`RPT_FONT` (next to `RPT_PROSE_CSS`). Before: the live preview was Georgia
+(plus monospace block glyphs for the PI-compliance bars, now a CSS bar); the
+archived copy, shown in a font-less iframe, fell to the browser default (Times);
+the portal's copy and print window used the system font; the .docx set Arial on
+paragraphs but on NO table cell, so Word drew every table in Calibri.
+`_docxArial(xml)` gives every run in the generated body rFonts Arial (after an
+rStyle) — applied in `_buildDocxWithTemplate` and both issue exports, never to
+the template's own parts. The close-out keeps Calibri (its own document).
+Same pass found `auto-parcels`' .docx branch calling `_parcelStats(projF)`
+(undefined there): a report with Parcels could not export — fixed on LIVE.
+Guarded by `test/tests/102-report-arial.test.js` (fails on the old code).
+
 ### The concerns narrative is budgeted in WORDS, not sentences (Aug 2026)
 `_sectionAIRequest('auto-concerns')` asked for "5-8 sentences". The model
 complied on the count and blew past the intent — 265 words in six sentences of

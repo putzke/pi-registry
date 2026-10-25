@@ -11011,7 +11011,7 @@ function exportIssuesSummaryDocx(){
       var bodyIdx=docXml.indexOf('<w:body>');
       var beforeBody=docXml.substring(0,bodyIdx+8);
       var sectAndAfter=docXml.substring(sectIdx);
-      zip.file('word/document.xml',_firstPageHeaderOnly(beforeBody+xml+sectAndAfter));
+      zip.file('word/document.xml',_firstPageHeaderOnly(beforeBody+_docxArial(xml)+sectAndAfter));
       return zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
     });
   }).then(function(blob){
@@ -11154,7 +11154,7 @@ function exportIssueSingleDocx(issueId){
       var bodyIdx=docXml.indexOf('<w:body>');
       var beforeBody=docXml.substring(0,bodyIdx+8);
       var sectAndAfter=docXml.substring(sectIdx);
-      zip.file('word/document.xml',_firstPageHeaderOnly(beforeBody+xml+sectAndAfter));
+      zip.file('word/document.xml',_firstPageHeaderOnly(beforeBody+_docxArial(xml)+sectAndAfter));
       return zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
     });
   }).then(function(blob){
@@ -15731,6 +15731,10 @@ var PERIOD_SCOPED_TYPES = ['auto-concerns','auto-outreach'];
 // overall summary sits in a tinted box, a section narrative behind a left rule —
 // but the type does not. Mirrored in client-portal.html's
 // renderArchivedReportHTML() and, as Word run properties, in exportPIDocx().
+// The PI report prints in ARIAL on every surface (Jeff, Oct 2026): the live
+// preview, the archived copy, the client portal's copy and the .docx
+// (_docxArial gives every run rFonts Arial, table cells included).
+var RPT_FONT = 'Arial,Helvetica,sans-serif';
 var RPT_PROSE_CSS   = 'font-size:13px;color:#222;line-height:1.6';
 var RPT_OVERALL_CSS = 'background:#f0f4f8;border-left:3px solid #4a9be8;padding:10px 14px;margin-bottom:18px;' + RPT_PROSE_CSS;
 var RPT_SECSUM_CSS  = 'border-left:2px solid #9ab;padding-left:10px;margin-bottom:8px;white-space:pre-wrap;' + RPT_PROSE_CSS;
@@ -17442,7 +17446,7 @@ async function openPIReport(_isReopen){
     +'<span style="font-size:11px;font-weight:600;color:#555;text-transform:uppercase;letter-spacing:.5px">Live Preview</span>'
     +'<span style="font-size:10px;color:#595959;margin-left:4px">updates as you type</span>'
     +'</div>'
-    +'<div id="rpt-live-preview" style="padding:32px 40px;font-family:Georgia,serif;color:#111;line-height:1.7;font-size:13px;min-height:100%">'
+    +'<div id="rpt-live-preview" style="padding:32px 40px;font-family:'+RPT_FONT+';color:#111;line-height:1.7;font-size:13px;min-height:100%">'
     +'<div style="color:#aaa;font-style:italic;text-align:center;padding-top:60px">Preview loading…</div>'
     +'</div></div>'
     +'</div>';
@@ -17715,8 +17719,8 @@ function _buildSectionPreviewTable(secType, projF, pstart, pend, includeInternal
       var f = Math.max(0, Math.min(10, Math.round(pct/10)));
       var col = pct>=100?'#1a7a50':pct>=60?'#1a5fb4':'#b36b00';
       return '<strong>'+pct+'%</strong> '
-        +'<span style="font-family:monospace;letter-spacing:1px;color:'+col+'">'+'▮'.repeat(f)+'</span>'
-        +'<span style="font-family:monospace;letter-spacing:1px;color:#d0d0d0">'+'▯'.repeat(10-f)+'</span>';
+        +'<span style="display:inline-block;vertical-align:middle;width:80px;height:8px;background:#e2e2e2;border-radius:2px;overflow:hidden">'
+        +'<span style="display:block;width:'+(f*10)+'%;height:8px;background:'+col+'"></span></span>';
     };
     var rowsP = [
       ['NEPA PI checklist', clP.length>0?(clDoneP+' / '+clP.length+' items'):'No checklist set', clPctP],
@@ -18901,7 +18905,8 @@ function _buildArchivedPreviewHTML(rec, proj) {
       + 'Re-archive the current draft to capture a complete snapshot going forward.</div>';
   }
   html += '<div style="border-top:1px solid #cdd4dc;margin-top:24px;padding-top:12px;font-size:10px;color:#aaa">*Stakeholder registry can be provided on request.</div>';
-  return html;
+  // One face for the whole report — the frame has no font of its own.
+  return '<div style="font-family:'+RPT_FONT+'">' + html + '</div>';
 }
 
 var _lastTrendResult = null;
@@ -19567,6 +19572,24 @@ function buildDocx(proj,saved,periodInts,recipients,allStakes,dels,brand,recipie
 // page is correct, and the Sunrise template's default footer is there on
 // purpose — this function must never turn a repeating footer into a first-page
 // one. Idempotent, so it is safe to run over a template that already complies.
+// Every run in a generated report body prints in ARIAL (Jeff, Oct 2026). Many
+// runs are written by hand (table cells, the sentiment matrix) and named no
+// font, so Word fell back to the template's theme font, Calibri — the tables
+// read in a different face from the paragraphs above them. This gives every
+// run that names no font rFonts Arial (after an rStyle, as the schema orders
+// it). Applied to the generated body only, never to the template's parts.
+var DOCX_ARIAL='<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>';
+function _docxArial(xml){
+  return String(xml)
+    .replace(/<w:rPr\/>/g, '<w:rPr>'+DOCX_ARIAL+'</w:rPr>')
+    .replace(/<w:rPr>([\s\S]*?)<\/w:rPr>/g, function(m, inner){
+      if (/<w:rFonts\b/.test(inner)) return m;
+      var st = inner.match(/^<w:rStyle\b[^>]*\/>/);
+      return '<w:rPr>'+(st ? st[0]+DOCX_ARIAL+inner.slice(st[0].length) : DOCX_ARIAL+inner)+'</w:rPr>';
+    })
+    .replace(/<w:r>(?!<w:rPr>)/g, '<w:r><w:rPr>'+DOCX_ARIAL+'</w:rPr>');
+}
+
 function _firstPageHeaderOnly(docXmlStr){
   return String(docXmlStr).replace(/<w:sectPr\b[\s\S]*?<\/w:sectPr>/g, function(sect){
     var hasFirst = /<w:headerReference[^>]*w:type="first"/.test(sect);
@@ -19641,7 +19664,7 @@ function _buildDocxWithTemplate(proj,saved,periodInts,recipients,allStakes,dels,
       var sectAndAfter=docXml.substring(sectIdx);
 
       // Inject report content
-      var finalDocXml=_firstPageHeaderOnly(beforeBody+contentXML+sectAndAfter);
+      var finalDocXml=_firstPageHeaderOnly(beforeBody+_docxArial(contentXML)+sectAndAfter);
       if(stripLH){
         zip=_stripLetterheadFromZip(zip,finalDocXml);
       } else {
@@ -19720,8 +19743,8 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
   // Helper: simple docx table (used for section data tables when showTable is on)
   var _cellBdr='<w:tcBorders><w:top w:val="single" w:sz="4" w:color="CCCCCC"/><w:bottom w:val="single" w:sz="4" w:color="CCCCCC"/><w:left w:val="single" w:sz="4" w:color="CCCCCC"/><w:right w:val="single" w:sz="4" w:color="CCCCCC"/></w:tcBorders>';
   var _hdrFill='<w:shd w:val="clear" w:color="auto" w:fill="1A3050"/>';
-  var _hdrRpr='<w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr>';
-  var _cellRpr='<w:rPr><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr>';
+  var _hdrRpr='<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr>';
+  var _cellRpr='<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr>';
 
   function tblHdrRow(hdrs,colWidths){
     var row='<w:tr><w:trPr><w:tblHeader/></w:trPr>';

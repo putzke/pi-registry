@@ -1110,6 +1110,37 @@ driving `generateOverallDraft()` for real with `_claudeNarrative` stubbed
 (same technique as `test/tests/34-draft-all-parity.test.js`), that the
 `userContent` actually sent to the model carries none of it either.
 
+### The overall summary is now an EXECUTIVE SUMMARY (DEV, Oct 2026, Jeff)
+Reported live: a report with interactions, deliverables and Outreach got a
+four-sentence summary that never mentioned Outreach. It was by design — the
+3-4 sentence brief above, and facts that predate the Outreach log — so it
+was redesigned (supersedes the "3-4 sentences / not a recap" parts above):
+- **Facts for every section in the report** — `_overallAIFacts(templateDraft)`
+  adds, for included sections only: what inbound contacts were about (newest
+  `OVERALL_LOG_LINES` = 40, `_coWho` + `_pkgTrim`, for themes — replaces relying
+  on the keyword topics), outreach (`_outreachFactLines` for the period),
+  events dated in the period (with key concerns), formal comments in the period
+  (affiliation, never the commenter), follow-ups, issues, commitments, parcels
+  (counts only). The deterministic `_buildOverallDraft()` stays the no-key
+  fallback and the counts block.
+- **Fixed:** events were EVERY completed event ever, worded inside the
+  interactions sentence — now their own sentence, period-scoped, only with
+  `auto-events` in the report. Deliverables "In progress" were never counted
+  (code looked for "In Progress"; issues really do use that spelling) — fixed
+  here and in the deliverables section draft.
+- **Length rule** (`_overallWordBudget`): base `OVERALL_BASE_WORDS` 60 + per
+  section with something to say (`OVERALL_SECTION_WORDS`): interactions 70
+  (+30 over 25 inbound contacts in the period), outreach 40, comment matrix
+  40, events 30, issues 30, parcels 30, deliverables 25, commitments 25,
+  follow-ups 20, sentiment 20; clamp 120–300 words; ≤160 words → 1-2
+  paragraphs, else 2-3. Reply budget words×1.6+200. Only sections with facts
+  are named in the request.
+- `_claudeExecSystemPrompt()`: executive summary a client may read alone;
+  connected prose, not section-by-section; numbers only from the facts; never
+  name a private individual (organizations may be named), never quote; the
+  "this project", outbound-is-normal and reading-level rules kept.
+- Guarded by `test/tests/100-overall-exec-summary.test.js` (fails on the old code).
+
 ### "Include data table" hid the table in the .docx, not the data (Sep 2026)
 Every `TABLE_ELIGIBLE_TYPES` section's `.docx` renderer (`_buildDocxWithTemplate`)
 had a THIRD state the checkbox never offered: `showTable` on printed a Word

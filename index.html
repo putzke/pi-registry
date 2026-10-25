@@ -16022,17 +16022,19 @@ function _claudeSectionSystemPrompt() {
 // generation and no ordering assumption.
 function _claudeExecSystemPrompt() {
   return 'You are a public involvement coordinator at a transportation engineering firm. '
-    + 'Write a short opening summary (3-4 sentences) for an FHWA/NEPA public involvement progress report. '
-    + 'Its job is to state the period\'s activity plainly, not to build a narrative around it: say what '
-    + 'phase the project is in, how much outreach happened, and anything that genuinely needs attention '
-    + '(an overdue item, a high-priority issue) — reporting the numbers, not interpreting them. '
+    + 'Write the executive summary that opens an FHWA/NEPA public involvement progress report. A client may read only this, '
+    + 'so it should give a complete picture of the period: what phase the project is in, what outreach and engagement happened, '
+    + 'what the public raised and how the team responded, and anything that genuinely needs attention. '
+    + 'Follow the length the request gives. Write connected prose, not a section-by-section list. '
+    + 'Every number comes from the facts given, used exactly — never add, estimate or invent one. '
     + 'Refer to the project as "this project" or "the project," never by its name or PIN — the report '
     + 'header already carries both, and naming it again here is redundant. '
+    + 'Never name a private individual (a resident, a property owner, a caller, a commenter): describe them by role. '
+    + 'Agencies, businesses and organizations may be named. Never quote anyone. '
     + 'A project sending more outbound notifications than it receives inbound contact is normal, expected '
     + 'early-project work, not a finding — never characterize that gap as an imbalance, a shortfall, or '
     + 'anything needing explanation. State the interaction volume plainly and move on. '
-    + 'Do NOT summarise the report section by section, and do NOT restate the reporting date range — the '
-    + 'sections and tables below already carry that. '
+    + 'Do not restate the reporting date range — the report header already carries it. '
     + 'Write at about a 9th-10th grade reading level: short sentences, everyday words, no jargon beyond '
     + 'the standard PI/NEPA terms already used elsewhere in the report. '
     + 'Do not use headers, bullet points, or markdown. Do not invent data — only use the facts provided.';
@@ -16169,22 +16171,173 @@ function _sectionDraftCall(secType, templateDraft) {
 // The executive summary has its OWN system prompt: it states the period's
 // activity plainly rather than recapping the sections or narrating what it
 // means, and drafting it under the section prompt turns it back into a recap.
+// ── The executive summary's length and facts (Oct 2026, Jeff) ──────────────
+// Length follows the report: a base for the orienting opening and anything
+// needing attention, plus a weight for each section in the report that has
+// something to say. Interactions weigh most, and more when the period's
+// inbound contact is heavy. Floor and ceiling keep a one-section report from
+// reading thin and a twelve-section one from becoming a second report.
+var OVERALL_BASE_WORDS=60, OVERALL_MIN_WORDS=120, OVERALL_MAX_WORDS=300;
+var OVERALL_SECTION_WORDS={'auto-concerns':70,'auto-intlog':70,'auto-outreach':40,'auto-comment-matrix':40,
+  'auto-events':30,'auto-issues':30,'auto-parcels':30,'auto-del':25,'auto-commitments':25,'auto-followups':20,'auto-sentiment':20};
+var OVERALL_HEAVY_INBOUND=25, OVERALL_HEAVY_EXTRA=30;   // > 25 inbound contacts in the period: +30 words
+var OVERALL_LOG_LINES=40;                               // newest inbound contacts the model reads
+function _overallWordBudget(present, inboundN){
+  var w=OVERALL_BASE_WORDS, ints=false;
+  (present||[]).forEach(function(t){
+    if(t==='auto-concerns'||t==='auto-intlog'){
+      if(ints) return; ints=true;
+      w+=OVERALL_SECTION_WORDS[t]+(inboundN>OVERALL_HEAVY_INBOUND?OVERALL_HEAVY_EXTRA:0); return;
+    }
+    w+=OVERALL_SECTION_WORDS[t]||0;
+  });
+  return Math.max(OVERALL_MIN_WORDS, Math.min(OVERALL_MAX_WORDS, w));
+}
+function _overallParas(words){ return words<=160?'1-2':'2-3'; }
+
+// Everything the executive summary may draw on, for the sections IN this
+// report only: the deterministic facts (counts, phase, attention items) plus a
+// block per section — outreach, events, comments, follow-ups, issues,
+// commitments, parcels — and what inbound contacts were actually about
+// (by role/organization, never a person's name). Counts are computed here.
+function _overallAIFacts(templateDraft){
+  var projF=S.projectFilter; if(!projF) return null;
+  var saved=loadReportSections(projF);
+  var types=(saved.sections||[]).map(function(s){ return s.type; });
+  var has=function(t){ return types.indexOf(t)>=0; };
+  var ps=saved.periodStart||'', pe=saved.periodEnd||'';
+  var inP=function(d){ return !!d && (!ps||d>=ps) && (!pe||d<=pe); };
+  var mine=function(x){ return String(x.projectId)===String(projF); };
+  var today=localToday();
+  var stakes=DB.get('stakeholders')||[];
+  var blocks=[], present=[], inboundN=0;
+  var tally=function(arr, fn){ var t={}; arr.forEach(function(x){ var k=fn(x); if(k) t[k]=(t[k]||0)+1; });
+    return Object.keys(t).sort(function(a,b){ return t[b]-t[a]; }).map(function(k){ return t[k]+' '+k; }).join(', '); };
+  var block=function(title, lines){ if(lines.length) blocks.push(title+':\n'+lines.join('\n')); };
+
+  // Interactions — the counts are in the deterministic facts; this adds what
+  // the public's contacts were about, for themes.
+  if(has('auto-concerns')||has('auto-intlog')){
+    var ext=DB.get('project_stakeholders').filter(mine)
+      .filter(function(l){ return (l.stakeholderRole||'External')==='External'; }).map(function(l){ return String(l.stakeholderId); });
+    var pi=DB.get('interactions').filter(function(i){ return mine(i) && _intIsExternal(i,ext) && inP(i.date); });
+    var inb=pi.filter(function(i){ return i.direction!=='Outgoing'; })
+      .sort(function(a,b){ return String(b.date||'').localeCompare(String(a.date||'')); });
+    inboundN=inb.length;
+    if(pi.length) present.push(has('auto-concerns')?'auto-concerns':'auto-intlog');
+    var L=inb.slice(0,OVERALL_LOG_LINES).map(function(i){
+      return '- '+(i.date||'')+' · '+(i.channel||'')+' · '+_coWho(i,stakes)+': '+_pkgTrim((i.subject?i.subject+' — ':'')+(i.summary||''));
+    });
+    if(inb.length>OVERALL_LOG_LINES) L.push('(and '+(inb.length-OVERALL_LOG_LINES)+' earlier inbound contacts)');
+    block('WHAT INBOUND AND IN-PERSON CONTACTS WERE ABOUT (newest first; for themes only, do not count from it)', L);
+  }
+  if(has('auto-outreach')){
+    var st=_outreachStats(projF, ps, pe);
+    if(st.total){ present.push('auto-outreach'); block('OUTREACH IN THIS PERIOD (releases, posts, flyers, coverage — not interactions)', _outreachFactLines(st)); }
+    else block('OUTREACH IN THIS PERIOD', ['No outreach was logged in this period.']);
+  }
+  if(has('auto-events')){
+    var ev=(DB.get('meetings')||[]).filter(function(m){ return mine(m) && inP(m.date); })
+      .sort(function(a,b){ return String(a.date).localeCompare(String(b.date)); });
+    if(ev.length){
+      present.push('auto-events');
+      var held=ev.filter(function(m){ return m.status==='Completed'; });
+      var att=held.reduce(function(n,m){ return n+(Number(m.attendanceCount)||0); },0);
+      var E=['Events dated in this period: '+ev.length+' ('+tally(ev,function(m){ return _qrEventState(m,today).k; })+').'
+        +(att?' Attendance at events held: '+att+'.':'')];
+      ev.slice(0,15).forEach(function(m){
+        E.push('- '+m.date+' · '+(m.type||'Event')+' · '+String(m.title||'').slice(0,120)+' · '+_qrEventState(m,today).k
+          +(Number(m.attendanceCount)?' · '+m.attendanceCount+' attended':'')+(m.keyConcerns?' — '+_pkgTrim(m.keyConcerns):''));
+      });
+      block('EVENTS (gatherings — not interactions)', E);
+    }
+  }
+  if(has('auto-comment-matrix')){
+    var cm=(DB.get('public_comments')||[]).filter(function(c){ return mine(c) && inP(c.commentDate); })
+      .sort(function(a,b){ return String(b.commentDate).localeCompare(String(a.commentDate)); });
+    if(cm.length){
+      present.push('auto-comment-matrix');
+      var C=['Formal public comments dated in this period: '+cm.length+'. By response status: '+tally(cm,function(c){ return c.responseStatus||'Pending'; })
+        +'. By topic: '+(tally(cm,function(c){ return c.category; })||'not categorized')+'.'];
+      cm.slice(0,20).forEach(function(c){
+        C.push('- '+c.commentDate+' · '+(c.category||'General')+' · from '+(c.affiliation||'a member of the public')+': '+_pkgTrim(c.summary)
+          +(c.responseText?' — Response: '+_pkgTrim(c.responseText):''));
+      });
+      block('PUBLIC COMMENTS (use the affiliation, never a commenter\'s name)', C);
+    }
+  }
+  if(has('auto-followups')){
+    var fu=(DB.get('interactions')||[]).filter(function(i){ return mine(i) && i.followUp; });
+    if(fu.length){
+      present.push('auto-followups');
+      var open=fu.filter(function(i){ return !i.followUpDone; });
+      var over=open.filter(function(i){ return i.followUpDue && i.followUpDue<today; });
+      var res=fu.filter(function(i){ return i.followUpDone && inP(i.followUpResolved); });
+      block('FOLLOW-UPS', ['Open follow-ups now: '+open.length+(over.length?' ('+over.length+' overdue)':'')+'. Resolved during this period: '+res.length+'.']);
+    }
+  }
+  if(has('auto-issues')){
+    var iss=(DB.get('issues')||[]).filter(mine);
+    if(iss.length){
+      present.push('auto-issues');
+      var openI=iss.filter(function(i){ return i.status!=='Resolved' && i.status!=='Closed'; });
+      var I=['Issues: '+iss.length+' on record, '+openI.length+' not yet resolved; '+iss.filter(function(i){ return inP(i.dateRaised); }).length
+        +' raised and '+iss.filter(function(i){ return inP(i.dateResolved); }).length+' resolved during this period.'];
+      openI.slice(0,10).forEach(function(i){ I.push('- Open: '+String(i.title||'').slice(0,120)+' ('+(i.priority||'Normal')+' priority, '+(i.status||'Open')+')'); });
+      block('ISSUES', I);
+    }
+  }
+  if(has('auto-commitments')){
+    var co=(DB.get('commitments')||[]).filter(mine);
+    if(co.length){
+      present.push('auto-commitments');
+      var K=['Commitments to the public: '+co.length+' ('+tally(co,function(c){ return c.status||'Open'; })+').'];
+      co.filter(function(c){ return c.status!=='Fulfilled'; }).slice(0,6).forEach(function(c){
+        K.push('- '+String(c.commitment||'').slice(0,120)+' — '+(c.status||'Open')+(c.dueDate?', due '+c.dueDate:''));
+      });
+      block('COMMITMENTS', K);
+    }
+  }
+  if(has('auto-parcels')){
+    var pst=_parcelStats(projF);
+    if(pst.total){
+      present.push('auto-parcels');
+      block('RIGHT-OF-WAY PARCELS (counts only, never owner names)', ['Parcels: '+pst.total+'; owner identified on '+(pst.total-pst.unownedCt)
+        +' ('+pst.ownedPct+'%); noticed on '+pst.noticedCt+' ('+pst.noticePct+'%).']);
+    }
+  }
+  if(has('auto-del') && /deliverable progress/.test(templateDraft||'')) present.push('auto-del');
+  if(has('auto-sentiment') && /stakeholder sentiment/.test(templateDraft||'')) present.push('auto-sentiment');
+
+  // Only the sections that have something to say are named, so the model is
+  // never handed a heading it has no facts for.
+  var titles=getAvailableSections().filter(function(s){ return present.indexOf(s.type)>=0; }).map(function(s){ return s.title; });
+  var words=_overallWordBudget(present, inboundN);
+  return { text:'PROJECT FACTS (computed; authoritative — use these numbers exactly):\n'+(templateDraft||'')
+      +(blocks.length?'\n\n'+blocks.join('\n\n'):''),
+    words:words, paras:_overallParas(words), present:present, inboundN:inboundN, titles:titles };
+}
+
 function _overallDraftCall(templateDraft) {
-  var projF = S.projectFilter;
-  var proj = projF ? (DB.get('projects').find(function(p){ return p.id===projF; }))||{} : {};
-  // Deliberately does NOT receive the section narratives: this summary reports
-  // the period's facts rather than recapping the sections, and feeding it
-  // their text just pulls it back toward a recap. The project facts are
-  // enough. The project's name/PID are deliberately NOT passed here either —
-  // saying "for project X" up front is exactly what cues the model to open
-  // by naming it, which the report header already does.
-  var userContent = 'Write the opening summary for this project\'s public involvement progress report.\n\n'
-    + 'State the period\'s activity plainly — how much outreach happened and anything that genuinely needs '
-    + 'attention. Do not draw conclusions from the outbound-vs-inbound volume; more outbound than inbound '
-    + 'is normal early in a project and is not itself worth commenting on. Do not recap the report\'s '
-    + 'sections one by one, and do not restate the date range.\n\n'
-    + 'PROJECT FACTS:\n' + templateDraft;
-  return _claudeNarrative(_claudeExecSystemPrompt(), userContent, 400);
+  // Deliberately does NOT receive the section narratives — it gets the same
+  // computed facts the sections are built from (_overallAIFacts), so it can
+  // speak across the report without paraphrasing other paragraphs. The
+  // project's name/PID are deliberately NOT passed either: the report header
+  // already carries them.
+  var f = _overallAIFacts(templateDraft) || { text: 'PROJECT FACTS:\n'+templateDraft, words: OVERALL_MIN_WORDS, paras: '1-2', titles: [] };
+  var userContent = 'Write the executive summary that opens this project\'s public involvement progress report.\n\n'
+    + 'Length: about '+f.words+' words (never more than '+(f.words+30)+'), in '+f.paras+' paragraphs.\n'
+    + (f.titles.length ? 'The report contains these sections: '+f.titles.join('; ')+'.\n' : '')
+    + 'Open with one sentence that orients the reader: the phase and what the period was mostly about. '
+    + 'Then give one connected account of what the period\'s work and the public\'s response showed across those sections, '
+    + 'giving the interactions the most weight and the other sections weight in proportion to how much happened. '
+    + 'Where the facts say what people raised or commented on, group it into the main themes and paraphrase. '
+    + 'Close with anything that needs the client\'s attention (overdue, past due, open high-priority), if there is any.\n'
+    + 'Do not walk through the sections one by one or name them as headings, and do not restate the date range. '
+    + 'Do not draw conclusions from the outbound-vs-inbound volume; more outbound than inbound is normal early in a project '
+    + 'and is not itself worth commenting on.\n\n'
+    + f.text;
+  return _claudeNarrative(_claudeExecSystemPrompt(), userContent, Math.round(f.words*1.6)+200);
 }
 
 // Run N async jobs with a ceiling on how many are in flight at once, so a
@@ -16478,7 +16631,7 @@ function _buildSectionDraft(secType) {
   if (secType === 'auto-del') {
     if (dels.length === 0) return null;
     var complete = dels.filter(function(d){ return d.status==='Complete'; }).length;
-    var inProg   = dels.filter(function(d){ return d.status==='In Progress'; }).length;
+    var inProg   = dels.filter(function(d){ return String(d.status||'').toLowerCase()==='in progress'; }).length;
     var pct      = dels.length > 0 ? Math.round(complete/dels.length*100) : 0;
     var txt4 = complete+' of '+dels.length+' contracted deliverable'+(dels.length!==1?'s are':' is')+' complete ('+pct+'%).';
     if (inProg > 0) txt4 += ' '+inProg+' item'+(inProg!==1?'s are':' is')+' currently in progress.';
@@ -16688,6 +16841,7 @@ function _buildOverallDraft() {
   var showIssues = hasSec('auto-issues');
   var showComms = hasSec('auto-commitments');
   var showSentiment = hasSec('auto-sentiment');
+  var showEvents = hasSec('auto-events');
 
   var ps = DB.get('project_stakeholders').filter(function(x){ return String(x.projectId)===String(projF); });
   var allStakes = DB.getActive('stakeholders');
@@ -16743,19 +16897,27 @@ function _buildOverallDraft() {
   // early, notification-heavy period should read as real outreach work, not
   // vanish, and it should never read as public engagement it isn't. ────────
   if (showInts && periodInts.length > 0) {
-    var compEvts = meetings.filter(function(m){ return m.status==='Completed'; }).length;
     var needFU = periodInts.filter(function(i){ return i.followUp && !i.followUpDone; }).length;
     var parts2 = [];
     if (outboundInts.length > 0) parts2.push('sent '+outboundInts.length+' outbound project notification'+(outboundInts.length!==1?'s':''));
     if (inboundInts.length > 0) parts2.push('logged '+inboundInts.length+' inbound or in-person stakeholder interaction'+(inboundInts.length!==1?'s':''));
-    var s2 = 'During '+periodLabel+', the project team '+parts2.join(' and ');
-    if (compEvts > 0) s2 += ', including '+compEvts+' public outreach event'+(compEvts!==1?'s':'');
-    s2 += '.';
+    var s2 = 'During '+periodLabel+', the project team '+parts2.join(' and ')+'.';
     if (inboundInts.length === 0 && outboundInts.length > 0) s2 += ' No inbound public inquiries have been received to date.';
     if (needFU > 0) s2 += ' '+needFU+' interaction'+(needFU!==1?'s require':' requires')+' follow-up.';
     lines.push(s2);
   } else if (showInts && ints.length > 0) {
     lines.push('A total of '+ints.length+' stakeholder interaction'+(ints.length!==1?'s have':' has')+' been logged for this project to date.');
+  }
+
+  // Events are their own records, not interactions — reported in their own
+  // sentence, only when the events section is in the report, and only those
+  // dated inside the report period (this used to count every completed event
+  // the project ever had, inside the interactions sentence).
+  if (showEvents) {
+    var heldEvts = meetings.filter(function(m){
+      return m.status==='Completed' && m.date && (!saved.periodStart || m.date >= saved.periodStart) && (!saved.periodEnd || m.date <= saved.periodEnd);
+    }).length;
+    if (heldEvts > 0) lines.push('The team held '+heldEvts+' public event'+(heldEvts!==1?'s':'')+' during the period.');
   }
 
   // ── Sentence 3: Most active stakeholder — INBOUND contact only. A
@@ -16858,7 +17020,7 @@ function _buildOverallDraft() {
   // Part 2: Deliverable progress
   if (dels.length > 0) {
     var complete = dels.filter(function(d){ return d.status==='Complete'; }).length;
-    var inProg   = dels.filter(function(d){ return d.status==='In Progress'; }).length;
+    var inProg   = dels.filter(function(d){ return String(d.status||'').toLowerCase()==='in progress'; }).length;
     var pct      = Math.round(complete/dels.length*100);
     var today    = new Date().toISOString().slice(0,10);
     var overdueDels = dels.filter(function(d){

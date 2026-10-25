@@ -20310,7 +20310,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
       }
 
     } else if(sec.type==='auto-parcels'){
-      var _pmx=_parcelStats(projF);
+      var _pmx=_parcelStats(proj.id);
       if(!_pmx.total){
         xml+=bullet('No parcels tracked for this project.');
       } else {

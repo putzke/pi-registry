@@ -1022,6 +1022,19 @@ Same pass found `auto-parcels`' .docx branch calling `_parcelStats(projF)`
 (undefined there): a report with Parcels could not export — fixed on LIVE.
 Guarded by `test/tests/102-report-arial.test.js` (fails on the old code).
 
+### Section titles landed on the wrong sections (fixed Oct 2026)
+Seen on DEV: section 1 titled "Planned PI activities" but auto-populated as
+concerns; section 3 titled "Recent public concerns" as a manual section.
+`loadReportSections` moves `concerns` to the top AFTER writing its copy to
+localStorage, so a draft where concerns had been moved down (▼) was drawn
+concerns-first while `captureFormState` started from the raw localStorage
+copy in the old order — and it matches inputs to sections BY POSITION, so
+every title, narrative and table setting shifted. Now `captureFormState`
+starts from `loadReportSections` (a copy), and concerns can't be moved off the
+top (no ▼ on it, no ▲ on the section under it; `movePISection` refuses). LIVE
+drafts checked: none affected. The DEV draft was repaired. Guarded by
+`test/tests/103-report-section-titles.test.js` (fails on the old code).
+
 ### The concerns narrative is budgeted in WORDS, not sentences (Aug 2026)
 `_sectionAIRequest('auto-concerns')` asked for "5-8 sentences". The model
 complied on the count and blew past the intent — 265 words in six sentences of

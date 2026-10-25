@@ -17315,8 +17315,8 @@ async function openPIReport(_isReopen){
     sectionsHTML+='<div style="margin-bottom:12px;background:#0E1E30;border:1px solid rgba(255,255,255,.13);border-radius:12px;padding:14px 18px">'
       +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
       +'<div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">'
-      +(idx>0?'<button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="movePISection('+idx+',-1)" title="Move up" style="padding:2px 6px;font-size:13px;line-height:1">\u25B2</button>':'<div style="width:32px;height:18px"></div>')
-      +(idx<sections.length-1?'<button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="movePISection('+idx+',1)" title="Move down" style="padding:2px 6px;font-size:13px;line-height:1">\u25BC</button>':'<div style="width:32px;height:18px"></div>')
+      +(idx>0&&!(idx===1&&sections[0].id==='concerns')?'<button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="movePISection('+idx+',-1)" title="Move up" style="padding:2px 6px;font-size:13px;line-height:1">\u25B2</button>':'<div style="width:32px;height:18px"></div>')
+      +(idx<sections.length-1&&sec.id!=='concerns'?'<button class="btn btn-xs" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--white)" onclick="movePISection('+idx+',1)" title="Move down" style="padding:2px 6px;font-size:13px;line-height:1">\u25BC</button>':'<div style="width:32px;height:18px"></div>')
       +'</div>'
       +'<span style="font-size:12px;color:var(--fog);font-weight:600;width:20px;text-align:center;flex-shrink:0">'+(idx+1)+'</span>'
       +'<input class="rpt-sec-title" data-idx="'+idx+'" value="'+sec.title.replace(/"/g,'&quot;')+'" style="flex:1;background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--white);font-size:14px;font-weight:600;font-family:var(--font);padding:4px 0;outline:none">'
@@ -17968,7 +17968,12 @@ function renderLivePreview() {
 function captureFormState(){
   var projF=S.projectFilter;
   if(!projF)return null;
-  var saved=JSON.parse(localStorage.getItem('pir4_pi_reports_'+projF)||'{}');
+  // Start from the SAME draft the editor drew (loadReportSections: the saved
+  // draft first, concerns moved to the top), never the raw localStorage copy.
+  // The inputs below are matched to sections by position, and localStorage
+  // could hold the sections in a different order — every title, narrative and
+  // table setting then landed on the wrong section (seen on DEV, Oct 2026).
+  var saved=JSON.parse(JSON.stringify(loadReportSections(projF)||{}));
   var rn=document.getElementById('rpt-num');if(rn)saved.reportNum=rn.value;
   var rt=document.getElementById('rpt-title');if(rt)saved.reportTitle=rt.value;
   var rs=document.getElementById('rpt-subtitle');if(rs)saved.reportSubtitle=rs.value;
@@ -18051,6 +18056,12 @@ function movePISection(idx,dir){
     var saved=captureFormState();if(!saved)return;
     var newIdx=idx+dir;
     if(newIdx<0||newIdx>=saved.sections.length)return;
+    // "Recent public concerns" always comes first (loadReportSections puts it
+    // back on every open), so a move that would take it off the top is refused.
+    if(saved.sections[idx].id==='concerns'||saved.sections[newIdx].id==='concerns'){
+      showToast('Recent public concerns and inquiries always comes first in the report.','warn');
+      return;
+    }
     var temp=saved.sections[idx];
     saved.sections[idx]=saved.sections[newIdx];
     saved.sections[newIdx]=temp;

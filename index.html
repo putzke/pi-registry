@@ -1263,7 +1263,8 @@ const SB_TO_INT = {
   // The all-hotlines ring/hours defaults (one row, id 1).
   pi_hotline_settings: {
     id:'id', ringEnabled:'ring_enabled', ringSeconds:'ring_seconds', hoursStart:'hours_start',
-    hoursEnd:'hours_end', hoursDays:'hours_days', timezone:'timezone', updatedBy:'updated_by'
+    hoursEnd:'hours_end', hoursDays:'hours_days', timezone:'timezone', updatedBy:'updated_by',
+    voicemailAudioPath:'voicemail_audio_path', spanishVoicemailAudioPath:'spanish_voicemail_audio_path'
   },
   // The Outreach log (sql/2026-10-20_outreach_log.sql), staff-only.
   pi_outreach_campaigns: {
@@ -1370,7 +1371,8 @@ function toSB(table, obj) {
 // Columns where a null the caller sends means "clear it": a hotline's or menu
 // option's ring/hours override set back to "use the default".
 const NULL_CLEARS_FIELDS = new Set(['campaign_id','delivery','reach','ring_mode','ring_seconds','hours_start','hours_end','hours_days',
-  'menu_audio_path','menu_audio_for','spanish_menu_audio_path','spanish_menu_audio_for']);
+  'menu_audio_path','menu_audio_for','spanish_menu_audio_path','spanish_menu_audio_for',
+  'voicemail_audio_path','spanish_voicemail_audio_path']);
 
 // Convert Supabase row back to our internal format
 function fromSB(table, row) {
@@ -8950,6 +8952,57 @@ function _hotRingProblem(r,withSecs){
   }
   return '';
 }
+// The voicemail prompt recording — one for every hotline (pi_hotline_settings).
+// The receiver plays it in place of the computer's "Please leave your name…",
+// and after an unanswered ring in place of "Sorry, nobody can take your call".
+const HOT_VM_SCRIPT={
+  en:'Sorry, no one is available to take your call right now. Please leave your name, your phone number and your message after the tone, and we’ll call you back. Press the pound key when you’re finished.',
+  es:'Lo sentimos, nadie puede atender su llamada en este momento. Por favor, deje su nombre, su número de teléfono y su mensaje después del tono, y le devolveremos la llamada. Oprima la tecla de numeral cuando termine.'};
+function _hotVmBoxHTML(g){
+  const row=(l,label)=>{
+    const sfx=l==='es'?'-es':'', path=g&&(l==='es'?g.spanishVoicemailAudioPath:g.voicemailAudioPath);
+    return `<div style="margin-top:10px">
+      <div style="font-size:11px;font-weight:700;color:var(--mist);margin-bottom:3px">${label}: ${path?'<span style="color:var(--green,#3fb97c)">recording in use</span> <button class="btn btn-sm" onclick="hotPlayPrompt(\''+l+'\')">▶ Play</button>':'<span style="color:var(--fog);font-weight:400">computer voice</span>'}</div>
+      <div id="hot-vm-audio${sfx}"></div>
+      <div style="font-size:11px;color:var(--fog);margin-bottom:4px">Suggested wording: “${escHtml(HOT_VM_SCRIPT[l])}”</div>
+      <input type="file" id="hot-vm-file${sfx}" accept="audio/mpeg,audio/mp3,audio/wav,audio/x-wav">
+      ${path?`<label style="display:flex;gap:6px;align-items:center;margin-top:4px;font-size:12px;color:var(--mist);font-weight:400"><input type="checkbox" id="hot-vm-rm${sfx}"> Remove — go back to the computer voice</label>`:''}
+    </div>`;};
+  return `<div id="hot-vm" style="border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:12px 14px;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:var(--white);margin-bottom:4px">Voicemail prompt — one recording for every hotline</div>
+      <div style="font-size:11px;color:var(--fog);line-height:1.5">Played just before the tone whenever a caller leaves a message: when the PI Lead doesn’t answer, after hours, or after a menu choice. The greeting has already named the project, so keep it general. Without a recording the computer voice says it. MP3 or WAV, under 5 MB.</div>
+      ${row('en','English')}
+      ${row('es','Spanish (callers who press 9)')}
+      <div style="margin-top:10px"><button class="btn btn-sm btn-primary" onclick="saveHotlineVoicemail()">Save voicemail prompt</button></div>
+    </div>`;
+}
+async function saveHotlineVoicemail(){
+  const rec={};
+  for(const [l,col] of [['en','voicemailAudioPath'],['es','spanishVoicemailAudioPath']]){
+    const sfx=l==='es'?'-es':'';
+    if(document.getElementById('hot-vm-rm'+sfx)?.checked){ rec[col]=null; continue; }
+    const up=await _hotUploadGreeting('voicemail',document.getElementById('hot-vm-file'+sfx),l,'prompts');
+    if(up===false) return;
+    if(up) rec[col]=up;
+  }
+  if(!Object.keys(rec).length){ showToast('Choose a recording to upload (or tick Remove) first.','info',4000); return; }
+  rec.updatedBy=getLoggedBy()||'';
+  const ok=_hotRingGlobal()?await sbUpdate('hotline_settings',1,rec):await sbAdd('hotline_settings',{id:1,...rec});
+  if(!ok){ showToast('Couldn’t save the voicemail prompt. Has sql/2026-10-25_hotline_voicemail_recording.sql been run?','error',8000); return; }
+  await _hotReload(); showToast('Voicemail prompt saved','info',2000); renderHotlineCard();
+}
+async function hotPlayPrompt(lang){
+  const g=_hotRingGlobal(), path=g&&(lang==='es'?g.spanishVoicemailAudioPath:g.voicemailAudioPath);
+  const box=document.getElementById('hot-vm-audio'+(lang==='es'?'-es':'')); if(!box||!path) return;
+  box.innerHTML='<span style="font-size:11px;color:var(--fog)">Loading…</span>';
+  try{
+    const h=getAuthHeaders(); delete h['Prefer'];
+    const r=await fetch(SUPA_URL+'/storage/v1/object/sign/'+HOT_AUDIO_BUCKET+'/'+path,{method:'POST',headers:h,body:JSON.stringify({expiresIn:600})});
+    if(!r.ok) throw new Error(r.status);
+    const j=await r.json();
+    box.innerHTML='<audio controls autoplay style="width:100%;max-width:420px" src="'+escHtml(SUPA_URL+'/storage/v1'+j.signedURL)+'"></audio>';
+  }catch(e){ box.innerHTML='<span style="font-size:11px;color:var(--fog)">The recording could not be opened.</span>'; }
+}
 async function saveHotlineDefaults(){
   const r=_hotReadRing(document.getElementById('hot-defaults'),true);
   const bad=_hotRingProblem({...r,on:true},true); if(bad){ alert(bad); return; }
@@ -9494,6 +9547,7 @@ function renderHotlineCard(){
       <div style="margin-top:10px"><button class="btn btn-sm btn-primary" onclick="saveHotlineDefaults()">Save defaults</button>
         <span style="font-size:11px;color:var(--fog);margin-left:8px">Times are Mountain Time.</span></div>
     </div>
+    ${_hotVmBoxHTML(g)}
     ${hs.length?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;color:var(--fog)">
       <thead><tr style="text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em"><th style="padding:4px 8px">Hotline</th><th style="padding:4px 8px">Number</th><th style="padding:4px 8px">Goes to</th><th style="padding:4px 8px">Language</th><th style="padding:4px 8px">When a call comes in</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>`:'<div style="font-size:12px;color:var(--fog)">No hotlines yet.</div>'}

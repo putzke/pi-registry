@@ -3261,7 +3261,8 @@ a Twilio trial + one number on DEV for a real call, then release.
   with Twilio — now Nova-3 live transcription, confirm on DEV calls; paste
   `sql/2026-10-17_hotline_live_transcript.sql` and
   `sql/2026-10-18_hotline_junk_cleanup.sql` and
-  `sql/2026-10-19_hotline_menu_recording.sql` on LIVE too; (3) decide whether `hotline-audio` joins the nightly backup;
+  `sql/2026-10-19_hotline_menu_recording.sql` and
+  `sql/2026-10-25_hotline_voicemail_recording.sql` on LIVE too; (3) decide whether `hotline-audio` joins the nightly backup;
   (4) paste `sql/2026-10-12_hotlines.sql` on LIVE, set the LIVE secrets and
   point the real number(s) at the LIVE function; (5) add Twilio to "Outside
   services" and the Service Map; (6) **not before a long stretch of DEV
@@ -3424,6 +3425,18 @@ a Twilio trial + one number on DEV for a real call, then release.
   A wrong key replays the recording without the greeting. Guarded by
   `test/tests/89-hotline-menu-recording.test.js` (verified to fail without the
   staleness check). Paste the SQL on LIVE at the hotline release.
+- **Voicemail prompt recording (2026-10-25, Jeff):** ONE recording for every
+  hotline (`pi_hotline_settings.voicemail_audio_path` / `spanish_voicemail_audio_path`,
+  `sql/2026-10-25_hotline_voicemail_recording.sql`; files `prompts/voicemail-<lang>.*`
+  in `hotline-audio`). The receiver (`voicemailPrompt`, `voicemailUrl`) plays it
+  wherever the computer said "Please leave your name…": straight to voicemail,
+  after a menu choice, and after an unanswered ring, where it also replaces
+  "Sorry, nobody can take your call". A Spanish caller hears the Spanish one or
+  the Spanish computer voice — never the English recording. Settings → Project
+  hotlines → "Voicemail prompt" (`_hotVmBoxHTML`, `saveHotlineVoicemail`,
+  `hotPlayPrompt`; suggested wording `HOT_VM_SCRIPT`). Applied to DEV + receiver
+  v19. Guarded by `test/tests/99-hotline-voicemail-recording.test.js` (fails on
+  the old receiver). Paste the SQL on LIVE with the hotline release.
 - **Fallback assignee (2026-10-12):** `pi_hotlines.default_assignee`
   (initials; "If the project has no PI Lead…" in the hotline dialog). The
   receiver assigns the project's active lead, else this person (also for the

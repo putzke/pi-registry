@@ -186,14 +186,14 @@ export function menuText(hotline, exts, lang) {
 
 // The greeting + menu. A single-project number with Spanish off has no menu at
 // all and goes straight to the recording.
-export function voiceTwiml({ hotline, exts, lang, base, greetingUrl, menuUrl, retry = 0 }) {
+export function voiceTwiml({ hotline, exts, lang, base, greetingUrl, menuUrl, vmUrl, retry = 0 }) {
   const q = `h=${hotline.id}&l=${lang}`;
   const parts = menuParts(hotline, exts, lang);
   // The options from the uploaded menu recording when there is a current one;
   // the Spanish offer is always the computer's Spanish voice.
   const menu = say(parts.spanish, 'es') + (menuUrl && parts.options ? `<Play>${xmlEsc(menuUrl)}</Play>` : say(parts.options, lang));
   const greet = retry ? '' : greetingParts(hotline, lang, greetingUrl);
-  if (!menu) return twiml(greet + recordParts({ hotline, lang, base, projectId: hotline.project_id, digit: '' }));
+  if (!menu) return twiml(greet + recordParts({ hotline, lang, base, projectId: hotline.project_id, digit: '', vmUrl }));
   const timeout = exts.length ? 6 : 3;
   return twiml(
     `<Gather numDigits="1" timeout="${timeout}" action="${xmlEsc(base + '/menu?' + q + '&r=' + retry)}" method="POST">`
@@ -214,11 +214,19 @@ export function route({ hotline, exts, lang, digits, retry }) {
   return Number(retry) >= 1 ? { kind: 'record', projectId: null, digit: GENERAL_DIGIT } : { kind: 'retry' };
 }
 
-function recordParts({ hotline, lang, base, projectId, digit }) {
+// The voicemail prompt: the all-hotlines recording when one is uploaded for
+// this language (pi_hotline_settings), else the computer voice. On a ring that
+// nobody answered the computer adds "nobody can take your call" first; the
+// recording replaces both sentences.
+export function voicemailPrompt(lang, vmUrl, unanswered) {
+  if (vmUrl) return `<Play>${xmlEsc(vmUrl)}</Play>`;
+  return (unanswered ? say(T[lang].noAnswer, lang) : '') + say(T[lang].record, lang);
+}
+function recordParts({ hotline, lang, base, projectId, digit, vmUrl, unanswered = false }) {
   const q = `h=${hotline.id}&l=${lang}&d=${encodeURIComponent(digit || '')}&p=${encodeURIComponent(projectId || '')}`;
   // Live transcription starts here, after the prompt, so only the message
   // itself is transcribed (and billed). English and Spanish alike.
-  return say(T[lang].record, lang)
+  return voicemailPrompt(lang, vmUrl, unanswered)
     + `<Start><Transcription name="voicemail" track="inbound_track"`
     + ` transcriptionEngine="${TRANSCRIBE_ENGINE}" speechModel="${TRANSCRIBE_MODEL}" languageCode="${TRANSCRIBE_LANG[lang] || TRANSCRIBE_LANG.en}"`
     + ` partialResults="false" statusCallbackUrl="${xmlEsc(base + '/transcription?' + q)}" statusCallbackMethod="POST"/></Start>`
@@ -229,17 +237,17 @@ function recordParts({ hotline, lang, base, projectId, digit }) {
     + say(T[lang].noMessage, lang) + '<Hangup/>';
 }
 
-export function menuTwiml({ hotline, exts, lang, base, digits, retry, greetingUrl, menuUrl }) {
+export function menuTwiml({ hotline, exts, lang, base, digits, retry, greetingUrl, menuUrl, vmUrl }) {
   const r = route({ hotline, exts, lang, digits, retry });
   if (r.kind === 'spanish') {
     const esExts = exts;
-    return voiceTwiml({ hotline, exts: esExts, lang: 'es', base, greetingUrl, menuUrl });
+    return voiceTwiml({ hotline, exts: esExts, lang: 'es', base, greetingUrl, menuUrl, vmUrl });
   }
   if (r.kind === 'retry') {
     return twiml(say(T[lang].notOption, lang)
       + voiceTwiml({ hotline, exts, lang, base, menuUrl, retry: 1 }).replace(/^.*?<Response>|<\/Response>$/g, ''));
   }
-  return twiml(recordParts({ hotline, lang, base, projectId: r.projectId, digit: r.digit }));
+  return twiml(recordParts({ hotline, lang, base, projectId: r.projectId, digit: r.digit, vmUrl }));
 }
 
 export const recordedTwiml = lang => twiml(say(T[lang === 'es' ? 'es' : 'en'].thanks, lang === 'es' ? 'es' : 'en') + '<Hangup/>');
@@ -380,6 +388,14 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
   async function menuUrl(loaded, lang) {
     const path = menuRecordingPath(loaded.h, loaded.exts, lang);
     return path ? signAudio(path) : '';
+  }
+  // The all-hotlines voicemail prompt recording for this language, or ''.
+  async function voicemailUrl(lang) {
+    try {
+      const g = await one('pi_hotline_settings?id=eq.1&select=*');
+      const path = g && (lang === 'es' ? g.spanish_voicemail_audio_path : g.voicemail_audio_path);
+      return path ? signAudio(path) : '';
+    } catch (_) { return ''; }        // the computer voice
   }
   async function signAudio(path) {
     try {
@@ -559,7 +575,9 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
         const t = await ringTarget(loaded, loaded.h.project_id, '');
         if (t) return xml(ringTwiml({ hotline: loaded.h, lang: 'en', base, projectId: loaded.h.project_id, digit: '', seconds: t.seconds, phone: t.phone, lead: t.lead, greet: greetingParts(loaded.h, 'en', gu) }));
       }
-      return xml(voiceTwiml({ hotline: loaded.h, exts: loaded.exts, lang: 'en', base, greetingUrl: gu, menuUrl: await menuUrl(loaded, 'en') }));
+      const noMenu = !menuText(loaded.h, loaded.exts, 'en');
+      return xml(voiceTwiml({ hotline: loaded.h, exts: loaded.exts, lang: 'en', base, greetingUrl: gu, menuUrl: noMenu ? '' : await menuUrl(loaded, 'en'),
+        vmUrl: noMenu ? await voicemailUrl('en') : '' }));
     }
     const loaded = await loadHotline(url.searchParams.get('h'));
     if (sub === '/menu') {
@@ -578,7 +596,11 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
       }
       // The menu is played again on a wrong key, or in Spanish after 9.
       const mu = r.kind === 'spanish' ? await menuUrl(loaded, 'es') : r.kind === 'retry' ? await menuUrl(loaded, lang) : '';
-      return xml(menuTwiml({ hotline: loaded.h, exts: loaded.exts, lang, base, digits, retry: url.searchParams.get('r'), greetingUrl: gu, menuUrl: mu }));
+      // The voicemail prompt is needed when this answer records (straight away,
+      // or Spanish on a number with no Spanish menu).
+      const vmLang = r.kind === 'spanish' ? 'es' : lang;
+      const vu = r.kind === 'record' || (r.kind === 'spanish' && !menuText(loaded.h, loaded.exts, 'es')) ? await voicemailUrl(vmLang) : '';
+      return xml(menuTwiml({ hotline: loaded.h, exts: loaded.exts, lang, base, digits, retry: url.searchParams.get('r'), greetingUrl: gu, menuUrl: mu, vmUrl: vu }));
     }
     if (sub === '/recorded') return xml(recordedTwiml(lang));
 
@@ -620,8 +642,8 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
         return xml(twiml('<Hangup/>'));
       }
       if (!loaded) return xml(closedTwiml());
-      return xml(twiml(say(T[lang].noAnswer, lang)
-        + recordParts({ hotline: loaded.h, lang, base, projectId: url.searchParams.get('p') || null, digit: url.searchParams.get('d') || '' })));
+      return xml(twiml(recordParts({ hotline: loaded.h, lang, base, projectId: url.searchParams.get('p') || null,
+        digit: url.searchParams.get('d') || '', vmUrl: await voicemailUrl(lang), unanswered: true })));
     }
 
     if (sub === '/recording') {

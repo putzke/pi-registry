@@ -3301,13 +3301,14 @@ a Twilio trial + one number on DEV for a real call, then release.
   `sql/2026-10-17_hotline_live_transcript.sql` and
   `sql/2026-10-18_hotline_junk_cleanup.sql` and
   `sql/2026-10-19_hotline_menu_recording.sql` and
-  `sql/2026-10-25_hotline_voicemail_recording.sql` on LIVE too; (3) decide whether `hotline-audio` joins the nightly backup;
+  `sql/2026-10-25_hotline_voicemail_recording.sql` on LIVE too; (3) ✅ `hotline-audio` joins the nightly backup (Jeff, 2026-10-26; `BUCKETS`
+  in cirruscc-backups' `backup.sh`, files under `files/<bucket>/`);
   (4) paste `sql/2026-10-12_hotlines.sql` on LIVE, set the LIVE secrets and
   point the real number(s) at the LIVE function; (5) add Twilio to "Outside
   services" and the Service Map; (6) **not before a long stretch of DEV
   testing — Jeff, 2026-10-12: "we will want to test everything frequently in
   dev first"**; (7) Jeff's OWN Twilio account (he owns the product;
-  decided 2026-10-25 — not a Sunrise account), upgraded from its Individual
+  decided 2026-10-25, confirmed 2026-10-26 — not a Sunrise account), upgraded from its Individual
   profile to a **Business profile with an EIN or DUNS** — CNAM and full
   SHAKEN/STIR need one; (8) the outgoing-call registrations (SHAKEN/STIR,
   Voice Integrity, CNAM) on that account. **CNAM rules (Twilio):** at most 15
@@ -3315,6 +3316,13 @@ a Twilio trial + one number on DEV for a real call, then release.
   unique, not generic — so "Public Information" (18) is too long and a generic
   "PUBLIC INFO" is likely refused; something tied to the business (e.g. "CIRRUS
   CC PI") is the safe choice. Mobiles often don't show CNAM at all.
+  **Numbers (Jeff, 2026-10-26):** the first LIVE hotline is the number
+  already bought for testing, **(801) 683-1089** (DEV `pi_hotlines` id 1,
+  "Test Hotline"). Moving it means pointing its webhook at the LIVE function,
+  which leaves DEV with no number — buy a second, cheap number for DEV first.
+  Sunrise's Teams hotline numbers are ported LATER, together, once Jeff has
+  the porting PIN from Teams Admin (a reminder is scheduled for 2026-11-09;
+  some of those numbers are still in use).
 - **First real test, 2026-10-11/12 on DEV:** voicemail → transcript → inbox →
   Log as interaction → thread all worked. Bugs found and fixed: the trial
   number posts unsigned webhooks (see above); service_role had no read on
@@ -4707,7 +4715,7 @@ Crawl-specific rules learned the hard way:
 | Wix | registrar + DNS for cirruscc.com | every cirruscc.com address |
 | Resend | client sign-in email (SMTP for Supabase LIVE) | client OTP links |
 | ImprovMX | support@ and info@cirruscc.com → Jeff's work inbox (info@ alias added by Jeff in ImprovMX, 2026-10-12) | support/info mail |
-| Twilio | project hotlines (DEV only so far): numbers, voicemail + transcript, call-back, dialpad. Test number on Jeff's personal account; live needs a Sunrise-owned account | hotlines (dev only today) |
+| Twilio | project hotlines (DEV only so far): numbers, voicemail + transcript, call-back, dialpad. On Jeff's own account (DEV and LIVE; needs a Business profile before live) | hotlines (dev only today) |
 | Google Cloud | Maps/Places key (map, autocomplete, geocode) | map features |
 | Anthropic | Claude API, per-user key in Settings | AI drafting |
 No account: Microsoft Authenticator (staff phones), UGRC ArcGIS parcels,

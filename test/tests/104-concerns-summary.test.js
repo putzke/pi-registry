@@ -2,9 +2,10 @@
 // an "Interactions at a glance" table (DEV, Oct 2026, Jeff). Before: a fixed
 // ~175-word cap whatever the volume (319 interactions got the same as 15), the
 // team's outbound notifications counted as public concern, no counts by theme,
-// no comparison with the previous period, and contact NAMES sent to the AI.
+// no comparison over time, and contact NAMES sent to the AI. (Oct 2026: the
+// comparison is the PROJECT TO DATE, not a previous period of equal length.)
 module.exports = {
-  name: 'concerns summary — length by volume, inbound/outbound, themes, previous period, glance table',
+  name: 'concerns summary — length by volume, inbound/outbound, themes, project to date, glance table',
   async run({ t }) {
     t.seed();
     const proj = (await t.sql(`select id from pi_projects where pid='25-154-001'`))[0];
@@ -55,7 +56,7 @@ module.exports = {
         URL.createObjectURL = real;
         const doc = blob ? await (await JSZip.loadAsync(blob)).file('word/document.xml').async('string') : '';
         return {
-          inN: st.inbound.length, outN: st.outbound.length, top: st.top, prev: st.prev,
+          inN: st.inbound.length, outN: st.outbound.length, top: st.top, td: st.toDate, td105: _concernsToDate(3, 3) + ' | ' + _concernsToDate(3, 40) + ' | ' + _concernsToDate(0, 40),
           facts, req, req2, glanceFU, tiers,
           names: [stake.firstName, stake.lastName],
           pane, archGlance: (snap.sections[0].glanceHtml || '').length > 0, arch, doc,
@@ -64,21 +65,23 @@ module.exports = {
       t.eq(r.inN, 4, 'inbound counted on their own');
       t.eq(r.outN, 2, 'outbound counted on their own');
       t.eq(r.top[0].join(':'), 'Noise:3', 'top subject from inbound only, counted');
-      t.ok(r.prev && r.prev.start === '2030-01-18' && r.prev.end === '2030-01-31', 'previous period = the same 14 days before');
-      t.eq(r.prev.inbound + '/' + r.prev.outbound, '1/1', 'previous period counts');
+      t.ok(r.td && r.td.end === '2030-02-14' && r.td.inbound >= 5 && r.td.outbound >= 3, 'project to date counts everything through the report end');
+      t.ok(r.td.start && /project start date|first logged interaction/.test(r.td.basis), 'project to date names where it starts');
+      t.eq(r.td105, '3 this period, 3 project to date \u2014 new this period (none before) | 3 this period, 40 project to date \u2014 also raised before this period | 0 this period, 40 project to date',
+        'new vs ongoing worked out in code');
       t.eq(r.tiers.join(','), '150,150,250,250,350,350,450', 'length steps with inbound volume');
       t.ok(/Inbound and in-person contacts from the public and stakeholders: 4\./.test(r.facts), 'facts: inbound count');
       t.ok(/Outbound notifications and calls by the project team: 2\./.test(r.facts), 'facts: outbound count, separate');
       t.ok(/Inbound contacts by subject: Noise \(3\), Access \(1\)/.test(r.facts), 'facts: counts by subject (inbound only)');
-      t.ok(/Inbound and in-person contacts: 4 this period, 1 in the previous period \u2014 up 3\./.test(r.facts), 'facts: inbound change worked out (up 3)');
-      t.ok(/Outbound notifications and calls: 2 this period, 1 in the previous period \u2014 up 1\./.test(r.facts), 'facts: outbound change worked out (up 1)');
-      t.ok(/Inbound about Noise: 3 this period, 0 in the previous period \u2014 up 3 \(none before\)/.test(r.facts), 'facts: subject change worked out');
-      t.ok(!/ vs /.test(r.facts), 'no bare "a vs b" left for the model to compare');
+      t.ok(new RegExp('Inbound and in-person contacts: 4 this period, ' + r.td.inbound + ' project to date').test(r.facts), 'facts: inbound this period vs project to date');
+      t.ok(new RegExp('Outbound notifications and calls: 2 this period, ' + r.td.outbound + ' project to date').test(r.facts), 'facts: outbound this period vs project to date');
+      t.ok(/Inbound about Noise: 3 this period, \d+ project to date/.test(r.facts), 'facts: subject this period vs to date');
+      t.ok(!/previous period|%/.test(r.facts), 'no previous-period comparison and no percentages');
       t.ok(!r.facts.includes(r.names[0] + ' ' + r.names[1]) && !r.facts.includes(r.names[1]), 'no contact name reaches the AI');
       t.ok(/still awaiting follow-up: 1/.test(r.facts), 'follow-ups given when the report has no follow-up section');
       t.ok(/about 150 words/.test(r.req.userContent) && r.req.maxTokens === 440, 'request: words and reply budget from the tier');
       t.ok(/Outbound notifications are the team's work, not public concern/.test(r.req.userContent), 'request keeps outreach out of public concern');
-      t.ok(/compared with the previous period/.test(r.req.userContent), 'request asks what changed');
+      t.ok(/context of the project to date/.test(r.req.userContent) && /Never compute changes or percentages/.test(r.req.userContent), 'request asks for new vs ongoing themes, no percentages');
       t.ok(/Do not discuss follow-ups/.test(r.req2.userContent), 'with a Follow-up section: no follow-ups in the narrative');
       t.ok(!r.glanceFU.some(x => /follow-up/i.test(x)), 'glance rows drop follow-ups when the section exists');
       t.ok(/What the public raised most/.test(r.pane), 'preview shows the subjects table (data table off)');

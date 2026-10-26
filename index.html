@@ -16083,8 +16083,10 @@ function _claudeSystemPrompt() {
 //    the team's own notifications are not public concern (same split as the
 //    overall summary);
 //  - counts by subject and nature are computed here — the model never counts;
-//  - the previous period is the same number of days just before this one, so a
-//    bi-weekly report compares with the two weeks before;
+//  - each count is set beside the PROJECT TO DATE (start = the earlier of the
+//    project start date and the first logged interaction, end = the report's
+//    end) — not a "previous period", which misled when report lengths vary.
+//    No percentages (Jeff): a steady pace reads as a shrinking %;
 //  - the narrative's length grows with the inbound volume (CONCERNS_TIERS, the
 //    same steps as the Interaction log quick report);
 //  - follow-ups are left to the Follow-up status section when the report has one.
@@ -16095,6 +16097,21 @@ function _isoAddDays(iso, n){
 }
 function _concernsTier(inboundN){
   for(var k=0;k<CONCERNS_TIERS.length;k++){ if(inboundN<=CONCERNS_TIERS[k][0]) return {words:CONCERNS_TIERS[k][1], paras:CONCERNS_TIERS[k][2]}; }
+}
+// Where "project to date" starts: the earlier of the project start date and the
+// first logged interaction, so nothing logged is before it.
+function _projToDate(projF){
+  var proj=(DB.get('projects')||[]).find(function(p){ return String(p.id)===String(projF); })||{};
+  var first=(DB.get('interactions')||[]).filter(function(i){ return String(i.projectId)===String(projF) && i.date; })
+    .reduce(function(m,i){ return !m||i.date<m ? i.date : m; }, '');
+  var ps=proj.startDate||'';
+  if(ps && (!first || ps<=first)) return {start:ps, basis:'project start date'};
+  if(first) return {start:first, basis:'first logged interaction'};
+  return {start:'', basis:''};
+}
+function _toDateLabel(td, pend){
+  if(!td||!td.start) return '';
+  return 'Project to date: '+_fmtDateRange(td.start, pend)+' (from the '+td.basis+').';
 }
 function _concernsStats(projF, pstart, pend, includeInternal){
   var ps=DB.get('project_stakeholders').filter(function(x){ return String(x.projectId)===String(projF); });
@@ -16113,15 +16130,12 @@ function _concernsStats(projF, pstart, pend, includeInternal){
   var cur=all.filter(function(i){ return inWin(i,pstart,pend); })
              .sort(function(a,b){ return String(a.date||'').localeCompare(String(b.date||'')); });
   var inbound=cur.filter(isIn), outbound=cur.filter(function(i){ return !isIn(i); });
-  var prev=null;
-  if(pstart&&pend&&pend>=pstart){
-    var days=Math.round((new Date(pend+'T00:00:00Z')-new Date(pstart+'T00:00:00Z'))/86400000)+1;
-    var pe=_isoAddDays(pstart,-1), pb=_isoAddDays(pstart,-days);
-    var pcur=all.filter(function(i){ return inWin(i,pb,pe); });
-    var pin=pcur.filter(isIn), sm={};
-    tally(pin,subj).forEach(function(r){ sm[r[0]]=r[1]; });
-    prev={start:pb, end:pe, days:days, inbound:pin.length, outbound:pcur.length-pin.length, bySubject:sm};
-  }
+  // Project to date: everything logged through the report's end.
+  var tcur=all.filter(function(i){ return inWin(i,'',pend); });
+  var tin=tcur.filter(isIn), tsm={};
+  tally(tin,subj).forEach(function(r){ tsm[r[0]]=r[1]; });
+  var td=_projToDate(projF);
+  var toDate={start:td.start, basis:td.basis, end:pend||'', inbound:tin.length, outbound:tcur.length-tin.length, bySubject:tsm};
   var bySubject=tally(inbound,subj);
   return {
     total:cur.length, inbound:inbound, outbound:outbound,
@@ -16129,33 +16143,31 @@ function _concernsStats(projF, pstart, pend, includeInternal){
     byChannel:tally(cur,function(i){ return i.channel||'Unknown'; }),
     outSubjects:tally(outbound,subj),
     top:bySubject.slice(0,CONCERNS_TOP_SUBJECTS),
-    prev:prev,
+    toDate:toDate,
     openFU:cur.filter(function(i){ return i.followUp&&!i.followUpDone; }).length,
     tier:_concernsTier(inbound.length)
   };
 }
-// "80 this period, 52 in the previous period — up 28" (never left to the model).
-function _concernsChange(now, prev){
-  var d=now-prev;
-  return now+' this period, '+prev+' in the previous period \u2014 '
-    +(d>0 ? (prev===0 ? 'up '+d+' (none before)' : 'up '+d) : d<0 ? 'down '+(-d) : 'no change');
+// "15 this period, 210 project to date" — and whether it is new (worked out
+// here, never by the model; no percentages).
+function _concernsToDate(n, total){
+  return n+' this period, '+total+' project to date'
+    +(n && n===total ? ' \u2014 new this period (none before)' : n ? ' \u2014 also raised before this period' : '');
 }
 function _concernsHasFollowupSection(projF){
   return (loadReportSections(projF).sections||[]).some(function(x){ return x.type==='auto-followups'; });
 }
-// Rows of the concerns table: [subject, this period, previous period].
+// Rows of the concerns table: [subject, this period, project to date].
 function _concernsGlanceRows(st, withFU){
-  var p=st.prev, pv=function(n){ return p? String(n) : '—'; };
+  var t=st.toDate;
   // Inbound/outbound totals are in "Report at a glance" at the top of the
   // report; this table carries only what the public raised most.
   var rows=[];
-  st.top.forEach(function(r){ rows.push([r[0], String(r[1]), pv(p&&(p.bySubject[r[0]]||0))]); });
+  st.top.forEach(function(r){ rows.push([r[0], String(r[1]), String(t.bySubject[r[0]]||r[1])]); });
   if(withFU) rows.push(['Still awaiting follow-up', String(st.openFU), '—']);
   return rows;
 }
-function _concernsPrevLabel(st){
-  return st.prev ? 'Previous period: '+_fmtDateRange(st.prev.start, st.prev.end)+' (the same number of days just before this report).' : '';
-}
+function _concernsToDateLabel(st){ return _toDateLabel(st.toDate, st.toDate.end); }
 // Inline-styled so the frozen copy renders the same in the archive and portal.
 function _concernsGlanceHTML(projF, pstart, pend, includeInternal){
   var st=_concernsStats(projF, pstart, pend, includeInternal);
@@ -16167,14 +16179,14 @@ function _concernsGlanceHTML(projF, pstart, pend, includeInternal){
   var h='<div style="margin:6px 0 10px">'
     +'<div style="font-size:11px;font-weight:700;color:#1e3a5f;margin-bottom:4px">What the public raised most</div>'
     +'<table style="width:100%;max-width:520px;border-collapse:collapse"><thead><tr>'
-    +'<th style="'+th+'">Subject</th><th style="'+th+';text-align:right">This period</th><th style="'+th+';text-align:right">Previous period</th></tr></thead><tbody>';
+    +'<th style="'+th+'">Subject</th><th style="'+th+';text-align:right">This period</th><th style="'+th+';text-align:right">Project to date</th></tr></thead><tbody>';
   rows.forEach(function(r,k){
     h+='<tr style="'+(k%2?'background:#f6f8fa':'')+'"><td style="'+td+'">'+escHtml(r[0])+'</td>'
       +'<td style="'+td+';text-align:right;font-weight:600">'+escHtml(r[1])+'</td>'
       +'<td style="'+td+';text-align:right;color:#595959">'+escHtml(r[2])+'</td></tr>';
   });
   h+='</tbody></table>';
-  var pl=_concernsPrevLabel(st);
+  var pl=_concernsToDateLabel(st);
   if(pl) h+='<div style="font-size:10px;color:#777;font-style:italic;margin-top:3px">'+escHtml(pl)+'</div>';
   return h+'</div>';
 }
@@ -16199,11 +16211,7 @@ function _reportGlance(projF, o){
   var a=o.pstart||'', b=o.pend||'', today=o.today||localToday();
   var mine=function(x){ return String(x.projectId)===String(projF); };
   var inW=function(d,x,y){ return !!d && (!x||d>=x) && (!y||d<=y); };
-  var pb='', pe='', hasPrev=!!(a&&b&&b>=a);
-  if(hasPrev){
-    var days=Math.round((new Date(b+'T00:00:00Z')-new Date(a+'T00:00:00Z'))/86400000)+1;
-    pe=_isoAddDays(a,-1); pb=_isoAddDays(a,-days);
-  }
+  var td=_projToDate(projF);
   var rows=[], attn=[];
   // Items are NAMED only when that section's "Include data table" is on — off
   // promises no itemized records in the report — otherwise they are counted.
@@ -16213,19 +16221,19 @@ function _reportGlance(projF, o){
     if(tbl(t)) items.forEach(function(x){ attn.push(nameFn(x)); });
     else attn.push(items.length===1 ? one : items.length+' '+many);
   };
-  // [measure, this period, previous period] — a count over a window, or a
-  // state "now" (previous shown as a dash).
-  // [label, this period, previous] — a count zero in both periods says nothing
-  // and is left out.
-  var pair=function(label, n, p){ if(!n&&!p) return; rows.push([label, String(n), hasPrev?String(p):'—']); };
-  var both=function(label, fn){ pair(label, fn(a,b), hasPrev?fn(pb,pe):0); };
+  // [measure, this period, project to date] — a count over the report window
+  // and over everything through its end (no percentages: a steady pace reads
+  // as a shrinking %). A count that is zero both ways says nothing — left out.
+  // A state "now" (open issues…) has one value; to date shows a dash.
+  var pair=function(label, n, t){ if(!n&&!t) return; rows.push([label, String(n), String(t)]); };
+  var both=function(label, fn){ pair(label, fn(a,b), fn('',b)); };
   var now=function(label, val){ rows.push([label, String(val), '—']); };
   var fmtD=function(d){ return _fmtMDY(d); };
 
   if(has('auto-concerns','auto-intlog')){
     var cs=_concernsStats(projF, a, b, !!o.includeInternal);
-    pair('Inbound and in-person contacts', cs.inbound.length, cs.prev?cs.prev.inbound:0);
-    pair('Outbound notifications by the team', cs.outbound.length, cs.prev?cs.prev.outbound:0);
+    pair('Inbound and in-person contacts', cs.inbound.length, cs.toDate.inbound);
+    pair('Outbound notifications by the team', cs.outbound.length, cs.toDate.outbound);
   }
   if(has('auto-outreach')){
     both('Outreach actions (releases, posts, flyers, coverage)', function(x,y){ return _outreachStats(projF,x,y).total; });
@@ -16299,7 +16307,7 @@ function _reportGlance(projF, o){
   // put something in it — otherwise "nothing" would be an unchecked claim.
   var canAttn=has('auto-events','auto-comment-matrix','auto-comments','auto-nepa-compliance','auto-issues','auto-commitments','auto-followups','auto-del');
   return { intro:intro, rows:rows, attention:attn, showAttention:canAttn,
-    prevLabel: hasPrev ? 'Previous period: '+_fmtDateRange(pb,pe)+' (the same number of days just before this report).' : '' };
+    toDateLabel: _toDateLabel(td, b) };
 }
 var GLANCE_NONE='Nothing in this report is past due, and nothing is scheduled in the next two weeks.';
 // Inline-styled: the frozen copy renders the same in the archive and the portal.
@@ -16312,14 +16320,14 @@ function _reportGlanceHTML(g){
     +'<div style="font-size:12px;color:#222;line-height:1.5;margin-bottom:8px">'+escHtml(g.intro)+'</div>';
   if(g.rows.length){
     h+='<table style="width:100%;max-width:560px;border-collapse:collapse"><thead><tr>'
-      +'<th style="'+th+'">Key figures</th><th style="'+th+';text-align:right">This period</th><th style="'+th+';text-align:right">Previous period</th></tr></thead><tbody>';
+      +'<th style="'+th+'">Key figures</th><th style="'+th+';text-align:right">This period</th><th style="'+th+';text-align:right">Project to date</th></tr></thead><tbody>';
     g.rows.forEach(function(r,k){
       h+='<tr style="'+(k%2?'background:#f6f8fa':'')+'"><td style="'+td+'">'+escHtml(r[0])+'</td>'
         +'<td style="'+td+';text-align:right;font-weight:600">'+escHtml(r[1])+'</td>'
         +'<td style="'+td+';text-align:right;color:#595959">'+escHtml(r[2])+'</td></tr>';
     });
     h+='</tbody></table>';
-    if(g.prevLabel) h+='<div style="font-size:10px;color:#777;font-style:italic;margin-top:3px">'+escHtml(g.prevLabel)+'</div>';
+    if(g.toDateLabel) h+='<div style="font-size:10px;color:#777;font-style:italic;margin-top:3px">'+escHtml(g.toDateLabel)+'</div>';
   }
   if(g.showAttention){
     h+='<div style="font-size:11px;font-weight:700;color:#1e3a5f;margin:10px 0 4px">Needs attention and coming up</div>';
@@ -16354,20 +16362,16 @@ function _buildConcernsAIFacts() {
   if (st.byNature.length) L.push('- Inbound contacts by nature: ' + list(st.byNature) + '.');
   L.push('- All contacts by channel: ' + list(st.byChannel) + '.');
   if (st.outSubjects.length) L.push('- Team outreach by subject: ' + list(st.outSubjects) + '.');
-  if (st.prev) {
-    // The direction and size of each change are worked out HERE — the model
-    // once wrote "80 outbound, down from 52" when it did the comparison itself.
-    L.push('- Compared with the previous period (' + _fmtDateRange(st.prev.start, st.prev.end)
-      + ', the same number of days; directions already worked out — use them as given):');
-    L.push('  - Inbound and in-person contacts: ' + _concernsChange(st.inbound.length, st.prev.inbound) + '.');
-    L.push('  - Outbound notifications and calls: ' + _concernsChange(st.outbound.length, st.prev.outbound) + '.');
-    var changes = st.bySubject.map(function(r){ return [r[0], r[1], st.prev.bySubject[r[0]]||0]; })
-      .filter(function(r){ return r[1] !== r[2]; })
-      .sort(function(a,b){ return (b[1]-b[2])-(a[1]-a[2]); }).slice(0,5);
-    changes.forEach(function(r){ L.push('  - Inbound about ' + r[0] + ': ' + _concernsChange(r[1], r[2]) + '.'); });
-  } else {
-    L.push('- No previous period to compare with (the report has no start and end date).');
-  }
+  // Set beside the project to date, worked out HERE (the model once compared
+  // two periods itself and got the direction wrong). No percentages.
+  var _tdl = _toDateLabel(st.toDate, saved.periodEnd);
+  L.push('- This period compared with the project to date' + (_tdl ? ' (' + _tdl.replace(/^Project to date: /, '').replace(/\.$/, '') + ')' : '')
+    + ' — worked out already; use as given:');
+  L.push('  - Inbound and in-person contacts: ' + _concernsToDate(st.inbound.length, st.toDate.inbound) + '.');
+  L.push('  - Outbound notifications and calls: ' + _concernsToDate(st.outbound.length, st.toDate.outbound) + '.');
+  st.bySubject.slice(0, 8).forEach(function(r){
+    L.push('  - Inbound about ' + r[0] + ': ' + _concernsToDate(r[1], st.toDate.bySubject[r[0]] || r[1]) + '.');
+  });
   if (withFU) L.push('- Inbound contacts still awaiting follow-up: ' + st.inbound.filter(function(i){ return i.followUp && !i.followUpDone; }).length + '.');
   L.push('');
   L.push('INBOUND LOG (oldest first; who = type/organization; read for themes and responses — do not count from it):');
@@ -16402,7 +16406,7 @@ function _sectionAIRequest(secType, templateDraft) {
     var _cs = S.projectFilter ? (function(){ var sv=loadReportSections(S.projectFilter); return _concernsStats(S.projectFilter, sv.periodStart, sv.periodEnd, !!sv.includeInternal); })() : null;
     var tier = (_cs && _cs.total) ? _cs.tier : _concernsTier(0);
     var withFU = S.projectFilter ? !_concernsHasFollowupSection(S.projectFilter) : true;
-    var hasPrev = !!(_cs && _cs.prev);
+    var hasToDate = !!(_cs && _cs.total);
     return {
       userContent: 'Write the narrative for the "Recent public concerns and inquiries" '
         + 'section of a public involvement progress report that goes to the client every two weeks or so.\n\n'
@@ -16412,9 +16416,9 @@ function _sectionAIRequest(secType, templateDraft) {
         + '1. Open with the reporting period, then what the public and stakeholders raised (the inbound contacts), '
         + 'grouped by theme, using the counts given. Give the more consequential themes more room than routine ones.\n'
         + '2. How the team responded and what was resolved, drawing on the summaries and responses in the log.\n'
-        + (hasPrev ? '3. What changed compared with the previous period, using the comparison lines given exactly — '
-                   + 'their up/down/no change is already worked out; never compare the numbers yourself.\n' : '')
-        + (hasPrev ? '4. ' : '3. ') + 'End with ONE sentence on the team\'s own outreach (the outbound count and what it was about). '
+        + (hasToDate ? '3. Put the period in context of the project to date: which themes are new this period and which have '
+                     + 'come up before, using the comparison lines given exactly. Never compute changes or percentages yourself.\n' : '')
+        + (hasToDate ? '4. ' : '3. ') + 'End with ONE sentence on the team\'s own outreach (the outbound count and what it was about). '
         + 'Outbound notifications are the team\'s work, not public concern — never mix them into what the public raised.\n\n'
         + (withFU ? 'Mention in one clause how many inbound contacts still await follow-up.\n\n'
                   : 'Do not discuss follow-ups — the report has its own follow-up section.\n\n')
@@ -19624,10 +19628,10 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
     xml+=para(_rg.intro,bodyRpr);
     if(_rg.rows.length){
       var rgCols=[5200,2000,2260];
-      var rgRows=tblHdrRow(['Key figures','This period','Previous period'],rgCols);
+      var rgRows=tblHdrRow(['Key figures','This period','Project to date'],rgCols);
       _rg.rows.forEach(function(r,ri){ rgRows+=tblDataRow(r,rgCols,ri%2!==0); });
       xml+=tblWrap(9460,rgCols,rgRows);
-      if(_rg.prevLabel) xml+=para(_rg.prevLabel,italicGrayRpr);
+      if(_rg.toDateLabel) xml+=para(_rg.toDateLabel,italicGrayRpr);
     }
     if(_rg.showAttention){
       xml+='<w:p>'+bodyPpr+'<w:r>'+boldRpr+'<w:t xml:space="preserve">Needs attention and coming up</w:t></w:r></w:p>';
@@ -19688,10 +19692,10 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
       var _gRowsData=_gst.total?_concernsGlanceRows(_gst,!(saved.sections||[]).some(function(x){return x.type==='auto-followups';})):[];
       if(_gRowsData.length){
         var gCols=[5200,2000,2260];
-        var gRows=tblHdrRow(['What the public raised most','This period','Previous period'],gCols);
+        var gRows=tblHdrRow(['What the public raised most','This period','Project to date'],gCols);
         _gRowsData.forEach(function(r,ri){ gRows+=tblDataRow(r,gCols,ri%2!==0); });
         xml+=tblWrap(9460,gCols,gRows);
-        var _gpl=_concernsPrevLabel(_gst); if(_gpl) xml+=para(_gpl,italicGrayRpr);
+        var _gpl=_concernsToDateLabel(_gst); if(_gpl) xml+=para(_gpl,italicGrayRpr);
         xml+=spacer();
       }
       if(sec.showTable){

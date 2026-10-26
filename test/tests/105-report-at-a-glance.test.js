@@ -1,7 +1,7 @@
 // "Report at a glance" — the PI report's opener (Oct 2026, Jeff). It replaced
 // the AI executive summary, which could only retell the sections in fewer
 // words. Counted, never AI-written: what the report covers, key figures (this
-// period vs the one before) for the sections IN the report only, and what
+// period vs the project to date) for the sections IN the report only, and what
 // needs attention or is coming up. Same model in the preview, the frozen
 // snapshot (archive + portal) and the .docx.
 // Also: the concerns AI facts carry each change already worked out (up/down),
@@ -47,8 +47,8 @@ module.exports = {
         const g = _reportGlance(projF, { pstart: '2030-02-01', pend: '2030-02-14', sections: secs.map(s => Object.assign({ showTable: true }, s)), today: '2030-02-14' });
         const gOff = _reportGlance(projF, { pstart: '2030-02-01', pend: '2030-02-14', sections: secs, today: '2030-02-14' });
         const gManual = _reportGlance(projF, { pstart: '2030-02-01', pend: '2030-02-14', sections: [{ type: 'manual', title: 'Planned PI activities' }], today: '2030-02-14' });
-        const gZero = _reportGlance(projF, { pstart: '2040-02-01', pend: '2040-02-14', sections: [{ type: 'auto-outreach', title: 'Outreach' }, { type: 'auto-events', title: 'Events' }], today: '2030-02-14' });
-        const chg = [_concernsChange(80, 52), _concernsChange(52, 80), _concernsChange(5, 5), _concernsChange(3, 0)];
+        const gZero = _reportGlance(projF, { pstart: '2000-02-01', pend: '2000-02-14', sections: [{ type: 'auto-outreach', title: 'Outreach' }, { type: 'auto-events', title: 'Events' }], today: '2030-02-14' });
+        const chg = [];
 
         // Editor, preview, snapshot, archive, .docx
         _syncCache.reports = [{ id: 1, projectId: projF, reportNum: '1', reportTitle: 'PI', periodStart: '2030-02-01', periodEnd: '2030-02-14',
@@ -73,17 +73,14 @@ module.exports = {
       }, String(proj.id));
 
       const row = (label) => r.g.rows.find(x => x[0] === label);
-      t.eq(r.chg.join(' | '), '80 this period, 52 in the previous period — up 28 | 52 this period, 80 in the previous period — down 28 | '
-        + '5 this period, 5 in the previous period — no change | 3 this period, 0 in the previous period — up 3 (none before)',
-        'concerns changes are worked out in code, direction included');
       t.ok(/^This report covers February 1–14, 2030/.test(r.g.intro), 'intro names the period');
       t.ok(!r.phase || r.g.intro.includes('during the ' + r.phase + ' phase'), 'intro names the phase');
       t.ok(r.g.intro.includes('includes: Recent public concerns and inquiries; Events & outreach log; Issues tracker'), 'intro lists the sections that follow');
-      t.eq((row('Inbound and in-person contacts') || []).slice(1).join('/'), '3/1', 'inbound contacts: this period / previous');
-      t.eq((row('Outbound notifications by the team') || []).slice(1).join('/'), '1/0', 'outbound contacts: this period / previous');
-      t.eq((row('Events held') || []).slice(1).join('/'), '1/0', 'events held');
-      t.eq((row('Attendance at events held') || []).slice(1).join('/'), '40/0', 'attendance');
-      t.eq((row('Issues raised') || []).slice(1).join('/'), '1/1', 'issues raised, both periods');
+      t.eq((row('Inbound and in-person contacts') || []).slice(1).join('/'), '3/4', 'inbound contacts: this period / project to date');
+      t.eq((row('Outbound notifications by the team') || []).slice(1).join('/'), '1/1', 'outbound contacts: this period / project to date');
+      t.eq((row('Events held') || []).slice(1).join('/'), '1/1', 'events held');
+      t.eq((row('Attendance at events held') || []).slice(1).join('/'), '40/40', 'attendance');
+      t.eq((row('Issues raised') || []).slice(1).join('/'), '1/2', 'issues raised: this period / project to date');
       t.ok(/\(1 past due\)/.test((row('Open commitments to the public now') || [])[1] || ''), 'open commitments, with past due');
       t.ok(!r.g.rows.some(x => /Deliverables|Outreach actions|parcels/i.test(x[0])), 'no figure for a section not in the report');
       t.ok(r.g.attention.some(x => /Commitment past due \(due 02\/01\/2030\): Mail the detour map/.test(x)), 'attention: past-due commitment');
@@ -95,11 +92,13 @@ module.exports = {
       t.ok(r.gOff.attention.includes('1 commitment to the public is past due.') && r.gOff.attention.includes('1 high-priority issue is open.')
         && r.gOff.attention.includes('1 event is scheduled in the next two weeks.'), 'data table off: attention items counted, not named');
       t.ok(!r.gOff.attention.some(x => /Mail the detour|Driveway|Business briefing/.test(x)), 'and no item text leaks');
-      t.eq(r.gZero.rows.length, 0, 'a count that is zero in both periods is left out');
+      t.eq(r.gZero.rows.length, 0, 'a count that is zero this period and to date is left out');
       t.eq(r.gManual.rows.length, 0, 'a report with only typed sections has no figures');
       t.eq(r.gManual.showAttention, false, 'and no attention block (nothing to check it against)');
 
       t.ok(r.pane.includes('Report at a glance') && r.paneText.includes('Key figures'), 'live preview opens with Report at a glance');
+      t.ok(r.paneText.includes('Project to date') && !r.paneText.includes('Previous period') && !/\d%/.test(r.g.rows.map(x => x.join(' ')).join(' ')), 'columns are This period / Project to date, no percentages');
+      t.ok(/^Project to date: .* \(from the (project start date|first logged interaction)\)\.$/.test(r.g.toDateLabel), 'the note says where project to date starts');
       t.ok(r.paneText.indexOf('Report at a glance') < r.paneText.indexOf('A NOTE TO THE CLIENT.'), 'the optional note follows it');
       t.ok(r.noAIButton, 'the AI overall-summary button and its code are gone');
       t.ok(r.snapGlance.includes('Report at a glance') && r.snapGlance.includes('high-priority issue'), 'snapshot freezes the glance');

@@ -92,6 +92,7 @@ module.exports = {
       t.eq(r.ids.join(','), 'project-brief,parcel-status', 'chosen order read');
       t.ok(r.pfBrief.some(x => /Contacts logged: 6/.test(x)) && r.pfParcel.some(x => /Right-of-way parcels: \d+/.test(x)), 'package summary gets brief and parcel facts');
       t.ok(r.popup && /Project brief — March 1/.test(r.popup.body) && /Right-of-Way Parcel Report/.test(r.popup.body), 'package contains the brief and the parcel report');
+      t.ok(/break-before:page;margin-top:44px[^>]*>\s*<div[^>]*>2\. /.test(r.popup.body), 'space before each report after the first');
       t.ok(/Mostly appreciative/.test(r.popup.body), 'typed conversation prints on the brief');
       t.ok(r.popup.opts && r.popup.opts.running && /March 1/.test(r.popup.opts.running.sub) && /Source:/.test(r.popup.opts.source), 'running header + source line passed');
       t.ok(r.frame.includes('Weber River Bridges') && r.frame.includes('Report date: March 8, 2030') && r.frame.includes('#c4551f') && r.frame.includes('Source: Cirrus Cc logs'), 'frame draws the running strip and source line');

@@ -15636,7 +15636,9 @@ function generateReportSequence(){
       +'</div>';
   }
   collected.forEach(function(r,i){
-    combined+='<div'+(i>0?' style="page-break-before:always;break-before:page"':'')+'>'
+    // Space between reports on screen; in print each starts a new page (a top
+    // margin after a forced break is dropped there).
+    combined+='<div'+(i>0?' style="page-break-before:always;break-before:page;margin-top:44px"':'')+'>'
       +'<div style="font-size:15px;font-weight:700;color:#1a3a5c;margin:0 0 12px;border-bottom:2px solid #1a3a5c;padding-bottom:5px">'+(i+1)+'. '+r.title+'</div>'
       +r.body
       +'</div>';

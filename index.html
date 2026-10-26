@@ -13548,7 +13548,8 @@ function _coCloseoutSystemPrompt() {
     + 'Use ONLY the facts and notes provided. Never invent a number, date, name, outlet, quote, event or outcome; '
     + 'if something is not in the facts, leave it out rather than guess. Use each number exactly as given. '
     + 'Do not write web addresses or email addresses; the report lists those links under your paragraph. '
-    + 'Do not begin by repeating the section heading. Stay within the requested length.';
+    + 'Do not begin by repeating the section heading. Stay within the requested length. '
+    + RPT_TEAM_VOICE;
 }
 
 // Facts for one heading. Returns { lines, notes } — lines computed from Cirrus Cc
@@ -13993,6 +13994,18 @@ function _rptBrandHeader(modeOverride){
     +'<img src="'+window._srHeader+'" alt="Cirrus Cc" style="height:70px;width:auto;object-fit:contain;flex-shrink:0">'
     +'</div>'
     +'</div>';
+}
+// The running title strip under the letterhead (report packages): project
+// name and period on the left, client/PIN and report date on the right, an
+// orange rule beneath. In <thead>, so it repeats on every printed page.
+function _rptRunningStrip(r){
+  if(!r) return '';
+  return '<table style="width:100%;border-collapse:collapse;table-layout:fixed;margin:0"><tr>'
+    +'<td style="border:none!important;padding:0 0 6px!important;vertical-align:bottom!important"><div style="font-size:17px;font-weight:700;color:#1a3a5c;line-height:1.15">'+escHtml(r.title||'')+'</div>'
+    +'<div style="font-size:9.5px;color:#555;margin-top:2px">'+escHtml(r.sub||'')+'</div></td>'
+    +'<td style="border:none!important;padding:0 0 6px!important;text-align:right;vertical-align:bottom!important;width:42%"><div style="font-size:9.5px;color:#555">'+escHtml(r.right||'')+'</div>'
+    +'<div style="font-size:9.5px;color:#555">Report date: '+escHtml(r.date||'')+'</div></td></tr></table>'
+    +'<div style="height:3px;background:#c4551f;margin:0 0 4px"></div>';
 }
 // Full-width letterhead footer band. Sunrise mode only (UDOT skips the footer).
 function _rptBrandFooter(){
@@ -14492,6 +14505,7 @@ function generateParcelReport(){
   var targetProjs=projF?projs.filter(function(p){ return String(p.id)===String(projF); })
                        :projs.filter(function(p){ return (DB.get('parcels')||[]).some(function(x){ return String(x.projectId)===String(p.id); }); });
   if(!targetProjs.length){
+    if(window._rptCollector) return;
     alert('No parcels tracked yet. Add parcels in the Parcels view, or import a parcel list, then run this report.');
     return;
   }
@@ -14592,6 +14606,11 @@ function generateParcelReport(){
     bodyHTML+='</tbody></table>';
   });
 
+  if(window._rptCollector){
+    // In a report package: hand over the body; a project with no parcels adds nothing.
+    if(bodyHTML) window._rptCollector.push({title:'Right-of-Way Parcel Report', distBlock:'', body:bodyHTML});
+    return;
+  }
   if(!bodyHTML){ alert('No parcels tracked for the selected project yet.'); return; }
 
   var titleLine=projF&&targetProjs[0]
@@ -15225,6 +15244,285 @@ function generateReport(type, opts){
   _openRptPopup(bodyForPopup, getReportTitle(type), proj.pid+' — '+proj.name, dateStr, opts.summary||summaryTxtVal2);
 }
 
+
+// ── PROJECT BRIEF — the report package's one-page overview (Oct 2026, Jeff) ──
+// Modelled on a hand-built I-84 Weber Bridges PI summary: headline tiles, inbound
+// contacts per day with the team's outreach marked on the same axis, what people
+// contacted us about, tone by topic, the outreach timeline, social posts with
+// their counts, and an optional "What the public conversation looks like".
+// Everything is COUNTED from the log — subjects and natures as staff logged
+// them, never themes or tone guessed by a model — and dated within the brief's
+// own period. _briefModel is the one set of numbers: the brief, its AI facts
+// and the package summary all read it.
+var BRIEF_WEEKLY_AFTER_DAYS=62;   // longer than this → contacts per week, not per day
+var BRIEF_TOPICS=8, BRIEF_TONE_TOPICS=7, BRIEF_SOCIAL_MAX=6, BRIEF_TIMELINE_MAX=30, BRIEF_PHASES=3;
+// Tone = the Nature staff picked when logging, grouped. Labels say what was
+// logged, not a judgment of the person.
+var BRIEF_TONES=[
+  {k:'Complaint', n:['Complaint'], c:'#b32020'},
+  {k:'Concern', n:['Concern'], c:'#e0a100'},
+  {k:'Question or information', n:['Inquiry','Request','Comment','Notification'], c:'#7f8c99'},
+  {k:'Positive', n:['Compliment','Support'], c:'#1a7a50'},
+  {k:'Not recorded', n:[''], c:'#cfd6dd'}
+];
+function _briefTone(nature){
+  var n=String(nature||'').trim();
+  for(var k=0;k<BRIEF_TONES.length-1;k++){ if(BRIEF_TONES[k].n.indexOf(n)>=0) return BRIEF_TONES[k].k; }
+  return n ? 'Question or information' : 'Not recorded';
+}
+function _briefMonday(iso){ var d=new Date(iso+'T00:00:00Z'), w=(d.getUTCDay()+6)%7; return _isoAddDays(iso,-w); }
+function _briefRange(a,b){ return a===b ? _fmtDateRange(a,'').replace(/^from /,'') : _fmtDateRange(a,b); }
+function _briefShort(iso){ var p=String(iso).split('-'); return (+p[1])+'/'+(+p[2]); }
+function _briefModel(projF, a, b, includeInternal){
+  var proj=(DB.get('projects')||[]).find(function(p){ return String(p.id)===String(projF); });
+  if(!proj) return null;
+  var cs=_concernsStats(projF, a, b, includeInternal);
+  var inbound=cs.inbound, all=cs.inbound.concat(cs.outbound);
+  var subj=function(i){ return String(i.subject||'').trim()||'General'; };
+  // Window for the chart: the brief's dates, else the span of what was logged.
+  var dates=inbound.map(function(i){ return i.date; }).filter(Boolean).sort();
+  var s=a||dates[0]||'', e=b||dates[dates.length-1]||'';
+  var buckets=[], weekly=false;
+  if(s&&e&&e>=s){
+    var days=Math.round((new Date(e+'T00:00:00Z')-new Date(s+'T00:00:00Z'))/86400000)+1;
+    weekly=days>BRIEF_WEEKLY_AFTER_DAYS;
+    if(weekly){ for(var w=_briefMonday(s); w<=e; w=_isoAddDays(w,7)) buckets.push({start:w, end:_isoAddDays(w,6), n:0, out:0}); }
+    else { for(var d=s; d<=e; d=_isoAddDays(d,1)) buckets.push({start:d, end:d, n:0, out:0}); }
+  }
+  var bucketOf=function(iso){ for(var k=0;k<buckets.length;k++){ if(iso>=buckets[k].start&&iso<=buckets[k].end) return buckets[k]; } return null; };
+  inbound.forEach(function(i){ var bk=i.date&&bucketOf(i.date); if(bk) bk.n++; });
+  var ost=_outreachStats(projF, a, b);
+  ost.rows.forEach(function(x){ var bk=x.a.actionDate&&bucketOf(String(x.a.actionDate)); if(bk) bk.out++; });
+  var peak=null; buckets.forEach(function(bk){ if(bk.n&&(!peak||bk.n>peak.n)) peak=bk; });
+  var ch=function(re){ return inbound.filter(function(i){ return re.test(i.channel||''); }).length; };
+  var reachActs=ost.rows.filter(function(x){ return /newsletter|email blast/i.test(x.a.actionType||'') && _outHas(x.a.reach); })
+    .sort(function(x,y){ return Number(y.a.reach)-Number(x.a.reach); });
+  var openIssues=(DB.get('issues')||[]).filter(function(i){ return String(i.projectId)===String(projF) && i.status!=='Resolved' && i.status!=='Closed'; }).length;
+  var topics=_qrTally(inbound, subj, BRIEF_TOPICS);
+  var toneTopics=_qrTally(inbound, subj, BRIEF_TONE_TOPICS).map(function(r){
+    var t={}; BRIEF_TONES.forEach(function(g){ t[g.k]=0; });
+    inbound.filter(function(i){ return subj(i)===r[0]; }).forEach(function(i){ t[_briefTone(i.nature)]++; });
+    return {topic:r[0], n:r[1], tones:t};
+  });
+  var toneAll={}; BRIEF_TONES.forEach(function(g){ toneAll[g.k]=0; });
+  inbound.forEach(function(i){ toneAll[_briefTone(i.nature)]++; });
+  var projInts=(DB.get('interactions')||[]).filter(function(i){ return String(i.projectId)===String(projF); });
+  var social=ost.rows.filter(function(x){ return /social/i.test(x.a.actionType||''); }).slice(0, BRIEF_SOCIAL_MAX);
+  var timeline=ost.rows.slice().sort(function(x,y){ return String(x.a.actionDate).localeCompare(String(y.a.actionDate)); });
+  return {proj:proj, a:s, b:e, pstart:a, pend:b, cs:cs, inbound:inbound, all:all, buckets:buckets, weekly:weekly, peak:peak,
+    phone:ch(/phone|call/i), email:ch(/e-?mail/i), ost:ost, reach:reachActs[0]||null, openIssues:openIssues,
+    topics:topics, topicMore:_qrMore(inbound, subj, BRIEF_TOPICS, 'contacts', 'subjects'),
+    toneTopics:toneTopics, toneAll:toneAll, social:social, timeline:timeline,
+    undated:projInts.filter(function(i){ return !i.date; }).length,
+    noNotes:inbound.filter(function(i){ return !String(i.summary||'').trim(); }).length};
+}
+// Inbound contacts per day (or week), the team's outreach marked ▼ above the
+// day it went out — so a reader sees the newsletter go out and the calls come.
+function _briefDailySvg(m){
+  var W=CO_CHART.w, H=250, n=m.buckets.length;
+  if(!n) return null;
+  var max=Math.max.apply(null, m.buckets.map(function(b){ return b.n; }).concat([1]));
+  var ticks=_coTicks(max,4), top=ticks[ticks.length-1];
+  var padL=Math.ceil(_coTextW(_coFmtN(top))+14), padR=8, padT=52, padB=30;
+  var pw=W-padL-padR, ph=H-padT-padB, base=padT+ph;
+  var y=function(v){ return base-v/top*ph; };
+  var band=pw/n, bw=Math.max(2, Math.min(26, band*0.7));
+  var s=_coSvgOpen(W,H,'Inbound contacts per '+(m.weekly?'week':'day')+' with outreach actions marked');
+  s+='<path d="M'+padL+',8 l5,8 l5,-8 Z" fill="#1a3a5c"/>'+_coSvgText(padL+15,16,'= outreach the team sent or posted that '+(m.weekly?'week':'day')+' (website, newsletter, press, social, partners)',{size:10,fill:CO_CHART.ink});
+  ticks.forEach(function(t){
+    if(t) s+='<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+y(t)+'" y2="'+y(t)+'" stroke="'+CO_CHART.grid+'" stroke-width="1"/>';
+    s+=_coSvgText(padL-7, y(t)+4, _coFmtN(t), {anchor:'end'});
+  });
+  var every=Math.ceil(n/(m.weekly?12:16));
+  m.buckets.forEach(function(b,i){
+    var cx=padL+band*(i+0.5), x=cx-bw/2, h=b.n/top*ph, isPeak=(b===m.peak);
+    if(b.n) s+='<path d="'+_coBarPath(x, base-h, bw, h, 'up')+'" fill="'+(isPeak?'#c4551f':CO_CHART.s1)+'"/>';
+    if(b.n&&(isPeak||n<=31)) s+=_coSvgText(cx, base-h-4, _coFmtN(b.n), {anchor:'middle', size:isPeak?11:9.5, bold:isPeak, fill:CO_CHART.ink});
+    if(b.out) s+='<path d="M'+(cx-5)+',24 l5,8 l5,-8 Z" fill="#1a3a5c"/>';
+    if((n-1-i)%every===0) s+=_coSvgText(cx, base+16, _briefShort(b.start), {anchor:'middle', size:10});
+  });
+  s+='<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+base+'" y2="'+base+'" stroke="'+CO_CHART.base+'" stroke-width="1"/>';
+  return {svg:s+'</svg>', w:W, h:H};
+}
+// Stacked horizontal bars: each topic split by the tone staff logged.
+function _briefToneSvg(m){
+  var rows=m.toneTopics; if(!rows.length) return null;
+  var W=CO_CHART.w, rowH=24, bh=15, padT=6, legH=24, H=padT+rows.length*rowH+legH+6;
+  var labs=rows.map(function(r){ var t=r.topic; return t.length>28?t.slice(0,27)+'…':t; });
+  var labW=Math.min(200, Math.ceil(Math.max.apply(null, labs.map(function(l){ return _coTextW(l,11); })))+14);
+  var max=Math.max.apply(null, rows.map(function(r){ return r.n; }).concat([1]));
+  var x0=labW, pw=W-x0-40;
+  var s=_coSvgOpen(W,H,'Contacts by topic and tone');
+  rows.forEach(function(r,i){
+    var yc=padT+rowH*(i+0.5), x=x0;
+    s+=_coSvgText(x0-8, yc+4, labs[i], {anchor:'end', size:11, fill:CO_CHART.ink});
+    BRIEF_TONES.forEach(function(g){
+      var v=r.tones[g.k]; if(!v) return;
+      var w=v/max*pw;
+      s+='<rect x="'+x.toFixed(1)+'" y="'+(yc-bh/2)+'" width="'+Math.max(1,w-1).toFixed(1)+'" height="'+bh+'" fill="'+g.c+'"/>';
+      if(w>16) s+=_coSvgText(x+w/2, yc+4, String(v), {anchor:'middle', size:9.5, bold:true, fill:(g.k==='Concern'||g.k==='Not recorded')?'#222':'#fff'});
+      x+=w;
+    });
+    s+=_coSvgText(x+5, yc+4, String(r.n), {size:10, fill:CO_CHART.ink2});
+  });
+  var ly=padT+rows.length*rowH+16, lx=10;
+  BRIEF_TONES.forEach(function(g){
+    s+='<rect x="'+lx+'" y="'+(ly-9)+'" width="10" height="10" rx="2" fill="'+g.c+'"/>'+_coSvgText(lx+14, ly, g.k, {size:10, fill:CO_CHART.ink});
+    lx+=14+_coTextW(g.k,10)+12;
+  });
+  return {svg:s+'</svg>', w:W, h:H};
+}
+// The brief's headline tiles: solid colour, white figures.
+function _briefTiles(tiles){
+  var w=Math.floor(100/tiles.length);
+  return '<table style="width:100%;border-collapse:separate;border-spacing:6px 0;table-layout:fixed;margin:0 0 14px"><tr>'
+    +tiles.map(function(t){
+      return '<td style="width:'+w+'%;padding:9px 8px!important;background:'+t.c+'!important;border:none!important;text-align:center;vertical-align:middle!important">'
+        +'<div style="font-size:21px;font-weight:700;color:#fff;line-height:1.1">'+escHtml(t.v)+'</div>'
+        +'<div style="font-size:8.5px;color:#fff;line-height:1.3;margin-top:3px">'+escHtml(t.label)+'</div></td>';
+    }).join('')+'</tr></table>';
+}
+function _briefH(t){ return '<div style="font-size:12px;font-weight:700;color:#1a3a5c;margin:14px 0 6px">'+escHtml(t)+'</div>'; }
+// opts: {phases:[{a,b,text}], convo:'Heading: text\n…'}
+function _briefHTML(m, opts){
+  opts=opts||{};
+  var T=[];
+  T.push({v:String(m.all.length), label:'contacts logged ('+m.inbound.length+' inbound, '+m.cs.outbound.length+' outbound)', c:'#1a3a5c'});
+  T.push({v:m.phone+' / '+m.email, label:'inbound phone calls / emails', c:'#2a78d6'});
+  if(m.peak) T.push({v:String(m.peak.n), label:'inbound contacts '+(m.weekly?'the week of ':'on ')+_briefShort(m.peak.start)+' (busiest '+(m.weekly?'week':'day')+')', c:'#c4551f'});
+  T.push({v:String(m.ost.total), label:'proactive outreach actions', c:'#0e3d8c'});
+  if(m.reach) T.push({v:Number(m.reach.a.reach).toLocaleString('en-US'), label:(m.reach.a.actionType||'newsletter').toLowerCase()+' recipients reached '+_briefShort(m.reach.a.actionDate), c:'#444'});
+  else T.push({v:String(m.openIssues), label:'open issues now', c:'#444'});
+  var h=_briefTiles(T);
+  var ch=_briefDailySvg(m);
+  if(ch) h+=_qrFigure('Inbound public contacts per '+(m.weekly?'week':'day')+(m.a&&m.b?' ('+_fmtDateRange(m.a,m.b)+')':''), ch,
+    m.peak?'Busiest '+(m.weekly?'week':'day')+': '+_briefRange(m.peak.start,m.peak.end)+', '+m.peak.n+' inbound contacts.':'');
+  // Topics, beside the volume-by-period table when phases were given.
+  var phases=(opts.phases||[]).filter(function(p){ return p.a&&p.b&&p.b>=p.a; });
+  var topics=m.topics.length?_qrFigure('What people contacted us about ('+m.inbound.length+' inbound contacts)', _qrHBars(m.topics.map(function(r,i){ return [r[0],r[1],i===0?'#c4551f':i===1?'#2a78d6':'#7f8c99']; }),'Inbound contacts by subject'), m.topicMore):'';
+  if(phases.length){
+    var th='background:#1a3a5c!important;color:#fff!important';
+    var pt='<div style="font-size:10px;font-weight:700;color:#1a3a5c;margin-bottom:4px">Volume by period</div><table><thead><tr><th style="'+th+'">Period</th><th style="'+th+';width:22%">Contacts</th><th style="'+th+'">What was happening</th></tr></thead><tbody>';
+    phases.forEach(function(p){
+      var n=m.inbound.filter(function(i){ return i.date&&i.date>=p.a&&i.date<=p.b; }).length;
+      pt+='<tr><td><b>'+escHtml(_fmtDateRange(p.a,p.b))+'</b></td><td>'+n+'</td><td>'+escHtml(p.text||'')+'</td></tr>';
+    });
+    pt+='</tbody></table>';
+    h+='<table style="width:100%;table-layout:fixed;border-collapse:collapse;margin:0"><tr><td style="width:56%;border:none!important;padding:0 10px 0 0!important">'+topics+'</td><td style="border:none!important;padding:0!important">'+pt+'</td></tr></table>';
+  } else h+=topics;
+  if(m.timeline.length){
+    h+=_briefH('Proactive outreach timeline');
+    var th2='background:#1a3a5c!important;color:#fff!important';
+    h+='<table><thead><tr><th style="'+th2+';width:13%">Date</th><th style="'+th2+';width:30%">Channel</th><th style="'+th2+'">Activity</th></tr></thead><tbody>';
+    m.timeline.slice(0,BRIEF_TIMELINE_MAX).forEach(function(x,k){
+      var a=x.a, act=String(a.title||a.description||'').trim(); if(act.length>140) act=act.slice(0,139)+'…';
+      var chan=(a.actionType||'')+(a.outlet?' — '+a.outlet:'');
+      h+='<tr style="'+(k%2?'background:#f6f8fa':'')+'"><td><b>'+escHtml(_briefShort(String(a.actionDate)))+'</b></td><td>'+escHtml(chan)+'</td><td>'+escHtml(act)+(_outReachText(a)?' <span style="color:#666">('+escHtml(_outReachText(a))+')</span>':'')+'</td></tr>';
+    });
+    h+='</tbody></table>';
+    if(m.timeline.length>BRIEF_TIMELINE_MAX) h+='<div style="font-size:8.5px;color:#666;font-style:italic">Plus '+(m.timeline.length-BRIEF_TIMELINE_MAX)+' more in the Outreach log.</div>';
+  }
+  if(m.social.length){
+    h+=_briefH('Social media posts');
+    var cards=m.social.map(function(x){
+      var a=x.a, r=x.r, cnt=r?OUT_COUNTS.filter(function(c){ return _outHas(r[c[0]]); }).map(function(c){ return Number(r[c[0]]).toLocaleString('en-US')+' '+c[1].toLowerCase(); }).join(' | '):'';
+      var d=String(a.description||'').trim(); if(d.length>200) d=d.slice(0,199)+'…';
+      return '<td style="width:33%;vertical-align:top!important;border:1px solid #c9d3de!important;padding:0!important">'
+        +'<div style="background:#2a78d6;color:#fff;font-weight:700;font-size:9.5px;padding:5px 8px">'+escHtml(a.outlet||a.author||'Social post')+'</div>'
+        +'<div style="padding:6px 8px"><div style="font-weight:700;font-size:9.5px;color:#1a3a5c;margin-bottom:3px">'+escHtml(_briefShort(String(a.actionDate)))+': '+escHtml(String(a.title||'Post').slice(0,90))+'</div>'
+        +(d?'<div style="font-size:9px;color:#333;line-height:1.45">'+escHtml(d)+'</div>':'')
+        +(cnt?'<div style="font-size:9px;font-weight:700;color:#c4551f;margin-top:4px">'+escHtml(cnt)+'</div>':'')
+        +(r?'<div style="font-size:8px;color:#777;margin-top:2px">'+escHtml(_outReadingNote(r))+'</div>':'')+'</div></td>';
+    });
+    for(var k=0;k<cards.length;k+=3){
+      var row=cards.slice(k,k+3); while(row.length<3) row.push('<td style="border:none!important"></td>');
+      h+='<table style="width:100%;table-layout:fixed;border-collapse:separate;border-spacing:6px 6px;margin:0 -6px"><tr>'+row.join('')+'</tr></table>';
+    }
+  }
+  var convo=String(opts.convo||'').split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
+  if(convo.length){
+    h+=_briefH('What the public conversation looks like');
+    h+='<table style="border-left:4px solid #c4551f">';
+    convo.forEach(function(l,k){
+      var mm=l.match(/^([^:]{2,40}):\s*(.+)$/);
+      h+='<tr style="background:'+(k%2?'#fff':'#f4f6f8')+'"><td style="width:24%;font-weight:700;color:#1a3a5c">'+escHtml(mm?mm[1]:'')+'</td><td>'+escHtml(mm?mm[2]:l)+'</td></tr>';
+    });
+    h+='</table>';
+  }
+  var tch=_briefToneSvg(m);
+  if(tch){
+    var ta=m.toneAll, parts=BRIEF_TONES.filter(function(g){ return ta[g.k]; }).map(function(g){ return ta[g.k]+' '+g.k.toLowerCase(); });
+    h+='<div style="height:10px"></div>'+_qrFigure('Contact tone by topic', tch, 'Tone is the nature staff recorded for each inbound contact: '+parts.join(', ')+'.');
+  }
+  var notes=[];
+  notes.push('Counts come from the project\'s logged interactions'+(m.a&&m.b?' dated '+_fmtDateRange(m.a,m.b):'')+'; outreach from the Outreach log, with engagement counts as read on the dates shown.');
+  if(m.undated) notes.push(m.undated+' logged interaction'+(m.undated!==1?'s have':' has')+' no date and '+(m.undated!==1?'are':'is')+' not counted here.');
+  if(m.noNotes) notes.push(m.noNotes+' inbound contact'+(m.noNotes!==1?'s were':' was')+' logged without notes.');
+  h+='<div style="font-size:8.5px;color:#666;font-style:italic;margin-top:10px;line-height:1.5">Notes: '+escHtml(notes.join(' '))+'</div>';
+  return h;
+}
+// Facts the package summary and the conversation draft read. Counted here.
+function _briefFactLines(m){
+  var L=[];
+  L.push('Brief period: '+_fmtDateRange(m.a,m.b)+'.');
+  L.push('Contacts logged: '+m.all.length+' ('+m.inbound.length+' inbound and in-person, '+m.cs.outbound.length+' outbound by the team). Inbound by phone: '+m.phone+'; by email: '+m.email+'.');
+  if(m.peak) L.push('Busiest '+(m.weekly?'week':'day')+': '+_briefRange(m.peak.start,m.peak.end)+' with '+m.peak.n+' inbound contacts.');
+  if(m.topics.length) L.push('Inbound contacts by subject: '+m.topics.map(function(r){ return r[0]+' ('+r[1]+')'; }).join(', ')+'.');
+  var parts=BRIEF_TONES.filter(function(g){ return m.toneAll[g.k]; }).map(function(g){ return g.k.toLowerCase()+' '+m.toneAll[g.k]; });
+  if(parts.length) L.push('Inbound contacts by recorded nature: '+parts.join(', ')+'.');
+  _outreachFactLines(m.ost).forEach(function(x){ L.push(x); });
+  return L;
+}
+function _briefPhasesFromModal(){
+  var out=[];
+  for(var k=0;k<BRIEF_PHASES;k++){
+    var a=(document.getElementById('pkg-ph-a'+k)||{}).value||'', b=(document.getElementById('pkg-ph-b'+k)||{}).value||'', t=(document.getElementById('pkg-ph-t'+k)||{}).value||'';
+    if(a||b||t.trim()) out.push({a:a,b:b,text:t.trim()});
+  }
+  return out;
+}
+function _briefIncludeInternal(){ return !!((document.getElementById('rpt-include-internal')||{}).checked); }
+// "What the public conversation looks like" — the one AI part of the brief.
+// Reads the outreach log and what inbound contacts were about (by role or
+// organisation, never a person's name). Returns the request; never counts.
+function _briefConvoRequest(m){
+  var stakes=DB.get('stakeholders')||[];
+  var news=m.ost.rows.filter(function(x){ return /news|press|trucking|publication/i.test(x.a.actionType||''); });
+  var soc=m.social;
+  var L=['FACTS (computed — authoritative; never count anything yourself):'].concat(_briefFactLines(m));
+  if(news.length){ L.push('','NEWS AND PRESS IN THE PERIOD:'); news.slice(0,20).forEach(function(x){ L.push('- '+x.a.actionDate+' · '+(x.a.actionType||'')+' · '+(x.a.outlet||'')+': '+_pkgTrim(x.a.title||x.a.description||'')); }); }
+  if(soc.length){ L.push('','SOCIAL POSTS:'); soc.forEach(function(x){ var r=x.r; L.push('- '+x.a.actionDate+' · '+(x.a.outlet||'')+': '+_pkgTrim(x.a.title||'')+(x.a.description?' — '+_pkgTrim(x.a.description):'')+(r?' (counts as read '+r.readOn+': '+OUT_COUNTS.filter(function(c){ return _outHas(r[c[0]]); }).map(function(c){ return r[c[0]]+' '+c[1].toLowerCase(); }).join(', ')+')':'')); }); }
+  L.push('','INBOUND CONTACTS, newest first (who = type or organization; read for themes, do not count from it):');
+  m.inbound.slice().reverse().slice(0,OVERALL_LOG_FALLBACK).forEach(function(i){
+    L.push('- '+(i.date||'')+' · '+(i.channel||'')+' · '+_coWho(i,stakes)+' · '+(String(i.subject||'').trim()||'General')+': '+_pkgTrim(i.summary||'')+(i.followUpResolution?' — response: '+_pkgTrim(i.followUpResolution):''));
+  });
+  var user='Write the "What the public conversation looks like" panel of a one-page public involvement project brief.\n\n'
+    +'FORMAT: 3 or 4 lines, each "Heading: text", nothing else. Choose headings only from what the facts support, such as '
+    +'"News coverage", "Social media", "Inbox themes", "Partner coordination". Each text is 1-2 sentences, at most 45 words. '
+    +'No bullets, no markdown, no blank lines.\n'
+    +'Say what people are saying and how the project team is responding. Use the counts exactly as given; never count or estimate. '
+    +'Refer to private individuals by role, never by name. Refer to the project as "the project".\n\n'+L.join('\n');
+  return {system:_claudeSectionSystemPrompt(), user:user, maxTokens:Math.round(200*1.6)+200};
+}
+var OVERALL_LOG_FALLBACK=80;   // newest inbound contacts the conversation draft reads
+async function genBriefConvo(btn){
+  var projF=S.projectFilter;
+  if(!projF){alert('Select a project first.');return;}
+  if(!_getClaudeKey()){showToast('Add your Claude API key in Settings to use AI','warn');return;}
+  var a=(document.getElementById('pkg-pstart')||{}).value||'', b=(document.getElementById('pkg-pend')||{}).value||'';
+  var m=_briefModel(projF, a, b, _briefIncludeInternal());
+  if(!m||(!m.all.length&&!m.ost.total)){showToast('Nothing logged in the brief period to draft from','warn');return;}
+  var ta=document.getElementById('pkg-convo');
+  if(ta&&ta.value.trim()&&!confirm('Replace the current text with a new AI draft?'))return;
+  var req=_briefConvoRequest(m);
+  var orig=btn?btn.innerHTML:'';
+  if(btn){btn.disabled=true;btn.textContent='Generating…';}
+  var out=await _claudeNarrative(req.system, req.user, req.maxTokens);
+  if(btn){btn.disabled=false;btn.innerHTML=orig;}
+  if(out&&ta){ ta.value=out.split('\n').map(function(l){ return l.replace(/^[-*•\s]+/,'').replace(/\*\*/g,'').trim(); }).filter(Boolean).join('\n'); showToast('Drafted — review before printing','info',2500); }
+  else if(!out){ showToast('AI draft failed — check the console','error',4000); }
+}
+
 // ── REPORT PACKAGE (stitch multiple quick reports into one document) ──────
 // The reports that render through the shared letterhead frame (_openRptPopup)
 // can be stitched into a single printable document. The user assigns each a
@@ -15232,6 +15530,7 @@ function generateReport(type, opts){
 // around the whole thing (so the header/footer repeat on every page), with a
 // page break between reports and the "Distributed to" block shown once up top.
 var PACKAGE_REPORTS=[
+  {id:'project-brief',name:'Project brief — one-page overview'},
   {id:'contact-list',name:'Stakeholder contact list'},
   {id:'interaction-log',name:'Interaction log'},
   {id:'followup-status',name:'Follow-up status report'},
@@ -15240,14 +15539,15 @@ var PACKAGE_REPORTS=[
   {id:'comment-matrix',name:'Public comment matrix'},
   {id:'issues-report',name:'Issues tracker report'},
   {id:'events-log',name:'Events & outreach log'},
-  {id:'outreach-log',name:'Outreach log'}
+  {id:'outreach-log',name:'Outreach log'},
+  {id:'parcel-status',name:'Right-of-Way parcel report'}
 ];
 
 function openReportSequenceModal(){
   var projF=S.projectFilter;
   if(!projF){alert('Select a project first.');return;}
   var opts='<option value="">—</option>';
-  for(var n=1;n<=9;n++)opts+='<option value="'+n+'">'+n+'</option>';
+  for(var n=1;n<=PACKAGE_REPORTS.length;n++)opts+='<option value="'+n+'">'+n+'</option>';
   var rows='';
   PACKAGE_REPORTS.forEach(function(r){
     rows+='<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:#1A3050;border:1px solid rgba(255,255,255,.12);border-radius:8px;margin-bottom:8px">'
@@ -15267,12 +15567,29 @@ function openReportSequenceModal(){
     +'style="width:100%;min-height:90px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:10px 12px;resize:vertical;font-family:inherit;line-height:1.6;box-sizing:border-box"></textarea>'
     +'<div style="font-size:11px;color:var(--fog);margin-top:5px">Summarizes only the reports you have numbered above, in that order — number them first. Always review before printing.</div>'
     +'</div>';
+  var _today=localToday(), _lbl='font-size:11px;color:var(--fog)';
+  var phRows='';
+  for(var q=0;q<BRIEF_PHASES;q++) phRows+='<div style="display:grid;grid-template-columns:130px 130px 1fr;gap:6px;margin-top:5px">'
+    +'<input type="date" id="pkg-ph-a'+q+'" class="finput"><input type="date" id="pkg-ph-b'+q+'" class="finput">'
+    +'<input id="pkg-ph-t'+q+'" class="finput" placeholder="What was happening (e.g. wide-load inquiries as restrictions were announced)"></div>';
+  var briefBlock='<div style="margin-top:18px;padding-top:16px;border-top:1px solid rgba(255,255,255,.10)">'
+    +'<div style="font-size:12px;font-weight:600;color:var(--mist);margin-bottom:4px">Project brief <span style="font-weight:400;color:var(--slate)">(used when "Project brief" is numbered)</span></div>'
+    +'<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="'+_lbl+'">Period</span>'
+    +'<input type="date" id="pkg-pstart" class="finput" style="width:150px" value="'+_isoAddDays(_today,-29)+'">'
+    +'<span style="'+_lbl+'">to</span><input type="date" id="pkg-pend" class="finput" style="width:150px" value="'+_today+'"></div>'
+    +'<div style="'+_lbl+';margin-top:10px">Phases for a "Volume by period" table (optional — leave blank to leave the table out)</div>'+phRows
+    +'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 0 6px">'
+    +'<label style="font-size:12px;font-weight:600;color:var(--mist)">What the public conversation looks like <span style="font-weight:400;color:var(--slate)">(optional — one "Heading: text" per line)</span></label>'
+    +'<button class="btn btn-sm" '+(hasKey?'':'disabled title="Add your Claude API key in Settings to use AI"')+' onclick="genBriefConvo(this)">✦ Draft with AI</button></div>'
+    +'<textarea id="pkg-convo" placeholder="News coverage: …&#10;Social media: …&#10;Inbox themes: …" style="width:100%;min-height:80px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:13px;padding:10px 12px;resize:vertical;font-family:inherit;box-sizing:border-box"></textarea>'
+    +'</div>';
   var body='<div style="font-size:13px;color:var(--slate);margin-bottom:16px;line-height:1.55">'
-    +'Assign a sequence number (1–9) to each report you want included. They print in that order as one document — '
+    +'Assign a sequence number to each report you want included. They print in that order as one document — '
     +'letterhead on every page, a page break between reports, and the distribution list shown once on page 1. '
     +'Reports left blank are skipped. The internal-stakeholder toggle and distribution checkboxes on the Quick Reports screen still apply.'
     +'</div>'
     +rows
+    +briefBlock
     +execBlock;
   var ftr='<button class="btn" onclick="closeM()">Cancel</button>'
     +'<button class="btn btn-primary" onclick="generateReportSequence()" style="margin-left:8px">Generate package</button>';
@@ -15288,7 +15605,11 @@ function generateReportSequence(){
     var v=parseInt(sels[i].value,10);
     if(v>0)chosen.push({id:sels[i].getAttribute('data-rid'),ord:v,idx:i});
   }
-  if(!chosen.length){alert('Assign a sequence number (1–9) to at least one report.');return;}
+  if(!chosen.length){alert('Assign a sequence number to at least one report.');return;}
+  var bStart=(document.getElementById('pkg-pstart')||{}).value||'', bEnd=(document.getElementById('pkg-pend')||{}).value||'';
+  var hasBrief=chosen.some(function(c){ return c.id==='project-brief'; });
+  if(hasBrief&&bStart&&bEnd&&bEnd<bStart){alert('The project brief period ends before it starts.');return;}
+  var bPhases=_briefPhasesFromModal(), bConvo=((document.getElementById('pkg-convo')||{}).value||'').trim();
   // Sort by chosen number, ties broken by list order for determinism.
   chosen.sort(function(a,b){return a.ord-b.ord||a.idx-b.idx;});
   // Grab the (optional, human-reviewed) executive summary before closeM() clears the modal.
@@ -15306,6 +15627,12 @@ function generateReportSequence(){
         S.projectFilter=projF;S.issViewStatus='';S.issViewCat='';S.issViewPri='';
         try{ exportIssuesPdf(); }
         finally{ S.projectFilter=_pv;S.issViewStatus=_sv;S.issViewCat=_cv;S.issViewPri=_pr; }
+      } else if(c.id==='project-brief'){
+        var bm=_briefModel(projF, bStart, bEnd, _briefIncludeInternal());
+        if(bm) collected.push({title:'Project brief'+(bm.a&&bm.b?' — '+_fmtDateRange(bm.a,bm.b):''), distBlock:'', body:_briefHTML(bm,{phases:bPhases, convo:bConvo})});
+      } else if(c.id==='parcel-status'){
+        var _pv2=S.projectFilter; S.projectFilter=projF;
+        try{ generateParcelReport(); } finally{ S.projectFilter=_pv2; }
       } else {
         generateReport(c.id);
       }
@@ -15340,7 +15667,10 @@ function generateReportSequence(){
       +'</div>';
   });
 
-  _openRptPopup(combined,'Public Involvement Report Package',projLabel,dateStr);
+  var runSub=hasBrief&&bStart&&bEnd?'PI Report Package  |  '+_fmtDateRange(bStart,bEnd):'PI Report Package';
+  _openRptPopup(combined,'Public Involvement Report Package',projLabel,dateStr,'',
+    {running:{title:proj?proj.name:'', sub:runSub, right:(proj&&proj.client?proj.client+' · ':'')+(proj?'PIN '+proj.pid:''), date:dateStr},
+     source:'Source: Cirrus Cc interaction log and Outreach log'+(hasBrief&&bEnd?' through '+_fmtDateRange('',bEnd).replace(/^through /,''):'')});
 }
 
 // ── PACKAGE EXECUTIVE SUMMARY (Oct 2026) ──────────────────────────────────
@@ -15521,6 +15851,15 @@ function _buildPackageFacts(projF, ids, opts){
       if(!oL.length) L.push('No outreach actions are logged.');
       else oL.slice(0,25).forEach(function(x){ L.push(x); });
     }
+    else if(id==='project-brief'){
+      var bm=_briefModel(projF, opts.briefStart||'', opts.briefEnd||'', !!opts.includeInternal);
+      if(bm) _briefFactLines(bm).forEach(function(x){ L.push(x); });
+    }
+    else if(id==='parcel-status'){
+      var pm=_parcelStats(projF);
+      if(!pm.total) L.push('No right-of-way parcels are tracked on this project.');
+      else L.push('Right-of-way parcels: '+pm.total+'; owner identified on '+(pm.total-pm.unownedCt)+' ('+pm.ownedPct+'%); notice sent on '+pm.noticedCt+' ('+pm.noticePct+'%). Counts only — never owner names.');
+    }
     if(L.length) blocks.push({id:id,name:nameOf(id),lines:L,count:L.count||0});
   });
   return {phase:proj.phase||'',blocks:blocks,log:log};
@@ -15582,7 +15921,8 @@ async function genPackageExecSummary(btn){
   if(!ids.length){showToast('Number the reports for this package first — the summary covers only those.','warn',4000);return;}
   var ta=document.getElementById('pkg-exec-summary');
   if(ta&&ta.value.trim()&&!confirm('Replace the current summary with a new AI draft?'))return;
-  var facts=_buildPackageFacts(projF, ids);
+  var facts=_buildPackageFacts(projF, ids, {briefStart:(document.getElementById('pkg-pstart')||{}).value||'',
+    briefEnd:(document.getElementById('pkg-pend')||{}).value||'', includeInternal:_briefIncludeInternal()});
   if(!facts||!facts.blocks.length){showToast('Not enough project data to summarize yet','warn');return;}
   var req=_pkgSummaryRequest(facts);
   var orig=btn?btn.innerHTML:'';
@@ -15597,7 +15937,8 @@ async function genPackageExecSummary(btn){
 // ── PI REPORT EDITOR (with reorderable sections) ──────────
 // ── PI REPORT EDITOR (all sections selectable and orderable) ──
 
-function _openRptPopup(rawHtml, rptTitle, rptProjLabel, dateStr, summaryTxt){
+function _openRptPopup(rawHtml, rptTitle, rptProjLabel, dateStr, summaryTxt, frameOpts){
+  frameOpts=frameOpts||{};
   // Fix CSS variables to print-safe values
   var bodyHtml=rawHtml
     .replace(/color:var\(--fog\)/g,'color:#666')
@@ -15664,18 +16005,18 @@ function _openRptPopup(rawHtml, rptTitle, rptProjLabel, dateStr, summaryTxt){
     +'<span style="font-size:11px;color:#555">'+rptTitle+(rptProjLabel?' — '+rptProjLabel:'')+'</span>'
     +'</div>'
     +'<table class="rpt-frame">'
-    +'<thead><tr><td class="rpt-hdr-cell">'+_rptBrandHeader()+'</td></tr></thead>'
+    +'<thead><tr><td class="rpt-hdr-cell">'+_rptBrandHeader()+_rptRunningStrip(frameOpts.running)+'</td></tr></thead>'
     +'<tfoot><tr><td class="rpt-ftr-cell">'+_rptBrandFooter()+'</td></tr></tfoot>'
     +'<tbody><tr><td class="rpt-body-cell">'
     +'<div style="padding:0 0 8px 0">'
-    +'<div style="font-size:15px;font-weight:700;color:#1a3a5c;margin-bottom:3px">'+rptTitle+'</div>'
+    +(frameOpts.running?'':'<div style="font-size:15px;font-weight:700;color:#1a3a5c;margin-bottom:3px">'+rptTitle+'</div>'
     +(rptProjLabel?'<div style="font-size:11px;color:#555;margin-bottom:2px">'+rptProjLabel+'</div>':'')
-    +'<div style="font-size:10px;color:#595959;margin-bottom:10px">Generated '+dateStr+'</div>'
+    +'<div style="font-size:10px;color:#595959;margin-bottom:10px">Generated '+dateStr+'</div>')
     +summaryBlock
     +'</div>'
     +bodyHtml
     +'<div style="margin-top:20px;padding-top:8px;border-top:1px solid #ddd;font-size:8px;color:#aaa;display:flex;justify-content:space-between">'
-    +'<span>Cirrus Cc · Sunrise Engineering</span>'
+    +'<span>'+(frameOpts.source?escHtml(frameOpts.source):'Cirrus Cc · Sunrise Engineering')+'</span>'
     +'<span>'+footerLabel+'</span>'
     +'</div>'
     +'</td></tr></tbody>'
@@ -16060,12 +16401,24 @@ function _fmtDateRange(startIso, endIso) {
   return MON[a.getMonth()]+' '+a.getDate()+' \u2013 '+MON[b.getMonth()]+' '+b.getDate()+', '+b.getFullYear();
 }
 
+// The team voice (Oct 2026, Jeff): these reports go to the client's project
+// manager and to everyone on the project team, contractors included. The PI
+// team's business grows by partnering, so the prose credits the whole team —
+// while public concern is still reported honestly (that part is compliance).
+var RPT_TEAM_VOICE = 'These reports go to the client\'s project manager and the whole project team, including the contractors. '
+  + 'Write in a constructive, team-positive voice: present the client, the contractors and the public involvement team as one '
+  + 'project team working together, and where the facts support it, credit coordination, responsiveness and adjustments made '
+  + 'in response to public feedback. Frame challenges as being worked through together. Never assign blame to, or criticize the '
+  + 'decisions of, the client, a contractor or any project partner. Stay accurate: report what the public raised, and how much, '
+  + 'honestly and without minimizing it; the positive tone comes from how the team\'s response is described, never from '
+  + 'softening what people said. No promotional language or superlatives. ';
 function _claudeSectionSystemPrompt() {
   return 'You are a professional public involvement coordinator at a transportation engineering firm. '
     + 'Write professional narrative prose suitable for an FHWA project progress report, at the length '
     + 'requested in the task. Use plain, factual language. Do not use headers, bullet points, or markdown. '
     + 'Do not invent data — only summarize the facts provided. '
-    + 'Write in third person past or present tense as appropriate.';
+    + 'Write in third person past or present tense as appropriate. '
+    + RPT_TEAM_VOICE;
 }
 
 function _claudeSystemPrompt() {
@@ -19151,6 +19504,9 @@ async function generateTrendSummary() {
     +'Use plain, professional language, third person, 6-9 sentences. '
     +'IMPORTANT: Output plain prose paragraphs only. No markdown, no hashtags, no headers, no bullet points, '
     +'no asterisks, no special formatting of any kind.';
+  // Same team voice as every other client-facing narrative (RPT_TEAM_VOICE): candid
+  // about position, never blaming a partner.
+  systemPrompt += '\n\n' + RPT_TEAM_VOICE;
 
   var movement = '';
   if (cmp) {

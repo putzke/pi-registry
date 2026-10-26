@@ -971,6 +971,41 @@ above `generateReport`; colours in `QR_TONE`.
   its ~140-word paragraph and the newest 60 lines.
 - Guarded by `test/tests/91-quick-report-figures.test.js`.
 
+### Report package: Project brief, parcel report, running header, team voice (DEV, Oct 2026, Jeff)
+Modelled on a hand-built I-84 Weber Bridges PI summary Jeff liked.
+- **Project brief** (`project-brief`, first in `PACKAGE_REPORTS`): a one-page
+  overview over the brief's OWN period (Period from/to in the package dialog,
+  default the last 30 days). `_briefModel` is the one set of numbers (brief,
+  its AI facts `_briefFactLines`, the package summary): colour tiles
+  (`_briefTiles`: contacts in/out, inbound phone/email, busiest day, outreach
+  actions, newsletter reach or open issues), inbound contacts per day — per
+  week past `BRIEF_WEEKLY_AFTER_DAYS` — with ▼ on days the Outreach log has an
+  action (`_briefDailySvg`), "What people contacted us about" (Subject), an
+  optional "Volume by period" table from up to `BRIEF_PHASES` typed phases,
+  the outreach timeline, social-post cards with counts and "as of", the
+  optional "What the public conversation looks like" (one `Heading: text` per
+  line; ✦ Draft with AI → `genBriefConvo` / `_briefConvoRequest`: outreach +
+  inbound log via `_coWho`, no names, never counts), "Contact tone by topic"
+  (`_briefToneSvg`: Subject × the Nature staff logged, grouped by
+  `BRIEF_TONES` — counted, never AI-judged), and data notes (undated / no
+  notes). Internal toggle = the Quick Reports one.
+- **Right-of-Way parcel report** is in the package (`generateParcelReport`
+  hands its body to `_rptCollector`; no parcels → nothing added, no alert).
+  Sequence numbers now run to the number of reports.
+- **Running header** (`_rptRunningStrip`, 6th arg `frameOpts` of
+  `_openRptPopup`): project name + "PI Report Package | period" left, client ·
+  PIN + report date right, orange rule — in `<thead>`, so on every page; the
+  body title block is skipped then. `frameOpts.source` replaces the end line.
+  No page numbers: the letterhead frame prints with zero page margins.
+- **Team voice** `RPT_TEAM_VOICE` (Jeff: reports go to the client PM and every
+  project team member; the firm grows by partnering): team-positive, credit
+  coordination and responsiveness, never blame or criticize the client, a
+  contractor or a partner — but report what the public raised honestly, never
+  softened. Appended to `_claudeSectionSystemPrompt()` (PI report sections,
+  package + quick-report summaries, the brief), `_coCloseoutSystemPrompt()`
+  and the Project Status Report prompt.
+- Guarded by `test/tests/106-package-brief.test.js`.
+
 ### The report-period label belongs to ONE section (`_periodLabel`, Aug 2026)
 The counts chip under every auto section was prefixed "19-day report period · ".
 Only **`auto-concerns`** is actually bounded by `pstart`/`pend`. Deliverables,

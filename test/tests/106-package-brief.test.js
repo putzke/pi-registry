@@ -31,7 +31,7 @@ module.exports = {
           { id: 'or1', actionId: 'oa2', readOn: '2030-03-06', reactions: 217, comments: 27, shares: 16, source: 'typed' },
         ]);
         const m = _briefModel(projF, '2030-03-01', '2030-03-07', false);
-        const html = _briefHTML(m, { phases: [{ a: '2030-03-01', b: '2030-03-03', text: 'Transitional period' }], convo: 'News coverage: Picked up by two outlets.\nInbox themes: Delays and access.' });
+        const html = _briefHTML(m, { convo: 'News coverage: Picked up by two outlets.\nInbox themes: Delays and access.' });
         const facts = _briefFactLines(m).join('\n');
 
         // Package modal + generation
@@ -46,6 +46,7 @@ module.exports = {
         document.getElementById('pkg-pstart').value = '2030-03-01';
         document.getElementById('pkg-pend').value = '2030-03-07';
         document.getElementById('pkg-convo').value = 'Social media: Mostly appreciative.';
+        const pkgPhases = !!document.getElementById('pkg-ph-a0');
         const ids = _pkgSelectedIds();
         const pf = _buildPackageFacts(projF, ids, { briefStart: '2030-03-01', briefEnd: '2030-03-07' });
         generateReportSequence();
@@ -59,7 +60,7 @@ module.exports = {
           m: { all: m.all.length, inb: m.inbound.length, phone: m.phone, email: m.email, peak: m.peak && [m.peak.start, m.peak.n], out: m.ost.total,
                marked: m.buckets.filter(b => b.out).map(b => b.start), reach: m.reach && m.reach.a.reach, undated: m.undated, noNotes: m.noNotes,
                topics: m.topics.map(x => x[0] + ':' + x[1]), tone: m.toneAll, weekly: m.weekly, buckets: m.buckets.length },
-          html, facts, listed, maxNum, ids, pfNames: pf.blocks.map(b => b.name), pfBrief: (pf.blocks.find(b => b.id === 'project-brief') || {}).lines || [],
+          html, facts, pkgPhases, listed, maxNum, ids, pfNames: pf.blocks.map(b => b.name), pfBrief: (pf.blocks.find(b => b.id === 'project-brief') || {}).lines || [],
           pfParcel: (pf.blocks.find(b => b.id === 'parcel-status') || {}).lines || [],
           popup: popup ? { body: popup[0], opts: popup[5] } : null, frame,
           prompts: { sec: _claudeSectionSystemPrompt(), co: _coCloseoutSystemPrompt(), voice: RPT_TEAM_VOICE,
@@ -80,10 +81,11 @@ module.exports = {
       t.eq([m.tone.Complaint, m.tone.Concern, m.tone['Question or information'], m.tone.Positive].join(','), '1,2,1,1', 'tone counted from Nature, grouped');
       t.eq(m.weekly + '/' + m.buckets, 'false/7', 'a one-week brief charts per day');
       ['contacts logged', 'inbound phone calls / emails', 'proactive outreach actions', 'Inbound public contacts per day', 'What people contacted us about',
-       'Volume by period', 'Transitional period', 'Proactive outreach timeline', 'Traffic shift newsletter', 'Social media posts', '217 reactions | 27 comments | 16 shares',
+       'Proactive outreach timeline', 'Traffic shift newsletter', 'Social media posts', '217 reactions | 27 comments | 16 shares',
        'What the public conversation looks like', 'News coverage', 'Contact tone by topic', 'has no date and is not counted here']
         .forEach(s => t.ok(r.html.includes(s), 'brief shows: ' + s));
       t.ok(!r.html.includes(r.names[1]), 'no contact name on the brief');
+      t.ok(!r.html.includes('Volume by period') && !r.pkgPhases, 'no typed volume-by-period table (removed)');
       t.ok(/Inbound contacts by subject: Traffic \(3\)/.test(r.facts) && /recorded nature: complaint 1, concern 2/.test(r.facts), 'brief facts are counted');
       t.eq(r.listed[0] + '|' + r.listed[r.listed.length - 1], 'project-brief|parcel-status', 'package lists the brief first and the parcel report last');
       t.eq(r.maxNum, r.listed.length, 'sequence numbers go up to the number of reports');

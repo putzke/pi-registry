@@ -980,9 +980,8 @@ Modelled on a hand-built I-84 Weber Bridges PI summary Jeff liked.
   (`_briefTiles`: contacts in/out, inbound phone/email, busiest day, outreach
   actions, newsletter reach or open issues), inbound contacts per day — per
   week past `BRIEF_WEEKLY_AFTER_DAYS` — with ▼ on days the Outreach log has an
-  action (`_briefDailySvg`), "What people contacted us about" (Subject), an
-  optional "Volume by period" table from up to `BRIEF_PHASES` typed phases,
-  the outreach timeline, social-post cards with counts and "as of", the
+  action (`_briefDailySvg`), "What people contacted us about" (Subject) — a typed "Volume by period" table was tried and removed (Jeff: too
+  much; the daily chart already shows it) — the outreach timeline, social-post cards with counts and "as of", the
   optional "What the public conversation looks like" (one `Heading: text` per
   line; ✦ Draft with AI → `genBriefConvo` / `_briefConvoRequest`: outreach +
   inbound log via `_coWho`, no names, never counts), "Contact tone by topic"

@@ -70,8 +70,10 @@ module.exports = {
       t.ok(/Inbound and in-person contacts from the public and stakeholders: 4\./.test(r.facts), 'facts: inbound count');
       t.ok(/Outbound notifications and calls by the project team: 2\./.test(r.facts), 'facts: outbound count, separate');
       t.ok(/Inbound contacts by subject: Noise \(3\), Access \(1\)/.test(r.facts), 'facts: counts by subject (inbound only)');
-      t.ok(/Previous period \(.*\): 1 inbound, 1 outbound/.test(r.facts), 'facts: previous period');
-      t.ok(/Noise 3 vs 0 \(new\)/.test(r.facts), 'facts: subject change vs previous');
+      t.ok(/Inbound and in-person contacts: 4 this period, 1 in the previous period \u2014 up 3\./.test(r.facts), 'facts: inbound change worked out (up 3)');
+      t.ok(/Outbound notifications and calls: 2 this period, 1 in the previous period \u2014 up 1\./.test(r.facts), 'facts: outbound change worked out (up 1)');
+      t.ok(/Inbound about Noise: 3 this period, 0 in the previous period \u2014 up 3 \(none before\)/.test(r.facts), 'facts: subject change worked out');
+      t.ok(!/ vs /.test(r.facts), 'no bare "a vs b" left for the model to compare');
       t.ok(!r.facts.includes(r.names[0] + ' ' + r.names[1]) && !r.facts.includes(r.names[1]), 'no contact name reaches the AI');
       t.ok(/still awaiting follow-up: 1/.test(r.facts), 'follow-ups given when the report has no follow-up section');
       t.ok(/about 150 words/.test(r.req.userContent) && r.req.maxTokens === 440, 'request: words and reply budget from the tier');
@@ -79,10 +81,10 @@ module.exports = {
       t.ok(/compared with the previous period/.test(r.req.userContent), 'request asks what changed');
       t.ok(/Do not discuss follow-ups/.test(r.req2.userContent), 'with a Follow-up section: no follow-ups in the narrative');
       t.ok(!r.glanceFU.some(x => /follow-up/i.test(x)), 'glance rows drop follow-ups when the section exists');
-      t.ok(/Interactions at a glance/.test(r.pane), 'preview shows the glance table (data table off)');
-      t.ok(/Raised most: Noise/.test(r.pane), 'preview glance lists the top subject');
-      t.ok(r.archGlance && /Interactions at a glance/.test(r.arch), 'archived copy carries the frozen glance table');
-      t.ok(/Interactions at a glance/.test(r.doc) && /Raised most: Noise/.test(r.doc), '.docx has the glance table');
+      t.ok(/What the public raised most/.test(r.pane), 'preview shows the subjects table (data table off)');
+      t.ok(/>Noise<\/td>/.test(r.pane) && !/What the public raised most[\s\S]*Outbound notifications by the team/.test(r.pane), 'it lists the top subject, not the inbound/outbound totals (those open the report)');
+      t.ok(r.archGlance && /What the public raised most/.test(r.arch), 'archived copy carries the frozen glance table');
+      t.ok(/What the public raised most/.test(r.doc) && />Noise</.test(r.doc), '.docx has the glance table');
       t.ok(/Para one\.<\/w:t>/.test(r.doc) && /Para two\.<\/w:t>/.test(r.doc), '.docx prints each narrative paragraph as its own paragraph');
     } finally { await app.close(); }
     const fs = require('fs'), path = require('path');

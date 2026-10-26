@@ -9,9 +9,8 @@
 //      _claudeSystemPrompt(), the GENERIC prompt that caps output at "2-4
 //      sentence narrative summaries". _claudeSectionSystemPrompt() exists
 //      precisely because that cap truncates richer sections.
-//   2. The overall summary was drafted under the SECTION prompt rather than
-//      _claudeExecSystemPrompt(), from a near-copy of the individual button's
-//      instruction instead of the instruction itself.
+//   2. The overall summary was drafted under the SECTION prompt (it is no
+//      longer AI-drafted at all — the report opens with "Report at a glance").
 //   3. One response carrying N narratives as JSON makes the model ration
 //      length whatever the shared ceiling says.
 //
@@ -70,13 +69,9 @@ module.exports = {
           await generateSectionDraft(types[i], String(i));
           perButton[types[i]] = window.__calls.slice();
         }
-        window.__calls.length = 0;
-        await generateOverallDraft();
-        perButton.overall = window.__calls.slice();
 
         // ── then the same report via "Draft all sections" ──────────────────
         document.querySelectorAll('.rpt-sec-summary').forEach(ta => { ta.value = ''; });
-        document.getElementById('rpt-overall-summary').value = '';
         window.__calls.length = 0;
         await generateAllSectionDrafts();
         const all = window.__calls.slice();
@@ -90,9 +85,9 @@ module.exports = {
       }, [String(proj.id), TYPES, EMPTY]);
 
       // ── one call per narrative, not one call for all of them ─────────────
-      t.eq(rec.all.length, TYPES.length + 1,
-           `"Draft all" made one call per narrative (${rec.all.length} for `
-           + `${TYPES.length} sections + the overall summary)`);
+      t.eq(rec.all.length, TYPES.length,
+           `"Draft all" made one call per section (${rec.all.length} for ${TYPES.length} sections; `
+           + 'the report opens with the counted "Report at a glance", which is never AI-drafted)');
       t.ok(rec.filled.every(v => v === 'STUB NARRATIVE'),
            'and every section with facts received its own narrative');
 
@@ -120,25 +115,7 @@ module.exports = {
         t.eq(match.model, one.model, `${ty}: and the same model`);
       });
 
-      // The executive summary is the one that must NOT share the section
-      // prompt — it orients rather than recaps, and the batch drafted it under
-      // the section prompt.
-      const oneOverall = rec.perButton.overall[0];
-      t.ok(oneOverall, 'the overall summary button makes a call');
-      const allOverall = rec.all.find(c => c.user === oneOverall.user);
-      t.ok(allOverall, '"Draft all" sends the identical overall instruction');
-      if (allOverall) {
-        t.eq(allOverall.sys, oneOverall.sys, 'under the identical system prompt');
-        t.eq(allOverall.max, oneOverall.max, 'with the identical token budget');
-      }
-      // Named explicitly, not merely "different from the section one" — the two
-      // could both be wrong and still differ.
-      const prompts = await app.page.evaluate(() => ({
-        exec: _claudeExecSystemPrompt(), section: _claudeSectionSystemPrompt(),
-      }));
-      t.eq(oneOverall.sys, prompts.exec,
-           'the overall summary is drafted under the EXECUTIVE prompt');
-      t.eq(allOverall && allOverall.sys, prompts.exec, 'in both paths');
+      const prompts = await app.page.evaluate(() => ({ section: _claudeSectionSystemPrompt() }));
       TYPES.forEach(ty => {
         const c = rec.all.find(x => x.user === rec.perButton[ty][0].user);
         t.eq(c && c.sys, prompts.section, `${ty} is drafted under the SECTION prompt`);

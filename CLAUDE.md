@@ -340,7 +340,7 @@ report on pace whose contract-window date had passed). Now, next to
 - A project where NO item has a target falls back to the share marked
   Complete (`completeShare`), labelled "N of M complete".
 - Used by the Deliverables header, dashboard donut, Reports tab card, quick
-  report, `_buildOverallDraft`, `_buildStatusMetrics`; the portal has the same
+  report, `_buildStatusMetrics`; the portal has the same
   rule as `devProgress()` (Overview tile, project cards, health card).
 - Guarded by `test/tests/101-deliverable-progress-rule.test.js` (fails on the
   old code).
@@ -1065,8 +1065,12 @@ the team responded → what changed vs the previous period → ONE sentence on t
 team's outreach. Facts name contacts by type/organization (`_coWho`), never a
 person. **Follow-ups are left out when the report has the Follow-up status
 section** (Jeff: redundant); otherwise one clause/row.
-- **"Interactions at a glance"** (`_concernsGlanceRows` / `_concernsGlanceHTML`):
-  inbound, outbound, top 3 subjects — this period vs previous — in the live
+- **Changes are worked out in code** (`_concernsChange`: "80 this period, 52 in
+  the previous period — up 28"); a draft once wrote "80 outbound, down from 52"
+  when the model compared the numbers itself.
+- **"What the public raised most"** (`_concernsGlanceRows` / `_concernsGlanceHTML`;
+  was "Interactions at a glance"): top 3 inbound subjects — this period vs
+  previous (the in/out totals moved to "Report at a glance") — in the live
   preview, the frozen snapshot (`glanceHtml`, rendered by the archive and the
   portal) and the .docx, whether or not the data table is on (counts only).
   Charts stay in quick reports and the close-out (Jeff).
@@ -1075,145 +1079,35 @@ section** (Jeff: redundant); otherwise one clause/row.
 - Guarded by `test/tests/104-concerns-summary.test.js` (fails on the old code);
   test 32's budget checks updated to the tiers.
 
-### The overall summary is scoped to the report, and outbound ≠ inbound (Sep 2026)
-`_buildOverallDraft()` (feeds `_overallDraftCall()`, which deliberately never
-sees the other sections' drafted text — see its own comment) had two problems,
-both found by reading the code rather than assuming from its output:
-
-1. **It ignored which sections were actually checked into the report.** It
-   pulled deliverable progress, issue/commitment alerts and the stakeholder
-   sentiment mix from the WHOLE PROJECT unconditionally. A report with only
-   "Recent public concerns" selected could still have its overall summary cite
-   a fact — an overdue commitment, a sentiment split — that appears nowhere
-   else in the document. That's an unsupported claim in a compliance record,
-   even when the fact is true of the project generally: the reader can't check
-   a number the report never shows them. Fixed with `hasSec(type)` reading
-   `loadReportSections(projF).sections` — deliverables/issues/commitments/
-   sentiment facts are now only gathered when `auto-del`/`auto-issues`/
-   `auto-commitments`/`auto-sentiment` is in the report, and the whole
-   interaction-based block (outreach counts, most-engaged stakeholder, top
-   topics) only runs when `auto-concerns` or `auto-intlog` is.
-2. **It folded outbound and inbound interactions into one undifferentiated
-   count, and keyword-scanned ALL of them for "topics raised."** A project
-   whose early activity is mostly the team notifying stakeholders (mass flyer
-   emails, phone referrals to the project website — the primary Quick Log use
-   case, see that section above) would have the team's OWN outreach language
-   ("sent detour exhibit for review") scanned and reported back as what the
-   public raised — exactly backwards, and worse the earlier in a project's
-   life the report runs, since that's precisely when outbound notification
-   is most of what has happened yet.
-   **The fix keeps outbound work in the narrative — it just gets its own
-   clause.** `periodInts` is split into `outboundInts` (`direction ===
-   'Outgoing'`) and `inboundInts` (everything else). The outreach sentence
-   now reads "sent N outbound project notifications and logged M inbound or
-   in-person stakeholder interactions" as two clauses, not one blended count,
-   and states explicitly when inbound is zero ("No inbound public inquiries
-   have been received to date") rather than silently omitting it — an early,
-   notification-only period is real, reportable work, and the absence of
-   inbound contact yet is itself a fact worth stating plainly, not hiding.
-   "Most engaged stakeholder" and the keyword-scanned topics sentence both
-   moved to `inboundInts` only, and are skipped entirely when it's empty — a
-   stakeholder the team merely notified several times was not "engaged," and
-   there is nothing to report as "raised" when nobody has raised anything yet.
-   Guarded by `test/tests/48-overall-summary-scope.test.js` (18 checks):
-   asserts an all-outbound period gets the honest two-clause treatment and
-   skips the engagement/topics sentences; a mixed period keeps both clauses
-   and scopes topics to inbound only; and deliverable/issue/commitment/
-   sentiment facts each appear only when their section is in the report and
-   are absent otherwise, on the identical underlying data.
-
-### The overall summary's PROMPT needed fixing too — not just its facts (Sep 2026)
-Live feedback on real generated reports, after the fact-scoping fix above had
-already shipped: the prose itself still had problems the facts alone couldn't
-cause.
-1. **It opened with the project's NAME, every time.** `_buildOverallDraft()`'s
-   sentence 1 led with `"ProjectName (Client) is currently in the X phase."`,
-   the model tends to mirror that opening line closely since it's handed as
-   "PROJECT FACTS," and `_overallDraftCall()`'s own `userContent` additionally
-   said `for project "X" (PID)` — two reinforcing cues to name a project the
-   report header already names. Fixed in both places: the deterministic
-   opener now reads `"This project ..."`, and the userContent no longer
-   passes the name/PID at all. `_claudeExecSystemPrompt()` also says so
-   explicitly now — "never by its name" — since the instruction is what
-   holds once the AI paraphrases rather than echoes the facts verbatim.
-2. **"Identify the single most consequential development of the period"
-   invited editorializing about the outbound/inbound gap.** A PI team's real
-   workflow front-loads outbound notification — mass flyer emails, referral
-   calls — well before any inbound reply is expected, so an early report
-   handed a big outbound number and a near-zero inbound number, then told to
-   find "the most consequential development," would draw a conclusion from
-   that gap as if it meant something. It doesn't; it's the normal, expected
-   shape of early PI work. That framing is gone from the system prompt,
-   replaced with an explicit instruction: state the outbound/inbound volume
-   plainly, never characterize the gap as an imbalance or a finding. The
-   `userContent` says the same thing a second time — the section-level
-   prompts in this app have always reinforced instructions in both places
-   (see `_claudeSectionSystemPrompt()`/`_sectionAIRequest()`), not just relied
-   on the system prompt alone.
-3. **The prose read at roughly a college level; a PI report is read by
-   agency staff and the public, not policy analysts.** The system prompt now
-   asks for "about a 9th-10th grade reading level: short sentences, everyday
-   words, no jargon beyond the standard PI/NEPA terms already used elsewhere
-   in the report" — a concrete target, not just "use plain language," which
-   the earlier version already said and which evidently wasn't concrete
-   enough to hold.
-4. **"Deliverable / scope status" (`auto-del`) is no longer a DEFAULT
-   section** (`getDefaultSections()`) — not every project tracks deliverables
-   the way this section expects, and a brand-new report shouldn't open with
-   a section a consultant has to notice and remove. It's still a real,
-   addable section in `getAvailableSections()`; only the default changed.
-
-Model choice was raised and deliberately left alone: the fix here is a
-prompt-engineering problem (tone, framing, what the model is asked to look
-for), not a capability gap Sonnet has and Haiku doesn't. Swapping models for
-just this one call also risks breaking `RPT_PROSE_CSS`'s "one prose voice"
-guarantee — the overall summary sits on the same page as Sonnet-drafted
-section narratives, and a different model is a real way for the voice to
-drift between them even with an identical prompt. `_overallDraftCall()`
-still calls `_claudeNarrative()` with no explicit model argument, i.e. its
-default (`CLAUDE_TEXT_MODEL`, Sonnet 5.5 since Oct 2026).
-
-Guarded by `test/tests/51-overall-summary-tone.test.js` (16 checks): asserts
-`getDefaultSections()` excludes `auto-del` while `getAvailableSections()`
-still offers it; the system prompt's own wording (names the project as "this
-project," drops the old "most consequential" phrase, frames the
-outbound/inbound gap as normal, states a concrete reading-level target); the
-deterministic opener says "This project" and never the project's actual
-name, using a deliberately identifying fabricated name to prove it; and,
-driving `generateOverallDraft()` for real with `_claudeNarrative` stubbed
-(same technique as `test/tests/34-draft-all-parity.test.js`), that the
-`userContent` actually sent to the model carries none of it either.
-
-### The overall summary is now an EXECUTIVE SUMMARY (DEV, Oct 2026, Jeff)
-Reported live: a report with interactions, deliverables and Outreach got a
-four-sentence summary that never mentioned Outreach. It was by design — the
-3-4 sentence brief above, and facts that predate the Outreach log — so it
-was redesigned (supersedes the "3-4 sentences / not a recap" parts above):
-- **Facts for every section in the report** — `_overallAIFacts(templateDraft)`
-  adds, for included sections only: what inbound contacts were about (newest
-  `OVERALL_LOG_LINES` = 40, `_coWho` + `_pkgTrim`, for themes — replaces relying
-  on the keyword topics), outreach (`_outreachFactLines` for the period),
-  events dated in the period (with key concerns), formal comments in the period
-  (affiliation, never the commenter), follow-ups, issues, commitments, parcels
-  (counts only). The deterministic `_buildOverallDraft()` stays the no-key
-  fallback and the counts block.
-- **Fixed:** events were EVERY completed event ever, worded inside the
-  interactions sentence — now their own sentence, period-scoped, only with
-  `auto-events` in the report. Deliverables "In progress" were never counted
-  (code looked for "In Progress"; issues really do use that spelling) — fixed
-  here and in the deliverables section draft.
-- **Length rule** (`_overallWordBudget`): base `OVERALL_BASE_WORDS` 60 + per
-  section with something to say (`OVERALL_SECTION_WORDS`): interactions 70
-  (+30 over 25 inbound contacts in the period), outreach 40, comment matrix
-  40, events 30, issues 30, parcels 30, deliverables 25, commitments 25,
-  follow-ups 20, sentiment 20; clamp 120–300 words; ≤160 words → 1-2
-  paragraphs, else 2-3. Reply budget words×1.6+200. Only sections with facts
-  are named in the request.
-- `_claudeExecSystemPrompt()`: executive summary a client may read alone;
-  connected prose, not section-by-section; numbers only from the facts; never
-  name a private individual (organizations may be named), never quote; the
-  "this project", outbound-is-normal and reading-level rules kept.
-- Guarded by `test/tests/100-overall-exec-summary.test.js` (fails on the old code).
+### The report opens with "Report at a glance" — no AI overall summary (Oct 2026, Jeff)
+The AI overall/executive summary was REMOVED (button, `generateOverallDraft`,
+`_overallDraftCall`, `_overallAIFacts`, `_buildOverallDraft`,
+`_claudeExecSystemPrompt`, its job in "Draft all", and tests 48/51/100). However
+it was prompted it could only retell the section narratives in fewer words —
+redundant by construction. History of the attempts (Sep–Oct 2026) is in git.
+- **`_reportGlance(projF, {pstart, pend, sections, includeInternal, today})`**
+  (next to `_concernsGlanceHTML`) is the ONE model, COUNTED, never AI: an intro
+  ("This report covers <range>, during the <phase> phase, and includes: <section
+  titles>."), key figures this period vs the same number of days before — ONLY
+  for sections in the report (contacts in/out, outreach actions, events held +
+  attendance, formal comments + answered, issues raised/resolved/open, open
+  commitments, open follow-ups, deliverables, parcels noticed); a count zero in
+  both periods is left out — and **"Needs attention and coming up"**
+  (past-due commitments, follow-ups and deliverables, open high-priority issues,
+  events in `GLANCE_SOON_DAYS` (14), comment periods opening/closing within 30;
+  max `GLANCE_ATTN_MAX`). The attention block shows only when the report has a
+  section that could fill it; empty → `GLANCE_NONE`.
+- **Items are NAMED only when that section's "Include data table" is on**,
+  otherwise counted ("1 commitment to the public is past due.") — the checkbox
+  promises no itemized records (test 50 caught the first version leaking).
+- Rendered by `_reportGlanceHTML` in the live preview and frozen as
+  `snapshot.atGlanceHtml` (archive + portal render it as issued); the .docx
+  builds "Report at a Glance:" + table + bullets from the same model over the
+  sections that print. The overall-summary box stays as an optional **"Note to
+  the client"**, printed after the glance (and in the .docx without a heading).
+- `getDefaultSections()` still leaves out `auto-del` (not every project tracks
+  deliverables that way).
+- Guarded by `test/tests/105-report-at-a-glance.test.js` (fails on the old code).
 
 ### "Include data table" hid the table in the .docx, not the data (Sep 2026)
 Every `TABLE_ELIGIBLE_TYPES` section's `.docx` renderer (`_buildDocxWithTemplate`)
@@ -1381,7 +1275,7 @@ the same text. Measured on a real 8-section report the entire saving was the
 repeated system prompt — **~570 input tokens, about $0.002** at Sonnet pricing.
 That is what the short narratives were being traded for.
 
-Now: **N+1 ordinary calls run concurrently** (`_mapLimit`, 4 in flight), each
+Now: **one ordinary call per section, run concurrently** (`_mapLimit`, 4 in flight), each
 identical to what its own button sends. `_sectionDraftCall()` and
 `_overallDraftCall()` are the single place each kind of narrative is requested,
 and BOTH entry points go through them — parity is by construction, not by two
@@ -1922,11 +1816,9 @@ ROW agents read that before negotiating.
 - **Report prompt architecture (July 2026).** Three distinct system prompts so the
   sections don't compete: `_claudeSystemPrompt()` (generic), `_claudeSectionSystemPrompt()`
   (defers to each task's stated length — the shared one's "2-4 sentences" cap was
-  truncating richer sections), `_claudeExecSystemPrompt()` (executive summary:
-  3-4 sentences that ORIENT, explicitly NOT a section recap, no counts, no date
-  range). **The concerns section owns the reporting date range**; the exec summary is
-  told not to repeat it. "Draft all sections" is ONE batched call whose token
-  ceiling is the sum of the per-section budgets.
+  truncating richer sections). The executive-summary prompt went with the AI
+  overall summary (Oct 2026, see "Report at a glance"). **The concerns section
+  owns the reporting date range.** "Draft all sections" = one call per section.
 - **`_fmtMDY(d)`** → mm/dd/yyyy for table cells; **`_fmtDateRange(a,b)`** → "July 6 –
   August 7, 2026" for prose/AI facts; `fmt(d)` → "Jul 6, 2026" for headers. Feeding
   raw ISO to the AI makes it echo ISO in the narrative.

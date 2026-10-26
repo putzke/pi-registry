@@ -16068,36 +16068,6 @@ function _claudeSectionSystemPrompt() {
     + 'Write in third person past or present tense as appropriate.';
 }
 
-// Executive summary. Deliberately NARROW: it orients the reader and flags what
-// matters — it is NOT a recap of the report.
-//
-// Everything a recap would cover already sits below it in more detail (themes,
-// volume and the date range in the concerns section; deliverable status, issues and
-// commitments in their own sections), so a recap has nothing of its own to say and
-// reads thin however long you make it. Scoping it to "headline + what needs
-// attention" gives it a real job, removes the redundancy, and means it does not
-// depend on the section narratives having been written yet — so no two-pass
-// generation and no ordering assumption.
-function _claudeExecSystemPrompt() {
-  return 'You are a public involvement coordinator at a transportation engineering firm. '
-    + 'Write the executive summary that opens an FHWA/NEPA public involvement progress report. A client may read only this, '
-    + 'so it should give a complete picture of the period: what phase the project is in, what outreach and engagement happened, '
-    + 'what the public raised and how the team responded, and anything that genuinely needs attention. '
-    + 'Follow the length the request gives. Write connected prose, not a section-by-section list. '
-    + 'Every number comes from the facts given, used exactly — never add, estimate or invent one. '
-    + 'Refer to the project as "this project" or "the project," never by its name or PIN — the report '
-    + 'header already carries both, and naming it again here is redundant. '
-    + 'Never name a private individual (a resident, a property owner, a caller, a commenter): describe them by role. '
-    + 'Agencies, businesses and organizations may be named. Never quote anyone. '
-    + 'A project sending more outbound notifications than it receives inbound contact is normal, expected '
-    + 'early-project work, not a finding — never characterize that gap as an imbalance, a shortfall, or '
-    + 'anything needing explanation. State the interaction volume plainly and move on. '
-    + 'Do not restate the reporting date range — the report header already carries it. '
-    + 'Write at about a 9th-10th grade reading level: short sentences, everyday words, no jargon beyond '
-    + 'the standard PI/NEPA terms already used elsewhere in the report. '
-    + 'Do not use headers, bullet points, or markdown. Do not invent data — only use the facts provided.';
-}
-
 function _claudeSystemPrompt() {
   return 'You are a professional public involvement coordinator at a transportation engineering firm. '
     + 'Write concise, professional 2-4 sentence narrative summaries suitable for an FHWA project progress report. '
@@ -16164,17 +16134,22 @@ function _concernsStats(projF, pstart, pend, includeInternal){
     tier:_concernsTier(inbound.length)
   };
 }
+// "80 this period, 52 in the previous period — up 28" (never left to the model).
+function _concernsChange(now, prev){
+  var d=now-prev;
+  return now+' this period, '+prev+' in the previous period \u2014 '
+    +(d>0 ? (prev===0 ? 'up '+d+' (none before)' : 'up '+d) : d<0 ? 'down '+(-d) : 'no change');
+}
 function _concernsHasFollowupSection(projF){
   return (loadReportSections(projF).sections||[]).some(function(x){ return x.type==='auto-followups'; });
 }
-// Rows of the "at a glance" table: [measure, this period, previous period].
+// Rows of the concerns table: [subject, this period, previous period].
 function _concernsGlanceRows(st, withFU){
   var p=st.prev, pv=function(n){ return p? String(n) : '—'; };
-  var rows=[
-    ['Inbound and in-person contacts', String(st.inbound.length), pv(p&&p.inbound)],
-    ['Outbound notifications by the team', String(st.outbound.length), pv(p&&p.outbound)]
-  ];
-  st.top.forEach(function(r){ rows.push(['Raised most: '+r[0], String(r[1]), pv(p&&(p.bySubject[r[0]]||0))]); });
+  // Inbound/outbound totals are in "Report at a glance" at the top of the
+  // report; this table carries only what the public raised most.
+  var rows=[];
+  st.top.forEach(function(r){ rows.push([r[0], String(r[1]), pv(p&&(p.bySubject[r[0]]||0))]); });
   if(withFU) rows.push(['Still awaiting follow-up', String(st.openFU), '—']);
   return rows;
 }
@@ -16186,12 +16161,13 @@ function _concernsGlanceHTML(projF, pstart, pend, includeInternal){
   var st=_concernsStats(projF, pstart, pend, includeInternal);
   if(!st.total) return '';
   var rows=_concernsGlanceRows(st, !_concernsHasFollowupSection(projF));
+  if(!rows.length) return '';
   var th='padding:5px 8px;background:#1a3a5c;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.4px;text-align:left';
   var td='padding:5px 8px;border-bottom:1px solid #e0e0e0;font-size:11px';
   var h='<div style="margin:6px 0 10px">'
-    +'<div style="font-size:11px;font-weight:700;color:#1e3a5f;margin-bottom:4px">Interactions at a glance</div>'
+    +'<div style="font-size:11px;font-weight:700;color:#1e3a5f;margin-bottom:4px">What the public raised most</div>'
     +'<table style="width:100%;max-width:520px;border-collapse:collapse"><thead><tr>'
-    +'<th style="'+th+'">Measure</th><th style="'+th+';text-align:right">This period</th><th style="'+th+';text-align:right">Previous period</th></tr></thead><tbody>';
+    +'<th style="'+th+'">Subject</th><th style="'+th+';text-align:right">This period</th><th style="'+th+';text-align:right">Previous period</th></tr></thead><tbody>';
   rows.forEach(function(r,k){
     h+='<tr style="'+(k%2?'background:#f6f8fa':'')+'"><td style="'+td+'">'+escHtml(r[0])+'</td>'
       +'<td style="'+td+';text-align:right;font-weight:600">'+escHtml(r[1])+'</td>'
@@ -16200,6 +16176,157 @@ function _concernsGlanceHTML(projF, pstart, pend, includeInternal){
   h+='</tbody></table>';
   var pl=_concernsPrevLabel(st);
   if(pl) h+='<div style="font-size:10px;color:#777;font-style:italic;margin-top:3px">'+escHtml(pl)+'</div>';
+  return h+'</div>';
+}
+
+// ── "Report at a glance" — the report's opener (Oct 2026, Jeff) ─────────────
+// Replaced the AI executive summary, which could only retell the sections in
+// fewer words. This is COUNTED, never written by the model: one line on what
+// the report covers, key figures (this period vs the same number of days just
+// before) for the sections IN the report, and what needs the client's
+// attention or is coming up. A section left out of the report contributes
+// nothing — a figure the report never shows is an unsupported claim.
+// _reportGlance is the ONE model; the live preview and the frozen snapshot
+// render it with _reportGlanceHTML, the .docx with its own table + bullets.
+var GLANCE_SOON_DAYS=14, GLANCE_PERIOD_SOON_DAYS=30, GLANCE_ATTN_MAX=6;
+function _reportGlance(projF, o){
+  o=o||{};
+  var proj=(DB.get('projects')||[]).find(function(p){ return String(p.id)===String(projF); });
+  if(!proj) return null;
+  var secs=(o.sections||[]).filter(Boolean);
+  var types=secs.map(function(s){ return s.type; });
+  var has=function(){ for(var k=0;k<arguments.length;k++) if(types.indexOf(arguments[k])>=0) return true; return false; };
+  var a=o.pstart||'', b=o.pend||'', today=o.today||localToday();
+  var mine=function(x){ return String(x.projectId)===String(projF); };
+  var inW=function(d,x,y){ return !!d && (!x||d>=x) && (!y||d<=y); };
+  var pb='', pe='', hasPrev=!!(a&&b&&b>=a);
+  if(hasPrev){
+    var days=Math.round((new Date(b+'T00:00:00Z')-new Date(a+'T00:00:00Z'))/86400000)+1;
+    pe=_isoAddDays(a,-1); pb=_isoAddDays(a,-days);
+  }
+  var rows=[], attn=[];
+  // Items are NAMED only when that section's "Include data table" is on — off
+  // promises no itemized records in the report — otherwise they are counted.
+  var tbl=function(t){ return secs.some(function(x){ return x.type===t && x.showTable; }); };
+  var listOr=function(t, items, one, many, nameFn){
+    if(!items.length) return;
+    if(tbl(t)) items.forEach(function(x){ attn.push(nameFn(x)); });
+    else attn.push(items.length===1 ? one : items.length+' '+many);
+  };
+  // [measure, this period, previous period] — a count over a window, or a
+  // state "now" (previous shown as a dash).
+  // [label, this period, previous] — a count zero in both periods says nothing
+  // and is left out.
+  var pair=function(label, n, p){ if(!n&&!p) return; rows.push([label, String(n), hasPrev?String(p):'—']); };
+  var both=function(label, fn){ pair(label, fn(a,b), hasPrev?fn(pb,pe):0); };
+  var now=function(label, val){ rows.push([label, String(val), '—']); };
+  var fmtD=function(d){ return _fmtMDY(d); };
+
+  if(has('auto-concerns','auto-intlog')){
+    var cs=_concernsStats(projF, a, b, !!o.includeInternal);
+    pair('Inbound and in-person contacts', cs.inbound.length, cs.prev?cs.prev.inbound:0);
+    pair('Outbound notifications by the team', cs.outbound.length, cs.prev?cs.prev.outbound:0);
+  }
+  if(has('auto-outreach')){
+    both('Outreach actions (releases, posts, flyers, coverage)', function(x,y){ return _outreachStats(projF,x,y).total; });
+  }
+  if(has('auto-events')){
+    var evs=(DB.get('meetings')||[]).filter(mine);
+    var held=function(x,y){ return evs.filter(function(m){ return m.status==='Completed' && inW(m.date,x,y); }); };
+    both('Events held', function(x,y){ return held(x,y).length; });
+    var att=function(x,y){ return held(x,y).reduce(function(n,m){ return n+(Number(m.attendanceCount)||0); },0); };
+    both('Attendance at events held', att);
+    listOr('auto-events', evs.filter(function(m){ return m.status!=='Cancelled' && m.status!=='Completed' && m.date && m.date>=today && m.date<=_isoAddDays(today,GLANCE_SOON_DAYS); })
+      .sort(function(x,y){ return String(x.date).localeCompare(String(y.date)); }),
+      '1 event is scheduled in the next two weeks.', 'events are scheduled in the next two weeks.',
+      function(m){ return 'Coming up '+fmtD(m.date)+': '+(m.title||m.type||'Event')+(m.type&&m.title?' ('+m.type+')':''); });
+  }
+  if(has('auto-comment-matrix')){
+    var cms=(DB.get('public_comments')||[]).filter(mine);
+    var got=function(x,y){ return cms.filter(function(c){ return inW(c.commentDate,x,y); }); };
+    both('Formal public comments received', function(x,y){ return got(x,y).length; });
+    both('…of those, answered', function(x,y){ return got(x,y).filter(function(c){ return c.responseStatus==='Responded'||c.responseStatus==='No response needed'; }).length; });
+  }
+  if(has('auto-comment-matrix','auto-comments','auto-nepa-compliance')){
+    (DB.get('comment_periods')||[]).filter(mine).forEach(function(p){
+      var nm=p.name||'Comment period';
+      if(p.startDate&&p.startDate>today&&p.startDate<=_isoAddDays(today,GLANCE_PERIOD_SOON_DAYS)) attn.push('Comment period opens '+fmtD(p.startDate)+': '+nm);
+      else if(p.endDate&&p.endDate>=today&&(!p.startDate||p.startDate<=today)&&p.endDate<=_isoAddDays(today,GLANCE_PERIOD_SOON_DAYS)) attn.push('Comment period closes '+fmtD(p.endDate)+': '+nm);
+    });
+  }
+  if(has('auto-issues')){
+    var iss=(DB.get('issues')||[]).filter(mine);
+    var openI=iss.filter(function(i){ return i.status!=='Resolved' && i.status!=='Closed'; });
+    both('Issues raised', function(x,y){ return iss.filter(function(i){ return inW(i.dateRaised,x,y); }).length; });
+    both('Issues resolved', function(x,y){ return iss.filter(function(i){ return inW(i.dateResolved,x,y); }).length; });
+    now('Open issues now', openI.length);
+    listOr('auto-issues', openI.filter(function(i){ return /^(high|critical|urgent)$/i.test(i.priority||''); }),
+      '1 high-priority issue is open.', 'high-priority issues are open.',
+      function(i){ return 'Open '+String(i.priority).toLowerCase()+'-priority issue: '+String(i.title||'Untitled').slice(0,120); });
+  }
+  if(has('auto-commitments')){
+    var cos=(DB.get('commitments')||[]).filter(mine).filter(function(c){ return c.status!=='Fulfilled' && c.status!=='Cancelled'; });
+    var late=cos.filter(function(c){ return c.dueDate && c.dueDate<today; });
+    now('Open commitments to the public now', cos.length+(late.length?' ('+late.length+' past due)':''));
+    listOr('auto-commitments', late, '1 commitment to the public is past due.', 'commitments to the public are past due.',
+      function(c){ return 'Commitment past due (due '+fmtD(c.dueDate)+'): '+_pkgTrim(c.commitment||'').slice(0,120); });
+  }
+  if(has('auto-followups')){
+    var fo=(DB.get('interactions')||[]).filter(function(i){ return mine(i) && i.followUp && !i.followUpDone; });
+    var fl=fo.filter(function(i){ return i.followUpDue && i.followUpDue<today; });
+    now('Open follow-ups now', fo.length+(fl.length?' ('+fl.length+' past due)':''));
+    if(fl.length) attn.push(fl.length+' follow-up'+(fl.length!==1?'s are':' is')+' past due.');
+  }
+  if(has('auto-del')){
+    var g=_delProgress((DB.get('deliverables')||[]).filter(mine), today);
+    if(g.total){
+      now('Deliverables', g.pct!==null ? g.delivered+' of '+g.contracted+' delivered ('+g.pct+'%)' : g.complete+' of '+g.total+' complete');
+      listOr('auto-del', g.pastDue, '1 deliverable is past due.', 'deliverables are past due.',
+        function(d){ return 'Deliverable past due: '+(d.title||d.type||'Deliverable'); });
+    }
+  }
+  if(has('auto-parcels')){
+    var pst=_parcelStats(projF);
+    if(pst.total) now('Right-of-way parcels noticed', pst.noticedCt+' of '+pst.total);
+  }
+  var more=attn.length>GLANCE_ATTN_MAX ? attn.length-GLANCE_ATTN_MAX : 0;
+  attn=attn.slice(0,GLANCE_ATTN_MAX); if(more) attn.push('…and '+more+' more in the sections below.');
+  var titles=secs.map(function(s){ return String(s.title||'').trim(); }).filter(Boolean);
+  var intro=((a||b) ? 'This report covers '+_fmtDateRange(a,b) : 'This report')
+    +(proj.phase ? ', during the '+proj.phase+' phase' : '')
+    +(titles.length ? ', and includes: '+titles.join('; ')+'.' : '.');
+  // The attention block only appears when the report has a section that can
+  // put something in it — otherwise "nothing" would be an unchecked claim.
+  var canAttn=has('auto-events','auto-comment-matrix','auto-comments','auto-nepa-compliance','auto-issues','auto-commitments','auto-followups','auto-del');
+  return { intro:intro, rows:rows, attention:attn, showAttention:canAttn,
+    prevLabel: hasPrev ? 'Previous period: '+_fmtDateRange(pb,pe)+' (the same number of days just before this report).' : '' };
+}
+var GLANCE_NONE='Nothing in this report is past due, and nothing is scheduled in the next two weeks.';
+// Inline-styled: the frozen copy renders the same in the archive and the portal.
+function _reportGlanceHTML(g){
+  if(!g) return '';
+  var th='padding:5px 8px;background:#1a3a5c;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.4px;text-align:left';
+  var td='padding:5px 8px;border-bottom:1px solid #e0e0e0;font-size:11px';
+  var h='<div style="margin-bottom:18px">'
+    +'<div style="font-size:13px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #cdd4dc;padding-bottom:4px;margin-bottom:8px">Report at a glance</div>'
+    +'<div style="font-size:12px;color:#222;line-height:1.5;margin-bottom:8px">'+escHtml(g.intro)+'</div>';
+  if(g.rows.length){
+    h+='<table style="width:100%;max-width:560px;border-collapse:collapse"><thead><tr>'
+      +'<th style="'+th+'">Key figures</th><th style="'+th+';text-align:right">This period</th><th style="'+th+';text-align:right">Previous period</th></tr></thead><tbody>';
+    g.rows.forEach(function(r,k){
+      h+='<tr style="'+(k%2?'background:#f6f8fa':'')+'"><td style="'+td+'">'+escHtml(r[0])+'</td>'
+        +'<td style="'+td+';text-align:right;font-weight:600">'+escHtml(r[1])+'</td>'
+        +'<td style="'+td+';text-align:right;color:#595959">'+escHtml(r[2])+'</td></tr>';
+    });
+    h+='</tbody></table>';
+    if(g.prevLabel) h+='<div style="font-size:10px;color:#777;font-style:italic;margin-top:3px">'+escHtml(g.prevLabel)+'</div>';
+  }
+  if(g.showAttention){
+    h+='<div style="font-size:11px;font-weight:700;color:#1e3a5f;margin:10px 0 4px">Needs attention and coming up</div>';
+    h+= g.attention.length
+      ? '<ul style="margin:0;padding-left:18px;font-size:12px;color:#222;line-height:1.5">'+g.attention.map(function(x){ return '<li>'+escHtml(x)+'</li>'; }).join('')+'</ul>'
+      : '<div style="font-size:12px;color:#444">'+escHtml(GLANCE_NONE)+'</div>';
+  }
   return h+'</div>';
 }
 
@@ -16228,13 +16355,16 @@ function _buildConcernsAIFacts() {
   L.push('- All contacts by channel: ' + list(st.byChannel) + '.');
   if (st.outSubjects.length) L.push('- Team outreach by subject: ' + list(st.outSubjects) + '.');
   if (st.prev) {
-    L.push('- Previous period (' + _fmtDateRange(st.prev.start, st.prev.end) + ', the same number of days): '
-      + st.prev.inbound + ' inbound, ' + st.prev.outbound + ' outbound.');
+    // The direction and size of each change are worked out HERE — the model
+    // once wrote "80 outbound, down from 52" when it did the comparison itself.
+    L.push('- Compared with the previous period (' + _fmtDateRange(st.prev.start, st.prev.end)
+      + ', the same number of days; directions already worked out — use them as given):');
+    L.push('  - Inbound and in-person contacts: ' + _concernsChange(st.inbound.length, st.prev.inbound) + '.');
+    L.push('  - Outbound notifications and calls: ' + _concernsChange(st.outbound.length, st.prev.outbound) + '.');
     var changes = st.bySubject.map(function(r){ return [r[0], r[1], st.prev.bySubject[r[0]]||0]; })
       .filter(function(r){ return r[1] !== r[2]; })
       .sort(function(a,b){ return (b[1]-b[2])-(a[1]-a[2]); }).slice(0,5);
-    if (changes.length) L.push('- Subjects compared with the previous period (this period vs previous): '
-      + changes.map(function(r){ return r[0]+' '+r[1]+' vs '+r[2]+(r[2]===0?' (new)':''); }).join('; ') + '.');
+    changes.forEach(function(r){ L.push('  - Inbound about ' + r[0] + ': ' + _concernsChange(r[1], r[2]) + '.'); });
   } else {
     L.push('- No previous period to compare with (the report has no start and end date).');
   }
@@ -16282,7 +16412,8 @@ function _sectionAIRequest(secType, templateDraft) {
         + '1. Open with the reporting period, then what the public and stakeholders raised (the inbound contacts), '
         + 'grouped by theme, using the counts given. Give the more consequential themes more room than routine ones.\n'
         + '2. How the team responded and what was resolved, drawing on the summaries and responses in the log.\n'
-        + (hasPrev ? '3. What changed compared with the previous period, using the comparison figures given.\n' : '')
+        + (hasPrev ? '3. What changed compared with the previous period, using the comparison lines given exactly — '
+                   + 'their up/down/no change is already worked out; never compare the numbers yourself.\n' : '')
         + (hasPrev ? '4. ' : '3. ') + 'End with ONE sentence on the team\'s own outreach (the outbound count and what it was about). '
         + 'Outbound notifications are the team\'s work, not public concern — never mix them into what the public raised.\n\n'
         + (withFU ? 'Mention in one clause how many inbound contacts still await follow-up.\n\n'
@@ -16324,178 +16455,6 @@ function _sectionDraftCall(secType, templateDraft) {
   var req = _sectionAIRequest(secType, templateDraft);
   return _claudeNarrative(_claudeSectionSystemPrompt(), req.userContent, req.maxTokens);
 }
-// The executive summary has its OWN system prompt: it states the period's
-// activity plainly rather than recapping the sections or narrating what it
-// means, and drafting it under the section prompt turns it back into a recap.
-// ── The executive summary's length and facts (Oct 2026, Jeff) ──────────────
-// Length follows the report: a base for the orienting opening and anything
-// needing attention, plus a weight for each section in the report that has
-// something to say. Interactions weigh most, and more when the period's
-// inbound contact is heavy. Floor and ceiling keep a one-section report from
-// reading thin and a twelve-section one from becoming a second report.
-var OVERALL_BASE_WORDS=60, OVERALL_MIN_WORDS=120, OVERALL_MAX_WORDS=300;
-var OVERALL_SECTION_WORDS={'auto-concerns':70,'auto-intlog':70,'auto-outreach':40,'auto-comment-matrix':40,
-  'auto-events':30,'auto-issues':30,'auto-parcels':30,'auto-del':25,'auto-commitments':25,'auto-followups':20,'auto-sentiment':20};
-var OVERALL_HEAVY_INBOUND=25, OVERALL_HEAVY_EXTRA=30;   // > 25 inbound contacts in the period: +30 words
-var OVERALL_LOG_LINES=40;                               // newest inbound contacts the model reads
-function _overallWordBudget(present, inboundN){
-  var w=OVERALL_BASE_WORDS, ints=false;
-  (present||[]).forEach(function(t){
-    if(t==='auto-concerns'||t==='auto-intlog'){
-      if(ints) return; ints=true;
-      w+=OVERALL_SECTION_WORDS[t]+(inboundN>OVERALL_HEAVY_INBOUND?OVERALL_HEAVY_EXTRA:0); return;
-    }
-    w+=OVERALL_SECTION_WORDS[t]||0;
-  });
-  return Math.max(OVERALL_MIN_WORDS, Math.min(OVERALL_MAX_WORDS, w));
-}
-function _overallParas(words){ return words<=160?'1-2':'2-3'; }
-
-// Everything the executive summary may draw on, for the sections IN this
-// report only: the deterministic facts (counts, phase, attention items) plus a
-// block per section — outreach, events, comments, follow-ups, issues,
-// commitments, parcels — and what inbound contacts were actually about
-// (by role/organization, never a person's name). Counts are computed here.
-function _overallAIFacts(templateDraft){
-  var projF=S.projectFilter; if(!projF) return null;
-  var saved=loadReportSections(projF);
-  var types=(saved.sections||[]).map(function(s){ return s.type; });
-  var has=function(t){ return types.indexOf(t)>=0; };
-  var ps=saved.periodStart||'', pe=saved.periodEnd||'';
-  var inP=function(d){ return !!d && (!ps||d>=ps) && (!pe||d<=pe); };
-  var mine=function(x){ return String(x.projectId)===String(projF); };
-  var today=localToday();
-  var stakes=DB.get('stakeholders')||[];
-  var blocks=[], present=[], inboundN=0;
-  var tally=function(arr, fn){ var t={}; arr.forEach(function(x){ var k=fn(x); if(k) t[k]=(t[k]||0)+1; });
-    return Object.keys(t).sort(function(a,b){ return t[b]-t[a]; }).map(function(k){ return t[k]+' '+k; }).join(', '); };
-  var block=function(title, lines){ if(lines.length) blocks.push(title+':\n'+lines.join('\n')); };
-
-  // Interactions — the counts are in the deterministic facts; this adds what
-  // the public's contacts were about, for themes.
-  if(has('auto-concerns')||has('auto-intlog')){
-    var ext=DB.get('project_stakeholders').filter(mine)
-      .filter(function(l){ return (l.stakeholderRole||'External')==='External'; }).map(function(l){ return String(l.stakeholderId); });
-    var pi=DB.get('interactions').filter(function(i){ return mine(i) && _intIsExternal(i,ext) && inP(i.date); });
-    var inb=pi.filter(function(i){ return i.direction!=='Outgoing'; })
-      .sort(function(a,b){ return String(b.date||'').localeCompare(String(a.date||'')); });
-    inboundN=inb.length;
-    if(pi.length) present.push(has('auto-concerns')?'auto-concerns':'auto-intlog');
-    var L=inb.slice(0,OVERALL_LOG_LINES).map(function(i){
-      return '- '+(i.date||'')+' · '+(i.channel||'')+' · '+_coWho(i,stakes)+': '+_pkgTrim((i.subject?i.subject+' — ':'')+(i.summary||''));
-    });
-    if(inb.length>OVERALL_LOG_LINES) L.push('(and '+(inb.length-OVERALL_LOG_LINES)+' earlier inbound contacts)');
-    block('WHAT INBOUND AND IN-PERSON CONTACTS WERE ABOUT (newest first; for themes only, do not count from it)', L);
-  }
-  if(has('auto-outreach')){
-    var st=_outreachStats(projF, ps, pe);
-    if(st.total){ present.push('auto-outreach'); block('OUTREACH IN THIS PERIOD (releases, posts, flyers, coverage — not interactions)', _outreachFactLines(st)); }
-    else block('OUTREACH IN THIS PERIOD', ['No outreach was logged in this period.']);
-  }
-  if(has('auto-events')){
-    var ev=(DB.get('meetings')||[]).filter(function(m){ return mine(m) && inP(m.date); })
-      .sort(function(a,b){ return String(a.date).localeCompare(String(b.date)); });
-    if(ev.length){
-      present.push('auto-events');
-      var held=ev.filter(function(m){ return m.status==='Completed'; });
-      var att=held.reduce(function(n,m){ return n+(Number(m.attendanceCount)||0); },0);
-      var E=['Events dated in this period: '+ev.length+' ('+tally(ev,function(m){ return _qrEventState(m,today).k; })+').'
-        +(att?' Attendance at events held: '+att+'.':'')];
-      ev.slice(0,15).forEach(function(m){
-        E.push('- '+m.date+' · '+(m.type||'Event')+' · '+String(m.title||'').slice(0,120)+' · '+_qrEventState(m,today).k
-          +(Number(m.attendanceCount)?' · '+m.attendanceCount+' attended':'')+(m.keyConcerns?' — '+_pkgTrim(m.keyConcerns):''));
-      });
-      block('EVENTS (gatherings — not interactions)', E);
-    }
-  }
-  if(has('auto-comment-matrix')){
-    var cm=(DB.get('public_comments')||[]).filter(function(c){ return mine(c) && inP(c.commentDate); })
-      .sort(function(a,b){ return String(b.commentDate).localeCompare(String(a.commentDate)); });
-    if(cm.length){
-      present.push('auto-comment-matrix');
-      var C=['Formal public comments dated in this period: '+cm.length+'. By response status: '+tally(cm,function(c){ return c.responseStatus||'Pending'; })
-        +'. By topic: '+(tally(cm,function(c){ return c.category; })||'not categorized')+'.'];
-      cm.slice(0,20).forEach(function(c){
-        C.push('- '+c.commentDate+' · '+(c.category||'General')+' · from '+(c.affiliation||'a member of the public')+': '+_pkgTrim(c.summary)
-          +(c.responseText?' — Response: '+_pkgTrim(c.responseText):''));
-      });
-      block('PUBLIC COMMENTS (use the affiliation, never a commenter\'s name)', C);
-    }
-  }
-  if(has('auto-followups')){
-    var fu=(DB.get('interactions')||[]).filter(function(i){ return mine(i) && i.followUp; });
-    if(fu.length){
-      present.push('auto-followups');
-      var open=fu.filter(function(i){ return !i.followUpDone; });
-      var over=open.filter(function(i){ return i.followUpDue && i.followUpDue<today; });
-      var res=fu.filter(function(i){ return i.followUpDone && inP(i.followUpResolved); });
-      block('FOLLOW-UPS', ['Open follow-ups now: '+open.length+(over.length?' ('+over.length+' overdue)':'')+'. Resolved during this period: '+res.length+'.']);
-    }
-  }
-  if(has('auto-issues')){
-    var iss=(DB.get('issues')||[]).filter(mine);
-    if(iss.length){
-      present.push('auto-issues');
-      var openI=iss.filter(function(i){ return i.status!=='Resolved' && i.status!=='Closed'; });
-      var I=['Issues: '+iss.length+' on record, '+openI.length+' not yet resolved; '+iss.filter(function(i){ return inP(i.dateRaised); }).length
-        +' raised and '+iss.filter(function(i){ return inP(i.dateResolved); }).length+' resolved during this period.'];
-      openI.slice(0,10).forEach(function(i){ I.push('- Open: '+String(i.title||'').slice(0,120)+' ('+(i.priority||'Normal')+' priority, '+(i.status||'Open')+')'); });
-      block('ISSUES', I);
-    }
-  }
-  if(has('auto-commitments')){
-    var co=(DB.get('commitments')||[]).filter(mine);
-    if(co.length){
-      present.push('auto-commitments');
-      var K=['Commitments to the public: '+co.length+' ('+tally(co,function(c){ return c.status||'Open'; })+').'];
-      co.filter(function(c){ return c.status!=='Fulfilled'; }).slice(0,6).forEach(function(c){
-        K.push('- '+String(c.commitment||'').slice(0,120)+' — '+(c.status||'Open')+(c.dueDate?', due '+c.dueDate:''));
-      });
-      block('COMMITMENTS', K);
-    }
-  }
-  if(has('auto-parcels')){
-    var pst=_parcelStats(projF);
-    if(pst.total){
-      present.push('auto-parcels');
-      block('RIGHT-OF-WAY PARCELS (counts only, never owner names)', ['Parcels: '+pst.total+'; owner identified on '+(pst.total-pst.unownedCt)
-        +' ('+pst.ownedPct+'%); noticed on '+pst.noticedCt+' ('+pst.noticePct+'%).']);
-    }
-  }
-  if(has('auto-del') && /deliverable progress/.test(templateDraft||'')) present.push('auto-del');
-  if(has('auto-sentiment') && /stakeholder sentiment/.test(templateDraft||'')) present.push('auto-sentiment');
-
-  // Only the sections that have something to say are named, so the model is
-  // never handed a heading it has no facts for.
-  var titles=getAvailableSections().filter(function(s){ return present.indexOf(s.type)>=0; }).map(function(s){ return s.title; });
-  var words=_overallWordBudget(present, inboundN);
-  return { text:'PROJECT FACTS (computed; authoritative — use these numbers exactly):\n'+(templateDraft||'')
-      +(blocks.length?'\n\n'+blocks.join('\n\n'):''),
-    words:words, paras:_overallParas(words), present:present, inboundN:inboundN, titles:titles };
-}
-
-function _overallDraftCall(templateDraft) {
-  // Deliberately does NOT receive the section narratives — it gets the same
-  // computed facts the sections are built from (_overallAIFacts), so it can
-  // speak across the report without paraphrasing other paragraphs. The
-  // project's name/PID are deliberately NOT passed either: the report header
-  // already carries them.
-  var f = _overallAIFacts(templateDraft) || { text: 'PROJECT FACTS:\n'+templateDraft, words: OVERALL_MIN_WORDS, paras: '1-2', titles: [] };
-  var userContent = 'Write the executive summary that opens this project\'s public involvement progress report.\n\n'
-    + 'Length: about '+f.words+' words (never more than '+(f.words+30)+'), in '+f.paras+' paragraphs.\n'
-    + (f.titles.length ? 'The report contains these sections: '+f.titles.join('; ')+'.\n' : '')
-    + 'Open with one sentence that orients the reader: the phase and what the period was mostly about. '
-    + 'Then give one connected account of what the period\'s work and the public\'s response showed across those sections, '
-    + 'giving the interactions the most weight and the other sections weight in proportion to how much happened. '
-    + 'Where the facts say what people raised or commented on, group it into the main themes and paraphrase. '
-    + 'Close with anything that needs the client\'s attention (overdue, past due, open high-priority), if there is any.\n'
-    + 'Do not walk through the sections one by one or name them as headings, and do not restate the date range. '
-    + 'Do not draw conclusions from the outbound-vs-inbound volume; more outbound than inbound is normal early in a project '
-    + 'and is not itself worth commenting on.\n\n'
-    + f.text;
-  return _claudeNarrative(_claudeExecSystemPrompt(), userContent, Math.round(f.words*1.6)+200);
-}
-
 // Run N async jobs with a ceiling on how many are in flight at once, so a
 // twelve-section report does not open twelve sockets at the same instant.
 async function _mapLimit(items, limit, fn) {
@@ -16547,34 +16506,6 @@ async function generateSectionDraft(secType, textareaIdx) {
   if (narrative) showToast('AI narrative generated', 'info', 2000);
 }
 
-async function generateOverallDraft() {
-  var ta = document.getElementById('rpt-overall-summary');
-  if (!ta) return;
-  if (ta.value.trim()) {
-    if (!confirm('The overall summary already has content. Replace it with a generated draft?')) return;
-  }
-
-  var templateDraft = _buildOverallDraft();
-  var key = _getClaudeKey();
-
-  if (!key) {
-    if (!templateDraft) { showToast('Not enough data yet to generate an overall summary.', 'warn'); return; }
-    _rptSetDraft(ta, templateDraft);
-    return;
-  }
-
-  if (!templateDraft) { showToast('Not enough data yet to generate an overall summary.', 'warn'); return; }
-
-  var btn = document.getElementById('overall-draft-btn');
-  if (btn) { btn.textContent = 'Generating…'; btn.disabled = true; }
-
-  var narrative = await _overallDraftCall(templateDraft);
-
-  if (btn) { btn.textContent = '✦ Generate Overall Summary'; btn.disabled = false; }
-  _rptSetDraft(ta, narrative || templateDraft);
-  if (narrative) showToast('AI narrative generated', 'info', 2000);
-}
-
 async function generateAllSectionDrafts() {
   var allBtn = document.getElementById('all-drafts-btn');
   var bar = document.getElementById('all-drafts-progress');
@@ -16620,14 +16551,6 @@ async function generateAllSectionDrafts() {
   // sequential path this replaced), each one identical to what its own button
   // sends. "Same engine and directive" is now true by construction rather than
   // by two code paths being kept in step by hand.
-  var overallTa = document.getElementById('rpt-overall-summary');
-  // Use the SAME rich facts builder as the standalone "Generate Overall Summary"
-  // button. This path previously used a hardcoded 4-fact string (whose stakeholder
-  // count was always 0 — it filtered stakeholders by a projectId field they don't
-  // have; the link lives in project_stakeholders), which is why the batched
-  // overall summary read far thinner than the individual button's output.
-  var overallTemplate = _buildOverallDraft() || '';
-
   // A section with no facts is SKIPPED, exactly as its own button refuses one
   // ("Not enough data yet to generate a draft for this section"). The batch
   // drafted them anyway, off an empty facts block, which is an invitation to
@@ -16640,10 +16563,6 @@ async function generateAllSectionDrafts() {
     if (!templateDraft) { skipped.push(s.secType); return; }
     jobs.push({ kind: 'section', ta: s.ta, secType: s.secType, templateDraft: templateDraft });
   });
-  if (overallTa && overallTemplate) {
-    jobs.push({ kind: 'overall', ta: overallTa, secType: 'overall',
-                templateDraft: overallTemplate });
-  }
 
   var total = jobs.length;
   if (!total) {
@@ -16673,9 +16592,7 @@ async function generateAllSectionDrafts() {
   // to trip a rate limit and fail half the report at once.
   var failed = [];
   await _mapLimit(jobs, 4, function(j) {
-    var call = j.kind === 'overall'
-      ? _overallDraftCall(j.templateDraft)
-      : _sectionDraftCall(j.secType, j.templateDraft);
+    var call = _sectionDraftCall(j.secType, j.templateDraft);
     return call.then(function(narrative) {
       if (narrative) { _rptSetDraft(j.ta, narrative); }
       else {
@@ -16971,241 +16888,6 @@ function _buildSectionDraft(secType) {
   return null;
 }
 
-function _buildOverallDraft() {
-  var projF = S.projectFilter;
-  if (!projF) return null;
-  var proj = DB.get('projects').find(function(p){ return p.id === projF; });
-  if (!proj) return null;
-
-  var saved = loadReportSections(projF);
-  // Facts are scoped to sections actually INCLUDED in this report. Citing a
-  // fact (deliverable progress, an overdue commitment, stakeholder sentiment)
-  // that appears nowhere else in the document is an unsupported claim in a
-  // compliance record, even when it's true of the project generally — a
-  // reader can't check a number the report never shows them.
-  var secTypes = (saved.sections||[]).map(function(s){ return s.type; });
-  var hasSec = function(t){ return secTypes.indexOf(t)>=0; };
-  var showInts = hasSec('auto-concerns') || hasSec('auto-intlog');
-  var showDels = hasSec('auto-del');
-  var showIssues = hasSec('auto-issues');
-  var showComms = hasSec('auto-commitments');
-  var showSentiment = hasSec('auto-sentiment');
-  var showEvents = hasSec('auto-events');
-
-  var ps = DB.get('project_stakeholders').filter(function(x){ return String(x.projectId)===String(projF); });
-  var allStakes = DB.getActive('stakeholders');
-  var ints = DB.get('interactions').filter(function(i){ return String(i.projectId)===String(projF); });
-  var externalPS = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; });
-  var internalPS = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='Internal'; });
-  var externalIds = externalPS.map(function(lk){ return String(lk.stakeholderId); });
-  var periodInts = ints.filter(function(i){
-    if (!_intIsExternal(i, externalIds)) return false;
-    if (saved.periodStart && i.date < saved.periodStart) return false;
-    if (saved.periodEnd && i.date > saved.periodEnd) return false;
-    return true;
-  });
-  // Outbound (the team reaching OUT — notifications, flyer deliveries,
-  // referral calls) vs inbound/in-person (the public reaching IN, or a
-  // genuine two-way contact). Conflating the two invents public engagement
-  // out of the team's own outreach — the keyword-scanned "topics raised"
-  // sentence below used to scan outbound notification text (e.g. "sent
-  // detour exhibit for review") and could report the team's OWN language
-  // back as what the public raised. Outbound activity is real, reportable
-  // work; it just gets its own clause instead of the "raised" framing.
-  var outboundInts = periodInts.filter(function(i){ return i.direction === 'Outgoing'; });
-  var inboundInts = periodInts.filter(function(i){ return i.direction !== 'Outgoing'; });
-  var dels = showDels ? DB.get('deliverables').filter(function(d){ return String(d.projectId)===String(projF); }) : [];
-  var meetings = DB.get('meetings').filter(function(m){ return String(m.projectId)===String(projF); });
-  var commitments = showComms ? DB.get('commitments').filter(function(c){ return String(c.projectId)===String(projF); }) : [];
-  var issues = showIssues ? DB.get('issues').filter(function(i){ return String(i.projectId)===String(projF); }) : [];
-  var stakes = showSentiment ? externalPS.map(function(lk){
-    return allStakes.find(function(s){ return String(s.id)===String(lk.stakeholderId); });
-  }).filter(Boolean) : [];
-
-  if (periodInts.length === 0 && ints.length === 0 && ps.length === 0) return null;
-
-  var periodLabel = (saved.periodStart || saved.periodEnd)
-    ? _fmtDateRange(saved.periodStart, saved.periodEnd)
-    : 'the current report period';
-
-  var lines = [];
-
-  // ── Sentence 1: Project context opener — "This project," never the name.
-  // The report header already names the project; opening the summary with
-  // it again is redundant, and the model tends to mirror this fact line
-  // closely, so fixing the wording here is what actually fixes the AI's
-  // own opening sentence too. ────────────────────────────────────────────
-  var opener = 'This project';
-  if (proj.client) opener += ' for '+proj.client;
-  if (proj.phase) opener += ' is currently in the '+proj.phase+' phase.';
-  else opener += "'s public involvement activities are summarized below.";
-  lines.push(opener);
-
-  // ── Sentence 2: Period outreach activity — outbound and inbound reported
-  // as separate clauses, never folded into one undifferentiated count. An
-  // early, notification-heavy period should read as real outreach work, not
-  // vanish, and it should never read as public engagement it isn't. ────────
-  if (showInts && periodInts.length > 0) {
-    var needFU = periodInts.filter(function(i){ return i.followUp && !i.followUpDone; }).length;
-    var parts2 = [];
-    if (outboundInts.length > 0) parts2.push('sent '+outboundInts.length+' outbound project notification'+(outboundInts.length!==1?'s':''));
-    if (inboundInts.length > 0) parts2.push('logged '+inboundInts.length+' inbound or in-person stakeholder interaction'+(inboundInts.length!==1?'s':''));
-    var s2 = 'During '+periodLabel+', the project team '+parts2.join(' and ')+'.';
-    if (inboundInts.length === 0 && outboundInts.length > 0) s2 += ' No inbound public inquiries have been received to date.';
-    if (needFU > 0) s2 += ' '+needFU+' interaction'+(needFU!==1?'s require':' requires')+' follow-up.';
-    lines.push(s2);
-  } else if (showInts && ints.length > 0) {
-    lines.push('A total of '+ints.length+' stakeholder interaction'+(ints.length!==1?'s have':' has')+' been logged for this project to date.');
-  }
-
-  // Events are their own records, not interactions — reported in their own
-  // sentence, only when the events section is in the report, and only those
-  // dated inside the report period (this used to count every completed event
-  // the project ever had, inside the interactions sentence).
-  if (showEvents) {
-    var heldEvts = meetings.filter(function(m){
-      return m.status==='Completed' && m.date && (!saved.periodStart || m.date >= saved.periodStart) && (!saved.periodEnd || m.date <= saved.periodEnd);
-    }).length;
-    if (heldEvts > 0) lines.push('The team held '+heldEvts+' public event'+(heldEvts!==1?'s':'')+' during the period.');
-  }
-
-  // ── Sentence 3: Most active stakeholder — INBOUND contact only. A
-  // stakeholder the team merely notified several times was not "engaged" —
-  // they never engaged back. ───────────────────────────────────────────────
-  if (showInts && inboundInts.length > 1) {
-    var intCounts = {};
-    inboundInts.forEach(function(i){
-      var id = String(i.stakeholderId);
-      intCounts[id] = (intCounts[id]||0) + 1;
-    });
-    var topId = Object.keys(intCounts).sort(function(a,b){ return intCounts[b]-intCounts[a]; })[0];
-    var topCount = intCounts[topId];
-    if (topCount > 1) {
-      var topSk = allStakes.find(function(s){ return String(s.id)===String(topId); });
-      if (topSk) {
-        var topName = ((topSk.firstName||'')+' '+(topSk.lastName||'')).trim();
-        var topOrg  = topSk.org ? ' ('+topSk.org+')' : '';
-        lines.push('The most engaged stakeholder during this period is '+topName+topOrg
-          +', with '+topCount+' logged interaction'+(topCount!==1?'s':'')+'.');
-      }
-    }
-  }
-
-  // ── Sentence 4: Top concern topics — keyword scan over INBOUND interactions
-  // only. Scanning outbound notification text (e.g. "sent detour exhibit for
-  // review") would report the team's own outreach language back as what the
-  // public raised, which is exactly backwards for an early, notification-
-  // heavy period. ───────────────────────────────────────────────────────────
-  if (showInts && inboundInts.length > 0) {
-    var keywords = [
-      // ── Transportation / construction ──────────────────────────────────────
-      {label:'construction access',       terms:['access','driveway','entrance','ingress','egress']},
-      {label:'noise and vibration',       terms:['noise','vibration','loud','sound','decibel']},
-      {label:'traffic and detours',       terms:['traffic','detour','lane','closure','road','signal']},
-      {label:'construction schedule',     terms:['schedule','timeline','deadline','duration','phase','start date','completion']},
-      {label:'dust and air quality',      terms:['dust','air quality','particulate','smoke','odor']},
-      {label:'public safety',             terms:['safety','pedestrian','school','children','emergency']},
-      {label:'contractor operations',     terms:['contractor','construction crew','foreman','work hours','staging','equipment','haul route']},
-      // ── Property / ROW ────────────────────────────────────────────────────
-      {label:'property impacts',          terms:['property','fence','landscape','structure','building']},
-      {label:'right-of-way acquisition',  terms:['right-of-way','ROW','easement','acquisition','appraisal','relocation','displacement','condemnation','eminent domain']},
-      // ── Water resources / supply ──────────────────────────────────────────
-      {label:'water supply and allocation',terms:['water supply','water rights','allocation','secondary water','culinary water','drought','reservoir','aquifer','groundwater','depletion','shortage','water share','senior rights']},
-      {label:'water distribution',        terms:['pipeline','water line','connection','meter','hookup','service area','pressure','distribution','treatment','wastewater']},
-      {label:'irrigation and agriculture',terms:['irrigation','agriculture','farming','crop','livestock','canal','ditch','secondary system']},
-      {label:'water conservation',        terms:['conservation','efficiency','xeriscaping','metering','usage','reduction','reuse','recycled water']},
-      // ── Municipal development ─────────────────────────────────────────────
-      {label:'municipal development',     terms:['development','growth','subdivision','density','zoning','land use','annexation','population','housing','commercial']},
-      {label:'rates and fees',            terms:['rate increase','water rate','impact fee','assessment','bond','infrastructure cost','connection fee','cost','budget','funding','taxpayer','fee','price']},
-      {label:'governance and policy',     terms:['policy','regulation','state engineer','water court','adjudication','water district','municipality','interlocal','agreement']},
-      // ── Environmental / regulatory ────────────────────────────────────────
-      {label:'environmental concerns',    terms:['NEPA','Section 4(f)','environmental','mitigation','wetland','floodplain','habitat','wildlife','riparian','erosion','runoff']},
-      // ── Equity / community ────────────────────────────────────────────────
-      {label:'equity and access',         terms:['fairness','equity','priority','rural','urban','underserved','residential','community']},
-      {label:'community and quality of life',terms:['recreation','fishing','boating','swimming','park','green space','trail','aesthetics','visual','community character']},
-      // ── Public process ────────────────────────────────────────────────────
-      {label:'public process',            terms:['public hearing','open house','comment period','scoping','record of decision','FHWA','UDOT','approval']},
-      {label:'communication and outreach',terms:['notification','notice','inform','communication','update','outreach']},
-      // ── Utilities ─────────────────────────────────────────────────────────
-      {label:'utilities and service',     terms:['utility','sewer','pipe','outage','service','electric','gas','telecom']}
-    ];
-    var topicCounts = {};
-    inboundInts.forEach(function(i){
-      var text = ((i.summary||'')+' '+(i.notes||'')).toLowerCase();
-      keywords.forEach(function(kw){
-        kw.terms.forEach(function(t){
-          if (text.indexOf(t) >= 0) {
-            topicCounts[kw.label] = (topicCounts[kw.label]||0) + 1;
-          }
-        });
-      });
-    });
-    var topTopics = Object.keys(topicCounts)
-      .sort(function(a,b){ return topicCounts[b]-topicCounts[a]; })
-      .slice(0,3);
-    if (topTopics.length > 0) {
-      var topicStr = topTopics.length === 1 ? topTopics[0]
-        : topTopics.slice(0,-1).join(', ')+' and '+topTopics[topTopics.length-1];
-      lines.push('The most frequently raised topics among inbound stakeholder contacts during this period include '+topicStr+'.');
-    }
-  }
-
-  // ── Snapshot clause: sentences 5, 6, 7 joined under one qualifier ──────────
-  var snapshotParts = [];
-
-  // Part 1: Stakeholder sentiment
-  if (stakes.length > 0) {
-    var champ = stakes.filter(function(s){ return s.sentiment==='Champion'; }).length;
-    var opp   = stakes.filter(function(s){ return s.sentiment==='Opponent'; }).length;
-    var neut  = stakes.length - champ - opp;
-    var hi    = stakes.filter(function(s){ return s.influence==='High'; }).length;
-    var sentTrend = opp > champ ? 'mixed' : (champ > stakes.length*0.5 ? 'predominantly supportive' : 'varied');
-    var s5 = 'overall stakeholder sentiment is '+sentTrend+' — '+champ+' Champion'+(champ!==1?'s':'')+', '
-      +neut+' Neutral, and '+opp+' Opponent'+(opp!==1?'s':'')+' across '+stakes.length+' external contact'+(stakes.length!==1?'s':'');
-    if (hi > 0) s5 += ', with '+hi+' classified as high influence';
-    snapshotParts.push(s5);
-  }
-
-  // Part 2: Deliverable progress
-  if (dels.length > 0) {
-    var g = _delProgress(dels);
-    var s6 = 'deliverable progress stands at '+(g.pct!==null ? g.delivered+' of '+g.contracted+' contracted items delivered ('+g.pct+'%)' : 'no contracted quantities set')
-      +', '+g.complete+' of '+g.total+' deliverables complete';
-    if (g.inProgress > 0) s6 += ', with '+g.inProgress+' in progress';
-    if (g.open.length > 0) s6 += ', '+g.open.length+' ongoing with no set number';
-    if (g.pastDue.length > 0) s6 += ', '+g.pastDue.length+' item'+(g.pastDue.length!==1?'s':'')+' past due';
-    snapshotParts.push(s6);
-  }
-
-  // Part 3: Specific overdue flags
-  var alerts = [];
-  var today2 = new Date().toISOString().slice(0,10);
-  var hiOpenIss = issues.filter(function(i){
-    return i.priority==='High' && (i.status==='Open'||i.status==='In Progress');
-  });
-  if (hiOpenIss.length > 0) {
-    var issNames = hiOpenIss.slice(0,2).map(function(i){ return '“'+i.title+'”'; });
-    if (hiOpenIss.length > 2) issNames.push('and '+(hiOpenIss.length-2)+' more');
-    alerts.push(hiOpenIss.length+' high-priority issue'+(hiOpenIss.length!==1?'s':'')+': '+issNames.join(', '));
-  }
-  var overdueComms = commitments.filter(function(c){ return c.status==='Overdue'; });
-  if (overdueComms.length > 0) {
-    var commNames = overdueComms.slice(0,2).map(function(c){ return '“'+(c.commitment||'Untitled').slice(0,40)+'”'; });
-    if (overdueComms.length > 2) commNames.push('and '+(overdueComms.length-2)+' more');
-    alerts.push(overdueComms.length+' overdue commitment'+(overdueComms.length!==1?'s':'')+': '+commNames.join(', '));
-  }
-  if (alerts.length > 0) {
-    snapshotParts.push('items requiring attention: '+alerts.join('; '));
-  }
-
-  // Emit snapshot clause once with qualifier as lead-in
-  if (snapshotParts.length > 0) {
-    lines.push('At the time this report was created: '+snapshotParts.join('; ')+'.');
-  }
-
-  return lines.join(' ');
-}
-
 // ── PI REPORT EDITOR: auto-save + presence + optimistic concurrency ──────────
 // One draft row per project (pi_reports). Multiple people can open the same
 // project's report, so: (1) fetch fresh on open, (2) warn if someone else is
@@ -17485,12 +17167,10 @@ async function openPIReport(_isReopen){
     +'<div style="margin-top:10px;font-size:11px;color:var(--fog)">Report period controls which interactions appear in auto-populated sections.</div>'
     +'<div style="margin-top:12px">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">'
-    +'<label style="margin:0;font-size:12px">Overall summary <span style="font-weight:400;font-style:italic;color:var(--fog)">(prints before first section)</span></label>'
-    +'<button id="overall-draft-btn" class="btn btn-xs" style="background:rgba(74,155,232,.15);border-color:rgba(74,155,232,.4);color:var(--sky-lt);font-size:10px;padding:2px 8px;white-space:nowrap" onclick="generateOverallDraft()">'
-    +(_getClaudeKey()?'✦ AI: Generate Overall Summary':'✦ Generate Overall Summary')
-    +'</button>'
+    +'<label style="margin:0;font-size:12px">Note to the client <span style="font-weight:400;font-style:italic;color:var(--fog)">(optional — prints after "Report at a glance")</span></label>'
     +'</div>'
-    +'<textarea id="rpt-overall-summary" rows="3" placeholder="Overall project summary or context to print before the first section..." oninput="schedulePreview()" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:12px;padding:8px 10px;resize:vertical;font-family:inherit;line-height:1.5;box-sizing:border-box">'+escHtml(saved.overallSummary||'')+'</textarea>'
+    +'<div style="font-size:11px;color:var(--fog);margin-bottom:5px">The report opens with "Report at a glance": what it covers, key figures and anything needing attention, all counted from the project. Add a sentence or two here only if you want to; leave it blank to leave it out.</div>'
+    +'<textarea id="rpt-overall-summary" rows="3" placeholder="Optional note to the client…" oninput="schedulePreview()" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:var(--white);font-size:12px;padding:8px 10px;resize:vertical;font-family:inherit;line-height:1.5;box-sizing:border-box">'+escHtml(saved.overallSummary||'')+'</textarea>'
     +'</div></div>'
     +'<div style="margin-bottom:18px;background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:16px">'
     +'<div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:6px">Report Distribution</div>'
@@ -17968,7 +17648,9 @@ function renderLivePreview() {
     html += '</div>';
   }
 
-  // Overall summary
+  // Report at a glance (counted) — then the optional note to the client.
+  html += _reportGlanceHTML(_reportGlance(projF, { pstart: pstart, pend: pend, sections: sections,
+    includeInternal: !!((document.getElementById('rpt-ed-include-internal')||document.getElementById('rpt-include-internal')||{}).checked) }));
   if (overall.trim()) {
     html += '<div style="' + RPT_OVERALL_CSS + '">' + escHtml(overall) + '</div>';
   }
@@ -18248,7 +17930,7 @@ async function savePIReportDraft(){
 }
 
 async function resetPIReportDraft(){
-  if(!confirm('Reset the report editor? This will clear all saved content including section summaries, the overall summary, and restore default sections. This cannot be undone.')) return;
+  if(!confirm('Reset the report editor? This will clear all saved content including section summaries, the note to the client, and restore default sections. This cannot be undone.')) return;
   var projF=S.projectFilter;
 
   // Tear the editor session down FIRST. It holds a debounced auto-save timer and a
@@ -18540,6 +18222,10 @@ function _buildReportSnapshot(projF, saved) {
     periodLabel: (pstart && pend) ? (fmt(pstart) + ' – ' + fmt(pend)) : (pstart ? 'From ' + fmt(pstart) : (pend ? 'Through ' + fmt(pend) : '')),
     recipients: recipients,
     includeInternal: includeInternal,
+    // "Report at a glance", frozen as rendered — the archive and the portal
+    // show it as issued, never recomputed.
+    atGlanceHtml: (function(){ try { return _reportGlanceHTML(_reportGlance(projF, { pstart: pstart, pend: pend,
+      sections: sections, includeInternal: includeInternal })); } catch(e) { console.warn('Snapshot glance failed:', e.message); return ''; } })(),
     sections: snapSections
   };
 }
@@ -18985,7 +18671,8 @@ function _buildArchivedPreviewHTML(rec, proj) {
       + '<span style="color:#111">'+snap.recipients.map(escHtml).join(', ')+'</span></div>';
   }
 
-  // Overall summary
+  // Report at a glance (frozen), then the note to the client
+  if (snap && snap.atGlanceHtml) html += snap.atGlanceHtml;
   if ((rec.overallSummary||'').trim()) {
     html += '<div style="'+RPT_OVERALL_CSS+'">'+escHtml(rec.overallSummary)+'</div>';
   }
@@ -19920,15 +19607,6 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
 
   xml+=spacer();
 
-  // ── OVERALL SUMMARY (prints before first section) ───────────
-  if(saved.overallSummary&&saved.overallSummary.trim()){
-    xml+=heading('Overall Summary:');
-    saved.overallSummary.trim().split('\n').forEach(function(line){
-      xml+=para(line.trim()||' ',bodyRpr);
-    });
-    xml+=spacer();
-  }
-
   // ── RENDER SECTIONS IN SAVED ORDER ──────────────
   var reportSaved=JSON.parse(localStorage.getItem('pir4_pi_reports_'+proj.id)||'{}');
   var sections=reportSaved.sections||[
@@ -19937,6 +19615,33 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
     {id:'planned',title:'Planned PI activities',type:'manual',content:''},
     {id:'deliverables',title:'Deliverable / scope status',type:'auto-del'}
   ];
+
+  // ── REPORT AT A GLANCE, then the optional note to the client ─────────
+  // Same model as the live preview (_reportGlance), over the sections that print.
+  var _rg=_reportGlance(proj.id,{pstart:saved.periodStart||'',pend:saved.periodEnd||'',sections:sections,includeInternal:!!saved.includeInternal});
+  if(_rg){
+    xml+=heading('Report at a Glance:');
+    xml+=para(_rg.intro,bodyRpr);
+    if(_rg.rows.length){
+      var rgCols=[5200,2000,2260];
+      var rgRows=tblHdrRow(['Key figures','This period','Previous period'],rgCols);
+      _rg.rows.forEach(function(r,ri){ rgRows+=tblDataRow(r,rgCols,ri%2!==0); });
+      xml+=tblWrap(9460,rgCols,rgRows);
+      if(_rg.prevLabel) xml+=para(_rg.prevLabel,italicGrayRpr);
+    }
+    if(_rg.showAttention){
+      xml+='<w:p>'+bodyPpr+'<w:r>'+boldRpr+'<w:t xml:space="preserve">Needs attention and coming up</w:t></w:r></w:p>';
+      if(_rg.attention.length) _rg.attention.forEach(function(x){ xml+=bullet(x); });
+      else xml+=para(GLANCE_NONE,bodyRpr);
+    }
+    xml+=spacer();
+  }
+  if(saved.overallSummary&&saved.overallSummary.trim()){
+    saved.overallSummary.trim().split('\n').forEach(function(line){
+      xml+=para(line.trim()||' ',bodyRpr);
+    });
+    xml+=spacer();
+  }
 
   // Get project stakeholder data for auto sections
   var _psRaw=DB.get('project_stakeholders').filter(function(x){return x.projectId===proj.id});
@@ -19977,13 +19682,14 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
         var pLabel='Report period: '+_fmtDateRange(saved.periodStart,saved.periodEnd);
         xml+=para(pLabel,italicGrayRpr);
       }
-      // "Interactions at a glance" — counts only, printed whether or not the
+      // "What the public raised most" — counts only, printed whether or not the
       // data table is on (same rows as the preview: _concernsGlanceRows).
       var _gst=_concernsStats(proj.id,saved.periodStart,saved.periodEnd,!!saved.includeInternal);
-      if(_gst.total){
+      var _gRowsData=_gst.total?_concernsGlanceRows(_gst,!(saved.sections||[]).some(function(x){return x.type==='auto-followups';})):[];
+      if(_gRowsData.length){
         var gCols=[5200,2000,2260];
-        var gRows=tblHdrRow(['Interactions at a glance','This period','Previous period'],gCols);
-        _concernsGlanceRows(_gst,!(saved.sections||[]).some(function(x){return x.type==='auto-followups';})).forEach(function(r,ri){ gRows+=tblDataRow(r,gCols,ri%2!==0); });
+        var gRows=tblHdrRow(['What the public raised most','This period','Previous period'],gCols);
+        _gRowsData.forEach(function(r,ri){ gRows+=tblDataRow(r,gCols,ri%2!==0); });
         xml+=tblWrap(9460,gCols,gRows);
         var _gpl=_concernsPrevLabel(_gst); if(_gpl) xml+=para(_gpl,italicGrayRpr);
         xml+=spacer();

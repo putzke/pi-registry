@@ -1052,6 +1052,29 @@ reuses `_sectionAIRequest`, so both paths get the same instruction and budget;
 keep it that way or the batched copy comes out a different length from the
 per-section button's.
 
+### Recent public concerns: length by volume + "at a glance" table (DEV, Oct 2026, Jeff)
+Supersedes the fixed 175/190-word budget above. `_concernsStats(projF, pstart,
+pend, includeInternal)` is the ONE set of numbers (next to `_buildConcernsAIFacts`):
+inbound (`direction !== 'Outgoing'`) and outbound SEPARATE, inbound by subject /
+nature, channels, team outreach by subject, and the previous period = the same
+number of days just before (`_isoAddDays`). Length grows with INBOUND volume
+(`CONCERNS_TIERS`, the Interaction-log quick-report steps: ≤25 → 150 words,
+≤100 → 250, ≤300 → 350, more → 450; ceiling ×1.1; reply words×1.6+200), paragraphs
+split by a blank line. Order: what the public raised by theme with counts → how
+the team responded → what changed vs the previous period → ONE sentence on the
+team's outreach. Facts name contacts by type/organization (`_coWho`), never a
+person. **Follow-ups are left out when the report has the Follow-up status
+section** (Jeff: redundant); otherwise one clause/row.
+- **"Interactions at a glance"** (`_concernsGlanceRows` / `_concernsGlanceHTML`):
+  inbound, outbound, top 3 subjects — this period vs previous — in the live
+  preview, the frozen snapshot (`glanceHtml`, rendered by the archive and the
+  portal) and the .docx, whether or not the data table is on (counts only).
+  Charts stay in quick reports and the close-out (Jeff).
+- Section narratives now print one Word paragraph per line in the .docx (they
+  ran together as one paragraph).
+- Guarded by `test/tests/104-concerns-summary.test.js` (fails on the old code);
+  test 32's budget checks updated to the tiers.
+
 ### The overall summary is scoped to the report, and outbound ≠ inbound (Sep 2026)
 `_buildOverallDraft()` (feeds `_overallDraftCall()`, which deliberately never
 sees the other sections' drafted text — see its own comment) had two problems,

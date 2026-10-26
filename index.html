@@ -16106,54 +16106,156 @@ function _claudeSystemPrompt() {
     + 'Write in third person past or present tense as appropriate.';
 }
 
-// Enriched, itemized facts for the "Recent public concerns and inquiries"
-// section: the aggregate counts PLUS each in-period interaction's subject and
-// summary, so the AI can synthesize the ACTUAL topics/concerns raised — not
-// just volume. Returns null when there is nothing in the report period.
+// ── "Recent public concerns and inquiries": ONE set of numbers (Oct 2026, Jeff) ──
+// _concernsStats feeds the AI facts, the "at a glance" table (live preview,
+// frozen snapshot, portal copy) and the .docx, so none of them can disagree.
+//  - inbound (direction !== 'Outgoing') and outbound are counted SEPARATELY:
+//    the team's own notifications are not public concern (same split as the
+//    overall summary);
+//  - counts by subject and nature are computed here — the model never counts;
+//  - the previous period is the same number of days just before this one, so a
+//    bi-weekly report compares with the two weeks before;
+//  - the narrative's length grows with the inbound volume (CONCERNS_TIERS, the
+//    same steps as the Interaction log quick report);
+//  - follow-ups are left to the Follow-up status section when the report has one.
+var CONCERNS_TIERS=[[25,150,'1-2'],[100,250,'2-3'],[300,350,'3-4'],[Infinity,450,'4-5']];
+var CONCERNS_TOP_SUBJECTS=3, CONCERNS_LOG_CHARS=300, CONCERNS_OUT_LINES=40;
+function _isoAddDays(iso, n){
+  var d=new Date(iso+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10);
+}
+function _concernsTier(inboundN){
+  for(var k=0;k<CONCERNS_TIERS.length;k++){ if(inboundN<=CONCERNS_TIERS[k][0]) return {words:CONCERNS_TIERS[k][1], paras:CONCERNS_TIERS[k][2]}; }
+}
+function _concernsStats(projF, pstart, pend, includeInternal){
+  var ps=DB.get('project_stakeholders').filter(function(x){ return String(x.projectId)===String(projF); });
+  var externalIds=ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; })
+                    .map(function(lk){ return String(lk.stakeholderId); });
+  var all=DB.get('interactions').filter(function(i){
+    return String(i.projectId)===String(projF) && (includeInternal || _intIsExternal(i, externalIds));
+  });
+  var inWin=function(i,a,b){ return (!a||i.date>=a)&&(!b||i.date<=b); };
+  var tally=function(arr,fn){
+    var m={}; arr.forEach(function(i){ var k=fn(i); m[k]=(m[k]||0)+1; });
+    return Object.keys(m).map(function(k){ return [k,m[k]]; }).sort(function(a,b){ return b[1]-a[1]||a[0].localeCompare(b[0]); });
+  };
+  var subj=function(i){ return String(i.subject||'').trim()||'General'; };
+  var isIn=function(i){ return i.direction!=='Outgoing'; };
+  var cur=all.filter(function(i){ return inWin(i,pstart,pend); })
+             .sort(function(a,b){ return String(a.date||'').localeCompare(String(b.date||'')); });
+  var inbound=cur.filter(isIn), outbound=cur.filter(function(i){ return !isIn(i); });
+  var prev=null;
+  if(pstart&&pend&&pend>=pstart){
+    var days=Math.round((new Date(pend+'T00:00:00Z')-new Date(pstart+'T00:00:00Z'))/86400000)+1;
+    var pe=_isoAddDays(pstart,-1), pb=_isoAddDays(pstart,-days);
+    var pcur=all.filter(function(i){ return inWin(i,pb,pe); });
+    var pin=pcur.filter(isIn), sm={};
+    tally(pin,subj).forEach(function(r){ sm[r[0]]=r[1]; });
+    prev={start:pb, end:pe, days:days, inbound:pin.length, outbound:pcur.length-pin.length, bySubject:sm};
+  }
+  var bySubject=tally(inbound,subj);
+  return {
+    total:cur.length, inbound:inbound, outbound:outbound,
+    bySubject:bySubject, byNature:tally(inbound,function(i){ return i.nature||'Unspecified'; }),
+    byChannel:tally(cur,function(i){ return i.channel||'Unknown'; }),
+    outSubjects:tally(outbound,subj),
+    top:bySubject.slice(0,CONCERNS_TOP_SUBJECTS),
+    prev:prev,
+    openFU:cur.filter(function(i){ return i.followUp&&!i.followUpDone; }).length,
+    tier:_concernsTier(inbound.length)
+  };
+}
+function _concernsHasFollowupSection(projF){
+  return (loadReportSections(projF).sections||[]).some(function(x){ return x.type==='auto-followups'; });
+}
+// Rows of the "at a glance" table: [measure, this period, previous period].
+function _concernsGlanceRows(st, withFU){
+  var p=st.prev, pv=function(n){ return p? String(n) : '—'; };
+  var rows=[
+    ['Inbound and in-person contacts', String(st.inbound.length), pv(p&&p.inbound)],
+    ['Outbound notifications by the team', String(st.outbound.length), pv(p&&p.outbound)]
+  ];
+  st.top.forEach(function(r){ rows.push(['Raised most: '+r[0], String(r[1]), pv(p&&(p.bySubject[r[0]]||0))]); });
+  if(withFU) rows.push(['Still awaiting follow-up', String(st.openFU), '—']);
+  return rows;
+}
+function _concernsPrevLabel(st){
+  return st.prev ? 'Previous period: '+_fmtDateRange(st.prev.start, st.prev.end)+' (the same number of days just before this report).' : '';
+}
+// Inline-styled so the frozen copy renders the same in the archive and portal.
+function _concernsGlanceHTML(projF, pstart, pend, includeInternal){
+  var st=_concernsStats(projF, pstart, pend, includeInternal);
+  if(!st.total) return '';
+  var rows=_concernsGlanceRows(st, !_concernsHasFollowupSection(projF));
+  var th='padding:5px 8px;background:#1a3a5c;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.4px;text-align:left';
+  var td='padding:5px 8px;border-bottom:1px solid #e0e0e0;font-size:11px';
+  var h='<div style="margin:6px 0 10px">'
+    +'<div style="font-size:11px;font-weight:700;color:#1e3a5f;margin-bottom:4px">Interactions at a glance</div>'
+    +'<table style="width:100%;max-width:520px;border-collapse:collapse"><thead><tr>'
+    +'<th style="'+th+'">Measure</th><th style="'+th+';text-align:right">This period</th><th style="'+th+';text-align:right">Previous period</th></tr></thead><tbody>';
+  rows.forEach(function(r,k){
+    h+='<tr style="'+(k%2?'background:#f6f8fa':'')+'"><td style="'+td+'">'+escHtml(r[0])+'</td>'
+      +'<td style="'+td+';text-align:right;font-weight:600">'+escHtml(r[1])+'</td>'
+      +'<td style="'+td+';text-align:right;color:#595959">'+escHtml(r[2])+'</td></tr>';
+  });
+  h+='</tbody></table>';
+  var pl=_concernsPrevLabel(st);
+  if(pl) h+='<div style="font-size:10px;color:#777;font-style:italic;margin-top:3px">'+escHtml(pl)+'</div>';
+  return h+'</div>';
+}
+
+// The facts the AI gets for "Recent public concerns and inquiries". Counts are
+// computed and authoritative; the log is for themes only. Contacts are named by
+// TYPE and ORGANIZATION (_coWho), never by a person's name. Returns null when
+// nothing was logged in the period.
 function _buildConcernsAIFacts() {
   var projF = S.projectFilter;
   if (!projF) return null;
   var saved = loadReportSections(projF);
-  var ps = DB.get('project_stakeholders').filter(function(x){ return String(x.projectId)===String(projF); });
-  var allStakes = DB.getActive('stakeholders');
-  var ints = DB.get('interactions').filter(function(i){ return String(i.projectId)===String(projF); });
-  var externalIds = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; })
-                      .map(function(lk){ return String(lk.stakeholderId); });
-  var periodInts = ints.filter(function(i){
-    if (!_intIsExternal(i, externalIds)) return false;
-    if (saved.periodStart && i.date < saved.periodStart) return false;
-    if (saved.periodEnd && i.date > saved.periodEnd) return false;
-    return true;
+  var st = _concernsStats(projF, saved.periodStart, saved.periodEnd, !!saved.includeInternal);
+  if (!st.total) return null;
+  var stakes = DB.get('stakeholders') || [];
+  var withFU = !_concernsHasFollowupSection(projF);
+  var list = function(t){ return t.map(function(r){ return r[0]+' ('+r[1]+')'; }).join(', '); };
+  var periodLabel = (saved.periodStart || saved.periodEnd) ? _fmtDateRange(saved.periodStart, saved.periodEnd) : 'the report period';
+  var L = [];
+  L.push('Report period: ' + periodLabel + '.');
+  L.push('');
+  L.push('COUNTS (computed — authoritative; use exactly, never count from the log):');
+  L.push('- Inbound and in-person contacts from the public and stakeholders: ' + st.inbound.length + '.');
+  L.push('- Outbound notifications and calls by the project team: ' + st.outbound.length + '.');
+  if (st.bySubject.length) L.push('- Inbound contacts by subject: ' + list(st.bySubject) + '.');
+  if (st.byNature.length) L.push('- Inbound contacts by nature: ' + list(st.byNature) + '.');
+  L.push('- All contacts by channel: ' + list(st.byChannel) + '.');
+  if (st.outSubjects.length) L.push('- Team outreach by subject: ' + list(st.outSubjects) + '.');
+  if (st.prev) {
+    L.push('- Previous period (' + _fmtDateRange(st.prev.start, st.prev.end) + ', the same number of days): '
+      + st.prev.inbound + ' inbound, ' + st.prev.outbound + ' outbound.');
+    var changes = st.bySubject.map(function(r){ return [r[0], r[1], st.prev.bySubject[r[0]]||0]; })
+      .filter(function(r){ return r[1] !== r[2]; })
+      .sort(function(a,b){ return (b[1]-b[2])-(a[1]-a[2]); }).slice(0,5);
+    if (changes.length) L.push('- Subjects compared with the previous period (this period vs previous): '
+      + changes.map(function(r){ return r[0]+' '+r[1]+' vs '+r[2]+(r[2]===0?' (new)':''); }).join('; ') + '.');
+  } else {
+    L.push('- No previous period to compare with (the report has no start and end date).');
+  }
+  if (withFU) L.push('- Inbound contacts still awaiting follow-up: ' + st.inbound.filter(function(i){ return i.followUp && !i.followUpDone; }).length + '.');
+  L.push('');
+  L.push('INBOUND LOG (oldest first; who = type/organization; read for themes and responses — do not count from it):');
+  st.inbound.forEach(function(i){
+    var summ = String(i.summary||'').trim(); if (summ.length > CONCERNS_LOG_CHARS) summ = summ.slice(0, CONCERNS_LOG_CHARS) + '…';
+    var res = String(i.followUpResolution||'').trim();
+    L.push('- ' + (i.date||'') + ' | ' + _coWho(i, stakes) + ' | ' + (i.channel||'') + ' | ' + (String(i.subject||'').trim()||'General')
+      + ' | ' + (i.nature||'') + ' | ' + (summ||'(no notes)') + (res ? ' | response: ' + res : ''));
   });
-  if (periodInts.length === 0) return null;
-  periodInts = periodInts.slice().sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
-
-  var chanCount = {};
-  periodInts.forEach(function(i){ var c=i.channel||'Unknown'; chanCount[c]=(chanCount[c]||0)+1; });
-  var chanStr = Object.keys(chanCount).sort(function(a,b){ return chanCount[b]-chanCount[a]; })
-                  .map(function(c){ return c+' ('+chanCount[c]+')'; }).join(', ');
-  var needFU = periodInts.filter(function(i){ return i.followUp && !i.followUpDone; }).length;
-  var periodLabel = (saved.periodStart || saved.periodEnd)
-    ? _fmtDateRange(saved.periodStart, saved.periodEnd)
-    : 'the report period';
-
-  var lines = [];
-  lines.push('Report period: ' + periodLabel + '.');
-  lines.push('Total external stakeholder interactions: ' + periodInts.length + '.');
-  if (chanStr) lines.push('Channel breakdown: ' + chanStr + '.');
-  lines.push('Interactions still requiring follow-up: ' + needFU + '.');
-  lines.push('');
-  lines.push('Individual interactions (date | contact | channel | subject | summary | follow-up status):');
-  periodInts.forEach(function(i){
-    var s = allStakes.find(function(x){ return String(x.id)===String(i.stakeholderId); });
-    var who = i.anonLabel || (s ? ((s.firstName||'')+' '+(s.lastName||'')).trim() : '') || 'Unknown';
-    var subj = (i.subject||'').trim() || '(no subject)';
-    var summ = (i.summary||'').trim();
-    if (summ.length > 300) summ = summ.slice(0,300) + '…';
-    var fu = (i.followUp && !i.followUpDone) ? 'follow-up pending' : (i.followUp ? 'follow-up done' : 'no follow-up');
-    lines.push('- ' + (i.date||'') + ' | ' + who + ' | ' + (i.channel||'') + ' | ' + subj + ' | ' + (summ||'(no notes)') + ' | ' + fu);
-  });
-  return lines.join('\n');
+  if (st.outbound.length) {
+    L.push('');
+    L.push('TEAM OUTREACH (newest ' + Math.min(CONCERNS_OUT_LINES, st.outbound.length) + ' of ' + st.outbound.length + '; for one closing sentence only):');
+    st.outbound.slice(-CONCERNS_OUT_LINES).forEach(function(i){
+      var summ = String(i.summary||'').trim(); if (summ.length > 150) summ = summ.slice(0,150) + '…';
+      L.push('- ' + (i.date||'') + ' | ' + (i.channel||'') + ' | ' + (String(i.subject||'').trim()||'General') + ' | ' + (summ||'(no notes)'));
+    });
+  }
+  return L.join('\n');
 }
 
 // Build the user-message + token budget for a given section's AI draft. The
@@ -16163,39 +16265,35 @@ function _buildConcernsAIFacts() {
 function _sectionAIRequest(secType, templateDraft) {
   if (secType === 'auto-concerns') {
     var facts = _buildConcernsAIFacts() || templateDraft || '';
+    // Length follows the INBOUND volume (CONCERNS_TIERS) — a hard word budget,
+    // not a sentence count (a sentence count once produced 265 words in six
+    // sentences). Paragraphs are separated by a blank line; each prints as its
+    // own paragraph in the preview and the .docx.
+    var _cs = S.projectFilter ? (function(){ var sv=loadReportSections(S.projectFilter); return _concernsStats(S.projectFilter, sv.periodStart, sv.periodEnd, !!sv.includeInternal); })() : null;
+    var tier = (_cs && _cs.total) ? _cs.tier : _concernsTier(0);
+    var withFU = S.projectFilter ? !_concernsHasFollowupSection(S.projectFilter) : true;
+    var hasPrev = !!(_cs && _cs.prev);
     return {
-      // This is the narrative heart of the report, and the facts include every
-      // in-period interaction's own summary text — so ask for real substance, not
-      // a 3-sentence stat recap. This section also OWNS the reporting date range;
-      // the executive summary is told not to repeat it.
-      //
-      // The LENGTH is a hard word budget, not a sentence count (Aug 2026). Asked
-      // for "5-8 sentences" the model complied on the count and blew past the
-      // intent — 265 words in six sentences of 40-plus words each, a wall of
-      // prose above a table that already carries the detail. A sentence count
-      // cannot constrain that; it says nothing about how long a sentence may be.
-      // 175 words is a third shorter with the same content: the instruction
-      // below cuts redundancy and per-item elaboration, NOT topics — dropping a
-      // theme would under-report public concern, which is a compliance figure.
       userContent: 'Write the narrative for the "Recent public concerns and inquiries" '
-        + 'section of a public involvement progress report.\n\n'
-        + 'LENGTH: about 175 words, and no more than 190 words. This is a hard limit.\n\n'
-        + 'Open by stating the reporting period explicitly (this section is where the date range is '
-        + 'reported). Then give a substantive account of what stakeholders actually raised, drawing on the '
-        + 'content of the individual interaction summaries below — the specific concerns, questions, '
-        + 'requests and complaints, and how they were addressed or resolved. Group recurring themes '
-        + 'together and give the more consequential items more room than routine ones. Weave in the '
-        + 'relevant counts (total interactions, primary contact channels, and how many still require '
-        + 'follow-up) as supporting detail rather than as the main point.\n\n'
-        + 'Cover every distinct theme, but write tightly to stay inside the word budget: state each '
-        + 'point once, keep routine items to a clause rather than a sentence, and cut throat-clearing '
-        + 'and restatement. Losing a theme is worse than losing a phrase — compress, do not omit.\n\n'
-        + 'Do not produce a list or go interaction-by-interaction, and do not name individual '
-        + 'stakeholders — the data table below the narrative already carries those details. '
+        + 'section of a public involvement progress report that goes to the client every two weeks or so.\n\n'
+        + 'LENGTH: about ' + tier.words + ' words, no more than ' + Math.round(tier.words * 1.1) + ' words, in '
+        + tier.paras + ' paragraphs separated by a blank line.\n\n'
+        + 'ORDER:\n'
+        + '1. Open with the reporting period, then what the public and stakeholders raised (the inbound contacts), '
+        + 'grouped by theme, using the counts given. Give the more consequential themes more room than routine ones.\n'
+        + '2. How the team responded and what was resolved, drawing on the summaries and responses in the log.\n'
+        + (hasPrev ? '3. What changed compared with the previous period, using the comparison figures given.\n' : '')
+        + (hasPrev ? '4. ' : '3. ') + 'End with ONE sentence on the team\'s own outreach (the outbound count and what it was about). '
+        + 'Outbound notifications are the team\'s work, not public concern — never mix them into what the public raised.\n\n'
+        + (withFU ? 'Mention in one clause how many inbound contacts still await follow-up.\n\n'
+                  : 'Do not discuss follow-ups — the report has its own follow-up section.\n\n')
+        + 'Cover every distinct theme the public raised; compress rather than omit. Every number comes from the COUNTS '
+        + 'block, used exactly — never count from the log or estimate. Do not produce a list or go interaction-by-interaction. '
+        + 'Never name a private individual (describe them by role, e.g. "a resident", "a property owner"); agencies, '
+        + 'businesses and organizations may be named. Never quote anyone. Short sentences and everyday words.\n\n'
         + 'Base it strictly on these facts:\n\n' + facts,
-      // ~190 words is ~260 tokens; the headroom is so a slight overrun ends on a
-      // finished sentence rather than being clipped mid-word by the ceiling.
-      maxTokens: 450
+      // Reply budget: words to tokens with room to finish the last sentence.
+      maxTokens: Math.round(tier.words * 1.6) + 200
     };
   }
   if (secType === 'auto-outreach') {
@@ -17940,6 +18038,8 @@ function renderLivePreview() {
         var _dayLabel = _periodLabel(sec.type, pstart, pend);
         html += '<div style="font-size:11px;color:#595959;font-style:italic;background:#f0f0f0;border-radius:4px;padding:5px 10px;margin-bottom:8px">' + _dayLabel + counts.join(' · ') + '</div>';
       }
+      // Counts only, no names — shown whether or not the data table is on.
+      if (sec.type === 'auto-concerns') html += _concernsGlanceHTML(projF, pstart, pend, includeInternal);
       // Data table (when toggled on)
       if (sec.showTable && TABLE_ELIGIBLE_TYPES.indexOf(sec.type) >= 0) {
         html += _buildSectionPreviewTable(sec.type, projF, pstart, pend, includeInternal);
@@ -18304,7 +18404,7 @@ function _buildReportSnapshot(projF, saved) {
 
   var snapSections = sections.map(function(sec){
     var isAuto = sec.type && sec.type !== 'manual';
-    var countsLabel = '', tableHtml = '';
+    var countsLabel = '', tableHtml = '', glanceHtml = '';
     if (isAuto) {
       // Same count logic as renderLivePreview so the frozen line matches the preview.
       var counts = [];
@@ -18356,6 +18456,10 @@ function _buildReportSnapshot(projF, saved) {
 
       // Freeze the rendered table — same builder the live preview uses, so the
       // archived copy is identical to what was on screen and in the .docx.
+      if (sec.type === 'auto-concerns') {
+        try { glanceHtml = _concernsGlanceHTML(projF, pstart, pend, includeInternal) || ''; }
+        catch(e) { console.warn('Snapshot glance table failed:', e.message); }
+      }
       if (sec.showTable && TABLE_ELIGIBLE_TYPES.indexOf(sec.type) >= 0) {
         try { tableHtml = _buildSectionPreviewTable(sec.type, projF, pstart, pend, includeInternal) || ''; }
         catch(e) { console.warn('Snapshot table failed for '+sec.type+':', e.message); }
@@ -18368,6 +18472,7 @@ function _buildReportSnapshot(projF, saved) {
       content: sec.content || '',
       showTable: !!sec.showTable,
       countsLabel: countsLabel,
+      glanceHtml: glanceHtml,
       tableHtml: tableHtml
     };
   });
@@ -18900,6 +19005,7 @@ function _buildArchivedPreviewHTML(rec, proj) {
       if (sec.countsLabel) {
         html += '<div style="font-size:11px;color:#595959;font-style:italic;background:#f0f0f0;border-radius:4px;padding:5px 10px;margin-bottom:8px">'+escHtml(sec.countsLabel)+'</div>';
       }
+      if (sec.glanceHtml) html += sec.glanceHtml;        // frozen "at a glance" table
       if (sec.tableHtml) html += sec.tableHtml;          // frozen table markup
     } else if (sec.content) {
       html += '<ul style="margin:0 0 8px 0;padding-left:20px">';
@@ -19856,7 +19962,12 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
       // bodyRpr, NOT italicGrayRpr — this is the report's prose, the same voice
       // as the overall summary above, and it printed two points smaller and
       // italic, which read as a caption on someone else's table.
-      xml+='<w:p><w:pPr><w:spacing w:before="80" w:after="80" w:line="276" w:lineRule="auto"/>'+bodyRpr+'</w:pPr><w:r>'+bodyRpr+'<w:t xml:space="preserve">'+escXml(sec.summary.trim())+'</w:t></w:r></w:p>';
+      // One Word paragraph per line — a multi-paragraph narrative used to run
+      // together as a single paragraph.
+      sec.summary.trim().split(/\n+/).forEach(function(par){
+        if(!par.trim())return;
+        xml+='<w:p><w:pPr><w:spacing w:before="80" w:after="80" w:line="276" w:lineRule="auto"/>'+bodyRpr+'</w:pPr><w:r>'+bodyRpr+'<w:t xml:space="preserve">'+escXml(par.trim())+'</w:t></w:r></w:p>';
+      });
       xml+=spacer();
     }
 
@@ -19865,6 +19976,17 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
       if(saved.periodStart||saved.periodEnd){
         var pLabel='Report period: '+_fmtDateRange(saved.periodStart,saved.periodEnd);
         xml+=para(pLabel,italicGrayRpr);
+      }
+      // "Interactions at a glance" — counts only, printed whether or not the
+      // data table is on (same rows as the preview: _concernsGlanceRows).
+      var _gst=_concernsStats(proj.id,saved.periodStart,saved.periodEnd,!!saved.includeInternal);
+      if(_gst.total){
+        var gCols=[5200,2000,2260];
+        var gRows=tblHdrRow(['Interactions at a glance','This period','Previous period'],gCols);
+        _concernsGlanceRows(_gst,!(saved.sections||[]).some(function(x){return x.type==='auto-followups';})).forEach(function(r,ri){ gRows+=tblDataRow(r,gCols,ri%2!==0); });
+        xml+=tblWrap(9460,gCols,gRows);
+        var _gpl=_concernsPrevLabel(_gst); if(_gpl) xml+=para(_gpl,italicGrayRpr);
+        xml+=spacer();
       }
       if(sec.showTable){
         var cCols=[1400,1900,1300,4860]; var cHdrs=['Date','Stakeholder','Channel','Summary'];

@@ -186,22 +186,25 @@ module.exports = {
         const r = _sectionAIRequest('auto-concerns', 'facts');
         return { text: r.userContent, budget: r.maxTokens };
       });
-      const budget = ask.text.match(/about (\d+) words, and no more than (\d+) words/);
+      // Since Oct 2026 the target grows with the period's inbound volume
+      // (CONCERNS_TIERS); a typical two-week report still sits a third below
+      // what the sentence-count prompt produced.
+      const budget = ask.text.match(/about (\d+) words, no more than (\d+) words/);
       t.ok(budget, 'the concerns task states a target and a hard ceiling');
-      t.ok(Number(budget[1]) <= Math.round(OBSERVED * 0.7),
-           `the target is about a third below what it was producing `
-           + `(${budget[1]} vs ${OBSERVED})`);
-      t.ok(Number(budget[2]) > Number(budget[1]) && Number(budget[2]) <= OBSERVED * 0.8,
-           `and the ceiling sits just above it (${budget[2]}), not back at the old length`);
+      t.ok(Number(budget[2]) > Number(budget[1]) && Number(budget[2]) <= Number(budget[1]) * 1.15,
+           `and the ceiling sits just above it (${budget[2]})`);
+      const small = await app.page.evaluate(() => _concernsTier(20).words);
+      t.ok(small <= Math.round(OBSERVED * 0.7),
+           `a typical two-week report is about a third below the old length (${small} vs ${OBSERVED})`);
       t.eq(/\d-\d sentences/.test(ask.text), false,
            'no sentence count, which never constrained the length');
-      t.ok(/compress, do not omit/i.test(ask.text),
+      t.ok(/compress rather than omit/i.test(ask.text),
            'the cut is explicitly elaboration, not coverage');
       t.ok(/Cover every distinct theme/.test(ask.text),
            'every theme is still required');
-      t.ok(/stating the reporting period explicitly/i.test(ask.text),
+      t.ok(/Open with the reporting period/i.test(ask.text),
            'this section still owns the reporting date range');
-      t.ok(ask.budget >= Number(budget[2]) * 2 && ask.budget <= 600,
+      t.ok(ask.budget >= Number(budget[2]) * 1.4 && ask.budget <= Number(budget[1]) * 1.6 + 200,
            `the token ceiling matches the new length (${ask.budget}), with room to `
            + 'finish a sentence rather than clip mid-word');
 

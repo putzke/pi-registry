@@ -2022,6 +2022,9 @@ function renderArchivedReportHTML(rec) {
     if (isAuto && sec.countsLabel) {
       html += `<div style="font-size:11px;color:#595959;font-style:italic;background:#f0f0f0;border-radius:4px;padding:5px 10px;margin-bottom:8px">${esc(sec.countsLabel)}</div>`;
     }
+    if (isAuto && sec.glanceHtml) {
+      html += `<div style="overflow-x:auto">${sec.glanceHtml}</div>`;  // frozen "at a glance" table
+    }
     if (isAuto && sec.tableHtml) {
       html += `<div style="overflow-x:auto">${sec.tableHtml}</div>`;   // frozen table markup
     }

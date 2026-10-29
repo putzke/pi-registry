@@ -22496,6 +22496,7 @@ function renderMapView(m) {
           <option value="influence" ${colorBy==='influence'?'selected':''}>Influence tier</option>
           <option value="type" ${colorBy==='type'?'selected':''}>Stakeholder type</option>
           <option value="ej" ${colorBy==='ej'?'selected':''}>EJ / LEP status</option>
+          <option value="group" ${colorBy==='group'?'selected':''}>Group</option>
         </select>
       </div>`:''}
       <div style="margin-top:auto;padding-top:10px;border-top:1px solid rgba(255,255,255,.08)">
@@ -22638,8 +22639,20 @@ function _mapLegendContactsHtml(colorBy) {
       + '<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#f59e0b;margin-right:3px;margin-left:10px"></span>LEP only</span>'
       + '<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#5a87c6;margin-right:3px;margin-left:10px"></span>Standard</span>';
   }
+  if (colorBy === 'group') {
+    if (!S.projectFilter) return '<span style="color:var(--fog)">Pick a project to color by its groups</span>';
+    var groups = _getProjectGroups(S.projectFilter);
+    if (!groups.length) return '<span style="color:var(--fog)">No groups on this project yet — add them with Groups on the project card</span>';
+    return groups.map(function(gr, i){
+      return '<span style="margin-left:'+(i?10:0)+'px"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+gr.color+';margin-right:3px"></span>'+escHtml(gr.name)+'</span>';
+    }).join('') + '<span style="margin-left:10px"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+MAP_NO_GROUP_COLOR+';margin-right:3px"></span>No group</span>';
+  }
   return '<span style="color:var(--fog)">Color by type</span>';
 }
+
+// A contact in no group of the project is grey. In several, the first group in
+// the project's order wins (the same rule as the contact list's colour bar).
+var MAP_NO_GROUP_COLOR = '#888888';
 
 function _mvMarkerColor(g, colorBy) {
   if (colorBy === 'influence') {
@@ -22650,6 +22663,10 @@ function _mvMarkerColor(g, colorBy) {
     if (g.s.ejCommunity || g.s.ej) return '#e94040';
     if (g.s.lep) return '#f59e0b';
     return '#5a87c6';
+  }
+  if (colorBy === 'group') {
+    var pid = (g.lk && g.lk.projectId) || S.projectFilter;
+    return (pid && _getGroupColor(g.s.id, pid)) || MAP_NO_GROUP_COLOR;
   }
   if (colorBy === 'type') {
     var typeColors = {Agency:'#0ea5e9',Business:'#f59e0b','Elected Official':'#8b5cf6','Community Group':'#10b981',Resident:'#64748b','Property Owner':'#ef4444',Tribal:'#d97706',Media:'#06b6d4',Other:'#94a3b8'};
@@ -27580,7 +27597,7 @@ function _smapRecolor(projectId) {
   const groups = _getProjectGroups(projectId);
   const members = DB.get('group_members') || [];
 
-  markers.forEach(({marker, stakeId, support}) => {
+  markers.forEach(({marker, stakeId, support}, idx) => {
     let color;
     if (mode === 'group') {
       const grp = groups.find(g => members.some(m => String(m.groupId)===String(g.id) && String(m.stakeholderId)===String(stakeId)));
@@ -27590,7 +27607,7 @@ function _smapRecolor(projectId) {
     }
     marker.setIcon({
       path: window.google.maps.SymbolPath.CIRCLE,
-      scale: 9,
+      scale: idx + 1 >= 10 ? 11 : 9,
       fillColor: color,
       fillOpacity: 0.95,
       strokeColor: '#ffffff',

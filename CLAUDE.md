@@ -754,6 +754,13 @@ there was nothing to count.
   - **The status line is rewritten after render** (`#mv-count`) to report what
     actually plotted, not what was placeable. It previously said "6 of 6" over
     three markers, which is how a geocode failure disguises itself.
+  - **Color markers by → Group (DEV, Oct 2026, Jeff):** `_mvMarkerColor(g,'group')`
+    = the contact's group colour on its project (`_getGroupColor`, first group in
+    the project's order wins), grey `MAP_NO_GROUP_COLOR` when none; legend lists
+    the project's groups (no project picked → "Pick a project"). The project
+    card's own map already had "Color by: Group" (`_smapRecolor`, which now keeps
+    the larger circle for two-digit numbers). Print still colours by support.
+    Guarded by `test/tests/108-map-color-by-group.test.js`.
   - `_mapPrint()` covers both layers. Static Maps takes no custom shapes and its
     label is a SINGLE character, so parcels are keyed 1-9 then A-Z
     (`_mvPrintKey`) and the printed table's first column carries the same key —

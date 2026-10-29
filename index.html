@@ -7045,7 +7045,12 @@ function openM(title,body,footer,large){
   document.getElementById('modal-ov').classList.add('open');
 }
 function closeM(){document.getElementById('modal-ov').classList.remove('open');S.editId=null}
-document.getElementById('modal-ov').addEventListener('click',e=>{if(e.target===e.currentTarget)closeM()});
+// Close on the backdrop only when the press STARTED there. A drag that starts
+// inside the dialog (selecting text in a box) and ends on the backdrop fires a
+// click on the backdrop too, and used to close the dialog mid-edit.
+var _modalDownOnBackdrop=false;
+document.getElementById('modal-ov').addEventListener('mousedown',e=>{_modalDownOnBackdrop=(e.target===e.currentTarget)});
+document.getElementById('modal-ov').addEventListener('click',e=>{if(e.target===e.currentTarget&&_modalDownOnBackdrop)closeM();_modalDownOnBackdrop=false});
 
 // STAKEHOLDER MODAL
 async function openStakeModal(id){
@@ -27484,14 +27489,21 @@ function _renderGroupMembersModal() {
       <span style="margin-left:auto;font-size:12px;color:var(--sky-lt)">${memberCount} member${memberCount!==1?'s':''}</span>
     </div>
     <div style="font-size:12px;color:var(--slate);margin-bottom:8px">Check stakeholders to add them to this group:</div>
-    <div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;overflow:hidden;max-height:340px;overflow-y:auto">
+    <div id="grp-mem-list" style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;overflow:hidden;max-height:340px;overflow-y:auto">
       ${projStakes.length===0?'<div style="padding:20px;text-align:center;color:var(--fog);font-size:13px">No stakeholders in this project yet.</div>':rows}
     </div>`;
 
   const footer = `<button class="btn" onclick="_renderGroupsManager()">← Back to groups</button>
     <button class="btn btn-primary" onclick="_renderGroupsManager()">Done</button>`;
 
+  // Ticking a box redraws the dialog; keep the list where it was scrolled to.
+  const listEl = document.getElementById('grp-mem-list'), bodyEl = document.getElementById('m-body');
+  const keep = (listEl && document.getElementById('modal-ov').classList.contains('open')) ? [listEl.scrollTop, bodyEl ? bodyEl.scrollTop : 0] : null;
   openM('Manage members — ' + g.name, body, footer, true);
+  if (keep) {
+    const l2 = document.getElementById('grp-mem-list'); if (l2) l2.scrollTop = keep[0];
+    if (bodyEl) bodyEl.scrollTop = keep[1];
+  }
 }
 
 function _toggleGroupMember(groupId, stakeholderId) {

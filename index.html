@@ -16147,6 +16147,10 @@ function getAvailableSections(){
 // The changes made to the site are the section's own bullet lines — website
 // updates are not Outreach actions.
 var WEB_SECTION={id:'website',title:'Project website updates',type:'auto-website'};
+// Auto sections with NO ✦ AI Draft (Jeff, Oct 2026): the website section's
+// bullets and visits table already say what a drafted paragraph would. The
+// summary box stays for a typed sentence; "Draft all" skips them.
+var RPT_NO_AI_TYPES=['auto-website'];
 var WEB_DEFAULT_LABEL='Website visits';
 function _webProj(projF){ return (DB.get('projects')||[]).find(function(p){ return String(p.id)===String(projF); })||{}; }
 function _webLabel(proj){ return String((proj&&proj.websiteLabel)||'').trim()||WEB_DEFAULT_LABEL; }
@@ -16207,17 +16211,6 @@ function _websiteBlockHTML(m){
     h+='<ul style="margin:0 0 8px 0;padding-left:20px">'+m.notes.map(function(l){ return '<li style="margin-bottom:4px;font-size:13px;color:#222">'+escHtml(l)+'</li>'; }).join('')+'</ul>';
   }
   return h;
-}
-// The facts an AI narrative gets. Null when there is nothing to say.
-function _websiteFactLines(m, periodLabel){
-  var L=[];
-  if(m.visits!==null){
-    L.push(m.label+' to date: '+_webFmtN(m.visits)+(m.asOf?' (as of '+fmt(m.asOf)+')':'')+'.');
-    if(m.thisPeriod!==null) L.push(m.label+' during '+periodLabel+': '+_webFmtN(m.thisPeriod)+'.');
-    if(m.lastPeriod!==null) L.push(m.label+' during the previous report period: '+_webFmtN(m.lastPeriod)+'.');
-  }
-  if(m.notes.length){ L.push('Changes made to the project website (from the PI team):'); m.notes.forEach(function(n){ L.push('- '+n); }); }
-  return L.length?L:null;
 }
 // When the report is archived, its count becomes a reading on the project
 // (one per date; a second archive on the same date replaces it).
@@ -16349,7 +16342,7 @@ function getSectionDesc(type){
     'auto-pi-compliance':'Auto-populates a FHWA/NEPA PI compliance summary: NEPA checklist progress, public meetings, comment response rate, LEP/EJ outreach, and commitment fulfillment.',
     'auto-nepa-compliance':'Auto-populates NEPA checklist progress by phase group, outstanding items, and comment period duration compliance. Supports AI-drafted narrative.',
     'auto-parcels':'Auto-populates the right-of-way parcel register: notice and ownership coverage, acquisition status, and every parcel still missing an owner or a notice date. Supports AI-drafted narrative.',
-    'auto-website':'The project website (from Edit project), the visits for this report period worked out from the last archived report\'s count, and the changes made to the site — one bullet per line. Supports AI-drafted narrative.',
+    'auto-website':'The project website (from Edit project), the visits for this report period worked out from the last archived report\'s count, and the changes made to the site — one bullet per line.',
     'auto-outreach':'Auto-populates the outreach actions dated in the report period — press releases, newsletters, email blasts, 511 alerts, social posts and news coverage — by campaign, with each one\'s latest engagement counts as of the period end. Supports AI-drafted narrative.'
   };
   return descs[type]||'';
@@ -16953,17 +16946,6 @@ function _sectionAIRequest(secType, templateDraft) {
       maxTokens: Math.round(tier.words * 1.6) + 200
     };
   }
-  if (secType === 'auto-website') {
-    return {
-      userContent: 'Write the narrative for the "Project website updates" section of a public involvement progress report: '
-        + 'what changed on the project website during the period and, where counts are given, how many visits it had.\n\n'
-        + 'LENGTH: about 70 words, and no more than 90.\n\n'
-        + 'Use the counts exactly as given. Do not work out changes or percentages yourself, do not call traffic high or low, '
-        + 'and do not quote the web address (it prints under the paragraph). Mention every change listed, briefly. '
-        + 'Base it strictly on these facts:\n\n' + (templateDraft || ''),
-      maxTokens: 220
-    };
-  }
   if (secType === 'auto-outreach') {
     return {
       userContent: 'Write the narrative for the "Outreach" section of a public involvement progress report: '
@@ -17054,7 +17036,7 @@ async function generateAllSectionDrafts() {
   document.querySelectorAll('.rpt-sec-summary').forEach(function(ta) {
     var idx = ta.getAttribute('data-idx');
     var secType = ta.getAttribute('data-sectype');
-    if (idx !== null && secType && secType.startsWith('auto-')) {
+    if (idx !== null && secType && secType.startsWith('auto-') && RPT_NO_AI_TYPES.indexOf(secType) < 0) {
       autoSections.push({ ta: ta, idx: idx, secType: secType });
     }
   });
@@ -17333,13 +17315,6 @@ function _buildSectionDraft(secType) {
     });
     var txt_pc = pcAll.length+' formal public comment'+(pcAll.length!==1?'s':'')+' received across '+Object.keys(pcCats).length+' topic'+(Object.keys(pcCats).length!==1?'s':'')+'. '+pcPending+' pending response. Categories: '+lines.join(' | ');
     return txt_pc;
-  }
-
-  if (secType === 'auto-website') {
-    var wsv = (captureFormState() || saved).sections || [];
-    var wsm = _websiteModel(projF, wsv.find(function(x){ return x.type === 'auto-website'; }), saved.periodEnd);
-    var wsl = _websiteFactLines(wsm, periodLabel);
-    return wsl ? 'Project website during ' + periodLabel + ':\n' + wsl.join('\n') : null;
   }
 
   if (secType === 'auto-outreach') {
@@ -17656,7 +17631,7 @@ async function openPIReport(_isReopen){
           +'<span style="font-size:11px;color:var(--slate)">Include data table in report</span>'
           +'</label>'
         : '')
-      +'<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.07)">'      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">'      +'<div style="font-size:11px;color:var(--slate);font-style:italic">Section summary <span style="color:var(--fog)">(optional — prints above the section data)</span></div>'      +(isAuto?'<button id="sec-draft-btn-'+idx+'" class="btn btn-xs" style="background:rgba(74,155,232,.15);border-color:rgba(74,155,232,.4);color:var(--sky-lt);font-size:10px;padding:2px 8px;white-space:nowrap" onclick="generateSectionDraft(\''+sec.type+'\','+idx+')">'+(_getClaudeKey()?'✦ AI Draft':'✦ Draft')+'</button>':'')      +'</div>'      +'<textarea class="rpt-sec-summary" data-idx="'+idx+'" data-sectype="'+sec.type+'" style="width:100%;min-height:60px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;color:var(--mist);font-family:var(--font);font-size:12px;padding:8px 12px;outline:none;resize:vertical;line-height:1.6" placeholder="Optional narrative or summary for this section...">'+(sec.summary||'')+'</textarea>'      +'</div>'      +'</div>';
+      +'<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.07)">'      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">'      +'<div style="font-size:11px;color:var(--slate);font-style:italic">Section summary <span style="color:var(--fog)">(optional — prints above the section data)</span></div>'      +(isAuto&&RPT_NO_AI_TYPES.indexOf(sec.type)<0?'<button id="sec-draft-btn-'+idx+'" class="btn btn-xs" style="background:rgba(74,155,232,.15);border-color:rgba(74,155,232,.4);color:var(--sky-lt);font-size:10px;padding:2px 8px;white-space:nowrap" onclick="generateSectionDraft(\''+sec.type+'\','+idx+')">'+(_getClaudeKey()?'✦ AI Draft':'✦ Draft')+'</button>':'')      +'</div>'      +'<textarea class="rpt-sec-summary" data-idx="'+idx+'" data-sectype="'+sec.type+'" style="width:100%;min-height:60px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;color:var(--mist);font-family:var(--font);font-size:12px;padding:8px 12px;outline:none;resize:vertical;line-height:1.6" placeholder="Optional narrative or summary for this section...">'+(sec.summary||'')+'</textarea>'      +'</div>'      +'</div>';
   });
 
   var available=getAvailableSections();
@@ -18217,7 +18192,7 @@ function renderLivePreview() {
     // Narrative first — it introduces the data block that follows.
     if (sec.summary) {
       html += '<div style="' + RPT_SECSUM_CSS + '">' + escHtml(sec.summary) + '</div>';
-    } else if (isAuto) {
+    } else if (isAuto && RPT_NO_AI_TYPES.indexOf(sec.type) < 0) {
       html += '<div style="font-size:11px;color:#bbb;font-style:italic;margin-bottom:6px">Section narrative will appear here after AI draft or manual entry.</div>';
     }
 

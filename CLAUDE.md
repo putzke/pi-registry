@@ -1132,9 +1132,9 @@ section** (Jeff: redundant); otherwise one clause/row.
 - Guarded by `test/tests/104-concerns-summary.test.js` (fails on the old code);
   test 32's budget checks updated to the tiers.
 
-### Project website updates — a report section (DEV, Oct 2026, Jeff)
-`sql/2026-10-31_project_website.sql` (applied to DEV; paste on LIVE at
-release): `pi_projects.website_url`, `website_label` (what the analytics counts;
+### Project website updates — a report section (Oct 2026, Jeff; LIVE 2026-10-31)
+`sql/2026-10-31_project_website.sql` (applied to DEV; Jeff pastes it on LIVE
+— until then the website fields don't save, everything else works): `pi_projects.website_url`, `website_label` (what the analytics counts;
 blank = "Website visits") and `website_readings` jsonb `[{date, visits, by}]`.
 `toSB` leaves them out until a fetched row carries `website_url`
 (`window._webCols`, the `_leadCols` pattern).
@@ -1148,13 +1148,14 @@ blank = "Website visits") and `website_readings` jsonb `[{date, visits, by}]`.
   removed section stays removed); always offered under Add sections.
   Editor boxes (`_webEditorHTML`): address (required; from the project),
   count to date + as-of date (optional), the changes as bullet lines
-  (`.rpt-sec-content`), plus the usual summary + ✦ AI Draft. Saved on the
-  section as `webUrl` / `webVisits` / `webAsOf`.
+  (`.rpt-sec-content`), plus the summary box — **no ✦ AI Draft** (Jeff: the
+  bullets and table already say it; `RPT_NO_AI_TYPES`, which "Draft all" also
+  skips). Saved on the section as `webUrl` / `webVisits` / `webAsOf`.
 - **`_websiteModel(projF, sec, pend)` is the ONE model** — editor line
   (`_webDeltaText`), preview + frozen snapshot (`_websiteBlockHTML`, inline
   styled, carries the bullets because archive/portal print only `tableHtml`
-  for auto sections), the .docx branch, "Report at a glance" row (label: this
-  period | to date) and AI facts (`_websiteFactLines`, never the address).
+  for auto sections), the .docx branch and the "Report at a glance" row
+  (label: this period | to date).
   This period = count to date minus the latest kept count dated BEFORE the
   as-of date; last period from the two before that. No percentages (a % of a
   running total shrinks at a steady pace). A count lower than the last one

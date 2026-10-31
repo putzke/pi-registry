@@ -3,7 +3,7 @@
 // the changes made; "this period" is worked out from the last archived
 // report's count, which archiving keeps on the project. A default section only
 // for a project with a website; removable and addable. Website updates are no
-// longer an Outreach type.
+// longer an Outreach type. No ✦ AI Draft on this section (Jeff).
 module.exports = {
   name: 'PI report — Project website updates section on every surface',
   async run({ t }) {
@@ -50,7 +50,9 @@ module.exports = {
         renderLivePreview();
         const delta = document.getElementById('rpt-web-delta-' + webIdx).textContent;
         const pane = document.getElementById('rpt-live-preview').innerHTML;
-        const facts = _buildSectionDraft('auto-website') || '';
+        const webIdx2 = document.querySelector('.rpt-sec-webvisits').getAttribute('data-idx');
+        const noAIButton = !document.getElementById('sec-draft-btn-' + webIdx2) && !!document.getElementById('sec-draft-btn-0');
+        const facts = _buildSectionDraft('auto-website');
 
         const saved = captureFormState();
         localStorage.setItem('pir4_pi_reports_' + projF, JSON.stringify(saved));
@@ -64,7 +66,7 @@ module.exports = {
         const doc = blob ? await (await JSZip.loadAsync(blob)).file('word/document.xml').async('string') : '';
         const archived = await _archiveReport(projF);
         const co = _coWithProjWeb({ projectId: projF, label: 'Final', intake: {} }, {});
-        return { noWebDefault, offered, outreachType, draftHas, withDefault, urlBox, delta, pane, facts,
+        return { noWebDefault, offered, outreachType, draftHas, withDefault, urlBox, delta, pane, facts, noAIButton,
           snapHtml: snapSec.tableHtml || '', glance: snap.atGlanceHtml || '', doc, archived,
           coUrl: co.websiteUrl, coVisits: (co.visits || []).map(v => v.visits).join(',') };
       }, [String(proj.id), String(other.id)]);
@@ -81,7 +83,8 @@ module.exports = {
       t.ok(/1,000 as of 01\/31\/2030 → 450 this period \(last period: 300\)/.test(r.delta), 'editor works out this period and last period: ' + r.delta);
       t.ok(/udotinput\.utah\.gov\/sr154/.test(r.pane) && /Page views this period/.test(r.pane) && />450</.test(r.pane) && />1,450</.test(r.pane) && /DETOURMAP/.test(r.pane), 'preview prints address, visits and the changes');
       t.ok(!/%/.test(r.pane.match(/Page views[\s\S]*?<\/table>/)[0]), 'no percentage');
-      t.ok(/Page views during .*: 450/.test(r.facts) && /DETOURMAP/.test(r.facts) && !/udotinput/.test(r.facts), 'AI facts: counts and changes, never the address');
+      t.ok(r.noAIButton, 'no ✦ AI Draft on the website section (other sections keep theirs)');
+      t.ok(!r.facts, 'no AI facts for the website section, so "Draft all" skips it');
       t.ok(/DETOURMAP/.test(r.snapHtml) && /1,450/.test(r.snapHtml), 'frozen snapshot carries the block (archive + portal)');
       t.ok(/Page views/.test(r.glance) && />450</.test(r.glance), 'Report at a glance shows the visits');
       t.ok(/Project website: /.test(r.doc) && /udotinput\.utah\.gov\/sr154/.test(r.doc) && /Page views this period: 450/.test(r.doc) && /DETOURMAP/.test(r.doc), '.docx prints the section');

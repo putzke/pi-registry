@@ -3323,8 +3323,8 @@ a Twilio trial + one number on DEV for a real call, then release.
   unique, not generic — so "Public Information" (18) is too long and a generic
   "PUBLIC INFO" is likely refused; something tied to the business (e.g. "CIRRUS
   CC PI") is the safe choice. Mobiles often don't show CNAM at all.
-  **⚠ BLOCKER, not done (Jeff, 2026-10-26): Jeff has no business EIN yet.**
-  Get the EIN first, then the Business profile, then CNAM. Jeff wants the
+  **EIN obtained (Jeff, 2026-10-31)** — next: the Trust Hub Business profile
+  (~24 h review), then SHAKEN/STIR (~72 h), Voice Integrity, then CNAM. Jeff wants the
   caller ID to read "Public Information CC" — 21 characters, over Twilio's
   15. Agree a ≤15-character version before registering (e.g. "PUBLIC INFO CC",
   14). Remind Jeff of this before any LIVE hotline step.

@@ -760,6 +760,11 @@ there was nothing to count.
     the project's groups (no project picked → "Pick a project"). The project
     card's own map already had "Color by: Group" (`_smapRecolor`, which now keeps
     the larger circle for two-digit numbers). Print still colours by support.
+    The contact pop-up names the contact's groups (`_mvGroupLineHTML`; two groups
+    → both, the first "sets the color"; "No group"). **EJ on the Map read
+    `ejCommunity`/`ej`, which nothing writes** — the EJ filter, EJ colour and
+    pop-up tag never fired; `_isEJ(s)` reads `underserved` (old names still count).
+    Released to LIVE 2026-10-31.
     Guarded by `test/tests/108-map-color-by-group.test.js`.
   - `_mapPrint()` covers both layers. Static Maps takes no custom shapes and its
     label is a SINGLE character, so parcels are keyed 1-9 then A-Z

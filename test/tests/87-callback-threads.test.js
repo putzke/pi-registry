@@ -8,7 +8,7 @@
 //  - "Save & log next contact" is on every new interaction: the one just
 //    saved becomes the original, and the next contact links to it.
 //  - The log shows tags: "No call-back needed", "Called back · date",
-//    "Conversation · N contacts", "↳ Next contact", "⏳ Follow-up due/overdue";
+//    "Conversation · 1 of N", "↳ Next contact · n of N", "⏳ Follow-up due/overdue";
 //    the contact's history shows the conversation tags too; the Follow-up
 //    filter has "Hotline: called back" / "Hotline: no call-back needed".
 //  - "📞 Call back" sits inside the Log hotline voicemail dialog, and the
@@ -105,7 +105,7 @@ module.exports = {
       const tags = await app.page.evaluate(() => [...document.querySelectorAll('.int-tag')].map(x => x.textContent));
       t.ok(tags.some(x => /^Called back · Oct 11, 2026$/.test(x)), 'the voicemail answered by a call-back reads “Called back · date”');
       t.ok(tags.includes('No call-back needed'), 'the voicemail logged with neither reads “No call-back needed”');
-      t.ok(tags.includes('Conversation · 2 contacts') && tags.includes('↳ Next contact'), 'the conversation and the next contact are tagged');
+      t.ok(tags.includes('Conversation · 1 of 2') && tags.includes('↳ Next contact · 2 of 2'), 'the conversation and the next contact are tagged');
       t.ok(tags.some(x => /^⏳ Follow-up overdue · Jan 5, 2026$/.test(x)), 'an open follow-up past due reads “⏳ Follow-up overdue · date”');
       t.ok(t1 && tc, '(rows found)');
 
@@ -126,7 +126,7 @@ module.exports = {
         const el = document.createElement('div'); el.innerHTML = renderStakeDetail(s, null);
         return [...el.querySelectorAll('.int-tag')].map(x => x.textContent).join('|');
       }, String(st.id));
-      t.ok(/↳ Next contact/.test(hist) && /Conversation · 2 contacts/.test(hist), 'the contact’s interaction history shows the conversation tags (' + hist + ')');
+      t.ok(/↳ Next contact/.test(hist) && /Conversation · 1 of 2/.test(hist), 'the contact’s interaction history shows the conversation tags (' + hist + ')');
       t.eq(app.errors, [], 'no page errors');
     } finally { await app.close(); }
   },

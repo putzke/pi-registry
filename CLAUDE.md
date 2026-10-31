@@ -472,6 +472,17 @@ Jeff's worry: a follow-up assigned to someone who doesn't sign in gets lost.
   contacts", open follow-up flagged). Removed: What's next? (`f-inext`),
   `_intThread`, `_threadOpen`, `_threadElsewhere`, `#fu-own`.
 - Guarded by `test/tests/85-followup-assign-team.test.js` (fails on the old code).
+- **One entry is a whole two-way record (Jeff, Oct 2026).** An interaction's
+  summary describes the inquiry AND the result; staff close the loop in one
+  entry. Log next contact is optional, for a later separate contact only.
+- **Conversation order = date, then the order LOGGED (DEV, Oct 2026, Jeff).**
+  No time field: `_intLoggedOrder` compares the database's increasing ids AS
+  NUMBERS (text put "100" before "99"); a tmp_ id counts as newest. Used by
+  `_intConversation`, the thread index and `sortInts` (same-day rows keep
+  logged order). The dialog's conversation is a numbered timeline, oldest
+  first, ⬇ in / ⬆ out, summary cut to one line (`.int-seq`); the log tags read
+  "Conversation · 1 of N" and "↳ Next contact · n of N" (`T.pos`). Guarded by
+  `test/tests/111-conversation-order.test.js` (fails on the old code).
 - **Follow-up vs. next contact, and "no call-back needed" (Oct 2026, Jeff).**
   A follow-up is a DATED task with an owner; a next contact is history (no
   due date, owner or overdue). The box reads **"Requires a scheduled

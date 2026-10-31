@@ -6121,7 +6121,9 @@ function sortInts(ints){
     else if(col==='nature'){av=a.nature||'Inquiry';bv=b.nature||'Inquiry';}
     else if(col==='loggedBy'){av=a.loggedBy||'';bv=b.loggedBy||'';}
     else{av=a.date||'';bv=b.date||'';}
-    const cmp=av.toLowerCase().localeCompare(bv.toLowerCase());
+    // Same day (or same value): the order they were logged, so a conversation
+    // reads in sequence.
+    const cmp=av.toLowerCase().localeCompare(bv.toLowerCase())||_intLoggedOrder(a,b);
     return dir==='asc'?cmp:-cmp;
   });
 }
@@ -10355,23 +10357,44 @@ function _intRoot(i){
   while(i&&i.relatedTo&&!seen.has(String(i.id))){ seen.add(String(i.id)); const p=all.find(x=>String(x.id)===String(i.relatedTo)); if(!p) break; i=p; }
   return i;
 }
+// Order inside one day = the order the entries were LOGGED (Jeff, Oct 2026:
+// no time field). Ids are the database's increasing numbers; an entry still
+// saving (tmp_ id) counts as the newest. Compared as numbers — as text "100"
+// sorted before "99".
+function _intLoggedOrder(a,b){
+  const n=x=>{ const v=Number(x&&x.id); return isFinite(v)?v:Infinity; };
+  const d=n(a)-n(b); return isNaN(d)?0:d;
+}
 function _intConversation(root){
   const all=DB.get('interactions')||[]; const out=[], q=[String(root.id)], have=new Set(q);
   while(q.length){ const id=q.shift(); all.forEach(x=>{ if(String(x.relatedTo)===id&&!have.has(String(x.id))){ have.add(String(x.id)); out.push(x); q.push(String(x.id)); } }); }
-  return out.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))||String(a.id).localeCompare(String(b.id)));
+  return out.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))||_intLoggedOrder(a,b));
 }
 function _intPairHTML(i){
   if(!i) return '';
   const root=_intRoot(i), kids=_intConversation(root);
   if(!kids.length) return '';
-  const stakes=DB.get('stakeholders')||[];
-  const line=x=>{
+  const stakes=DB.get('stakeholders')||[], all=[root].concat(kids);
+  // A numbered timeline, oldest first: one line per contact, the summary cut
+  // to one line beneath it. ⬇ = came in, ⬆ = we reached out.
+  const arrow=d=>d==='Outgoing'?'⬆':d==='Incoming'?'⬇':'•';
+  const row=(x,n)=>{
     const s=stakes.find(z=>String(z.id)===String(x.stakeholderId));
-    const me=String(x.id)===String(i.id);
-    return `<div style="padding:4px 0;${me?'color:var(--white)':''}">${escHtml(fmt(x.date))} · ${escHtml(x.channel||'')} · ${escHtml(x.direction||'')} · ${escHtml(s?dispName(s):(x.anonLabel||'Anonymous'))}${me?' <b>(this one)</b>':` — <a href="#" onclick="event.preventDefault();openEditIntModal('${escHtml(x.id)}')" style="color:var(--sky-lt)">open</a>`}<div style="color:var(--slate)">${escHtml(String(x.summary||'').slice(0,140))}</div></div>`;
+    const me=String(x.id)===String(i.id), last=n===all.length;
+    const sum=String(x.summary||'').replace(/\s+/g,' ').trim();
+    return `<div class="int-seq" style="display:flex;gap:8px">`
+      +`<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">`
+      +`<span style="width:18px;height:18px;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;${me?'background:var(--sky);color:#fff':'background:rgba(255,255,255,.12);color:var(--mist)'}">${n}</span>`
+      +(last?'':`<span style="flex:1;width:2px;background:rgba(255,255,255,.12);margin:2px 0"></span>`)+`</div>`
+      +`<div style="padding-bottom:${last?0:8}px;min-width:0;flex:1">`
+      +`<div style="${me?'color:var(--white);font-weight:600':''}">${escHtml(fmt(x.date))} · ${arrow(x.direction)} ${escHtml(x.channel||'')} · ${escHtml(s?dispName(s):(x.anonLabel||'Anonymous'))}`
+      +(me?' <span style="color:var(--sky-lt);font-weight:400">(this one)</span>':` — <a href="#" onclick="event.preventDefault();openEditIntModal('${escHtml(x.id)}')" style="color:var(--sky-lt)">open</a>`)+`</div>`
+      +(sum?`<div style="color:var(--slate);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(sum)}">${escHtml(sum)}</div>`:'')
+      +`</div></div>`;
   };
-  const fu=(root.followUp&&!root.followUpDone)?`<div style="color:var(--amber)">⏳ Follow-up open: ${escHtml(root.followUpNote||'follow-up')}${root.followUpDue?' · due '+escHtml(fmt(root.followUpDue)):''}</div>`:'';
-  return `<div class="fsec">Conversation · ${kids.length+1} contacts</div><div style="font-size:12px;color:var(--fog);margin-bottom:8px"><div style="font-weight:600;color:var(--mist)">Original</div>${line(root)}${fu}<div style="font-weight:600;color:var(--mist);margin-top:6px">Next contacts</div>${kids.map(line).join('')}</div>`;
+  const fu=(root.followUp&&!root.followUpDone)?`<div style="color:var(--amber);margin-top:4px">⏳ Follow-up open: ${escHtml(root.followUpNote||'follow-up')}${root.followUpDue?' · due '+escHtml(fmt(root.followUpDue)):''}</div>`:'';
+  return `<div class="fsec">Conversation · ${all.length} contacts <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--fog)">· oldest first · ⬇ in · ⬆ out</span></div>`
+    +`<div style="font-size:12px;color:var(--fog);margin-bottom:8px">${all.map((x,k)=>row(x,k+1)).join('')}${fu}</div>`;
 }
 // Conversation status at a glance (Oct 2026, with Jeff). A follow-up is the
 // dated to-do; a next contact is history. A call that came IN through a
@@ -10386,14 +10409,20 @@ function _intThreadIndex(){
     let r=x; const seen=new Set();
     while(r&&r.relatedTo&&!seen.has(String(r.id))){ seen.add(String(r.id)); const p=byId.get(String(r.relatedTo)); if(!p) break; r=p; }
     if(!r||r===x) return;
-    const e=idx.get(String(r.id))||{n:0,lastOut:''}; e.n++;
+    const e=idx.get(String(r.id))||{n:0,lastOut:'',kids:[]}; e.n++; e.kids.push(x);
     if(x.direction==='Outgoing'&&String(x.date||'')>e.lastOut) e.lastOut=String(x.date||'');
     idx.set(String(r.id),e);
+  });
+  // Each next contact's place in its conversation (the original is 1).
+  const pos=new Map();
+  idx.forEach(e=>{
+    e.kids.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))||_intLoggedOrder(a,b));
+    e.kids.forEach((x,k)=>pos.set(String(x.id),{n:k+2,of:e.n+1}));
   });
   const hot=new Set();
   (DB.get('hotline_messages')||[]).forEach(m=>{ if(m.status==='logged'&&m.loggedInteractionId) hot.add(String(m.loggedInteractionId)); });
   (DB.get('hotline_calls')||[]).forEach(c=>{ if(_hotIsInbound(c)&&c.outcome==='logged'&&c.loggedInteractionId) hot.add(String(c.loggedInteractionId)); });
-  return {idx,hot};
+  return {idx,hot,pos};
 }
 // 'calledback' | 'nocallback' | '' for a hotline original.
 function _intCallbackState(i,T){
@@ -10411,12 +10440,12 @@ function _intThreadTagsHTML(i,T,withFu){
     const od=!i.followUpDone&&i.followUpDue&&i.followUpDue<localToday();
     out.push(i.followUpDone?tag('Follow-up resolved','b-gray'):tag('⏳ Follow-up'+(i.followUpDue?(od?' overdue · ':' due ')+escHtml(fmt(i.followUpDue)):''),od?'b-red':'b-amber'));
   }
-  if(i.relatedTo) out.push(tag('↳ Next contact','b-dark','Part of a conversation — open it to see the rest'));
+  if(i.relatedTo){ const ps=T.pos&&T.pos.get(String(i.id)); out.push(tag('↳ Next contact'+(ps?' · '+ps.n+' of '+ps.of:''),'b-dark','Part of a conversation — open it to see the rest')); }
   else {
     const st=_intCallbackState(i,T), e=T.idx.get(String(i.id));
     if(st==='calledback') out.push(tag('Called back · '+escHtml(fmt(e.lastOut)),'b-green'));
     if(st==='nocallback') out.push(tag('No call-back needed','b-gray','Logged from the hotline with no follow-up and no next contact'));
-    if(e) out.push(tag('Conversation · '+(e.n+1)+' contacts','b-dark'));
+    if(e) out.push(tag('Conversation · 1 of '+(e.n+1),'b-dark','The first contact — open it to see the rest in order'));
   }
   return out.length?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${out.join('')}</div>`:'';
 }

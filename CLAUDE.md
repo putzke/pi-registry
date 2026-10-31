@@ -1132,6 +1132,43 @@ section** (Jeff: redundant); otherwise one clause/row.
 - Guarded by `test/tests/104-concerns-summary.test.js` (fails on the old code);
   test 32's budget checks updated to the tiers.
 
+### Project website updates — a report section (DEV, Oct 2026, Jeff)
+`sql/2026-10-31_project_website.sql` (applied to DEV; paste on LIVE at
+release): `pi_projects.website_url`, `website_label` (what the analytics counts;
+blank = "Website visits") and `website_readings` jsonb `[{date, visits, by}]`.
+`toSB` leaves them out until a fetched row carries `website_url`
+(`window._webCols`, the `_leadCols` pattern).
+- **Edit project → Project website** (address, label, the kept counts with ✕ to
+  remove a typo — `_projWebReadingsHTML`, `window._pwr`). `_webNormUrl` adds
+  https:// and refuses non-web addresses.
+- **Section `auto-website`** (`WEB_SECTION`, "Project website updates"):
+  a DEFAULT only when the project has a website (`getDefaultSections(projF)`);
+  entering a website on a project with a draft adds it once
+  (`_rptAddWebsiteSection`, run only when the address is newly set, so a
+  removed section stays removed); always offered under Add sections.
+  Editor boxes (`_webEditorHTML`): address (required; from the project),
+  count to date + as-of date (optional), the changes as bullet lines
+  (`.rpt-sec-content`), plus the usual summary + ✦ AI Draft. Saved on the
+  section as `webUrl` / `webVisits` / `webAsOf`.
+- **`_websiteModel(projF, sec, pend)` is the ONE model** — editor line
+  (`_webDeltaText`), preview + frozen snapshot (`_websiteBlockHTML`, inline
+  styled, carries the bullets because archive/portal print only `tableHtml`
+  for auto sections), the .docx branch, "Report at a glance" row (label: this
+  period | to date) and AI facts (`_websiteFactLines`, never the address).
+  This period = count to date minus the latest kept count dated BEFORE the
+  as-of date; last period from the two before that. No percentages (a % of a
+  running total shrinks at a steady pace). A count lower than the last one
+  (counter reset) leaves "this period" out and says so.
+- **Archiving keeps the count** (`_webRecordReadings` in `_archiveReport`; one
+  per date, re-archive replaces it). Writes the CACHED row — `DB.get` returns
+  copies, so writing to its result changes nothing.
+- **Website updates are no longer an Outreach type** (Jeff: a website change
+  isn't outreach and leaves its fields empty). An entry already logged that
+  way keeps its type and stays in the type filter. The close-out uses the
+  project's website and kept counts when its intake leaves them blank
+  (`_coWithProjWeb`, windowed for an interim).
+- Guarded by `test/tests/110-report-website-section.test.js`.
+
 ### The report opens with "Report at a glance" — no AI overall summary (Oct 2026, Jeff)
 The AI overall/executive summary was REMOVED (button, `generateOverallDraft`,
 `_overallDraftCall`, `_overallAIFacts`, `_buildOverallDraft`,
@@ -1159,7 +1196,7 @@ redundant by construction. History of the attempts (Sep–Oct 2026) is in git.
   builds "Report at a Glance:" + table + bullets from the same model over the
   sections that print. The overall-summary box stays as an optional **"Note to
   the client"**, printed after the glance (and in the .docx without a heading).
-- `getDefaultSections()` still leaves out `auto-del` (not every project tracks
+- `getDefaultSections(projF)` still leaves out `auto-del` (not every project tracks
   deliverables that way).
 - Guarded by `test/tests/105-report-at-a-glance.test.js` (fails on the old code).
 

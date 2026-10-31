@@ -1056,7 +1056,8 @@ const SB_TO_INT = {
     nepaClassification:'nepa_classification', nepaStage:'nepa_stage',
     nepaChecklist:'nepa_checklist', phaseHistory:'phase_history',
     nepaStageHistory:'nepa_stage_history',
-    lead:'lead', leadHistory:'lead_history'
+    lead:'lead', leadHistory:'lead_history',
+    websiteUrl:'website_url', websiteLabel:'website_label', websiteReadings:'website_readings'
   },
   pi_stakeholders: {
     id:'id', firstName:'first_name', lastName:'last_name', org:'org',
@@ -1359,6 +1360,8 @@ function toSB(table, obj) {
     }
   }
   if (sbTable === 'pi_projects' && !window._leadCols) { delete result.lead; delete result.lead_history; }
+  // sql/2026-10-31_project_website.sql's columns, the same gate.
+  if (sbTable === 'pi_projects' && !window._webCols) { delete result.website_url; delete result.website_label; delete result.website_readings; }
   // Same gate for sql/2026-10-10_portal_pi_contact.sql's column.
   if (sbTable === 'pi_team_members' && !window._teamPortalCol) delete result.show_on_portal;
   // And for sql/2026-10-11_followup_resolution_note.sql's column.
@@ -1397,6 +1400,8 @@ function fromSB(table, row) {
   // column.
   if (sbTable === 'pi_projects' && row && row.lead !== undefined) window._leadCols = true;
   if (sbTable === 'pi_projects' && !Array.isArray(result.leadHistory)) result.leadHistory = [];
+  if (sbTable === 'pi_projects' && row && row.website_url !== undefined) window._webCols = true;
+  if (sbTable === 'pi_projects' && !Array.isArray(result.websiteReadings)) result.websiteReadings = [];
   if (sbTable === 'pi_interactions' && row && row.follow_up_resolution !== undefined) window._fuResCol = true;
   if (sbTable === 'pi_interactions' && row && row.related_to !== undefined) window._relCol = true;
   if (sbTable === 'pi_team_members') {
@@ -9089,7 +9094,7 @@ const LINK_FN_URL=SUPA_URL+'/functions/v1/link-preview';
 // own time. A gathering (in person or live online) is an Event; a one-to-one
 // conversation is an Interaction (Jeff, 2026-10-22). A hand-delivered flyer is
 // outreach — record how it went out and how many it reached.
-const OUTREACH_TYPES=['Press release','Newsletter','Email blast','Flyer / door hanger','Mailer / postcard','Website update','511 alert','Social post','News coverage','Trucking/industry publication','Shared with a partner to distribute','Other'];
+const OUTREACH_TYPES=['Press release','Newsletter','Email blast','Flyer / door hanger','Mailer / postcard','511 alert','Social post','News coverage','Trucking/industry publication','Shared with a partner to distribute','Other'];
 const OUT_DELIVERY=['Hand-delivered','Mailed','Emailed','Posted online','Posted on site'];
 // "Hand-delivered · 450 reached"
 function _outReachText(a){ return [a.delivery||'', _outHas(a.reach)?Number(a.reach).toLocaleString()+' reached':''].filter(Boolean).join(' · '); }
@@ -9184,7 +9189,7 @@ function renderOutreach(m){
       ${projs.map(p=>`<option value="${p.id}" ${String(projF)===String(p.id)?'selected':''}>${escHtml(p.pid||'')} — ${escHtml(p.name||'')}</option>`).join('')}
     </select>
     <select id="out-type" style="${sel}" onchange="S.outType=this.value;renderOutreach(document.getElementById('main'))">
-      <option value="">All types</option>${OUTREACH_TYPES.map(t=>`<option ${S.outType===t?'selected':''}>${t}</option>`).join('')}
+      <option value="">All types</option>${OUTREACH_TYPES.concat([...new Set((DB.get('outreach_actions')||[]).map(a=>a.actionType).filter(t=>t&&OUTREACH_TYPES.indexOf(t)<0))]).map(t=>`<option ${S.outType===t?'selected':''}>${t}</option>`).join('')}
     </select>
     <select id="out-camp" style="${sel}" onchange="S.outCampaign=this.value;renderOutreach(document.getElementById('main'))">
       <option value="">All campaigns</option>${camps.map(c=>`<option value="${c.id}" ${String(S.outCampaign)===String(c.id)?'selected':''}>${escHtml(c.name)}</option>`).join('')}
@@ -10612,6 +10617,13 @@ function openProjModal(id){
       <div class="fr" id="nepa-stage-wrap" style="${(p.nepaClassification&&p.nepaClassification!=='N/A')?'':'display:none'}"><label>Current NEPA Stage</label><select id="f-pns">${(()=>{const ST={CE:['Pre-NEPA','CE','Post-NEPA / Construction','N/A'],EA:['Pre-NEPA','EA - Scoping','EA - Draft','EA - Final / FONSI','Post-NEPA / Construction','N/A'],EIS:['Pre-NEPA','EIS - Scoping','EIS - DEIS','EIS - FEIS','EIS - ROD','Post-NEPA / Construction','N/A']};const opts=ST[p.nepaClassification]||['Pre-NEPA','CE','EA - Scoping','EA - Draft','EA - Final / FONSI','EIS - Scoping','EIS - DEIS','EIS - FEIS','EIS - ROD','Post-NEPA / Construction','N/A'];return opts.map(t=>`<option${(p.nepaStage||'Pre-NEPA')===t?' selected':''}>${t}</option>`).join('');})()}</select></div>
     </div>
   </div>
+  <div class="fsec">Project website <span style="font-weight:400;font-size:11px;color:var(--fog);text-transform:none;letter-spacing:0">(optional — adds "Project website updates" to the PI report)</span></div>
+  <div class="fgrid fg2f">
+    <div class="fr"><label>Website address</label><input id="f-pweb" value="${escHtml(p.websiteUrl||'')}" placeholder="https://udotinput.utah.gov/…" autocomplete="off"></div>
+    <div class="fr"><label>What your analytics counts</label><input id="f-pwebl" value="${escHtml(p.websiteLabel||'')}" placeholder="${WEB_DEFAULT_LABEL}" maxlength="40"></div>
+  </div>
+  ${(()=>{window._pwr=(p.websiteReadings||[]).slice();return '<div id="f-pweb-readings">'+_projWebReadingsHTML()+'</div>';})()}
+  ${(DB.get('projects')||[]).length&&!window._webCols?'<div style="font-size:11px;color:var(--amber,#e8a020);margin-top:4px">Not saved yet: run sql/2026-10-31_project_website.sql in Supabase first.</div>':''}
   <div class="fr"><label>Notes</label><textarea id="f-pno">${p.notes||''}</textarea></div>
 `,
   `${id?`<button class="btn btn-danger btn-sm" onclick="delProj('${id}')">Delete</button>`:''}
@@ -10678,7 +10690,9 @@ async function saveProj(){
   } else {
     _nepaChecklist=[];
   }
-  const data={id:S.editId||DB.uid(),pid:v('f-pid'),name:v('f-pn'),client:v('f-pc2'),type:v('f-pty'),county:v('f-pco'),phase:_phase,status:v('f-pst'),startDate:vDate('f-psd'),endDate:vDate('f-ped'),preconDate:_preconPhases.indexOf(_phase)>=0?vDate('f-ppd'):null,notes:v('f-pno'),nepaClassification:_nepaClass,nepaStage:_nepaStage,phaseHistory:_phaseHistory,nepaStageHistory:_nepaHistory,nepaChecklist:_nepaChecklist,lead:_lead,leadHistory:_leadHistory};
+  const data={id:S.editId||DB.uid(),pid:v('f-pid'),name:v('f-pn'),client:v('f-pc2'),type:v('f-pty'),county:v('f-pco'),phase:_phase,status:v('f-pst'),startDate:vDate('f-psd'),endDate:vDate('f-ped'),preconDate:_preconPhases.indexOf(_phase)>=0?vDate('f-ppd'):null,notes:v('f-pno'),nepaClassification:_nepaClass,nepaStage:_nepaStage,phaseHistory:_phaseHistory,nepaStageHistory:_nepaHistory,nepaChecklist:_nepaChecklist,lead:_lead,leadHistory:_leadHistory,
+    websiteUrl:_webNormUrl(v('f-pweb')),websiteLabel:v('f-pwebl').trim(),websiteReadings:(window._pwr||_existing?.websiteReadings||[]).slice()};
+  if(v('f-pweb').trim()&&!data.websiteUrl){alert('The website address should look like https://example.com/project.');return}
   if(!data.pid||!/^\d{3,5}$/.test(data.pid)){alert('Project ID must be 3 to 5 digits.');return}
   if(!data.name){alert('Project name is required.');return}
   if(!data.startDate&&!data.preconDate){alert('Please enter at least a Start date or Precon date — this is required for deliverable scheduling.');return}
@@ -10692,6 +10706,9 @@ async function saveProj(){
   if(S.editId){const i=all.findIndex(x=>x.id===S.editId);if(i>-1)all[i]=data;}else all.push(data);
   closeM();
   await DB.set('projects',all);
+  // A website entered (or newly entered) adds "Project website updates" to the
+  // project's existing PI report draft; a new draft gets it by default.
+  if(data.websiteUrl&&!(_existing&&_existing.websiteUrl)) await _rptAddWebsiteSection(data.id);
   await loadAllData();
   render();
 }
@@ -11713,14 +11730,14 @@ const CLOSEOUT_TYPES = {
       { id: 'website', title: 'Website & hotline',
         feeds: 'PI Highlights › website & hotline, Program at a Glance, visits chart',
         fields: [
-          { key: 'websiteUrl', label: 'Project website', kind: 'url', w: 2, ph: 'https://udotinput.utah.gov/…' },
+          { key: 'websiteUrl', label: 'Project website', kind: 'url', w: 2, ph: 'Blank = the project\u2019s website (Edit project)' },
           { key: 'projectEmail', label: 'Project email', kind: 'email', w: 1 },
           { key: 'hotline', label: 'Hotline', kind: 'tel', w: 1 },
           { kind: 'outreach', key: 'website', types: 'Website update', prints: false },
           { kind: 'compass', fact: 'inboundCalls', label: 'Inbound calls', ovr: 'ovrInboundCalls',
             note: 'counted from Phone · Incoming interactions' },
           { kind: 'rows', key: 'visits', label: 'Website visits over time',
-            hint: 'From your weekly PI reports. Two or more readings draw the visits chart; the last one is the total.',
+            hint: 'Left blank, the visit counts kept on the project from archived PI reports are used. Two or more readings draw the visits chart; the last one is the total.',
             cols: [ { k: 'when', l: 'Reading', ph: 'e.g. Oct 2025' },
                     { k: 'visits', l: 'Cumulative unique visits', ph: 'e.g. 769', mono: true } ],
             add: '+ Add a reading' }
@@ -12720,8 +12737,20 @@ function _coRunIn(heading, paras, placeholder) {
 // Builds the whole report. Returns the blocks plus, per section, whether it is
 // in the report and why — the report screen shows that beside each section so
 // "left out" is always a visible decision, never a silent one.
+// The project's website and its visit counts (Edit project, archived PI
+// reports) stand in when the intake leaves them blank — typed in once.
+function _coWithProjWeb(co, it) {
+  const p = _webProj(co.projectId), w = _coWindow(co);
+  const out = Object.assign({}, it);
+  if (!_coVal(out.websiteUrl) && p.websiteUrl) out.websiteUrl = p.websiteUrl;
+  if (!(out.visits || []).some(function (r) { return r && _coVal(r.visits); })) {
+    const rs = _webReadings(p).filter(function (r) { return _coInWin(r.date, w); });
+    if (rs.length) { out.visits = rs.map(function (r) { return { when: r.date, visits: String(r.visits) }; }); out._visitsFromProj = true; }
+  }
+  return out;
+}
 function _coReportDoc(co) {
-  const it = (_coWork && _coWork.id === co.id) ? _coWork.intake : (co.intake || {});
+  const it = _coWithProjWeb(co, (_coWork && _coWork.id === co.id) ? _coWork.intake : (co.intake || {}));
   const dr = it.draft || {};
   const rt = _coReportType(co);
   const proj = (DB.get('projects') || []).find(function (p) { return String(p.id) === String(co.projectId); }) || {};
@@ -13211,7 +13240,7 @@ function _coFigures(co, it) {
     const id = cap('Cumulative unique visits to the project website');
     const c = _coSvgLine({ id: id, pts: vp.pts, alt: 'Line chart of cumulative unique website visits, ' + _coFmtN(vp.pts[0].v) + ' to ' + _coFmtN(vp.pts[vp.pts.length - 1].v) + '.' });
     blocks.push({ t: 'chart', svg: c.svg, w: c.w, h: c.h, alt: 'Figure ' + fig + ': website visits' });
-    note('From the PI team’s website analytics, as entered in the close-out intake' + (vp.timed ? '.' : '; readings are spaced evenly in the order entered.'));
+    note('From the PI team’s website analytics, as ' + (it._visitsFromProj ? 'counted in the archived PI reports' : 'entered in the close-out intake') + (vp.timed ? '.' : '; readings are spaced evenly in the order entered.'));
   } else out.push('The website chart needs two or more visit readings in the intake.');
 
   // Issues escalated — titles, category and outcome. The client already sees
@@ -13560,7 +13589,7 @@ function _coCloseoutSystemPrompt() {
 // Facts for one heading. Returns { lines, notes } — lines computed from Cirrus Cc
 // and the intake, notes = what the consultant typed in that heading's box.
 function _coHighlightFacts(co, hid) {
-  const it = (_coWork && _coWork.id === co.id) ? _coWork.intake : (co.intake || {});
+  const it = _coWithProjWeb(co, (_coWork && _coWork.id === co.id) ? _coWork.intake : (co.intake || {}));
   const pid = String(co.projectId), w = _coWindow(co);
   // Dated records only inside the window (an interim); everything for a final.
   const DATE_OF = { interactions: 'date', meetings: 'date', issues: 'dateRaised' };
@@ -16073,12 +16102,16 @@ function _periodLabel(secType, pstart, pend) {
 // tracks deliverables the way this section expects, and a report shouldn't
 // open with an empty or irrelevant section a consultant has to notice and
 // remove. Add it explicitly when it applies (Sep 2026).
-function getDefaultSections(){
-  return[
+function getDefaultSections(projF){
+  var secs=[
     {id:'concerns',title:'Recent public concerns and inquiries',type:'auto-concerns',content:''},
     {id:'actions',title:'Recent PI action items',type:'manual',content:''},
     {id:'planned',title:'Planned PI activities',type:'manual',content:''}
   ];
+  // "Project website updates" is a default only for a project with a website
+  // (Edit project → Project website). Jeff, Oct 2026.
+  if(projF&&_webProj(projF).websiteUrl) secs.push(Object.assign({},WEB_SECTION,{content:''}));
+  return secs;
 }
 
 function getAvailableSections(){
@@ -16099,8 +16132,154 @@ function getAvailableSections(){
     {id:'pi-compliance',title:'PI Compliance Summary (FHWA/NEPA)',type:'auto-pi-compliance'},
     {id:'nepa-compliance',title:'NEPA Compliance — Checklist & Comment Periods',type:'auto-nepa-compliance'},
     {id:'parcels',title:'Right-of-Way — Parcel Status',type:'auto-parcels'},
-    {id:'outreach',title:'Outreach — releases, posts and coverage',type:'auto-outreach'}
+    {id:'outreach',title:'Outreach — releases, posts and coverage',type:'auto-outreach'},
+    {id:WEB_SECTION.id,title:WEB_SECTION.title,type:WEB_SECTION.type}
   ];
+}
+
+// ── Project website updates (auto-website, Oct 2026, Jeff) ──────────────────
+// The address and the analytics label live on the PROJECT (Edit project →
+// Project website). Each report types "visits to date" and an as-of date;
+// when the report is archived that count is kept on the project
+// (pi_projects.website_readings, [{date, visits, by}]), so the next report
+// works out "this period" (to date minus the last reading) by itself. No
+// percentages: a % of a running total shrinks every month at a steady pace.
+// The changes made to the site are the section's own bullet lines — website
+// updates are not Outreach actions.
+var WEB_SECTION={id:'website',title:'Project website updates',type:'auto-website'};
+var WEB_DEFAULT_LABEL='Website visits';
+function _webProj(projF){ return (DB.get('projects')||[]).find(function(p){ return String(p.id)===String(projF); })||{}; }
+function _webLabel(proj){ return String((proj&&proj.websiteLabel)||'').trim()||WEB_DEFAULT_LABEL; }
+function _webNormUrl(u){
+  u=String(u||'').trim(); if(!u) return '';
+  if(!/^https?:\/\//i.test(u)) u='https://'+u;
+  try{ var x=new URL(u); if(!/^https?:$/.test(x.protocol)||x.hostname.indexOf('.')<0) return ''; return x.href; }catch(e){ return ''; }
+}
+// What prints: no protocol, no trailing slash.
+function _webShowUrl(u){ return String(u||'').replace(/^https?:\/\//i,'').replace(/\/$/,''); }
+function _webNum(v){ var n=Number(String(v==null?'':v).replace(/[,\s]/g,'')); return (String(v==null?'':v).trim()!==''&&isFinite(n)&&n>=0)?Math.round(n):null; }
+function _webReadings(proj){
+  return ((proj&&proj.websiteReadings)||[]).filter(function(r){ return r&&r.date&&_webNum(r.visits)!==null; })
+    .slice().sort(function(a,b){ return String(a.date).localeCompare(String(b.date)); });
+}
+// The ONE model for the section (editor line, preview, snapshot, .docx, glance, AI).
+function _websiteModel(projF, sec, pend){
+  sec=sec||{};
+  var proj=_webProj(projF);
+  var url=_webNormUrl(sec.webUrl)||_webNormUrl(proj.websiteUrl)||'';
+  var visits=_webNum(sec.webVisits);
+  var asOf=sec.webAsOf||pend||'';
+  var rs=_webReadings(proj).filter(function(r){ return !asOf||r.date<asOf; });
+  var prev=rs.length?rs[rs.length-1]:null, prev2=rs.length>1?rs[rs.length-2]:null;
+  var pv=prev?_webNum(prev.visits):null, p2=prev2?_webNum(prev2.visits):null;
+  var thisPeriod=(visits!==null&&pv!==null&&visits>=pv)?visits-pv:null;
+  var lastPeriod=(pv!==null&&p2!==null&&pv>=p2)?pv-p2:null;
+  var notes=String(sec.content||'').split('\n').map(function(l){ return l.replace(/^[\s\u2022\-\*]+/,'').trim(); }).filter(Boolean);
+  return { url:url, label:_webLabel(proj), visits:visits, asOf:asOf, prev:prev, prevVisits:pv,
+    thisPeriod:thisPeriod, lastPeriod:lastPeriod, reset:(visits!==null&&pv!==null&&visits<pv), notes:notes };
+}
+function _webFmtN(n){ return n===null||n===undefined?'—':Number(n).toLocaleString('en-US'); }
+// The live line under the visit boxes in the editor.
+function _webDeltaText(m){
+  if(m.visits===null) return m.prev ? 'Last reading: '+_webFmtN(m.prevVisits)+' as of '+_fmtMDY(m.prev.date)+'. Type the count to date to show this period.' : 'Optional. Once a report with a count is archived, the next one shows the visits for its period.';
+  if(m.reset) return '⚠ Lower than the last reading ('+_webFmtN(m.prevVisits)+' as of '+_fmtMDY(m.prev.date)+'). Was the counter reset? "This period" is left out.';
+  if(!m.prev) return 'First reading for this project. The next report will show the visits for its period.';
+  return 'Last reading '+_webFmtN(m.prevVisits)+' as of '+_fmtMDY(m.prev.date)+' → '+_webFmtN(m.thisPeriod)+' this period'
+    +(m.lastPeriod!==null?' (last period: '+_webFmtN(m.lastPeriod)+')':'')+'.';
+}
+// Inline-styled, so the frozen copy renders the same in the archive and the portal.
+function _websiteBlockHTML(m){
+  var h='<div style="font-size:12px;color:#222;margin-bottom:8px">Project website: '
+    +(m.url?'<a href="'+escHtml(m.url)+'" target="_blank" rel="noopener" style="color:#1a5ea8;font-weight:600">'+escHtml(_webShowUrl(m.url))+'</a>'
+           :'<span style="background:#fff3a3;padding:0 4px">[website address needed]</span>')+'</div>';
+  if(m.visits!==null){
+    var th='padding:5px 8px;background:#1a3a5c;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.4px;text-align:right';
+    var td='padding:6px 8px;font-size:13px;font-weight:600;text-align:right;border-bottom:1px solid #e0e0e0';
+    h+='<table style="border-collapse:collapse;margin-bottom:4px;min-width:340px"><thead><tr>'
+      +'<th style="'+th+'">'+escHtml(m.label)+' this period</th><th style="'+th+'">To date</th>'
+      +(m.lastPeriod!==null?'<th style="'+th+'">Last report period</th>':'')+'</tr></thead><tbody><tr>'
+      +'<td style="'+td+'">'+_webFmtN(m.thisPeriod)+'</td><td style="'+td+'">'+_webFmtN(m.visits)+'</td>'
+      +(m.lastPeriod!==null?'<td style="'+td+';color:#595959">'+_webFmtN(m.lastPeriod)+'</td>':'')+'</tr></tbody></table>'
+      +'<div style="font-size:10px;color:#777;font-style:italic;margin-bottom:8px">'+escHtml(m.label)+' to date as of '+escHtml(m.asOf?_fmtMDY(m.asOf):'the report date')
+      +(m.prev?'; this period counts from '+escHtml(_fmtMDY(m.prev.date))+' ('+_webFmtN(m.prevVisits)+')':'')+'.</div>';
+  }
+  if(m.notes.length){
+    h+='<ul style="margin:0 0 8px 0;padding-left:20px">'+m.notes.map(function(l){ return '<li style="margin-bottom:4px;font-size:13px;color:#222">'+escHtml(l)+'</li>'; }).join('')+'</ul>';
+  }
+  return h;
+}
+// The facts an AI narrative gets. Null when there is nothing to say.
+function _websiteFactLines(m, periodLabel){
+  var L=[];
+  if(m.visits!==null){
+    L.push(m.label+' to date: '+_webFmtN(m.visits)+(m.asOf?' (as of '+fmt(m.asOf)+')':'')+'.');
+    if(m.thisPeriod!==null) L.push(m.label+' during '+periodLabel+': '+_webFmtN(m.thisPeriod)+'.');
+    if(m.lastPeriod!==null) L.push(m.label+' during the previous report period: '+_webFmtN(m.lastPeriod)+'.');
+  }
+  if(m.notes.length){ L.push('Changes made to the project website (from the PI team):'); m.notes.forEach(function(n){ L.push('- '+n); }); }
+  return L.length?L:null;
+}
+// When the report is archived, its count becomes a reading on the project
+// (one per date; a second archive on the same date replaces it).
+async function _webRecordReadings(projF, saved){
+  var sec=(saved.sections||[]).find(function(x){ return x.type==='auto-website'; });
+  if(!sec) return;
+  var visits=_webNum(sec.webVisits), date=sec.webAsOf||saved.periodEnd||localToday();
+  if(visits===null) return;
+  // The cached row itself (DB.get hands out copies).
+  var proj=(_syncCache['projects']||[]).find(function(p){ return String(p.id)===String(projF); }); if(!proj) return;
+  var rs=(proj.websiteReadings||[]).filter(function(r){ return r&&r.date!==date; });
+  rs.push({date:date, visits:visits, by:getLoggedBy()||''});
+  rs.sort(function(a,b){ return String(a.date).localeCompare(String(b.date)); });
+  proj.websiteReadings=rs;
+  if(!window._webCols) return;
+  try{ await sbUpdate('projects', proj.id, {websiteReadings:rs}); }
+  catch(e){ console.warn('Website reading not saved:', e.message); showToast('The website count was not saved on the project: '+e.message,'warn',5000); }
+}
+// The section's own boxes in the report editor.
+function _webEditorHTML(sec, idx, projF, pend){
+  var proj=_webProj(projF), m=_websiteModel(projF, sec, pend);
+  var box='background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;color:var(--mist);font-family:var(--font);font-size:13px;padding:7px 10px;outline:none';
+  var lab='font-size:11px;color:var(--slate);margin-bottom:3px';
+  return '<div style="margin:10px 0 0 0">'
+    +'<div style="'+lab+'">Website address <span style="color:var(--red)">*</span> <span style="color:var(--fog)">'+(proj.websiteUrl?'(from the project — change it in Edit project)':'(add it in Edit project to fill every report)')+'</span></div>'
+    +'<input class="rpt-sec-weburl" data-idx="'+idx+'" value="'+escHtml(sec.webUrl||proj.websiteUrl||'')+'" placeholder="https://…" style="'+box+';width:100%;margin-bottom:8px">'
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">'
+    +'<div><div style="'+lab+'">'+escHtml(m.label)+' to date <span style="color:var(--fog)">(optional)</span></div><input class="rpt-sec-webvisits" data-idx="'+idx+'" value="'+escHtml(sec.webVisits==null?'':String(sec.webVisits))+'" inputmode="numeric" placeholder="e.g. 12,480" style="'+box+';width:150px;font-family:var(--mono)"></div>'
+    +'<div><div style="'+lab+'">as of</div><input type="date" class="rpt-sec-webasof" data-idx="'+idx+'" value="'+escHtml(sec.webAsOf||'')+'" style="'+box+'"></div>'
+    +'</div>'
+    +'<div id="rpt-web-delta-'+idx+'" style="font-size:11px;color:var(--sky-lt);margin:6px 0 10px">'+escHtml(_webDeltaText(m))+'</div>'
+    +'<div style="'+lab+'">Website changes this period <span style="color:var(--fog)">(one bullet per line)</span></div>'
+    +'<textarea class="rpt-sec-content" data-idx="'+idx+'" style="width:100%;min-height:80px;'+box+';line-height:1.6;resize:vertical" placeholder="Posted the November night-closure schedule&#10;Added a detour map for 400 North">'+escHtml(sec.content||'')+'</textarea>'
+    +'</div>';
+}
+// Edit project: the readings kept so far, each removable (a typo).
+function _projWebReadingsHTML(){
+  var rs=(window._pwr||[]).slice().sort(function(a,b){ return String(a.date).localeCompare(String(b.date)); });
+  if(!rs.length) return '<div style="font-size:11px;color:var(--fog);margin:-4px 0 8px">Visit counts are kept here each time a PI report with a count is archived.</div>';
+  return '<div style="font-size:11px;color:var(--slate);margin:-4px 0 4px">Visit counts from archived reports:</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">'
+    +rs.map(function(r){ return '<span class="badge b-dark" style="font-size:11px">'+_fmtMDY(r.date)+': '+_webFmtN(_webNum(r.visits))
+      +' <a href="#" title="Remove this reading" style="color:var(--red);margin-left:4px;text-decoration:none" onclick="event.preventDefault();_projWebDelReading(\''+escHtml(r.date)+'\')">✕</a></span>'; }).join('')+'</div>';
+}
+function _projWebDelReading(date){
+  if(!confirm('Remove the visit count for '+_fmtMDY(date)+'? It is removed when you save the project.')) return;
+  window._pwr=(window._pwr||[]).filter(function(r){ return r.date!==date; });
+  var el=document.getElementById('f-pweb-readings'); if(el) el.innerHTML=_projWebReadingsHTML();
+}
+// A website entered on a project adds the section to its existing draft (a
+// removed section then stays removed: this runs only when the address is set).
+async function _rptAddWebsiteSection(projF){
+  var sbRec=(_syncCache['reports']||[]).find(function(r){ return String(r.projectId)===String(projF); });
+  var ls=null; try{ ls=JSON.parse(localStorage.getItem('pir4_pi_reports_'+projF)||'null'); }catch(e){}
+  var secs=(sbRec&&sbRec.sections&&sbRec.sections.length)?sbRec.sections:(ls&&ls.sections&&ls.sections.length?ls.sections:null);
+  if(!secs||secs.some(function(x){ return x.type==='auto-website'; })) return;
+  var next=secs.concat([Object.assign({},WEB_SECTION,{content:''})]);
+  if(ls){ ls.sections=next; try{ localStorage.setItem('pir4_pi_reports_'+projF, JSON.stringify(ls)); }catch(e){} }
+  if(sbRec){
+    sbRec.sections=next;
+    try{ await sbUpdate('reports', sbRec.id, {sections:next}); }catch(e){ console.warn('Website section not added to the draft:', e.message); }
+  }
 }
 
 function loadReportSections(projF){
@@ -16136,7 +16315,7 @@ function loadReportSections(projF){
     }
   }
   if(!saved.sections||saved.sections.length===0){
-    var sections=getDefaultSections();
+    var sections=getDefaultSections(projF);
     if(saved.sections_actions)sections[1].content=saved.sections_actions;
     if(saved.sections_planned)sections[2].content=saved.sections_planned;
     if(saved.customSections){
@@ -16170,7 +16349,8 @@ function getSectionDesc(type){
     'auto-pi-compliance':'Auto-populates a FHWA/NEPA PI compliance summary: NEPA checklist progress, public meetings, comment response rate, LEP/EJ outreach, and commitment fulfillment.',
     'auto-nepa-compliance':'Auto-populates NEPA checklist progress by phase group, outstanding items, and comment period duration compliance. Supports AI-drafted narrative.',
     'auto-parcels':'Auto-populates the right-of-way parcel register: notice and ownership coverage, acquisition status, and every parcel still missing an owner or a notice date. Supports AI-drafted narrative.',
-    'auto-outreach':'Auto-populates the outreach actions dated in the report period — press releases, newsletters, website updates, 511 alerts, social posts and news coverage — by campaign, with each one\'s latest engagement counts as of the period end. Supports AI-drafted narrative.'
+    'auto-website':'The project website (from Edit project), the visits for this report period worked out from the last archived report\'s count, and the changes made to the site — one bullet per line. Supports AI-drafted narrative.',
+    'auto-outreach':'Auto-populates the outreach actions dated in the report period — press releases, newsletters, email blasts, 511 alerts, social posts and news coverage — by campaign, with each one\'s latest engagement counts as of the period end. Supports AI-drafted narrative.'
   };
   return descs[type]||'';
 }
@@ -16631,6 +16811,10 @@ function _reportGlance(projF, o){
         function(d){ return 'Deliverable past due: '+(d.title||d.type||'Deliverable'); });
     }
   }
+  if(has('auto-website')){
+    var wm=_websiteModel(projF, secs.find(function(x){ return x.type==='auto-website'; }), b);
+    if(wm.visits!==null) rows.push([wm.label, wm.thisPeriod!==null?_webFmtN(wm.thisPeriod):'—', _webFmtN(wm.visits)]);
+  }
   if(has('auto-parcels')){
     var pst=_parcelStats(projF);
     if(pst.total) now('Right-of-way parcels noticed', pst.noticedCt+' of '+pst.total);
@@ -16769,10 +16953,21 @@ function _sectionAIRequest(secType, templateDraft) {
       maxTokens: Math.round(tier.words * 1.6) + 200
     };
   }
+  if (secType === 'auto-website') {
+    return {
+      userContent: 'Write the narrative for the "Project website updates" section of a public involvement progress report: '
+        + 'what changed on the project website during the period and, where counts are given, how many visits it had.\n\n'
+        + 'LENGTH: about 70 words, and no more than 90.\n\n'
+        + 'Use the counts exactly as given. Do not work out changes or percentages yourself, do not call traffic high or low, '
+        + 'and do not quote the web address (it prints under the paragraph). Mention every change listed, briefly. '
+        + 'Base it strictly on these facts:\n\n' + (templateDraft || ''),
+      maxTokens: 220
+    };
+  }
   if (secType === 'auto-outreach') {
     return {
       userContent: 'Write the narrative for the "Outreach" section of a public involvement progress report: '
-        + 'what the team and its partners put out during the period (press releases, newsletters, website updates, '
+        + 'what the team and its partners put out during the period (press releases, newsletters, email blasts, '
         + '511 alerts, social posts, news coverage), through which channels, and how it was received where counts '
         + 'were recorded.\n\nLENGTH: about 110 words, and no more than 130.\n\n'
         + 'Group it by campaign where campaigns are given. Use the counts exactly as given and say they are as of '
@@ -17140,6 +17335,13 @@ function _buildSectionDraft(secType) {
     return txt_pc;
   }
 
+  if (secType === 'auto-website') {
+    var wsv = (captureFormState() || saved).sections || [];
+    var wsm = _websiteModel(projF, wsv.find(function(x){ return x.type === 'auto-website'; }), saved.periodEnd);
+    var wsl = _websiteFactLines(wsm, periodLabel);
+    return wsl ? 'Project website during ' + periodLabel + ':\n' + wsl.join('\n') : null;
+  }
+
   if (secType === 'auto-outreach') {
     var ostD = _outreachStats(projF, saved.periodStart, saved.periodEnd);
     if (!ostD.total) return null;
@@ -17447,6 +17649,7 @@ async function openPIReport(_isReopen){
       +'</div>'
       +(isAuto?'<div style="font-size:12px;color:var(--fog);line-height:1.5;margin-left:62px">'+getSectionDesc(sec.type)+'</div>'
         :'<textarea class="rpt-sec-content" data-idx="'+idx+'" style="width:100%;min-height:100px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;color:var(--mist);font-family:var(--font);font-size:13px;padding:10px 12px;outline:none;resize:vertical;line-height:1.6" placeholder="Each line becomes a bullet. Indent with spaces for sub-bullets.">'+(sec.content||'')+'</textarea>')
+      +(sec.type==='auto-website'?_webEditorHTML(sec,idx,projF,periodEnd):'')
       +(isAuto && TABLE_ELIGIBLE_TYPES.indexOf(sec.type) >= 0
         ? '<label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-top:8px;margin-left:62px">'
           +'<input type="checkbox" class="rpt-sec-table" data-idx="'+idx+'"'+(sec.showTable?' checked':'')+' style="accent-color:var(--sky);width:13px;height:13px" onchange="schedulePreview()">'
@@ -17925,13 +18128,19 @@ function renderLivePreview() {
     var contentEl   = document.querySelector('.rpt-sec-content[data-idx="'+idx+'"]');
     var tableEl     = document.querySelector('.rpt-sec-table[data-idx="'+idx+'"]');
     var typeEl      = summaryEl ? summaryEl.getAttribute('data-sectype') : 'manual';
+    var webV = function(c){ var el=document.querySelector(c+'[data-idx="'+idx+'"]'); return el ? el.value.trim() : ''; };
     sections[idx] = {
       title:     inp.value || ('Section ' + (idx+1)),
       summary:   summaryEl ? summaryEl.value : '',
       content:   contentEl ? contentEl.value : '',
       type:      typeEl || 'manual',
-      showTable: tableEl ? tableEl.checked : false
+      showTable: tableEl ? tableEl.checked : false,
+      webUrl:    webV('.rpt-sec-weburl'), webVisits: webV('.rpt-sec-webvisits'), webAsOf: webV('.rpt-sec-webasof')
     };
+    if (typeEl === 'auto-website') {   // the editor's live "this period" line
+      var _dl = document.getElementById('rpt-web-delta-' + idx);
+      if (_dl) _dl.textContent = _webDeltaText(_websiteModel(projF, sections[idx], (document.getElementById('rpt-pend')||{}).value||''));
+    }
   });
   sections = sections.filter(Boolean);
 
@@ -18064,6 +18273,7 @@ function renderLivePreview() {
       }
       // Counts only, no names — shown whether or not the data table is on.
       if (sec.type === 'auto-concerns') html += _concernsGlanceHTML(projF, pstart, pend, includeInternal);
+      if (sec.type === 'auto-website') html += _websiteBlockHTML(_websiteModel(projF, sec, pend));
       // Data table (when toggled on)
       if (sec.showTable && TABLE_ELIGIBLE_TYPES.indexOf(sec.type) >= 0) {
         html += _buildSectionPreviewTable(sec.type, projF, pstart, pend, includeInternal);
@@ -18104,7 +18314,7 @@ function captureFormState(){
   var ps2=document.getElementById('rpt-pstart');if(ps2)saved.periodStart=ps2.value;
   var pe=document.getElementById('rpt-pend');if(pe)saved.periodEnd=pe.value;
   var os=document.getElementById('rpt-overall-summary');if(os)saved.overallSummary=os.value;
-  if(!saved.sections)saved.sections=getDefaultSections();
+  if(!saved.sections)saved.sections=getDefaultSections(projF);
   var contentAreas=document.querySelectorAll('.rpt-sec-content');
   for(var i=0;i<contentAreas.length;i++){
     var idx=parseInt(contentAreas[i].getAttribute('data-idx'));
@@ -18120,6 +18330,12 @@ function captureFormState(){
     var tidx=parseInt(titleInputs[t].getAttribute('data-idx'));
     if(tidx>=0&&tidx<saved.sections.length)saved.sections[tidx].title=titleInputs[t].value;
   }
+  [['.rpt-sec-weburl','webUrl'],['.rpt-sec-webvisits','webVisits'],['.rpt-sec-webasof','webAsOf']].forEach(function(f){
+    document.querySelectorAll(f[0]).forEach(function(el){
+      var wi=parseInt(el.getAttribute('data-idx'));
+      if(wi>=0&&wi<saved.sections.length)saved.sections[wi][f[1]]=el.value.trim();
+    });
+  });
   var tableCbs=document.querySelectorAll('.rpt-sec-table');
   for(var tc=0;tc<tableCbs.length;tc++){
     var tcidx=parseInt(tableCbs[tc].getAttribute('data-idx'));
@@ -18484,6 +18700,8 @@ function _buildReportSnapshot(projF, saved) {
         try { glanceHtml = _concernsGlanceHTML(projF, pstart, pend, includeInternal) || ''; }
         catch(e) { console.warn('Snapshot glance table failed:', e.message); }
       }
+      // The website block always prints (address, visits, the changes made).
+      if (sec.type === 'auto-website') tableHtml = _websiteBlockHTML(_websiteModel(projF, sec, pend));
       if (sec.showTable && TABLE_ELIGIBLE_TYPES.indexOf(sec.type) >= 0) {
         try { tableHtml = _buildSectionPreviewTable(sec.type, projF, pstart, pend, includeInternal) || ''; }
         catch(e) { console.warn('Snapshot table failed for '+sec.type+':', e.message); }
@@ -18495,6 +18713,7 @@ function _buildReportSnapshot(projF, saved) {
       summary: sec.summary || '',
       content: sec.content || '',
       showTable: !!sec.showTable,
+      webUrl: sec.webUrl || '', webVisits: sec.webVisits || '', webAsOf: sec.webAsOf || '',
       countsLabel: countsLabel,
       glanceHtml: glanceHtml,
       tableHtml: tableHtml
@@ -18615,6 +18834,7 @@ async function _archiveReport(projF) {
     if (!newId) { showToast('Could not save the archive snapshot — nothing was archived.', 'error', 6000); return false; }
     if (!_syncCache['report_archive']) _syncCache['report_archive'] = [];
     _syncCache['report_archive'].push(Object.assign({}, payload, {id: newId}));
+    await _webRecordReadings(projF, saved);
     return true;
   } catch(e) {
     console.warn('Archive snapshot failed:', e.message);
@@ -20583,6 +20803,20 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
           var comp=days>=req.minDays;
           xml+=bullet(label+': '+days+' days — '+(comp?'Compliant (min '+req.minDays+'d)':'NON-COMPLIANT (min '+req.minDays+'d required)'));
         });
+      }
+
+    } else if(sec.type==='auto-website'){
+      // Same model as the preview and the frozen snapshot (_websiteModel).
+      var _wm=_websiteModel(proj.id,sec,saved.periodEnd);
+      xml+='<w:p><w:pPr><w:spacing w:before="40" w:after="80"/></w:pPr><w:r>'+bodyRpr+'<w:t xml:space="preserve">Project website: </w:t></w:r><w:r>'+boldRpr+'<w:t xml:space="preserve">'+escXml(_wm.url?_webShowUrl(_wm.url):'[website address needed]')+'</w:t></w:r></w:p>';
+      if(_wm.visits!==null){
+        if(_wm.thisPeriod!==null) xml+=bullet(_wm.label+' this period: '+_webFmtN(_wm.thisPeriod));
+        xml+=bullet(_wm.label+' to date: '+_webFmtN(_wm.visits)+(_wm.asOf?' (as of '+_fmtMDY(_wm.asOf)+')':''));
+        if(_wm.lastPeriod!==null) xml+=bullet(_wm.label+' in the last report period: '+_webFmtN(_wm.lastPeriod));
+      }
+      if(_wm.notes.length){
+        xml+=para('Website changes this period:',boldRpr);
+        _wm.notes.forEach(function(n){ xml+=bullet(n); });
       }
 
     } else {

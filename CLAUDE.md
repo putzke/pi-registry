@@ -510,6 +510,17 @@ Jeff's worry: a follow-up assigned to someone who doesn't sign in gets lost.
   under the issue. The issue .docx/print exports are unchanged. Guarded by
   `test/tests/88-issue-linked-int-open.test.js` (verified to fail without it).
 
+### Stakeholder groups: save waits for the real id; one name per project (Nov 2026)
+Reported live: a second group saved with the same name, and Edit on it threw
+"Cannot read properties of undefined (reading 'color')". `_saveGroup` drew the
+list before the insert landed, so the Edit/Members buttons carried the
+temporary id (the Quick Log race again); members added to a temporary id
+could never save (`group_id` is bigint). Now `_saveGroup` is async, awaits
+`DB.set`, refuses a double click (`_groupSaving`) and refuses a name already on
+the project (`_groupNameKey`: case and spacing ignored). An id the cache no
+longer has redraws the list with a toast instead of throwing. Guarded by
+`test/tests/113-group-save-race.test.js` (fails on the old code).
+
 ### Follow-up resolution note (Oct 2026)
 `sql/2026-10-11_followup_resolution_note.sql` adds `pi_interactions.follow_up_resolution`
 (`followUpResolution`) — **must be pasted in the SQL Editor**; until then `toSB`

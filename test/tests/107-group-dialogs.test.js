@@ -31,7 +31,7 @@ module.exports = {
         showGroupsManager(projId);
         _openGroupEditModal(null);
         document.getElementById('g-name').value = 'Test corridor';
-        _saveGroup('');
+        await _saveGroup('');
         const g = DB.get('groups').find(x => x.name === 'Test corridor');
         _openGroupMembersModal(g.id);
         const listOf = () => document.querySelector('#m-body div[onclick*="_toggleGroupMember"]').closest('div[style*="overflow-y:auto"]');

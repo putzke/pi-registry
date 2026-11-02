@@ -27776,6 +27776,10 @@ function _renderGroupsManager() {
 // ── Add / Edit Group Modal ────────────────────────────────────────
 function _openGroupEditModal(groupId) {
   const g = groupId ? (DB.get('groups')||[]).find(x => String(x.id) === String(groupId)) : {};
+  // A button drawn before a save finished can point at an id the cache no
+  // longer has (the temporary id is swapped for the real one). Redraw the
+  // list instead of opening a dialog over nothing.
+  if (!g) { showToast('That group was just saved — try again.', 'warn', 3000); _renderGroupsManager(); return; }
   const isNew = !groupId;
   const existingGroups = (DB.get('groups')||[]).filter(x => String(x.projectId) === String(S._groupsProjId));
   const defaultColor = GROUP_COLORS[existingGroups.length % GROUP_COLORS.length];
@@ -27817,9 +27821,18 @@ function _openGroupEditModal(groupId) {
   openM(isNew ? 'New group' : 'Edit group', body, footer, true);
 }
 
-function _saveGroup(groupId) {
+// One name per project, compared without case or extra spaces: two groups
+// called the same thing can't be told apart on the map legend, the filter
+// chips or the contact pop-up.
+function _groupNameKey(n) { return String(n||'').trim().replace(/\s+/g,' ').toLowerCase(); }
+let _groupSaving = false;
+async function _saveGroup(groupId) {
+  if (_groupSaving) return;
   const name = document.getElementById('g-name')?.value?.trim();
   if (!name) { alert('Group name is required.'); return; }
+  const dup = (DB.get('groups')||[]).find(x => String(x.projectId) === String(S._groupsProjId)
+    && String(x.id) !== String(groupId||'') && _groupNameKey(x.name) === _groupNameKey(name));
+  if (dup) { alert('This project already has a group called "' + dup.name + '". Use a different name, or add the contacts to that group.'); return; }
   const data = {
     projectId: S._groupsProjId,
     name,
@@ -27838,7 +27851,12 @@ function _saveGroup(groupId) {
     data.sortOrder = all.filter(g => String(g.projectId) === String(S._groupsProjId)).length;
     all.push(data);
   }
-  DB.set('groups', all);
+  // Wait for the real id before drawing the list: an Edit or Members button
+  // drawn with the temporary id stops matching once the insert lands (the
+  // "Cannot read properties of undefined (reading 'color')" error), and
+  // members added to a temporary id can never be saved.
+  _groupSaving = true;
+  try { await DB.set('groups', all); } finally { _groupSaving = false; }
   _renderGroupsManager();
 }
 
@@ -27854,7 +27872,7 @@ function _deleteGroup(groupId) {
 // ── Group Members Modal ───────────────────────────────────────────
 function _openGroupMembersModal(groupId) {
   const g = (DB.get('groups')||[]).find(x => String(x.id) === String(groupId));
-  if (!g) return;
+  if (!g) { showToast('That group was just saved — try again.', 'warn', 3000); _renderGroupsManager(); return; }
   S._editGroupId = groupId;
   _renderGroupMembersModal();
 }

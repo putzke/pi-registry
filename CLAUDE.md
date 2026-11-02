@@ -1212,6 +1212,30 @@ redundant by construction. History of the attempts (Sep–Oct 2026) is in git.
   deliverables that way).
 - Guarded by `test/tests/105-report-at-a-glance.test.js` (fails on the old code).
 
+### "Since the last report" in the section drafts (DEV, Nov 2026, Jeff)
+The ✦ AI Draft for Issues, Commitments, Follow-ups and Deliverables
+(`RPT_SINCE_TYPES`) now says what changed since the last report the client got.
+- **Comparison point = the most recent ARCHIVED report that included that same
+  section** (`_rptPrevForSection`), so each section finds its own: Issues can
+  compare with report 5 when reports 6–7 left Issues out. None → a line telling
+  the model to make no comparison (first report).
+- Every archive freezes all issues, commitments and deliverables in
+  `trendFacts`, whatever it printed. Since Nov 2026 they carry `id`, and
+  deliverables `delivered`/`contracted`; `followUpOpenIds` lists every
+  open follow-up (ids only — notes can name a person). Matching is by id, by
+  title for older archives; follow-ups on older archives are read from dates
+  (`followUpResolved`, interaction date vs the archive date).
+- `_rptSinceLines` works out the changes in code (resolved / new / status
+  changed / still open; fulfilled / past due; completed / advanced 2 → 4 of 6;
+  follow-ups closed / opened / carried — COUNTS only). Items are named only
+  when that section's "Include data table" is on (`_rptSectionShowsTable`).
+  `_buildSectionDraft` = `_buildSectionDraftBase` + these lines; the request
+  asks the model to lead with the changes, name the earlier report by its date
+  and never work out a change itself. Prose only — no new table column.
+- Both draft paths `await _rptEnsureArchiveSnapshots` first (snapshots load
+  lazily). Guarded by `test/tests/112-since-last-report.test.js` (fails on the
+  old code).
+
 ### "Include data table" hid the table in the .docx, not the data (Sep 2026)
 Every `TABLE_ELIGIBLE_TYPES` section's `.docx` renderer (`_buildDocxWithTemplate`)
 had a THIRD state the checkbox never offered: `showTable` on printed a Word

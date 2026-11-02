@@ -16988,9 +16988,14 @@ function _sectionAIRequest(secType, templateDraft) {
       maxTokens: 300
     };
   }
+  var _since = /SINCE THE LAST REPORT THAT INCLUDED/.test(templateDraft || '');
   return {
     userContent: 'Write a narrative summary for the "' + secType.replace('auto-','').replace(/-/g,' ')
-      + '" section of a PI progress report. Base it strictly on these facts: ' + (templateDraft||''),
+      + '" section of a PI progress report.'
+      + (_since ? ' Lead with what changed since the last report (name that report by its date), then what remains open.'
+          + ' Use the "since the last report" lines exactly as given; never work out a change, count or percentage yourself,'
+          + ' and only name items the facts name.' : '')
+      + ' Base it strictly on these facts: ' + (templateDraft||''),
     maxTokens: undefined
   };
 }
@@ -17030,6 +17035,7 @@ async function generateSectionDraft(secType, textareaIdx) {
     if (!confirm('This section already has a summary. Replace it with a generated draft?')) return;
   }
 
+  if (RPT_SINCE_TYPES.indexOf(secType) >= 0) await _rptEnsureArchiveSnapshots(S.projectFilter);
   var templateDraft = _buildSectionDraft(secType);
   var key = _getClaudeKey();
 
@@ -17106,6 +17112,8 @@ async function generateAllSectionDrafts() {
   // must never do.
   var skipped = [];
   var jobs = [];
+  if (autoSections.some(function(s){ return RPT_SINCE_TYPES.indexOf(s.secType) >= 0; }))
+    await _rptEnsureArchiveSnapshots(S.projectFilter);
   autoSections.forEach(function(s) {
     var templateDraft = _buildSectionDraft(s.secType) || '';
     if (!templateDraft) { skipped.push(s.secType); return; }
@@ -17176,7 +17184,113 @@ async function generateAllSectionDrafts() {
   renderLivePreview();
 }
 
+// ── "Since the last report" (Nov 2026, Jeff) ──────────────────────────────
+// Sections that track things over time compare against the most recent
+// ARCHIVED report that INCLUDED the same section — what the client was last
+// told; a gap of several reports is fine. Every archive freezes the status of
+// all issues, commitments and deliverables (trendFacts), whichever sections it
+// printed. The changes are worked out HERE; the model only narrates them.
+// Items are named only when the section's "Include data table" is on (the
+// same rule as Report at a glance); follow-ups are always counted, never named
+// (their notes can name a private person).
+var RPT_SINCE_TYPES=['auto-issues','auto-commitments','auto-followups','auto-del'];
+function _rptPrevForSection(projF, secType){
+  var recs=(_syncCache['report_archive']||[]).filter(function(r){
+    return String(r.projectId)===String(projF) && r.snapshot && r.snapshot.trendFacts
+      && (r.snapshot.sections||[]).some(function(x){ return x && x.type===secType; });
+  });
+  recs.sort(function(a,b){ return String(b.archivedAt||'').localeCompare(String(a.archivedAt||'')); });
+  return recs[0]||null;
+}
+// The snapshots are fetched lazily (SB_LAZY_COLS); a draft needs them first.
+async function _rptEnsureArchiveSnapshots(projF){
+  var recs=(_syncCache['report_archive']||[]).filter(function(r){ return String(r.projectId)===String(projF); });
+  if(recs.length) await _archiveEnsureSnapshots(recs);
+}
+function _rptSinceLines(projF, secType, named){
+  if(RPT_SINCE_TYPES.indexOf(secType)<0) return [];
+  var prev=_rptPrevForSection(projF, secType);
+  if(!prev) return ['SINCE THE LAST REPORT: no earlier archived report included this section. Describe where things stand now; make no comparison with earlier reports.'];
+  var tf=prev.snapshot.trendFacts, when=prev.archivedAt?fmt(String(prev.archivedAt).slice(0,10)):'';
+  var head='SINCE THE LAST REPORT THAT INCLUDED THIS SECTION (Report'+(prev.reportNum?' #'+prev.reportNum:'')+(when?', issued '+when:'')
+    +') — worked out already; use exactly as given and never work out changes yourself:';
+  var mine=function(x){ return String(x.projectId)===String(projF); };
+  var done=function(st){ return /complet|resolv|closed|done|fulfill|cancel/i.test(st||''); };
+  var norm=function(t){ return String(t||'').trim().toLowerCase(); };
+  // Match by record id; an older archive without ids matches by title.
+  var finder=function(list, idKey, textKey){
+    var byId={}, byText={}; (list||[]).forEach(function(o){ if(o.id) byId[String(o.id)]=o; byText[norm(o[textKey])]=o; });
+    return function(x, text){ return byId[String(x.id)] || byText[norm(text)] || null; };
+  };
+  var MAX=8, fmtList=function(arr){ return named&&arr.length ? ': '+arr.slice(0,MAX).join('; ')+(arr.length>MAX?'; and '+(arr.length-MAX)+' more':'') : ''; };
+  var line=function(label, arr){ return '- '+label+': '+arr.length+fmtList(arr)+'.'; };
+  var L=[head];
+  if(secType==='auto-issues'){
+    var find=finder(tf.issues,'id','title'), cur=(DB.get('issues')||[]).filter(mine), seen={};
+    var res=[], neu=[], chg=[], still=[];
+    cur.forEach(function(x){
+      var title=String(x.title||'Untitled').slice(0,90), was=find(x,title);
+      if(was) seen[String(was.id||norm(was.title))]=1;
+      var st=x.status||'Open';
+      if(!was){ if(!done(st)) neu.push(title+' ('+st+')'); else neu.push(title+' (raised and '+st.toLowerCase()+' since then)'); return; }
+      if(!done(was.status)&&done(st)) res.push(title+' ('+st+')');
+      else if(!done(st)&&was.status!==st) chg.push(title+' ('+was.status+' → '+st+')');
+      else if(!done(st)) still.push(title+' ('+st+(x.dateRaised?', raised '+fmt(x.dateRaised):'')+')');
+    });
+    L.push(line('Resolved or closed since then',res), line('New since then',neu), line('Still open, status changed',chg), line('Still open, unchanged',still));
+  } else if(secType==='auto-commitments'){
+    var findC=finder(tf.commitments,'id','text'), curC=(DB.get('commitments')||[]).filter(mine), today=localToday();
+    var ful=[], neuC=[], outC=[], late=[];
+    curC.forEach(function(c){
+      var t=String(c.commitment||'Untitled').slice(0,90), was=findC(c,t), st=c.status||'Open';
+      if(!was){ neuC.push(t+' ('+st+')'); return; }
+      if(!done(was.status)&&done(st)) ful.push(t);
+      else if(!done(st)){ (c.dueDate&&c.dueDate<today?late:outC).push(t+(c.dueDate?' (due '+_fmtMDY(c.dueDate)+')':'')); }
+    });
+    L.push(line('Fulfilled since then',ful), line('New since then',neuC), line('Still outstanding',outC), line('Still outstanding and now past due',late));
+  } else if(secType==='auto-del'){
+    var findD=finder(tf.deliverables,'id','title'), curD=(DB.get('deliverables')||[]).filter(mine);
+    var comp=[], adv=[], neuD=[];
+    curD.forEach(function(d){
+      if(d.status==='Cancelled') return;
+      var t=String(d.title||d.type||'Untitled').slice(0,70), was=findD(d,t), now=Number(d.deliveredCount)||0, tgt=Number(d.contractedQty)||0;
+      if(!was){ neuD.push(t); return; }
+      if(!/complet/i.test(was.status||'')&&/complet/i.test(d.status||'')){ comp.push(t); return; }
+      if(was.delivered!==undefined){ if(now>was.delivered) adv.push(t+' ('+was.delivered+' → '+now+(tgt?' of '+tgt:'')+' delivered)'); }
+      else { var pct=tgt>0?Math.min(100,Math.round(now/tgt*100)):null; if(pct!==null&&pct>(was.pct||0)) adv.push(t+' ('+(was.pct||0)+'% → '+pct+'%)'); }
+    });
+    L.push(line('Completed since then',comp), line('Advanced since then',adv), line('Added since then',neuD));
+  } else if(secType==='auto-followups'){
+    var fus=(DB.get('interactions')||[]).filter(function(i){ return mine(i)&&i.followUp; }), since=String(prev.archivedAt||'').slice(0,10);
+    var openNow=fus.filter(function(i){ return !i.followUpDone; });
+    if(Array.isArray(tf.followUpOpenIds)){
+      var wasOpen={}; tf.followUpOpenIds.forEach(function(id){ wasOpen[String(id)]=1; });
+      var closed=fus.filter(function(i){ return wasOpen[String(i.id)]&&i.followUpDone; }).length;
+      var carried=openNow.filter(function(i){ return wasOpen[String(i.id)]; }).length;
+      L.push('- Closed since then: '+closed+'.', '- Opened since then and still open: '+(openNow.length-carried)+'.', '- Still open from before: '+carried+'.');
+    } else {
+      // An archive from before the follow-up list was kept: read the dates.
+      var closedD=fus.filter(function(i){ return i.followUpDone&&i.followUpResolved&&String(i.followUpResolved)>=since; }).length;
+      var openedD=openNow.filter(function(i){ return String(i.date||'')>=since; }).length;
+      L.push('- Resolved since then: '+closedD+'.', '- Opened since then and still open: '+openedD+'.', '- Still open from before: '+(openNow.length-openedD)+'.');
+    }
+    var od=openNow.filter(function(i){ return i.followUpDue&&i.followUpDue<localToday(); }).length;
+    if(od) L.push('- Of all open follow-ups, past due now: '+od+'.');
+  }
+  return L;
+}
+function _rptSectionShowsTable(secType){
+  var st=captureFormState()||loadReportSections(S.projectFilter)||{};
+  var sec=(st.sections||[]).find(function(x){ return x.type===secType; });
+  return !!(sec&&sec.showTable);
+}
+
 function _buildSectionDraft(secType) {
+  var base = _buildSectionDraftBase(secType);
+  if (!base || RPT_SINCE_TYPES.indexOf(secType) < 0 || !S.projectFilter) return base;
+  return base + '\n\n' + _rptSinceLines(S.projectFilter, secType, _rptSectionShowsTable(secType)).join('\n');
+}
+function _buildSectionDraftBase(secType) {
   var projF = S.projectFilter;
   if (!projF) return null;
   var proj = DB.get('projects').find(function(p){ return p.id === projF; });
@@ -18738,15 +18852,16 @@ function _buildReportSnapshot(projF, saved) {
   var _tfChan = {};
   _tfInts.forEach(function(i){ var c=i.channel||'Unknown'; _tfChan[c]=(_tfChan[c]||0)+1; });
   var _tfIssues = DB.get('issues').filter(function(x){ return String(x.projectId)===String(projF); })
-    .map(function(x){ return { title:(x.title||'Untitled').slice(0,90), status:x.status||'Open',
+    .map(function(x){ return { id:String(x.id), title:(x.title||'Untitled').slice(0,90), status:x.status||'Open',
                                priority:x.priority||'', category:x.category||'' }; });
   var _tfComm = DB.get('commitments').filter(function(c){ return String(c.projectId)===String(projF); })
-    .map(function(c){ return { text:(c.commitment||'Untitled').slice(0,90), status:c.status||'Open',
+    .map(function(c){ return { id:String(c.id), text:(c.commitment||'Untitled').slice(0,90), status:c.status||'Open',
                                dueDate:c.dueDate||'' }; });
   var _tfDelsAll = DB.get('deliverables').filter(function(d){ return String(d.projectId)===String(projF); });
   var _tfDels = _tfDelsAll.map(function(d){
     var pct = d.contractedQty>0 ? Math.min(100, Math.round((d.deliveredCount||0)/d.contractedQty*100)) : (d.progress||0);
-    return { title:(d.title||d.type||'Untitled').slice(0,70), status:d.status||'', pct:pct };
+    return { id:String(d.id), title:(d.title||d.type||'Untitled').slice(0,70), status:d.status||'', pct:pct,
+             delivered:Number(d.deliveredCount)||0, contracted:Number(d.contractedQty)||0 };
   });
   var _tfSent = {champion:0, neutral:0, opponent:0};
   ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; })
@@ -18767,6 +18882,11 @@ function _buildReportSnapshot(projF, saved) {
     interactions: _tfInts.length,
     channels: _tfChan,
     followUpsOpen: _tfInts.filter(function(i){ return i.followUp && !i.followUpDone; }).length,
+    // Every follow-up on the project open at archive time (ids only, plus the
+    // due date) — what the next report's "since the last report" lines compare
+    // against. No notes: they can name a private person.
+    followUpOpenIds: DB.get('interactions').filter(function(i){ return String(i.projectId)===String(projF) && i.followUp && !i.followUpDone; })
+      .map(function(i){ return String(i.id); }),
     issues: _tfIssues,
     commitments: _tfComm,
     deliverables: _tfDels,

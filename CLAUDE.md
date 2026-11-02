@@ -2138,6 +2138,19 @@ Field companion for logging interactions, managing contacts, follow-ups, and iss
   - The log toast read "Interactionsged ✓"; now "Interaction logged ✓" /
     "Interaction updated ✓".
 
+- **Contacts in walking order (DEV, Nov 2026, Jeff)** — with a project picked,
+  the Contacts list sorts by the Utah grid address (`_gridPos`: "354 N 300 W" =
+  354 north, 300 west; a corner lot "287 W 200 N" = 200 north), along whichever
+  axis the project's addresses spread most (`_addrOrder`): North → South or
+  West → East, with a "· Address order: … ⇅" link in the caption that reverses
+  it (localStorage `cc_addr_rev_<project>`) for the second walker. Contacts
+  with no grid address follow, by name. The street part of the address prints
+  large under the name (`.item-addr`, no city/zip); search matches addresses.
+  Names sort with numbers in order (`_natCmp`; Property 2 before 10) on the
+  master list and on desktop's project contact list. "Visited today" and
+  direction buttons were mocked up and declined (too cramped). Guarded by
+  `test/tests/114-mobile-address-order.test.js` (fails on the old code).
+
 - **Contact count, failed saves, email check — Oct 2026**
   (`test/tests/68-mobile-contact-count.test.js`, 11 checks):
   - Home "Contacts" counted project LINK rows; desktop counts links whose

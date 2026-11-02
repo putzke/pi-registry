@@ -4695,7 +4695,8 @@ function renderStakeholders(el){
       var roleA=(a._link&&(a._link.stakeholderRole||'External')==='Internal')?0:1;
       var roleB=(b._link&&(b._link.stakeholderRole||'External')==='Internal')?0:1;
       if(roleA!==roleB)return roleA-roleB;
-      return (a.lastName||'').toLowerCase().localeCompare((b.lastName||'').toLowerCase());
+      // Numbers in order: Property 1, 2, 3 … 10, not 1, 10, 11 … 2.
+      return ((a.lastName||'')+' '+(a.firstName||'')).localeCompare((b.lastName||'')+' '+(b.firstName||''),undefined,{numeric:true,sensitivity:'base'});
     });
   }
   const sel=S.selStakeholder;

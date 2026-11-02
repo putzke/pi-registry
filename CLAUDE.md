@@ -2589,6 +2589,14 @@ competitor has — keeping the PI firm's client continuously informed) is live.
     template; test at Gmail (UDOT is Google Workspace); **~2026-11-01 tighten
     DMARC to `p=quarantine`** if Resend shows clean sending. DEV still uses
     Supabase's built-in sender (no client logins there).
+    **DEV portal testing uses token links, not email (Jeff, 2026-11-02).** The
+    built-in sender allows only a few emails an hour on ANY plan ("email rate
+    limit exceeded"), and DEV's Auth URL Configuration had no Site URL /
+    redirect list, so a DEV sign-in link landed on `localhost:3000`. If email
+    sign-in on DEV is ever needed: Site URL `https://dev.cirruscc.com`,
+    Redirect URLs `https://dev.cirruscc.com/**` + `https://*.cirruscc-dev.pages.dev/**`
+    (the `/**` matters — Cloudflare serves `/client-portal` without `.html`),
+    and a separate Resend key in DEV's SMTP settings.
   - **Sign-in email template: `email-templates/client-sign-in.html`** — the
     copy of record for Supabase LIVE → Authentication → Emails → Templates,
     pasted into BOTH "Magic Link" and "Confirm signup" (a client's first

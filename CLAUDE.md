@@ -2151,6 +2151,11 @@ Field companion for logging interactions, managing contacts, follow-ups, and iss
   direction buttons were mocked up and declined (too cramped). Guarded by
   `test/tests/114-mobile-address-order.test.js` (fails on the old code).
 
+- **Same-day interactions in logged order (Nov 2026, Jeff)** — mobile's
+  Dashboard, Interactions list and a contact's history sort newest first by
+  date, then by `_intLoggedOrder` (a copy of desktop's, asserted identical):
+  `_intNewestFirst`. Guarded by `test/tests/115-mobile-same-day-order.test.js`.
+
 - **Contact count, failed saves, email check — Oct 2026**
   (`test/tests/68-mobile-contact-count.test.js`, 11 checks):
   - Home "Contacts" counted project LINK rows; desktop counts links whose

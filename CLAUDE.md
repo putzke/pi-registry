@@ -2649,7 +2649,8 @@ competitor has — keeping the PI firm's client continuously informed) is live.
     sign-in on DEV is ever needed: Site URL `https://dev.cirruscc.com`,
     Redirect URLs `https://dev.cirruscc.com/**` + `https://*.cirruscc-dev.pages.dev/**`
     (the `/**` matters — Cloudflare serves `/client-portal` without `.html`),
-    and a separate Resend key in DEV's SMTP settings.
+    and a separate Resend key in DEV's SMTP settings. (Site URL and both
+    redirect URLs confirmed set on DEV 2026-11-05; the Resend key is not.)
   - **Sign-in email template: `email-templates/client-sign-in.html`** — the
     copy of record for Supabase LIVE → Authentication → Emails → Templates,
     pasted into BOTH "Magic Link" and "Confirm signup" (a client's first
@@ -3012,8 +3013,9 @@ there was no "Forgot password?" anywhere.
   address with a hash alone, and after the password is saved a phone goes on
   to `mobile.html` (unless "Use full desktop site" is remembered).
 - **Supabase settings it depends on:** Authentication → URL Configuration Site
-  URL = the app's address (LIVE `https://app.cirruscc.com`; DEV must be set to
-  `https://dev.cirruscc.com` — it was blank, so DEV links went to localhost).
+  URL = the app's address (LIVE `https://app.cirruscc.com`; DEV
+  `https://dev.cirruscc.com`, with redirect URLs `https://dev.cirruscc.com/**`
+  and `https://*.cirruscc-dev.pages.dev/**` — confirmed set 2026-11-05).
   DEV's built-in sender allows only a few emails an hour.
 - **Adding staff (today):** Supabase → Authentication → Users → Send invitation
   (or Create new user + Auto Confirm), plus `insert into pi_staff (email)…`

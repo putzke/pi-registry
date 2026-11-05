@@ -2993,6 +2993,39 @@ any user can enroll their own.
   while staff reads 6 / 257 / 969. `demo@horizoncompass.com` auth user deleted
   the same paste. `sunriseinput@gmail.com` is a portal-TEST login, not staff.
 
+### Set / reset a password from an email link (DEV, Nov 2026, Jeff)
+Found adding a new staff member: Supabase's **Send invitation** (and **Send
+password recovery**) emails send the person to the Site URL with a one-time
+session in the hash (`#access_token=…&type=invite|recovery`), and the app
+ignored it — a new user landed on the sign-in screen with no password, and
+there was no "Forgot password?" anywhere.
+- One block, `// ── PASSWORD LINKS (begin)` … `(end)`, byte-identical in
+  `index.html` and `mobile.html` (test 116): `_pwLinkFromHash` (reads the link,
+  then wipes the hash from the address bar and history), `showSetPasswordOverlay`
+  ("Welcome to Cirrus Cc" for an invite, "Set a new password" for a reset; names
+  the account; `PW_MIN` = 8; `PUT /auth/v1/user {password}` with the link's
+  token, then `mfaGate` → the app), `pwForgot` ("Forgot password?" under the
+  password box: `POST /auth/v1/recover?redirect_to=CC_BASE/`; the same answer
+  whether or not the address has an account), `_pwNote`. An expired/used link
+  (`#error=…otp_expired`) opens the sign-in screen saying so.
+- The link lands on `index.html`; the phone redirect at the top leaves an
+  address with a hash alone, and after the password is saved a phone goes on
+  to `mobile.html` (unless "Use full desktop site" is remembered).
+- **Supabase settings it depends on:** Authentication → URL Configuration Site
+  URL = the app's address (LIVE `https://app.cirruscc.com`; DEV must be set to
+  `https://dev.cirruscc.com` — it was blank, so DEV links went to localhost).
+  DEV's built-in sender allows only a few emails an hour.
+- **Adding staff (today):** Supabase → Authentication → Users → Send invitation
+  (or Create new user + Auto Confirm), plus `insert into pi_staff (email)…`
+  on each database. **PLANNED (Jeff, Nov 2026), not built: manage logins from
+  Settings, Jeff as the only admin** — needs an Edge Function holding the
+  service-role key (Supabase's admin API: invite / remove a user) that checks
+  the caller is an admin (e.g. a `pi_admins` table or an `is_admin` flag on
+  `pi_staff`), adds/removes the `pi_staff` row in the same step, and is never
+  callable by a portal client. Team-list members could then get an "Invite to
+  sign in" button.
+- Guarded by `test/tests/116-password-links.test.js` (fails on the old code).
+
 ### Two-step sign-in — Microsoft Authenticator (Oct 2026, OPTIONAL for now)
 Supabase Auth MFA (TOTP) over REST. Microsoft Authenticator gives a 6-digit
 code ("Other account"); push approval would need Entra ID SSO — not used.

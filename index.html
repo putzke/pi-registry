@@ -952,6 +952,141 @@ async function mfaShowEnroll(token, opts, done, cancel) {
 }
 // ── TWO-STEP SIGN-IN (end) ─────────────────────────────────────────
 
+// ── PASSWORD LINKS (begin) ─────────────────────────────────────────
+// Set or reset a password from an emailed link (Nov 2026, Jeff). This block is
+// IDENTICAL in index.html and mobile.html — test 116 asserts it.
+//
+// Supabase's invite and "reset password" emails send the person to the app's
+// address with a one-time session in the address after "#":
+//   #access_token=…&refresh_token=…&type=invite|recovery
+// The app used to ignore it, so a new user landed on the sign-in screen with no
+// password. Now that link opens "Set your password", saves it (PUT /user) and
+// signs them in. An expired or used link (#error=…) says so on the sign-in
+// screen. "Forgot password?" on the sign-in screen sends the reset email
+// (POST /recover); the answer is the same whether or not the address has an
+// account, so the screen never reveals who has one. The link's address must be
+// allowed in Supabase → Authentication → URL Configuration.
+const PW_MIN = 8;
+const PW_LINK_TYPES = ['invite', 'recovery', 'signup', 'magiclink'];
+
+function _pwLinkFromHash() {
+  const h = String(location.hash || '').replace(/^#/, '');
+  if (!h) return null;
+  const p = new URLSearchParams(h);
+  let out = null;
+  if (p.get('access_token') && PW_LINK_TYPES.indexOf(p.get('type') || '') >= 0) {
+    out = { type: p.get('type'), access_token: p.get('access_token'), refresh_token: p.get('refresh_token') || '' };
+  } else if (p.get('error') || p.get('error_code')) {
+    const code = p.get('error_code') || '';
+    out = { error: /expired|otp/i.test(code + ' ' + (p.get('error_description') || ''))
+      ? 'That link has expired or was already used. Use "Forgot password?" below to get a new one.'
+      : (p.get('error_description') || 'That sign-in link could not be used.').replace(/\+/g, ' ') };
+  }
+  // The tokens must not stay in the address bar or the browser history.
+  if (out) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} }
+  return out;
+}
+
+function _pwNote(text, isError) {
+  const el = document.getElementById('login-error');
+  if (!el) return;
+  el.textContent = text;
+  el.style.display = 'block';
+  el.style.background = isError ? '#2D1B1B' : '#10263B';
+  el.style.borderColor = isError ? '#7F1D1D' : '#1F5F86';
+  el.style.color = isError ? '#FCA5A5' : '#BFE3F5';
+}
+
+function _pwRedirectTo() {
+  return (typeof CC_BASE !== 'undefined' ? CC_BASE : location.origin) + '/';
+}
+
+async function pwForgot() {
+  const emailEl = document.getElementById('login-email');
+  const email = emailEl ? emailEl.value.trim() : '';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    _pwNote('Type your email address above, then choose "Forgot password?" again.', true);
+    if (emailEl) emailEl.focus();
+    return;
+  }
+  const link = document.getElementById('login-forgot');
+  if (link) link.style.pointerEvents = 'none';
+  try {
+    const r = await fetch(SUPA_URL + '/auth/v1/recover?redirect_to=' + encodeURIComponent(_pwRedirectTo()), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPA_KEY },
+      body: JSON.stringify({ email })
+    });
+    if (r.status === 429) _pwNote('Too many reset emails were asked for. Wait a few minutes and try again.', true);
+    else if (!r.ok && r.status >= 500) _pwNote('The reset email could not be sent right now. Try again in a few minutes.', true);
+    else _pwNote('If ' + email + ' has an account, a link to set a new password is on its way. Check your inbox (and junk folder).', false);
+  } catch (e) {
+    _pwNote('No connection — the reset email was not sent.', true);
+  } finally {
+    if (link) link.style.pointerEvents = '';
+  }
+}
+
+function showSetPasswordOverlay(tok, done) {
+  const isNew = tok.type === 'invite' || tok.type === 'signup';
+  const inp = 'width:100%;box-sizing:border-box;background:#0B1929;border:1px solid #1A3350;border-radius:6px;padding:9px 12px;font-size:14px;color:#E2E8F0;outline:none;';
+  const ov = document.createElement('div');
+  ov.id = 'setpw-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:#0B1929;display:flex;align-items:center;justify-content:center;z-index:99999;font-family:inherit;';
+  ov.innerHTML = '<div style="background:#112236;border:1px solid #1A3350;border-radius:12px;padding:32px 28px;width:340px;max-width:calc(100vw - 32px);box-sizing:border-box;box-shadow:0 8px 40px rgba(0,0,0,.6);color:#E2E8F0">'
+    + '<div style="font-size:18px;font-weight:600;margin-bottom:6px">' + (isNew ? 'Welcome to Cirrus Cc' : 'Set a new password') + '</div>'
+    + '<div id="setpw-who" style="font-size:12px;color:#94A3B8;margin-bottom:16px">' + (isNew ? 'Choose a password to finish setting up your account.' : 'Choose a new password for your account.') + '</div>'
+    + '<div id="setpw-error" style="display:none;background:#2D1B1B;border:1px solid #7F1D1D;border-radius:6px;padding:10px 12px;font-size:12px;color:#FCA5A5;margin-bottom:14px"></div>'
+    + '<label style="font-size:11px;color:#94A3B8;display:block;margin-bottom:4px">New password (at least ' + PW_MIN + ' characters)</label>'
+    + '<input id="setpw-1" type="password" autocomplete="new-password" style="' + inp + 'margin-bottom:12px">'
+    + '<label style="font-size:11px;color:#94A3B8;display:block;margin-bottom:4px">Type it again</label>'
+    + '<input id="setpw-2" type="password" autocomplete="new-password" style="' + inp + 'margin-bottom:20px">'
+    + '<button id="setpw-btn" style="width:100%;background:#1D4ED8;border:none;border-radius:6px;padding:11px;font-size:14px;font-weight:500;color:#fff;cursor:pointer">Save password and sign in</button>'
+    + '</div>';
+  document.body.appendChild(ov);
+  const err = m => { const e = document.getElementById('setpw-error'); e.textContent = m; e.style.display = m ? 'block' : 'none'; };
+  // Name the account the link is for, so nobody sets a password on the wrong one.
+  (async () => {
+    try {
+      const r = await fetch(SUPA_URL + '/auth/v1/user', { headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + tok.access_token } });
+      const u = r.ok ? await r.json() : null;
+      if (u && u.email) { tok.user = u; document.getElementById('setpw-who').textContent += ' Account: ' + u.email; }
+      else if (!r.ok) err('This link has expired or was already used. Close this page and use "Forgot password?" on the sign-in screen.');
+    } catch (e) {}
+  })();
+  const btn = document.getElementById('setpw-btn');
+  const save = async () => {
+    const a = document.getElementById('setpw-1').value, b = document.getElementById('setpw-2').value;
+    if (a.length < PW_MIN) return err('Use at least ' + PW_MIN + ' characters.');
+    if (a !== b) return err('The two passwords are different.');
+    err(''); btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      const r = await fetch(SUPA_URL + '/auth/v1/user', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + tok.access_token },
+        body: JSON.stringify({ password: a })
+      });
+      let d = {}; try { d = await r.json(); } catch (e) {}
+      if (!r.ok) {
+        const m = d.msg || d.message || d.error_description || '';
+        throw new Error(r.status === 401 || r.status === 403
+          ? 'This link has expired or was already used. Use "Forgot password?" on the sign-in screen for a new one.'
+          : /same/i.test(m) ? 'That is your current password — choose a different one.'
+          : (m || 'The password could not be saved.'));
+      }
+      const sess = { access_token: tok.access_token, refresh_token: tok.refresh_token, user: d && d.email ? d : tok.user };
+      await mfaGate(sess, () => { ov.remove(); done(); },
+        () => { clearSession(); ov.remove(); showLoginOverlay(); _pwNote('Your password is saved. Sign in with it.', false); });
+    } catch (e) {
+      err(e.message); btn.disabled = false; btn.textContent = 'Save password and sign in';
+    }
+  };
+  btn.onclick = save;
+  document.getElementById('setpw-2').addEventListener('keydown', e => { if (e.key === 'Enter') save(); });
+  document.getElementById('setpw-1').focus();
+}
+// ── PASSWORD LINKS (end) ───────────────────────────────────────────
+
 // ── LOGIN OVERLAY ──────────────────────────────────────────────────
 function showLoginOverlay() {
   const overlay = document.createElement('div');
@@ -974,6 +1109,7 @@ function showLoginOverlay() {
       <label style="font-size:11px;color:#94A3B8;display:block;margin-bottom:4px;">Password</label>
       <input id="login-password" type="password" autocomplete="current-password" placeholder="••••••••"
         style="width:100%;box-sizing:border-box;background:#0B1929;border:1px solid #1A3350;border-radius:6px;padding:9px 12px;font-size:13px;color:#E2E8F0;margin-bottom:22px;outline:none;" />
+      <div style="text-align:right;margin:-12px 0 18px"><a id="login-forgot" href="javascript:void(0)" onclick="pwForgot()" style="font-size:11px;color:#7DB8DA;text-decoration:none">Forgot password?</a></div>
       <button id="login-btn" onclick="doLogin()"
         style="width:100%;background:#1D4ED8;border:none;border-radius:6px;padding:10px;font-size:14px;font-weight:500;color:#fff;cursor:pointer;">
         Sign In
@@ -2424,6 +2560,19 @@ window.addEventListener('unhandledrejection', function(e) {
 const DEV_BYPASS = false;
 (function() {
   if (DEV_BYPASS) { initApp(); return; }
+  // An invite or password-reset link from an email opens "Set your password".
+  const link = _pwLinkFromHash();
+  if (link && link.access_token) {
+    showSetPasswordOverlay(link, () => {
+      // Phones go on to the mobile app (the redirect at the top of the page
+      // leaves an address carrying a link alone).
+      let desk = false; try { desk = localStorage.getItem('cc_prefer_desktop') === '1'; } catch (e) {}
+      if (!desk && /iPhone|iPod|Android.+Mobile|Windows Phone/i.test(navigator.userAgent)) location.replace('mobile.html');
+      else initApp();
+    });
+    return;
+  }
+  if (link && link.error) { showLoginOverlay(); _pwNote(link.error, true); return; }
   const sess = getSession();
   if (sess && sess.access_token) {
     // A session from before the user set up two-step sign-in (another tab,

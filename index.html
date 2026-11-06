@@ -16268,6 +16268,21 @@ function saveAsPdf(){
 }
 
 // Section types that have row-based data eligible for table output
+// Follow-up status section (Jeff, Nov 2026): an OPEN follow-up always shows,
+// however old; a RESOLVED one only when it was resolved inside the report
+// period, so a long project doesn't reprint every past resolution. The date is
+// "Date resolved" (followUpResolved); an older row without one falls back to
+// its due date, then the day it was logged. No period set → everything shows.
+function _fuResolvedOn(i){ return String(i.followUpResolved||i.followUpDue||i.date||'').slice(0,10); }
+function _fuForReport(items, pstart, pend){
+  return (items||[]).filter(function(i){
+    if(!i.followUpDone) return true;
+    var d=_fuResolvedOn(i);
+    if(pstart && (!d || d<pstart)) return false;
+    if(pend && (!d || d>pend)) return false;
+    return true;
+  });
+}
 var TABLE_ELIGIBLE_TYPES = ['auto-concerns','auto-intlog','auto-del','auto-events','auto-followups','auto-comments','auto-commitments','auto-issues','auto-comment-matrix','auto-contacts','auto-pi-compliance','auto-outreach'];
 
 // Section types whose rows are actually BOUNDED by the reporting period, and so
@@ -16538,7 +16553,7 @@ function getSectionDesc(type){
     'auto-concerns':'Auto-populates from External stakeholder interactions logged during the report period.',
     'auto-contacts':'Auto-populates a formatted stakeholder roster filtered by selected report distribution.',
     'auto-intlog':'Auto-populates a chronological log of stakeholder interactions (External by default; toggle above to include Internal).',
-    'auto-followups':'Auto-populates all open and resolved follow-up action items with due dates.',
+    'auto-followups':'Auto-populates every open follow-up (overdue ones whatever their date) and those resolved during the report period.',
     'auto-sentiment':'Auto-populates a 3x3 stakeholder engagement matrix plus stakeholder positions grouped by Champion, Neutral, and Opponent.',
     'auto-del':'Auto-populates deliverable progress showing contracted vs delivered counts.',
     'auto-comments':'Auto-populates public comments received with response status for formal documentation.',
@@ -17547,16 +17562,16 @@ function _buildSectionDraftBase(secType) {
   }
 
   if (secType === 'auto-followups') {
-    var fuItems = ints.filter(function(i){ return i.followUp; });
+    var fuItems = _fuForReport(ints.filter(function(i){ return i.followUp; }), saved.periodStart||'', saved.periodEnd||'');
     if (fuItems.length === 0) return null;
     var fuOpen     = fuItems.filter(function(i){ return !i.followUpDone; }).length;
     var fuResolved = fuItems.filter(function(i){ return i.followUpDone; }).length;
     var today      = new Date().toISOString().slice(0,10);
     var fuOverdue  = fuItems.filter(function(i){ return !i.followUpDone && i.followUpDue && i.followUpDue < today; }).length;
-    var txt5 = fuItems.length+' follow-up item'+(fuItems.length!==1?'s have':' has')+' been recorded for this project.';
-    txt5 += ' '+fuOpen+' item'+(fuOpen!==1?'s are':' is')+' currently open';
+    var txt5 = '';
+    txt5 += fuOpen+' follow-up item'+(fuOpen!==1?'s are':' is')+' currently open';
     if (fuOverdue > 0) txt5 += ', of which '+fuOverdue+' '+(fuOverdue!==1?'are':'is')+' overdue';
-    txt5 += '. '+fuResolved+' item'+(fuResolved!==1?'s have':' has')+' been resolved.';
+    txt5 += '. '+fuResolved+' item'+(fuResolved!==1?'s were':' was')+' resolved'+((saved.periodStart||saved.periodEnd)?' during this report period':'')+'.';
     return txt5;
   }
 
@@ -18188,7 +18203,7 @@ function _buildSectionPreviewTable(secType, projF, pstart, pend, includeInternal
 
   } else if (secType === 'auto-followups') {
     var allInts = DB.get('interactions').filter(function(i){ return String(i.projectId)===String(projF); });
-    var fuItems = allInts.filter(function(i){ return i.followUp; })
+    var fuItems = _fuForReport(allInts.filter(function(i){ return i.followUp; }), pstart, pend)
       .sort(function(a,b){ if(!a.followUpDone&&b.followUpDone)return -1; if(a.followUpDone&&!b.followUpDone)return 1; return(a.followUpDue||'9999').localeCompare(b.followUpDue||'9999'); });
     var nowStr = new Date().toISOString().slice(0,10);
     tbl += '<colgroup><col style="width:13%"><col style="width:35%"><col style="width:24%"><col style="width:28%"></colgroup>'
@@ -20691,10 +20706,10 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
     } else if(sec.type==='auto-followups'){
       var allInts=DB.get('interactions').filter(function(i){return i.projectId===proj.id});
       // Include all project follow-ups (internal + external) — internal action items are equally relevant
-      var fuItems=allInts.filter(function(i){return i.followUp});
+      var fuItems=_fuForReport(allInts.filter(function(i){return i.followUp}),saved.periodStart||'',saved.periodEnd||'');
       var openFU=fuItems.filter(function(i){return!i.followUpDone});
       var resolvedFU=fuItems.filter(function(i){return i.followUpDone});
-      xml+=para('Open: '+openFU.length+' | Resolved: '+resolvedFU.length+' | Total: '+fuItems.length);
+      xml+=para('Open: '+openFU.length+' | Resolved'+((saved.periodStart||saved.periodEnd)?' in this period':'')+': '+resolvedFU.length+' | Total: '+fuItems.length);
       xml+=spacer();
       fuItems.sort(function(a,b){if(!a.followUpDone&&b.followUpDone)return-1;if(a.followUpDone&&!b.followUpDone)return 1;return(a.followUpDue||'9999').localeCompare(b.followUpDue||'9999')});
       if(sec.showTable){

@@ -964,6 +964,18 @@ listed beneath it. Every `externalIds` array is now built with `String()` to
 match the rule's own comparison; `project_id`/`stakeholder_id` types are mixed
 across tables (see the schema-fidelity section), so that is not paranoia.
 
+### Follow-up status section: resolved only within the period (DEV, Nov 2026, Jeff)
+PI report section `auto-followups`: every OPEN follow-up shows (overdue ones
+whatever their date); a RESOLVED one only when it was resolved inside the
+report period — the section used to reprint every resolution since the project
+began. `_fuForReport(items, pstart, pend)` (next to `TABLE_ELIGIBLE_TYPES`) is
+the one rule, used by `_buildSectionPreviewTable` (so the live preview and the
+archive snapshot), the .docx ("Open | Resolved in this period | Total") and the
+AI draft facts. Date = `_fuResolvedOn`: "Date resolved", else the due date,
+else the day logged. No period set → everything shows. The "since the last
+report" lines and the at-a-glance open count are unchanged. Guarded by
+`test/tests/122-followups-resolved-in-period.test.js` (fails on the old code).
+
 ### Report package executive summary — only the reports chosen (Oct 2026)
 Quick Reports → **Build report package** → "Generate with AI". Reported live: a
 package of Interaction log + Deliverables + Events opened with sentiment,

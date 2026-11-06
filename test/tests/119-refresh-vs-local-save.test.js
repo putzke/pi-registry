@@ -1,8 +1,10 @@
 // A background refresh that was already fetching when the user saved must not
-// write its older copy over the cache. Found through test 88 failing ~1 run in
-// 3 under load: a refresh started by setView landed after "Save & log next
-// contact", and the call-back vanished from the issue on screen (it was in the
-// database all along) until the next refresh.
+// write its older copy over the cache: a refresh started by setView that lands
+// after "Save & log next contact" would wipe the call-back from the cache, so it
+// vanished from the issue on screen (it was in the database all along) until
+// the next refresh. Found while chasing test 88's flake, which itself turned
+// out to be the issue pane filling on the next animation frame — this race is
+// real but separate.
 module.exports = {
   name: 'background refresh never overwrites a save made while it was fetching',
   async run({ t }) {

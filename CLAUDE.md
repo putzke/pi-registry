@@ -60,8 +60,11 @@ Other files: `mobile.html` (mobile companion), `importer.html` (bulk data import
   `_lastLocalWriteAt` shows a save happened meanwhile, keeps the cache — the
   fetched copy is older than the save. Before, a refresh begun by `setView`
   that landed after "Save & log next contact" wiped the call-back from the
-  issue on screen until the next refresh (found via test 88 failing ~1 in 3
-  under load). Guarded by `test/tests/119-refresh-vs-local-save.test.js`.
+  issue on screen until the next refresh. Found while chasing test 88's flake,
+  which was separate: the Issues view fills `#issues-detail-pane` on the next
+  animation frame (`renderIssuesPanel` in `requestAnimationFrame`), so a test
+  reading it right after a save must wait for the frame, not read once.
+  Guarded by `test/tests/119-refresh-vs-local-save.test.js`.
   Refetches only the current view's tables (`_viewTables(S.view)`) and re-renders
   ONLY if the data actually changed. Triggers: on nav (`setView`), on tab re-focus
   (`visibilitychange`), and a 60s interval. Stands down (`_bgRefreshOK`) when a

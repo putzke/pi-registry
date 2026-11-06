@@ -44,9 +44,15 @@ module.exports = {
       const child = await t.until(async () => (await t.sql(`select id from pi_interactions where summary='CALLED BACK THE BAKERY'`))[0]);
       t.ok(child && (await t.until(async () => (await t.sql(`select 1 from pi_issue_interactions where issue_id=$1 and interaction_id=$2`, [String(iss.id), String(child.id)]))[0])),
         '…and is saved under the issue');
-      t.ok(await app.page.evaluate(() => S.skView === 'issues' && /ISSUE BAKERY/.test(document.getElementById('issues-detail-pane').textContent)
-        && /CALLED BACK THE BAKERY/.test(document.getElementById('issues-detail-pane').textContent)),
-        'back on the same issue, with the call-back listed under it');
+      // The issues view fills its detail pane on the next animation frame
+      // (renderIssuesPanel runs in requestAnimationFrame), so right after the
+      // save the pane can still be the empty shell for a frame. Reading it once
+      // failed ~1 run in 8 (CI, Nov 2026) — wait for the frame instead.
+      const backOnIssue = await app.page.waitForFunction(() => {
+        const p = document.getElementById('issues-detail-pane');
+        return S.skView === 'issues' && !!p && /ISSUE BAKERY/.test(p.textContent) && /CALLED BACK THE BAKERY/.test(p.textContent);
+      }, null, { timeout: 5000 }).then(() => true, () => false);
+      t.ok(backOnIssue, 'back on the same issue, with the call-back listed under it');
 
       // ── Issues view ─────────────────────────────────────────────────────
       await app.page.evaluate(id => { closeM(); setView('issues'); _selectIssueView(id); }, String(iss.id));

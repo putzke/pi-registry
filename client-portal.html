@@ -1866,7 +1866,7 @@ function progCell(d) {
   const contracted = parseInt(d.contracted_qty, 10);
   let pct;
   if (!isNaN(contracted) && contracted > 0) {
-    pct = Math.min(100, Math.round((parseInt(d.delivered_count, 10) || 0) / contracted * 100));
+    pct = Math.round((parseInt(d.delivered_count, 10) || 0) / contracted * 100); // true %, e.g. 800% — the bar stays capped at full
   } else {
     // No contracted quantity → no target, so no %. The stored `progress` is a
     // placeholder the desktop derives from the status (In progress = 50), not

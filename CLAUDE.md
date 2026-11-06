@@ -344,6 +344,15 @@ report on pace whose contract-window date had passed). Now, next to
   rule as `devProgress()` (Overview tile, project cards, health card).
 - Guarded by `test/tests/101-deliverable-progress-rule.test.js` (fails on the
   old code).
+- **An item's OWN % is never capped (DEV, Nov 2026, Jeff).** Reported live on
+  3600 West: door hangers 8 of 1 read "8 (100%)" in the Deliverable / scope
+  status quick report while the Deliverables view read 800% "+7 over".
+  `_delPct(d)` (true %, null with no target) / `_delOver(d)` now feed the quick
+  report (plus a "Beyond contract" tile), the PI report table + .docx (status
+  "Complete (+7 over)"), the .xlsx Progress % and the portal's `progCell` (bar
+  stays full). The OVERALL % is unchanged (each item up to its target). The
+  stored `progress` field and archived `trendFacts` stay capped (comparability).
+  Guarded by `test/tests/117-deliverable-overage.test.js` (fails on the old code).
 
 ### Flags that updated only after a refresh (Oct 2026)
 Reported live: exporting 1200 South Wastewater (PIN 700) left its card without

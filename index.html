@@ -6934,6 +6934,11 @@ function _delFactLines(dels){
   L.push(g.pastDue.length ? 'Past due: '+g.pastDue.map(function(d){ return d.title||d.type; }).join(', ')+'.' : 'No deliverable is past due.');
   return L;
 }
+// Each item's own % is the true measure — 8 delivered on a contract of 1 is
+// 800%, never capped at 100 (the overall % still counts each item only up to
+// its own target; see _delProgress). null = no target, so no %.
+function _delPct(d){ return d.contractedQty>0 ? Math.round((d.deliveredCount||0)/d.contractedQty*100) : null; }
+function _delOver(d){ return d.contractedQty>0 ? Math.max(0,(d.deliveredCount||0)-d.contractedQty) : 0; }
 function _delNoTargetHTML(lead){
   return `<span style="font-size:11px;color:var(--slate)" title="No contracted quantity, so there is no target to measure a percentage against">${lead?lead+' · ':''}no target</span>`;
 }
@@ -15287,18 +15292,20 @@ function generateReport(type, opts){
       +'<div class="scope-stat"><b style="color:var(--green)">'+complete+'</b><span style="font-size:12px;color:var(--slate)">Complete</span></div>'
       +'<div class="scope-stat"><b style="color:var(--sky-lt)">'+inprog+'</b><span style="font-size:12px;color:var(--slate)">In progress</span></div>'
       +'<div class="scope-stat"><b>'+_g.delivered+'/'+_g.contracted+(_g.pct!==null?' ('+_g.pct+'%)':'')+'</b><span style="font-size:12px;color:var(--slate)">Delivered vs contracted</span></div>'
+      +(_g.over.length?'<div class="scope-stat"><b style="color:var(--amber)">+'+_g.over.reduce(function(n,d){return n+_delOver(d)},0)+'</b><span style="font-size:12px;color:var(--slate)">Beyond contract · '+_g.over.length+' item'+(_g.over.length!==1?'s':'')+'</span></div>':'')
       +(_g.open.length?'<div class="scope-stat"><b>'+_g.openDelivered+'</b><span style="font-size:12px;color:var(--slate)">Ongoing · no set number</span></div>':'')+'</div>'
       +'<table class="dtable" style="font-size:13px"><thead><tr>'
       +'<th>Type</th><th>Title</th><th>Scope</th><th>Contracted</th><th>Delivered</th><th>Status</th><th>Due</th><th>Milestone</th></tr></thead><tbody>';
     dels.forEach(function(d){
-      var pct=d.contractedQty>0?Math.min(100,Math.round((d.deliveredCount||0)/d.contractedQty*100)):null; // no target → no %
+      var pct=_delPct(d), over=_delOver(d); // no target → no %; over target → the real % plus "+N over"
       body+='<tr>'
         +'<td><span class="badge b-dark">'+d.type+'</span></td>'
         +'<td style="font-weight:500;color:var(--white)">'+d.type+'</td>'
         +'<td><span class="badge '+(d.scopeType==='recurring'?'b-sky':d.scopeType==='milestone'?'b-purple':'b-gray')+'">'+d.scopeType+'</span></td>'
         +'<td style="text-align:center">'+(d.contractedQty||'—')+'</td>'
         +'<td style="text-align:center">'+(d.deliveredCount||0)+(pct===null?'':' ('+pct+'%)')+'</td>'
-        +'<td><span class="badge '+(d.status==='Complete'?'b-green':d.status==='In progress'?'b-sky':'b-gray')+'">'+d.status+'</span></td>'
+        +'<td><span class="badge '+(d.status==='Complete'?'b-green':d.status==='In progress'?'b-sky':'b-gray')+'">'+d.status+'</span>'
+        +(over?' <span class="badge b-amber" title="Delivered beyond the contracted quantity">+'+over+' over</span>':'')+'</td>'
         +'<td style="font-size:12px;color:var(--slate)">'+(d.dueDate||'—')+'</td>'
         +'<td style="font-size:12px;color:var(--slate)">'+(d.scopeType==='recurring'?(d.freq||'—'):(d.milestoneStart||'—'))+'</td></tr>';
     });
@@ -18118,13 +18125,13 @@ function _buildSectionPreviewTable(secType, projF, pstart, pend, includeInternal
     dels.forEach(function(d){
       // No contracted quantity → no target, so no %. The stored `progress` is a
       // status placeholder (In progress = 50), never a measurement.
-      var pct = d.contractedQty > 0 ? Math.min(100, Math.round((d.deliveredCount||0)/d.contractedQty*100)) : null;
+      var pct = _delPct(d), over = _delOver(d);
       tbl += '<tr><td style="'+tdStyle+'">'+escHtml(d.type||'—')+'</td>'
         +'<td style="'+tdStyle+'">'+escHtml(d.title||d.type||'—')+'</td>'
         +'<td style="'+tdStyle+';text-align:center">'+escHtml(String(d.contractedQty||'—'))+'</td>'
         +'<td style="'+tdStyle+';text-align:center">'+escHtml(String(d.deliveredCount||0))+'</td>'
         +'<td style="'+tdStyle+';text-align:center">'+(pct===null?'—':pct+'%')+'</td>'
-        +'<td style="'+tdStyle+'">'+escHtml(d.status||'—')+'</td></tr>';
+        +'<td style="'+tdStyle+'">'+escHtml(d.status||'—')+(over?' (+'+over+' over)':'')+'</td></tr>';
     });
 
   } else if (secType === 'auto-events') {
@@ -20736,8 +20743,8 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
           var dCols=[1600,2860,1300,1300,700,1800]; var dHdrs=['Type','Title','Contracted','Delivered','%','Status'];
           var dRows=tblHdrRow(dHdrs,dCols);
           dels.forEach(function(d,ri){
-            var pct=d.contractedQty>0?Math.min(100,Math.round((d.deliveredCount||0)/d.contractedQty*100)):null; // same rule as the preview table
-            dRows+=tblDataRow([d.type||'\u2014',d.title||d.type||'\u2014',String(d.contractedQty||'\u2014'),String(d.deliveredCount||0),pct===null?'\u2014':pct+'%',d.status||'\u2014'],dCols,ri%2!==0);
+            var pct=_delPct(d), over=_delOver(d); // same rule as the preview table
+            dRows+=tblDataRow([d.type||'\u2014',d.title||d.type||'\u2014',String(d.contractedQty||'\u2014'),String(d.deliveredCount||0),pct===null?'\u2014':pct+'%',(d.status||'\u2014')+(over?' (+'+over+' over)':'')],dCols,ri%2!==0);
           });
           xml+=tblWrap(9560,dCols,dRows); xml+=spacer();
         }
@@ -21324,7 +21331,7 @@ function exportProject(projectId) {
   ];
   const delRows = pDels.map(d => [
     d.type||'', d.title||'', d.scopeType||'', d.status||'',
-    d.contractedQty||0, d.deliveredCount||0, d.contractedQty>0 ? Math.min(100, Math.round((d.deliveredCount||0)/d.contractedQty*100)) : '',
+    d.contractedQty||0, d.deliveredCount||0, d.contractedQty>0 ? _delPct(d) : '',
     d.scopeType === 'recurring' ? '' : (d.milestoneStart||''),
     d.scopeType === 'recurring' ? (d.freq||'') : '',
     d.distList||'', d.notes||''

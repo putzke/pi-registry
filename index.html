@@ -1893,6 +1893,12 @@ function _viewTables(v){
 async function _refreshData(tables){
   let changed = false;
   const failed = [];
+  // A save made while this fetch was out is NEWER than what the fetch brings
+  // back. Assigning the fetched copy would wipe it from the cache (seen as a
+  // just-logged call-back vanishing from its issue until the next refresh), so
+  // a refresh that overlapped a local write keeps the cache as it is.
+  const startedAt = Date.now();
+  const overlapped = () => _writesInFlight > 0 || _lastLocalWriteAt >= startedAt;
   await Promise.all(tables.map(async t => {
     try {
       cacheClear(t);                    // bust the 30s sbGet cache so this truly refetches
@@ -1900,6 +1906,7 @@ async function _refreshData(tables){
       // the table on screen. The comment below always claimed the cache was left
       // alone on failure; only a thrown network error actually did that.
       const fresh = await sbGet(t, {strict:true});
+      if (overlapped()) return;          // stale by the time it landed — the next tick refetches
       if (JSON.stringify(_syncCache[t]) !== JSON.stringify(fresh)) changed = true;
       _syncCache[t] = fresh;
     } catch(e) { failed.push(t); console.error('Background refresh failed for', t, e.message); }

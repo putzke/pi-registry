@@ -55,6 +55,13 @@ Other files: `mobile.html` (mobile companion), `importer.html` (bulk data import
   `test/tests/29-refresh-failure.test.js`.
 - **Live data refresh** (`_bgRefreshTick`, near `loadAllData`) — `_syncCache` is
   loaded once at startup, so this keeps a DWELLED-on list view from going stale.
+  **A refresh that overlapped a local save discards its result (Nov 2026):**
+  `_refreshData` notes when it started and, if `_writesInFlight` or
+  `_lastLocalWriteAt` shows a save happened meanwhile, keeps the cache — the
+  fetched copy is older than the save. Before, a refresh begun by `setView`
+  that landed after "Save & log next contact" wiped the call-back from the
+  issue on screen until the next refresh (found via test 88 failing ~1 in 3
+  under load). Guarded by `test/tests/119-refresh-vs-local-save.test.js`.
   Refetches only the current view's tables (`_viewTables(S.view)`) and re-renders
   ONLY if the data actually changed. Triggers: on nav (`setView`), on tab re-focus
   (`visibilitychange`), and a 60s interval. Stands down (`_bgRefreshOK`) when a

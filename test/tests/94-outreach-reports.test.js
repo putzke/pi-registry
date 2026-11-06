@@ -112,6 +112,10 @@ module.exports = {
       await P_.fill('#out-camp-new', 'Detour signs');
       await P_.click('#out-camp-add');
       await t.until(async () => (await t.sql(`select count(*)::int n from pi_outreach_campaigns where name='Detour signs'`))[0].n === 1, 'campaign added');
+      // The list redraws just after the save lands; typing before that redraw
+      // gets wiped by it (CI flake, Nov 2026). Wait for the new row on screen.
+      await P_.waitForFunction(() => /Detour signs/.test((document.getElementById('out-camp-list') || {}).innerHTML || '')
+        && [...document.querySelectorAll('#out-camp-list input')].some(i => i.value === 'Detour signs'), null, { timeout: 5000 });
       await P_.fill('#out-camp-name-' + c2.id, 'fall CLOSURES');
       await P_.evaluate((id) => outRenameCampaign(String(id)), c2.id);
       t.ok((await P_.evaluate(() => window._toasts)).some((m) => /already has a campaign/.test(m)), 'a duplicate name (any capitals) is refused');

@@ -368,6 +368,16 @@ report on pace whose contract-window date had passed). Now, next to
   wrapped while Contracted / Delivered / Due sat half empty. `QR_DEL_COLS`
   (next to `_delPct`) sets them: Type 21% · Title 18 · Scope 8 · Contracted 8 ·
   Delivered 10 · Status 15 · Due 8 · Milestone 12. Same in the package.
+  Released to LIVE 2026-11-06.
+- **All quick reports: tighter columns + a content margin (DEV, Nov 2026, Jeff).**
+  Dates, channel, phone, by/owner columns narrowed; summary, action, title,
+  notes and topic widened (interaction log, follow-ups, contact list, comment
+  matrix, events, outreach log, issues + their linked interactions, parcels).
+  **Printed content sat 8px from the paper's edge:** the frame's own
+  `td{padding:5px 8px!important}` (meant for the data tables) also hit the
+  `.rpt-body-cell` that holds the whole report, beating its 18mm padding.
+  `.rpt-frame td.rpt-body-cell` now sets `RPT_BODY_SIDE_MM` (12) per side;
+  the letterhead row is unchanged (Jeff: content only).
   Guarded by `test/tests/121-deliverable-report-columns.test.js` (fails on the old code).
 - **Partnering meetings (DEV, Nov 2026, Jeff).** PI scopes read "up to X
   partnering/construction meetings attended in person, the rest remotely".

@@ -3,7 +3,7 @@
 // table-layout:fixed, which split the eight columns evenly before.
 const SHOT = process.env.SHOT_DIR;
 module.exports = {
-  name: 'deliverable status report — column widths',
+  name: 'quick reports — column widths and content margin',
   async run({ t }) {
     t.seed();
     const app = await t.open('index.html', { email: 'putzke@demo.test' });
@@ -45,8 +45,37 @@ module.exports = {
         t.ok(W.Type > W.Due * 2, `${mode}: Type well over twice Due`);
         t.ok(W.Due < W.Milestone, `${mode}: Due narrower than Milestone`);
         t.ok(r.typeBadges.every(n => n === 1), `${mode}: every Type badge fits on one line (${r.typeBadges.join(',')})`);
+        // Content margin: the frame's td{padding:5px 8px!important} used to win
+        // over the body cell's own padding, so content printed 8px from the edge.
+        const pad = await app.page.evaluate(() => {
+          const doc = document.getElementById('inline-rpt-frame').contentDocument;
+          const b = doc.querySelector('.rpt-body-cell'), h = doc.querySelector('.rpt-hdr-cell');
+          return { body: parseFloat(getComputedStyle(b).paddingLeft), bodyR: parseFloat(getComputedStyle(b).paddingRight), hdr: parseFloat(getComputedStyle(h).paddingLeft) };
+        });
+        t.ok(pad.body >= 40 && pad.bodyR >= 40, `${mode}: report content has a side margin (${pad.body}px / ${pad.bodyR}px)`);
+        t.ok(pad.hdr < pad.body, `${mode}: the letterhead row keeps its own (narrower) margin`);
         await app.page.evaluate(() => { const o = document.getElementById('inline-rpt-overlay'); if (o) o.remove(); });
       }
+      // Other quick reports: short columns (dates, channel, by/owner) narrowed,
+      // text columns widened.
+      const w = await app.page.evaluate(() => {
+        const out = {};
+        const P = DB.get('projects').find(p => p.pid === '25-154-001'); S.projectFilter = P.id;
+        for (const id of ['interaction-log', 'followup-status', 'contact-list']) {
+          let h = ''; const real = window.showInlineReport; window.showInlineReport = (x) => { h = x; };
+          generateReport(id); window.showInlineReport = real;
+          const f = document.createElement('iframe'); f.style.width = '1100px'; document.body.appendChild(f);
+          f.contentDocument.open(); f.contentDocument.write(h); f.contentDocument.close();
+          const t = [...f.contentDocument.querySelectorAll('.rpt-body-cell table')].find(x => x.querySelector('th'));
+          const W = t.getBoundingClientRect().width;
+          out[id] = Object.fromEntries([...t.rows[0].cells].map(c => [c.textContent.trim(), Math.round(c.getBoundingClientRect().width / W * 100)]));
+          f.remove();
+        }
+        return out;
+      });
+      t.ok(w['interaction-log'].Summary >= 54 && w['interaction-log'].Date <= 9 && w['interaction-log'].By <= 6, `interaction log: Summary ${w['interaction-log'].Summary}%, Date ${w['interaction-log'].Date}%, By ${w['interaction-log'].By}%`);
+      t.ok(w['followup-status'].Action >= 40 && w['followup-status']['Due date'] <= 9, `follow-ups: Action ${w['followup-status'].Action}%`);
+      t.ok(w['contact-list'].Phone <= 11 && w['contact-list'].Organization >= 23, `contact list: Phone ${w['contact-list'].Phone}%, Organization ${w['contact-list'].Organization}%`);
     } finally { await app.close(); }
   },
 };

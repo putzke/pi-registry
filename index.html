@@ -11471,10 +11471,10 @@ function exportIssuesPdf(opts){
       (iss.resolutionSummary?'<div style="background:#f0f9f4;border:1px solid #c3e6d4;border-radius:4px;padding:8px 10px;font-size:9px;color:#1a7a50;margin-bottom:8px"><b>Resolution:</b> '+escHtml(iss.resolutionSummary)+'</div>':'')+
       '<div style="font-size:9px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">Linked interactions ('+linkedInts.length+')</div>'+
       '<table style="width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed"><thead><tr>'+
-        '<th style="text-align:left;padding:3px 6px;background:#e8eef4;color:#1a3a5c;font-weight:700;width:13%;white-space:nowrap">Date</th>'+
-        '<th style="text-align:left;padding:3px 6px;background:#e8eef4;color:#1a3a5c;font-weight:700;width:18%">Stakeholder</th>'+
-        '<th style="text-align:left;padding:3px 6px;background:#e8eef4;color:#1a3a5c;font-weight:700;width:12%">Channel</th>'+
-        '<th style="text-align:left;padding:3px 6px;background:#e8eef4;color:#1a3a5c;font-weight:700;width:57%">Summary</th>'+
+        '<th style="text-align:left;padding:3px 6px;background:#e8eef4;color:#1a3a5c;font-weight:700;width:11%;white-space:nowrap">Date</th>'+
+        '<th style="text-align:left;padding:3px 6px;background:#e8eef4;color:#1a3a5c;font-weight:700;width:20%">Stakeholder</th>'+
+        '<th style="text-align:left;padding:3px 6px;background:#e8eef4;color:#1a3a5c;font-weight:700;width:10%">Channel</th>'+
+        '<th style="text-align:left;padding:3px 6px;background:#e8eef4;color:#1a3a5c;font-weight:700;width:59%">Summary</th>'+
       '</tr></thead><tbody>'+intHtml+'</tbody></table>'+
     '</div>';
   }).join('');
@@ -11505,7 +11505,7 @@ function exportIssuesPdf(opts){
     issKpis+
     filterLine+
     '<table style="width:100%;border-collapse:collapse;margin-bottom:24px;table-layout:fixed"><thead><tr>'+
-      '<th style="width:28%">Title</th><th style="width:9%">Status</th><th style="width:9%">Priority</th><th style="width:14%">Category</th><th style="width:22%">Project</th><th style="width:12%;white-space:nowrap">Date Raised</th><th style="width:6%">Links</th>'+
+      '<th style="width:32%">Title</th><th style="width:9%">Status</th><th style="width:8%">Priority</th><th style="width:14%">Category</th><th style="width:21%">Project</th><th style="width:10%;white-space:nowrap">Date Raised</th><th style="width:6%">Links</th>'+
     '</tr></thead><tbody>'+rows+'</tbody></table>'+
     '<div style="font-size:13px;font-weight:700;color:#1a3a5c;margin-bottom:12px;border-bottom:2px solid #1a3a5c;padding-bottom:4px">Issue Details</div>'+
     details+
@@ -14246,6 +14246,8 @@ function _rptBrandFooter(){
 // Returns '' when branding is off (reports print with their normal @page margin).
 // NOTE: relies on Chrome's print behavior of repeating position:fixed elements
 // per page — the target for "Save as PDF".
+// Side margin of a printed quick report's content, inside the letterhead frame.
+var RPT_BODY_SIDE_MM=12;
 function _rptFrameCSS(){
   var mode=_rptBrandModeQ();
   var branded=(mode!=='off');
@@ -14258,6 +14260,10 @@ function _rptFrameCSS(){
   if(branded){
     css+='.rpt-hdr-cell{padding:6mm 18mm 3mm 18mm}'      // letterhead, side margins align with content
       +'.rpt-body-cell{padding:3mm 18mm 6mm 18mm}'        // content column
+      // The frame's own td{padding:5px 8px!important} (the data tables' rule)
+      // also hit this cell, so content printed 8px from the paper's edge. This
+      // wins on specificity. The letterhead row is left as it is (Jeff, Nov 2026).
+      +'.rpt-frame td.rpt-body-cell{padding:3mm '+RPT_BODY_SIDE_MM+'mm 6mm '+RPT_BODY_SIDE_MM+'mm!important}'
       +'.rpt-ftr-cell{padding:0}'                          // footer band full-bleed (no side padding)
       +'.rpt-ftr-fixed{display:none}'                      // fixed footer clone: print-only (see below)
       +(hasFooter?'':'.rpt-frame>tfoot{display:none}')     // UDOT: no footer
@@ -14812,7 +14818,7 @@ function generateParcelReport(){
 
     // ── The parcel register itself ───────────────────────────────────────
     bodyHTML+=sectionHdr('Parcel register');
-    bodyHTML+='<table style="table-layout:fixed"><colgroup><col style="width:14%"><col style="width:22%"><col style="width:26%"><col style="width:15%"><col style="width:12%"><col style="width:11%"></colgroup>'
+    bodyHTML+='<table style="table-layout:fixed"><colgroup><col style="width:12%"><col style="width:25%"><col style="width:27%"><col style="width:14%"><col style="width:12%"><col style="width:10%"></colgroup>'
       +'<thead><tr><th style="'+th+'">Parcel #</th><th style="'+th+'">Location</th><th style="'+th+'">Owner(s)</th><th style="'+th+'">Acquisition</th><th style="'+th+'">Status</th><th style="'+th+'">Notice</th></tr></thead><tbody>';
     m.rows.forEach(function(r){
       var p=r.parcel;
@@ -15087,12 +15093,12 @@ function generateReport(type, opts){
       return nameA.localeCompare(nameB);
     });
     body='<table style="width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed"><thead><tr>'
-      +'<th style="width:16%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px">Name</th>'
-      +'<th style="width:20%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px">Organization</th>'
-      +'<th style="width:16%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px">Title</th>'
-      +'<th style="width:26%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px">Email</th>'
-      +'<th style="width:14%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px">Phone</th>'
-      +'<th style="width:8%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px">Type</th>'
+      +'<th style="width:18%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px">Name</th>'
+      +'<th style="width:23%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px">Organization</th>'
+      +'<th style="width:17%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px">Title</th>'
+      +'<th style="width:22%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px">Email</th>'
+      +'<th style="width:11%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px">Phone</th>'
+      +'<th style="width:9%;padding:8px 10px;background:#1a3a5c;color:#fff;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px">Type</th>'
       +'</tr></thead><tbody>';
     var lastRole = null;
     var lastType = null;
@@ -15156,7 +15162,7 @@ function generateReport(type, opts){
     body+='<div style="font-size:9px;color:#444;margin:2px 0 6px"><span style="display:inline-block;width:9px;height:9px;background:'+QR_TONE.blue+';vertical-align:-1px;margin-right:4px"></span>Outbound'
       +'<span style="display:inline-block;width:9px;height:9px;background:'+QR_TONE.orange+';vertical-align:-1px;margin:0 4px 0 14px"></span>Inbound / in-person</div>'
       +'<table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">'
-      +'<colgroup><col style="width:12%"><col style="width:17%"><col style="width:12%"><col style="width:49%"><col style="width:10%"></colgroup>'
+      +'<colgroup><col style="width:9%"><col style="width:20%"><col style="width:10%"><col style="width:55%"><col style="width:6%"></colgroup>'
       +'<thead><tr>'
       +'<th style="padding:7px 8px;background:#1a3a5c;color:#fff;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px">Date</th>'
       +'<th style="padding:7px 8px;background:#1a3a5c;color:#fff;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px">Stakeholder</th>'
@@ -15204,7 +15210,7 @@ function generateReport(type, opts){
       {v:fuAvg===null?'—':fuAvg+(fuAvg===1?' day':' days'),label:'Average time to resolve',sub:fuTimed.length?'from the day it was logged':'',tone:'navy'}
     ]);
     body+='<table class="dtable" style="font-size:13px;table-layout:fixed;width:100%">'
-      +'<colgroup><col style="width:12%"><col style="width:32%"><col style="width:18%"><col style="width:16%"><col style="width:12%"><col style="width:10%"></colgroup>'
+      +'<colgroup><col style="width:9%"><col style="width:41%"><col style="width:20%"><col style="width:13%"><col style="width:9%"><col style="width:8%"></colgroup>'
       +'<thead><tr><th>Due date</th><th>Action</th><th>Stakeholder</th><th>Status</th><th>Log date</th><th>Owner</th></tr></thead><tbody>';
     fuItems.sort(function(a,b){if(!a.followUpDone&&b.followUpDone)return -1;if(a.followUpDone&&!b.followUpDone)return 1;return(a.followUpDue||'9999').localeCompare(b.followUpDue||'9999')});
     var fuTint={};fuTint[QR_TONE.red]='#fdf1f1';fuTint[QR_TONE.amber]='#fff8e8';fuTint[QR_TONE.green]='#f3faf6';fuTint[QR_TONE.blue]='#ffffff';
@@ -15351,7 +15357,7 @@ function generateReport(type, opts){
         evts.filter(function(m){return evN(m.attendanceCount)>0}).length>10?'The ten most recent events with attendance recorded.':'');
     }
     body+='<table class="dtable" style="font-size:13px;table-layout:fixed;width:100%">'
-      +'<colgroup><col style="width:10%"><col style="width:22%"><col style="width:15%"><col style="width:12%"><col style="width:7%"><col style="width:8%"><col style="width:26%"></colgroup>'
+      +'<colgroup><col style="width:9%"><col style="width:25%"><col style="width:13%"><col style="width:10%"><col style="width:7%"><col style="width:8%"><col style="width:28%"></colgroup>'
       +'<thead><tr><th>Date</th><th>Event</th><th>Type</th><th>Status</th><th>Attend.</th><th>Comments</th><th>Notes</th></tr></thead><tbody>';
     if(evts.length===0){
       body+='<tr><td colspan="7" style="text-align:center;color:#666;padding:20px">No events logged for this project.</td></tr>';
@@ -15394,7 +15400,7 @@ function generateReport(type, opts){
           +'</tbody></table>';
       }
       body+='<table class="dtable" style="font-size:13px;table-layout:fixed;width:100%">'
-        +'<colgroup><col style="width:11%"><col style="width:14%"><col style="width:33%"><col style="width:12%"><col style="width:13%"><col style="width:17%"></colgroup>'
+        +'<colgroup><col style="width:9%"><col style="width:14%"><col style="width:37%"><col style="width:10%"><col style="width:13%"><col style="width:17%"></colgroup>'
         +'<thead><tr><th>Date</th><th>Type</th><th>Title</th><th>By</th><th>Campaign</th><th>Engagement</th></tr></thead><tbody>';
       ost.rows.forEach(function(x){
         var a=x.a, safe=/^https?:\/\//i.test(a.url||''), pc=oTone[_outPartyKey(a.party)]||QR_TONE.gray;
@@ -15439,7 +15445,7 @@ function generateReport(type, opts){
         body+=_qrFigure('Comments by topic',_qrHBars(_qrTally(comments,function(c){return c.category||'No topic';},8),'Comments by topic'),
           _qrMore(comments,function(c){return c.category||'No topic';},8,'comments','topics'));
       body+='<table class="dtable" style="font-size:13px;table-layout:fixed;width:100%">'
-        +'<colgroup><col style="width:11%"><col style="width:16%"><col style="width:18%"><col style="width:13%"><col style="width:15%"><col style="width:27%"></colgroup>'
+        +'<colgroup><col style="width:9%"><col style="width:18%"><col style="width:20%"><col style="width:10%"><col style="width:13%"><col style="width:30%"></colgroup>'
         +'<thead><tr><th>Date</th><th>Commenter</th><th>Organization</th><th>Method</th><th>Response status</th><th>Topic</th></tr></thead><tbody>';
       comments.forEach(function(c){
         var sc=cmCol(cmSt(c));

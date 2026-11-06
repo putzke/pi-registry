@@ -6941,6 +6941,9 @@ function _delFactLines(dels){
   L.push(g.pastDue.length ? 'Past due: '+g.pastDue.map(function(d){ return d.title||d.type; }).join(', ')+'.' : 'No deliverable is past due.');
   return L;
 }
+// Deliverable / scope status quick report: column widths in %, in column order
+// Type, Title, Scope, Contracted, Delivered, Status, Due, Milestone.
+var QR_DEL_COLS=[21,18,8,8,10,15,8,12];
 // Each item's own % is the true measure — 8 delivered on a contract of 1 is
 // 800%, never capped at 100 (the overall % still counts each item only up to
 // its own target; see _delProgress). null = no target, so no %.
@@ -15301,8 +15304,13 @@ function generateReport(type, opts){
       +'<div class="scope-stat"><b>'+_g.delivered+'/'+_g.contracted+(_g.pct!==null?' ('+_g.pct+'%)':'')+'</b><span style="font-size:12px;color:var(--slate)">Delivered vs contracted</span></div>'
       +(_g.over.length?'<div class="scope-stat"><b style="color:var(--amber)">+'+_g.over.reduce(function(n,d){return n+_delOver(d)},0)+'</b><span style="font-size:12px;color:var(--slate)">Beyond contract · '+_g.over.length+' item'+(_g.over.length!==1?'s':'')+'</span></div>':'')
       +(_g.open.length?'<div class="scope-stat"><b>'+_g.openDelivered+'</b><span style="font-size:12px;color:var(--slate)">Ongoing · no set number</span></div>':'')+'</div>'
-      +'<table class="dtable" style="font-size:13px"><thead><tr>'
-      +'<th>Type</th><th>Title</th><th>Scope</th><th>Contracted</th><th>Delivered</th><th>Status</th><th>Due</th><th>Milestone</th></tr></thead><tbody>';
+      // Set column widths (Jeff, Nov 2026): the numbers and the date need little
+      // room, so Type gets more and its badge stops wrapping. The report frame
+      // uses table-layout:fixed, which otherwise splits the width evenly.
+      +'<table class="dtable" style="font-size:13px;table-layout:fixed;width:100%">'
+      +'<colgroup>'+QR_DEL_COLS.map(function(w){return '<col style="width:'+w+'%">';}).join('')+'</colgroup>'
+      +'<thead><tr>'
+      +'<th>Type</th><th>Title</th><th>Scope</th><th style="text-align:center">Contracted</th><th style="text-align:center">Delivered</th><th>Status</th><th>Due</th><th>Milestone</th></tr></thead><tbody>';
     dels.forEach(function(d){
       var pct=_delPct(d), over=_delOver(d); // no target → no %; over target → the real % plus "+N over"
       body+='<tr>'

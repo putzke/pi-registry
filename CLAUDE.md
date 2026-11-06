@@ -363,6 +363,12 @@ report on pace whose contract-window date had passed). Now, next to
   stays full). The OVERALL % is unchanged (each item up to its target). The
   stored `progress` field and archived `trendFacts` stay capped (comparability).
   Guarded by `test/tests/117-deliverable-overage.test.js` (fails on the old code).
+- **Quick report column widths (DEV, Nov 2026, Jeff).** The report frame's
+  `table-layout:fixed` split the eight columns evenly, so the Type badge
+  wrapped while Contracted / Delivered / Due sat half empty. `QR_DEL_COLS`
+  (next to `_delPct`) sets them: Type 21% · Title 18 · Scope 8 · Contracted 8 ·
+  Delivered 10 · Status 15 · Due 8 · Milestone 12. Same in the package.
+  Guarded by `test/tests/121-deliverable-report-columns.test.js` (fails on the old code).
 - **Partnering meetings (DEV, Nov 2026, Jeff).** PI scopes read "up to X
   partnering/construction meetings attended in person, the rest remotely".
   `DEL_GROUPS` → Government & Agency gained **Partnering Meetings (In-person)**

@@ -17826,24 +17826,40 @@ function _scheduleRptSave(){
   e.saveTimer=setTimeout(_rptDoSave,_RPT_SAVE_DEBOUNCE);
 }
 async function _rptDoSave(force){
-  var e=_rptEdit; if(!e||e.saving) return;
-  var saved=captureFormState(); if(!saved) return;
-  localStorage.setItem('pir4_pi_reports_'+e.projF,JSON.stringify(saved)); // never lose work locally
-  e.saving=true; _rptStatus('saving');
-  var res=await _rptSaveSupabase(saved,force);
-  e.saving=false;
-  if(res.ok){ e.dirty=false; _rptStatus('saved',res.ts); _rptUpdateMetaBanner(); }
-  else if(res.conflict){ _rptHandleConflict(); }   // status set inside (silent for our own writes)
-  else{ _rptStatus('local'); }   // Supabase unreachable — kept locally, retried on next edit
-}
-async function _rptHandleConflict(){
   var e=_rptEdit; if(!e) return;
+  var saved=captureFormState(); if(!saved) return;
+  // Never lose work locally — and keep this copy current even while another save
+  // is in flight: "Save to archive" archives THIS copy. It used to be skipped
+  // whenever a save was already running, so a slow conflict retry left the
+  // previous report's text here and the archive froze the wrong report.
+  localStorage.setItem('pir4_pi_reports_'+e.projF,JSON.stringify(saved));
+  if(e.saving){
+    // A forced save (Save to archive, export, click-to-save) waits for the one
+    // in flight and then saves what is on screen now; an autosave just marks dirty.
+    if(force){ try{ await e.savePromise; }catch(_){} if(_rptEdit===e) return _rptDoSave(true); }
+    else e.dirty=true;
+    return;
+  }
+  e.saving=true; _rptStatus('saving');
+  e.savePromise=(async function(){
+    var res=await _rptSaveSupabase(saved,force);
+    e.saving=false;
+    if(res.ok){ e.dirty=false; _rptStatus('saved',res.ts); _rptUpdateMetaBanner(); }
+    else if(res.conflict){ await _rptHandleConflict(e); }   // status set inside (silent for our own writes)
+    else{ _rptStatus('local'); }   // Supabase unreachable — kept locally, retried on next edit
+  })();
+  return e.savePromise;
+}
+async function _rptHandleConflict(e){
+  // Bound to the editing session that conflicted: if the editor was closed or
+  // reopened meanwhile, a late retry must not save into the NEW session.
+  e=e||_rptEdit; if(!e||_rptEdit!==e) return;
   var row=await _rptFetchRow(e.projF);
   // If WE were the last content writer, this isn't a real conflict — the baseline
   // just drifted (e.g. our own heartbeat, or a DB updated_at trigger). Silently
   // adopt the new baseline and retry, so solo editing never nags.
   if(row&&_rptMyEmail()&&row.updatedBy===_rptMyEmail()){
-    e.baseTs=row.updatedAt; _rptStatus('saving'); _rptDoSave(true); return;   // not a real conflict — no scary flash
+    e.baseTs=row.updatedAt; _rptStatus('saving'); await _rptDoSave(true); return;   // not a real conflict — no scary flash
   }
   _rptStatus('conflict');
   var who=row?_rptDisplayName(row.updatedBy):'another user';
@@ -17853,7 +17869,7 @@ async function _rptHandleConflict(){
     +'Cancel = discard your changes and reload THEIRS';
   if(confirm(msg)){
     if(row) e.baseTs=row.updatedAt;   // adopt their baseline, then force our write on top
-    _rptDoSave(true);
+    await _rptDoSave(true);
   } else {
     _rptTeardown(true);               // reload theirs (fresh fetch already in cache)
     openPIReport();
@@ -19085,7 +19101,13 @@ function _buildReportSnapshot(projF, saved) {
 // this function has.
 async function _archiveReport(projF) {
   if (typeof sbAdd !== 'function') return false;
-  var saved = JSON.parse(localStorage.getItem('pir4_pi_reports_'+projF)||'{}');
+  // With the editor open for this project, archive exactly what is on screen.
+  // The localStorage copy can lag it: loadReportSections() writes the cached
+  // draft back over it whenever the preview re-captures, so under load a second
+  // report archived with the FIRST one's title (test 38, Nov 2026).
+  var onScreen = (_rptEdit && String(_rptEdit.projF)===String(projF) && document.getElementById('rpt-title'))
+    ? captureFormState() : null;
+  var saved = onScreen || JSON.parse(localStorage.getItem('pir4_pi_reports_'+projF)||'{}');
   if (!saved.reportTitle && !saved.sections) {
     showToast('Nothing to archive yet — the report draft is empty.', 'warn', 4000);
     return false;

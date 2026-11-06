@@ -2019,6 +2019,18 @@ ROW agents read that before negotiating.
   **`client-portal.html` still fetches snapshots eagerly** — it only pulls
   `client_visible` rows for one project, so the payload is small, but the same
   treatment applies if that ever grows.
+- **Save to archive freezes what is ON SCREEN (Nov 2026).** Found via test 38
+  failing ~1 in 10 under load: a second report archived with the FIRST one's
+  title. Three gaps: `_rptDoSave` returned at once while a save was in flight
+  (so the localStorage copy `_archiveReport` read was never updated); a
+  self-conflict retry was not awaited, and `_rptHandleConflict` bound itself to
+  whichever editor was open by then; and the preview's re-capture
+  (`captureFormState` → `loadReportSections`) writes the cached draft back over
+  localStorage. Now the local copy is written even mid-save, a forced save
+  waits for the one in flight (`e.savePromise`) and saves again, the conflict
+  retry is awaited and tied to its own session, and `_archiveReport` uses
+  `captureFormState()` when the editor is open for that project. Guarded by
+  `test/tests/120-report-archive-waits-for-save.test.js` (fails on the old code).
 - `deleteArchivedReport(archiveId)` — async, re-renders `#rpt-archive-panel` in place
 - `_buildArchiveHTML(projF)` — renders archive list + AI trend button (shown when 2+ archives)
 - `generateTrendSummary()` — async, sends all archived report digests to Claude Haiku, renders trend narrative in `#trend-result`

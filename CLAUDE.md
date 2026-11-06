@@ -353,6 +353,15 @@ report on pace whose contract-window date had passed). Now, next to
   stays full). The OVERALL % is unchanged (each item up to its target). The
   stored `progress` field and archived `trendFacts` stay capped (comparability).
   Guarded by `test/tests/117-deliverable-overage.test.js` (fails on the old code).
+- **Partnering meetings (DEV, Nov 2026, Jeff).** PI scopes read "up to X
+  partnering/construction meetings attended in person, the rest remotely".
+  `DEL_GROUPS` → Government & Agency gained **Partnering Meetings (In-person)**
+  (Fixed quantity, contracted = X, so past X it reads "+N over") and
+  **Partnering Meetings (Remote)** (tracking only; usually no contracted
+  quantity → a count, never a %). The deliverable form has no title field, so
+  the TYPE is the label everywhere — which is why "Other" was the wrong home.
+  Log each meeting as an Event too (Partnering / Progress meeting) for dates.
+  Guarded by `test/tests/118-partnering-meeting-types.test.js`.
 
 ### Flags that updated only after a refresh (Oct 2026)
 Reported live: exporting 1200 South Wastewater (PIN 700) left its card without

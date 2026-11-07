@@ -41,14 +41,19 @@ module.exports = {
     await t.sql(`update pi_stakeholders set phone='(385) 555-0122' where id=$1`, [st2.id]);
     const [h] = await t.sql(`insert into pi_hotlines (name, phone_number, spanish_enabled) values ('Region One','+18015550101',true) returning id`);
     await t.sql(`insert into pi_hotline_extensions (hotline_id, digit, project_id, label) values ($1,'1',$2,'the first project'),($1,'2',$3,'the second project')`, [h.id, A, B]);
+    // The inbox's history shows the last 30 days, so these dates move with the
+    // calendar: the October fixtures shifted by whole weeks (weekdays, and so
+    // "two working days later", stay the same) to land within the last fortnight.
+    const SHIFT = 7 * Math.max(0, Math.ceil((Date.now() - Date.parse('2026-10-17T00:00:00Z')) / (7 * 864e5)));
+    const D = (iso) => { const s = new Date(Date.parse(iso.length === 10 ? iso + 'T12:00:00Z' : iso) + SHIFT * 864e5).toISOString(); return iso.length === 10 ? s.slice(0, 10) : s; };
     const ins = (o) => t.sql(`insert into pi_hotline_messages (hotline_id, extension_digit, project_id, language, caller_number, call_sid,
         recording_path, recording_seconds, transcript, transcript_status, status, assigned_to, received_at)
         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11,$12) returning id`,
       [h.id, o.d, o.p, o.lang || 'en', o.from, o.sid, o.rec || null, o.sec || 30, o.tr || null, o.ts || 'pending', o.to || null, o.at]).then(r => String(r[0].id));
-    const m1 = await ins({ d: '1', p: A, from: '+18015550142', sid: 'CA1', rec: 'messages/1.mp3', tr: 'Hi, the detour sign on 400 North is down.', ts: 'done', to: 'PUT', at: '2026-10-10T15:00:00Z' });
-    const m2 = await ins({ d: '0', p: null, lang: 'es', from: '+13855550111', sid: 'CA2', ts: 'none', at: '2026-10-09T15:00:00Z' });
-    const m3 = await ins({ d: '2', p: B, from: '+13855550122', sid: 'CA3', to: 'SHA', at: '2026-10-08T15:00:00Z' });
-    const m4 = await ins({ d: '2', p: B, from: '+13855550133', sid: 'CA4', to: 'SHA', at: '2026-10-07T15:00:00Z' });
+    const m1 = await ins({ d: '1', p: A, from: '+18015550142', sid: 'CA1', rec: 'messages/1.mp3', tr: 'Hi, the detour sign on 400 North is down.', ts: 'done', to: 'PUT', at: D('2026-10-10T15:00:00Z') });
+    const m2 = await ins({ d: '0', p: null, lang: 'es', from: '+13855550111', sid: 'CA2', ts: 'none', at: D('2026-10-09T15:00:00Z') });
+    const m3 = await ins({ d: '2', p: B, from: '+13855550122', sid: 'CA3', to: 'SHA', at: D('2026-10-08T15:00:00Z') });
+    const m4 = await ins({ d: '2', p: B, from: '+13855550133', sid: 'CA4', to: 'SHA', at: D('2026-10-07T15:00:00Z') });
 
     const app = await t.open('index.html', { email: 'putzke@demo.test' });   // initials PUT
     const notified = [];
@@ -113,7 +118,7 @@ module.exports = {
       await app.page.evaluate(() => closeM());
       // Saved under their own project: no stray link to the project they called.
       const [m5r] = await t.sql(`insert into pi_hotline_messages (hotline_id, extension_digit, project_id, language, caller_number, call_sid, recording_seconds, transcript_status, status, received_at)
-        values ($1,'2',$2,'en','+13855550122','CA5',20,'none','pending','2026-10-06T15:00:00Z') returning id`, [h.id, B]);
+        values ($1,'2',$2,'en','+13855550122','CA5',20,'none','pending',$3) returning id`, [h.id, B, D('2026-10-06T15:00:00Z')]);
       await app.page.evaluate(() => _hotReload());
       await app.page.evaluate(id => hotLog(id), String(m5r.id));
       await app.page.evaluate(() => document.querySelector('#modal-ov button[onclick^="_hotUseMatch"]').click());
@@ -135,9 +140,9 @@ module.exports = {
         stake: document.getElementById('f-is').value, useBtn: !!document.querySelector('#modal-ov button[onclick^="_hotUseMatch"]'),
       }));
       t.ok(/Log hotline voicemail/.test(form.title), 'the Log dialog opens for the voicemail');
-      t.ok(form.proj === A && form.ch === 'Phone' && form.dir === 'Incoming' && form.date === '2026-10-10', 'prefilled: project, Phone, Incoming, the day it was left');
+      t.ok(form.proj === A && form.ch === 'Phone' && form.dir === 'Incoming' && form.date === D('2026-10-10'), 'prefilled: project, Phone, Incoming, the day it was left');
       t.ok(/^Hotline voicemail \(Region One, pressed 1\)/.test(form.sum) && /detour sign/.test(form.sum), 'the summary starts from the transcript');
-      t.ok(!form.fu && /^Call back at \(801\) 555-0142/.test(form.fun) && form.fud === '2026-10-13', 'the “Call back” follow-up is prefilled (due two working days later) but NOT ticked');
+      t.ok(!form.fu && /^Call back at \(801\) 555-0142/.test(form.fun) && form.fud === D('2026-10-13'), 'the “Call back” follow-up is prefilled (due two working days later) but NOT ticked');
       // This voicemail does need a scheduled call-back: tick it.
       await app.page.evaluate(() => { const cb = document.getElementById('f-ifu'); cb.checked = true; cb.dispatchEvent(new Event('change')); });
       t.ok(form.stake === '' && form.useBtn, 'the matching contact is suggested, not attached');

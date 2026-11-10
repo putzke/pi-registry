@@ -1692,6 +1692,24 @@ the model narrates, never counts.
   (all) and the highlights (outreach: website/flyer/other; website: website;
   email: newsletter; traffic: flyer/newsletter/website) — context, never counts.
   Pushed straight to LIVE on Jeff's word. Guarded by test 123.
+- **Project documents fill the intake (LIVE, Nov 2026, Jeff).** Kinds
+  (`CO_DOC_KINDS`): website, newsletter, flyer/mailer, press release, news
+  article, scope of work / PI plan, construction schedule / traffic phasing,
+  thank-you or commendation, survey or meeting summary, other (presentations
+  and display boards left out on Jeff's call). The ONE read per file also asks
+  TITLE / OUTLET / PRAISE / CONCERNS / ASSUMPTIONS (`_coParseDoc`; private
+  people by role, officials may be named). `_coDocFill(it)` fills project
+  description, praise, concerns, scope title/date/assumptions and deliverable
+  evidence (`CO_DOC_EVIDENCE`: newsletter/flyer/press/website docs, named and
+  dated, on the matching deliverable) — ONLY a box that is empty or still holds
+  what it filled last time (`it.docFill`); typed text is never touched, and
+  removing a document takes back only what it filled. News, press releases,
+  newsletters and flyers get **＋ Add to Outreach log** (`coDocToOutreach`,
+  the Outreach dialog prefilled; `_coDocOutreach` matches type + title or
+  date → "✓ In the Outreach log") instead of a second list. The step's note
+  says "Cirrus Cc reads each file…", never "Claude"; files over 25 pages are
+  flagged in the cost confirm. `_coWorkProj()` = the close-out's project.
+  Guarded by test 123 (fails on the old code).
 - **Dated outreach links (DEV, Nov 2026, Jeff).** Under the PI Highlights a
   logged social post prints "(Mar 6, 2026 – UDOT Instagram – 1,863 reactions ·
   29 comments)" and a logged news story "(date – outlet – title)" — the date

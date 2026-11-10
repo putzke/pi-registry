@@ -11892,8 +11892,8 @@ const CLOSEOUT_TYPES = {
     label: 'UDOT Construction-Phase PI Close-Out',
     sections: [
       { id: 'docs', title: 'Project documents',
-        feeds: 'project description, cover letter, PI Highlights',
-        hint: 'Start here. Add the project website (saved as a PDF), the newsletters and the flyers. Each is read once by Claude into a short summary that every AI Draft in this close-out then uses. The files themselves are not kept, only the summaries, which you can edit. Weekly PI reports and emails are already in Cirrus Cc, so leave those out.',
+        feeds: 'project description, praise, concerns, scope, deliverable evidence, the Outreach log, cover letter, PI Highlights',
+        hint: 'Start here. Add what Cirrus Cc can\u2019t see on its own, things published or made outside the app: the project website (saved as a PDF), newsletters, flyers and mailers, press releases, news stories, the PI scope of work, construction schedules or traffic phasing, thank-you letters, and survey or meeting summaries. Cirrus Cc reads each file once and keeps a short summary you can edit; the file itself is not stored. The summaries feed every AI Draft and fill in the sections further down (project description, praise, concerns, scope document, deliverable evidence) wherever a box is still empty. No need to add weekly PI reports (already archived), emails and calls already logged as interactions, or social posts already in the Outreach log.',
         fields: [ { kind: 'docs', key: 'docs' } ] },
       { id: 'recipient', title: 'Project & recipient', required: true,
         feeds: 'cover letter address block, Re: line, salutation',
@@ -13907,7 +13907,8 @@ function _coHighlightFacts(co, hid) {
     olLines(ol.coord, 'Shared with a partner to distribute');
   }
   // What the website, newsletters and flyers told the public (Project documents).
-  const DOC_KINDS_FOR = { outreach: ['website', 'flyer', 'other'], website: ['website'], email: ['newsletter'], traffic: ['flyer', 'newsletter', 'website'] };
+  const DOC_KINDS_FOR = { outreach: ['website', 'flyer', 'press', 'news', 'other'], website: ['website'], email: ['newsletter'],
+    traffic: ['flyer', 'newsletter', 'website', 'press', 'phasing'], concerns: ['summary', 'thanks'], coord: ['scope'] };
   if (DOC_KINDS_FOR[hid]) _coDocLines(it, DOC_KINDS_FOR[hid]).forEach(function (x) { L.push(x); });
   const dr = it.draft || {};
   return { lines: L, notes: _coLines(dr['hl-' + hid]) };
@@ -14279,21 +14280,66 @@ async function coDraftLetter(btn) {
 }
 
 // ── PI CLOSE-OUT: Project documents (Nov 2026, Jeff) ─────────────────────
-// The website page (saved as a PDF), newsletters and flyers: the things the
-// public was told, whose CONTENT Cirrus Cc doesn't hold (the Outreach log knows
-// they went out, not what they said). Each file is read ONCE into a short
-// summary, kept in intake.docs = [{id,name,kind,date,summary}]; the files are
-// not stored. Every close-out AI draft then reads the summaries. Weekly PI
-// reports and emails are left out on purpose: Cirrus Cc already has them.
-const CO_DOC_KINDS = [['website', 'Project website'], ['newsletter', 'Newsletter'], ['flyer', 'Flyer or mailer'], ['other', 'Other']];
-const CO_DOC_MAX_MB = 20;
+// What the public saw, or what shaped the work, that Cirrus Cc can't read on
+// its own: the website (saved as a PDF), newsletters, flyers, press releases,
+// news stories, the PI scope, traffic phasing, thank-you letters, survey or
+// meeting summaries. Each file is read ONCE into intake.docs =
+// [{id,name,kind,date,title,outlet,summary,praise,concerns,assumptions}]; the
+// files are not stored. Every close-out AI draft reads the summaries, and
+// _coDocFill fills the intake further down (project description, praise,
+// concerns, scope document, deliverable evidence) — only a box that is empty
+// or still holds what it filled last time (it.docFill); once staff type in a
+// box, it is theirs. News, press releases, newsletters and flyers are offered
+// to the Outreach log ("Add to Outreach log"), which the outreach sections
+// already read, so there is one list. Weekly PI reports and logged emails are
+// left out on purpose: Cirrus Cc already has them.
+const CO_DOC_KINDS = [['website', 'Project website'], ['newsletter', 'Newsletter'], ['flyer', 'Flyer or mailer'],
+  ['press', 'Press release'], ['news', 'News article'], ['scope', 'Scope of work / PI plan'],
+  ['phasing', 'Construction schedule / traffic phasing'], ['thanks', 'Thank-you or commendation'],
+  ['summary', 'Survey or meeting summary'], ['other', 'Other']];
+const CO_DOC_MAX_MB = 20, CO_DOC_BIG_PAGES = 25;
 const CO_DOC_PDF_PAGE_TOKENS = 2500, CO_DOC_IMG_TOKENS = 1600;
+// Which Outreach log type each kind becomes, and which deliverables it is evidence for.
+const CO_DOC_OUTREACH = { news: 'News coverage', press: 'Press release', newsletter: 'Newsletter', flyer: 'Flyer / door hanger' };
+const CO_DOC_EVIDENCE = { newsletter: /newsletter/i, flyer: /flyer|door hanger|mailer|postcard/i, press: /press release|media advisory/i, website: /website/i };
 function _coDocKindLabel(k) { const x = CO_DOC_KINDS.find(function (y) { return y[0] === k; }); return x ? x[1] : 'Document'; }
 function _coDocs(it) { return Array.isArray(it && it.docs) ? it.docs : []; }
+// The project of the close-out being edited.
+function _coWorkProj() {
+  const co = _coWork && (_syncCache.closeouts || []).find(function (c) { return c.id === _coWork.id; });
+  return co ? String(co.projectId) : '';
+}
+function _coDocsByDate(it, kind) {
+  return _coDocs(it).filter(function (d) { return d.kind === kind; })
+    .slice().sort(function (a, b) { return String(a.date || '').localeCompare(String(b.date || '')); });
+}
+
+// The Outreach log entry this document already is, if any: same project and
+// type, and the same title or the same date.
+function _coDocOutreach(d) {
+  const type = CO_DOC_OUTREACH[d.kind];
+  if (!type || !_coWork) return null;
+  const pid = _coWorkProj(), t = String(d.title || '').trim().toLowerCase();
+  return (DB.get('outreach_actions') || []).find(function (a) {
+    if (String(a.projectId) !== pid) return false;
+    const sameType = a.actionType === type || (d.kind === 'flyer' && a.actionType === 'Mailer / postcard');
+    return sameType && ((t && String(a.title || '').trim().toLowerCase() === t) || (d.date && a.actionDate === d.date));
+  }) || null;
+}
 
 function _coDocsHTML(it) {
-  const docs = _coDocs(it);
+  const docs = _coDocs(it), fill = it.docFill || {};
+  const filled = function (d) {
+    const out = [];
+    if (d.kind === 'thanks' && _coVal(d.praise) && fill.praise && String(it.praise || '') === fill.praise) out.push('Notable outcomes & praise');
+    if (d.kind === 'summary' && _coVal(d.concerns) && fill.concerns && String(it.concerns || '') === fill.concerns) out.push('Concerns or complaints of note');
+    if (d.kind === 'scope' && fill.scopeTitle && String(it.scopeTitle || '') === fill.scopeTitle && _coVal(d.title) && fill.scopeTitle === String(d.title).trim()) out.push('Scope document');
+    if (CO_DOC_EVIDENCE[d.kind] && Object.keys(fill.evidence || {}).some(function (k) { return ((it.deliverables || {})[k] || {}).evidence === fill.evidence[k]; })) out.push('deliverable evidence');
+    return out;
+  };
   const rows = docs.map(function (d, i) {
+    const ol = CO_DOC_OUTREACH[d.kind] ? _coDocOutreach(d) : null;
+    const used = filled(d);
     return '<div style="border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;background:rgba(255,255,255,.02)">'
       + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">'
       + '<strong style="font-size:13px;color:var(--white);flex:1 1 200px;min-width:0;overflow:hidden;text-overflow:ellipsis">' + escHtml(d.name || 'Document') + '</strong>'
@@ -14301,7 +14347,15 @@ function _coDocsHTML(it) {
       + CO_DOC_KINDS.map(function (k) { return '<option value="' + k[0] + '"' + (d.kind === k[0] ? ' selected' : '') + '>' + k[1] + '</option>'; }).join('') + '</select>'
       + '<input aria-label="Date" type="date" value="' + escHtml(d.date || '') + '" onchange="coDocEdit(' + i + ',\'date\',this.value)" style="padding:4px 6px">'
       + '<button type="button" class="btn btn-sm" onclick="coDocRemove(' + i + ')">Remove</button></div>'
-      + '<textarea aria-label="Summary of ' + escHtml(d.name || 'document') + '" rows="3" oninput="coDocEdit(' + i + ',\'summary\',this.value)">' + escHtml(d.summary || '') + '</textarea></div>';
+      + (_coVal(d.title) || _coVal(d.outlet) ? '<div style="font-size:12px;color:var(--mist);margin-bottom:6px">' + escHtml([d.title, d.outlet].filter(_coVal).join(' — ')) + '</div>' : '')
+      + '<textarea aria-label="Summary of ' + escHtml(d.name || 'document') + '" rows="3" oninput="coDocEdit(' + i + ',\'summary\',this.value)">' + escHtml(d.summary || '') + '</textarea>'
+      + ((used.length || CO_DOC_OUTREACH[d.kind]) ? '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px;font-size:12px;color:var(--fog)">'
+        + (used.length ? '<span>Filled in: ' + escHtml(used.join(', ')) + '</span>' : '')
+        + (CO_DOC_OUTREACH[d.kind] ? (ol ? '<span style="color:var(--teal)">✓ In the Outreach log</span>'
+            : '<button type="button" class="btn btn-sm" data-doc-ol="' + i + '" onclick="coDocToOutreach(' + i + ')">＋ Add to Outreach log</button>'
+              + '<span>so the close-out, PI reports and quick reports list it</span>') : '')
+        + '</div>' : '')
+      + '</div>';
   }).join('');
   return '<div style="margin-bottom:12px">'
     + '<label class="btn btn-sm btn-primary" style="cursor:pointer;display:inline-block;margin-bottom:10px">📎 Add files (PDF or pictures)…'
@@ -14321,29 +14375,88 @@ function _coFileB64(file) {
 function _coIsPdf(f) { return f.type === 'application/pdf' || /\.pdf$/i.test(f.name || ''); }
 function _coIsImg(f) { return /^image\/(png|jpe?g|gif|webp)$/.test(f.type || ''); }
 // Pages counted from the PDF itself (its /Type /Page objects), else ~1 per 40 KB.
-async function _coDocTokens(f) {
-  if (!_coIsPdf(f)) return CO_DOC_IMG_TOKENS;
+async function _coDocPages(f) {
+  if (!_coIsPdf(f)) return 0;
   let pages = 0;
   try { const t = await f.text(); pages = (t.match(/\/Type\s*\/Page(?!s)/g) || []).length; } catch (e) {}
-  if (!pages) pages = Math.max(1, Math.round(f.size / 40960));
-  return pages * CO_DOC_PDF_PAGE_TOKENS;
+  return pages || Math.max(1, Math.round(f.size / 40960));
 }
+async function _coDocTokens(f) { return _coIsPdf(f) ? (await _coDocPages(f)) * CO_DOC_PDF_PAGE_TOKENS : CO_DOC_IMG_TOKENS; }
 
-const CO_DOC_SYSTEM = 'You read one public-facing document from a transportation project (its website page, a newsletter, a flyer or a mailer) '
-  + 'for the PI consultant’s close-out report. Use only what the document says; never invent a date, figure, place or outcome. '
-  + 'Describe private individuals by role, never by name, phone or email. Do not copy web addresses or email addresses.';
-const CO_DOC_TASK = 'Answer in exactly this form, nothing else:\n'
-  + 'KIND: website | newsletter | flyer | other\n'
-  + 'DATE: the date the document was issued, as YYYY-MM-DD, or unknown\n'
-  + 'SUMMARY: 60 to 120 words: what the document told the public (construction stages, closures, detours, restrictions, schedule, how to get updates or contact the team).\n'
-  + 'DESCRIPTION: 2 to 4 sentences (at most 90 words) on what the project builds or repairs, where, and why, if the document says so; otherwise none.';
+const CO_DOC_SYSTEM = 'You read one document from a transportation project for the PI consultant’s close-out report: a public-facing piece '
+  + '(website page, newsletter, flyer, press release, news story), the PI scope of work, a construction schedule or traffic phasing exhibit, '
+  + 'a thank-you or commendation, or a survey or meeting summary. Use only what the document says; never invent a date, figure, place or outcome. '
+  + 'Describe private individuals by role (a business owner on 400 North, a resident), never by name, phone or email; agency staff and elected officials may be named. '
+  + 'Do not copy web addresses or email addresses.';
+const CO_DOC_TASK = 'Answer in exactly this form, nothing else. Write none for anything the document does not say.\n'
+  + 'KIND: website | newsletter | flyer | press | news | scope | phasing | thanks | summary | other '
+  + '(flyer = flyer, mailer, door hanger or fact sheet; press = press release; news = a news story; scope = scope of work or PI plan; '
+  + 'phasing = construction schedule or traffic phasing; thanks = thank-you or commendation; summary = survey results or a meeting summary)\n'
+  + 'DATE: the date it was issued, as YYYY-MM-DD, or unknown\n'
+  + 'TITLE: its headline, subject line, edition title or document title\n'
+  + 'OUTLET: who published it (the news outlet, or the agency issuing a release), or none\n'
+  + 'SUMMARY: 60 to 120 words: what it told the public or what it covers (construction stages, closures, detours, restrictions, schedule, how to get updates or reach the team; for a scope, the PI services required).\n'
+  + 'DESCRIPTION: 2 to 4 sentences (at most 90 words) on what the project builds or repairs, where, and why, if the document says so; otherwise none.\n'
+  + 'PRAISE: for a thank-you or commendation, one or two lines on who was thankful (by role) and for what; otherwise none.\n'
+  + 'CONCERNS: for a survey or meeting summary, the main concerns raised, one short line each; otherwise none.\n'
+  + 'ASSUMPTIONS: for a scope of work, what the scope assumed (closure windows, months of effort, hotline duration, quantities), one short line each; otherwise none.';
+const CO_DOC_FIELDS = ['KIND', 'DATE', 'TITLE', 'OUTLET', 'SUMMARY', 'DESCRIPTION', 'PRAISE', 'CONCERNS', 'ASSUMPTIONS'];
 
 function _coParseDoc(text) {
-  const get = function (k) { const m = String(text || '').match(new RegExp('^\\s*' + k + ':\\s*([\\s\\S]*?)(?=\\n\\s*(KIND|DATE|SUMMARY|DESCRIPTION):|$)', 'im')); return m ? m[1].replace(/\s*\n\s*/g, ' ').trim() : ''; };
-  const kind = (get('KIND').toLowerCase().match(/website|newsletter|flyer|other/) || ['other'])[0];
-  const date = (get('DATE').match(/\d{4}-\d{2}-\d{2}/) || [''])[0];
-  const desc = get('DESCRIPTION');
-  return { kind: kind, date: date, summary: get('SUMMARY'), description: /^none\.?$/i.test(desc) ? '' : desc };
+  const src = String(text || '');
+  const get = function (k, keepLines) {
+    const m = src.match(new RegExp('^\\s*' + k + ':\\s*([\\s\\S]*?)(?=\\n\\s*(' + CO_DOC_FIELDS.join('|') + '):|(?![\\s\\S]))', 'im'));
+    let v = m ? m[1].trim() : '';
+    v = keepLines ? v.split(/\n+/).map(function (x) { return x.replace(/^\s*[-•*]\s*/, '').trim(); }).filter(Boolean).join('\n') : v.replace(/\s*\n\s*/g, ' ');
+    return /^(none|unknown|n\/a)\.?$/i.test(v) ? '' : v;
+  };
+  const kinds = CO_DOC_KINDS.map(function (k) { return k[0]; });
+  const k = get('KIND').toLowerCase().match(new RegExp(kinds.join('|')));
+  return { kind: k ? k[0] : 'other', date: (get('DATE').match(/\d{4}-\d{2}-\d{2}/) || [''])[0],
+    title: get('TITLE'), outlet: get('OUTLET'), summary: get('SUMMARY'), description: get('DESCRIPTION'),
+    praise: get('PRAISE', true), concerns: get('CONCERNS', true), assumptions: get('ASSUMPTIONS', true) };
+}
+
+// Fill the intake from the documents: a box is filled only while it is empty
+// or still holds exactly what this filled last time (it.docFill), so a later
+// document updates it, and anything typed there is never touched.
+function _coDocFill(it) {
+  const fill = it.docFill || (it.docFill = {});
+  const put = function (key, text) {
+    const cur = String(it[key] || '');
+    if (!_coVal(text)) { if (fill[key] !== undefined && cur === fill[key]) { it[key] = ''; } delete fill[key]; return; }
+    if (cur.trim() === '' || cur === fill[key]) { it[key] = text; fill[key] = text; }
+    else delete fill[key];
+  };
+  const docs = _coDocs(it);
+  const web = _coDocsByDate(it, 'website').filter(function (d) { return _coVal(d.description); });
+  const anyDesc = docs.filter(function (d) { return _coVal(d.description); });
+  put('projDesc', ((web[0] || anyDesc[0]) || {}).description || '');
+  put('praise', _coDocsByDate(it, 'thanks').map(function (d) { return d.praise; }).filter(_coVal).join('\n'));
+  put('concerns', _coDocsByDate(it, 'summary').map(function (d) { return d.concerns; }).filter(_coVal).join('\n'));
+  const scopes = _coDocsByDate(it, 'scope'), sc = scopes[scopes.length - 1] || {};
+  put('scopeTitle', String(sc.title || '').trim());
+  put('scopeDate', sc.date || '');
+  put('assumptions', sc.assumptions || '');
+  // Deliverable evidence: the documents of the matching kind, named and dated.
+  const ev = fill.evidence || (fill.evidence = {});
+  const saved = it.deliverables || (it.deliverables = {});
+  const dels = (DB.get('deliverables') || []).filter(function (d) { return _coWork && String(d.projectId) === _coWorkProj(); });
+  dels.forEach(function (d) {
+    const label = String(d.type || '') + ' ' + String(d.title || '');
+    const kind = Object.keys(CO_DOC_EVIDENCE).find(function (k) { return CO_DOC_EVIDENCE[k].test(label); });
+    const list = kind ? _coDocsByDate(it, kind) : [];
+    let text = '';
+    if (list.length) {
+      const names = list.slice(0, 6).map(function (x) { return (_coVal(x.title) ? String(x.title).trim() : x.name) + (x.date ? ' (' + fmt(x.date) + ')' : ''); });
+      text = _coDocKindLabel(kind) + (list.length > 1 ? 's' : '') + ': ' + names.join('; ') + (list.length > 6 ? '; and ' + (list.length - 6) + ' more' : '');
+    }
+    const row = saved[d.id] || {};
+    const cur = String(row.evidence || '');
+    if (!text) { if (ev[d.id] !== undefined && cur === ev[d.id]) row.evidence = ''; delete ev[d.id]; return; }
+    saved[d.id] = row;
+    if (cur.trim() === '' || cur === ev[d.id]) { row.evidence = text; ev[d.id] = text; } else delete ev[d.id];
+  });
 }
 
 async function coAddDocs(input) {
@@ -14354,10 +14467,15 @@ async function coAddDocs(input) {
   const ok = files.filter(function (f) { return (_coIsPdf(f) || _coIsImg(f)) && f.size <= CO_DOC_MAX_MB * 1024 * 1024; });
   const skipped = files.length - ok.length;
   if (!ok.length) { showToast('Pick PDFs or pictures (PNG, JPG), each under ' + CO_DOC_MAX_MB + ' MB.', 'warn', 6000); return; }
-  let tok = 0;
-  for (const f of ok) tok += await _coDocTokens(f);
-  const usd = tok / 1e6 * 2 + ok.length * 400 / 1e6 * 10;
-  if (!confirm('Read ' + ok.length + ' file' + (ok.length === 1 ? '' : 's') + ' with Claude?' + (skipped ? ' (' + skipped + ' skipped: not a PDF or picture, or over ' + CO_DOC_MAX_MB + ' MB.)' : '')
+  let tok = 0; const big = [];
+  for (const f of ok) {
+    const pages = await _coDocPages(f);
+    tok += _coIsPdf(f) ? pages * CO_DOC_PDF_PAGE_TOKENS : CO_DOC_IMG_TOKENS;
+    if (pages > CO_DOC_BIG_PAGES) big.push(f.name + ' (' + pages + ' pages)');
+  }
+  const usd = tok / 1e6 * 2 + ok.length * 600 / 1e6 * 10;
+  if (!confirm('Read ' + ok.length + ' file' + (ok.length === 1 ? '' : 's') + '?' + (skipped ? ' (' + skipped + ' skipped: not a PDF or picture, or over ' + CO_DOC_MAX_MB + ' MB.)' : '')
+    + (big.length ? '\n\nLong: ' + big.join(', ') + '. If only a few pages matter, save just those pages as a PDF and add that instead.' : '')
     + '\n\nAbout ' + Math.round(tok / 1000) + 'K tokens. Estimated cost: about $' + Math.max(0.01, usd).toFixed(2) + '.\nEach file is read once; only its summary is kept.')) return;
   const st = document.getElementById('co-docs-status');
   let done = 0;
@@ -14368,7 +14486,7 @@ async function coAddDocs(input) {
       const data = await _coFileB64(f);
       const block = _coIsPdf(f) ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: data } }
                                 : { type: 'image', source: { type: 'base64', media_type: f.type, data: data } };
-      const text = await _claudeNarrative(CO_DOC_SYSTEM, [block, { type: 'text', text: CO_DOC_TASK }], 500);
+      const text = await _claudeNarrative(CO_DOC_SYSTEM, [block, { type: 'text', text: CO_DOC_TASK }], 900);
       return text ? Object.assign({ name: f.name }, _coParseDoc(text)) : null;
     } catch (e) { console.error('Close-out document read failed:', f.name, e); return null; }
     finally { done++; say(); }
@@ -14378,14 +14496,15 @@ async function coAddDocs(input) {
   let added = 0;
   results.forEach(function (r) {
     if (!r || !r.summary) return;
-    if (!_coVal(it.projDesc) && r.description) it.projDesc = r.description;
-    docs.push({ id: DB.uid(), name: r.name, kind: r.kind, date: r.date, summary: r.summary });
+    docs.push({ id: DB.uid(), name: r.name, kind: r.kind, date: r.date, title: r.title, outlet: r.outlet, summary: r.summary,
+      description: r.description, praise: r.praise, concerns: r.concerns, assumptions: r.assumptions });
     added++;
   });
   it.docs = docs;
+  _coDocFill(it);
   _coDirty = true; _coSaveSoon();
   const failed = ok.length - added;
-  showToast(added + ' document' + (added === 1 ? '' : 's') + ' read' + (failed ? '; ' + failed + ' could not be read' : '') + '. Check the summaries, then draft.', failed ? 'warn' : 'info', 6000);
+  showToast(added + ' document' + (added === 1 ? '' : 's') + ' read' + (failed ? '; ' + failed + ' could not be read' : '') + '. Check the summaries and what they filled in further down.', failed ? 'warn' : 'info', 7000);
   render();
 }
 function coDocEdit(i, field, value) {
@@ -14394,6 +14513,7 @@ function coDocEdit(i, field, value) {
   if (!docs[i]) return;
   docs[i][field] = value;
   _coWork.intake.docs = docs;
+  if (field === 'kind' || field === 'date') { _coDocFill(_coWork.intake); render(); }
   _coDirty = true; _coSaveSoon();
 }
 function coDocRemove(i) {
@@ -14402,14 +14522,40 @@ function coDocRemove(i) {
   if (!docs[i] || !confirm('Remove "' + (docs[i].name || 'this document') + '" and its summary from this close-out?')) return;
   docs.splice(i, 1);
   _coWork.intake.docs = docs;
+  _coDocFill(_coWork.intake);
   _coDirty = true; _coSaveSoon();
   render();
+}
+// Log a news story, press release, newsletter or flyer in the Outreach log,
+// prefilled; staff check it, add the link if there is one, and save.
+function coDocToOutreach(i) {
+  if (!_coWork) return;
+  const d = _coDocs(_coWork.intake)[i], type = d && CO_DOC_OUTREACH[d.kind];
+  if (!type) return;
+  openOutreachModal(null);
+  const set = function (id, v) { const el = document.getElementById(id); if (el && v !== undefined && v !== null && v !== '') el.value = v; };
+  set('f-out-proj', _coWorkProj());
+  if (typeof _outCampOpts === 'function') _outCampOpts('');
+  if (typeof _outPartyRelabel === 'function') _outPartyRelabel();
+  set('f-out-type', type);
+  const ty = document.getElementById('f-out-type'); if (ty) { ty.dataset.touched = '1'; if (typeof _outTypeTip === 'function') _outTypeTip(); }
+  if (d.date) { set('f-out-date', d.date); const dt = document.getElementById('f-out-date'); if (dt) dt.dataset.touched = '1'; }
+  set('f-out-title', String(d.title || '').trim() || String(d.name || '').replace(/\.[a-z0-9]+$/i, ''));
+  set('f-out-outlet', d.outlet);
+  set('f-out-desc', d.summary);
+  if (d.kind === 'news') { const p = document.getElementById('f-out-party'); if (p && [].some.call(p.options, function (o) { return o.value === 'Media & third party'; })) p.value = 'Media & third party'; }
+  if (d.kind === 'flyer') set('f-out-deliv', 'Hand-delivered');
+  const msg = document.getElementById('f-out-readmsg');
+  if (msg) msg.textContent = 'Filled in from "' + (d.name || 'the document') + '". Paste its web address if it has one, check the rest, and save.';
 }
 // The summaries as fact lines, oldest first; kinds = which documents to include.
 function _coDocLines(it, kinds) {
   return _coDocs(it).filter(function (d) { return _coVal(d.summary) && (!kinds || kinds.indexOf(d.kind) > -1); })
     .slice().sort(function (a, b) { return String(a.date || '').localeCompare(String(b.date || '')); })
-    .map(function (d) { return 'From the ' + _coDocKindLabel(d.kind).toLowerCase() + (d.date ? ' (' + fmt(d.date) + ')' : '') + ': ' + String(d.summary).trim(); });
+    .map(function (d) {
+      return 'From the ' + _coDocKindLabel(d.kind).toLowerCase() + (d.date ? ' (' + fmt(d.date) + ')' : '')
+        + (_coVal(d.title) ? ' "' + String(d.title).trim() + '"' : '') + ': ' + String(d.summary).trim();
+    });
 }
 
 let _coPreviewTimer = null;

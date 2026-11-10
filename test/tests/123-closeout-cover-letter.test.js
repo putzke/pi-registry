@@ -18,6 +18,7 @@ module.exports = {
     const id = String((await t.sql(`insert into pi_closeouts (project_id, label, intake, created_by)
       values (${projId}, 'Final', $1::jsonb, 'putzke@demo.test') returning id`, [JSON.stringify(intake)]))[0].id);
     const inbound = (await t.sql(`select count(*)::int n from pi_interactions where project_id='${projId}' and coalesce(direction,'') <> 'Outgoing'`))[0].n;
+    const dnl = String((await t.sql(`insert into pi_deliverables (project_id, deliverable_type, title, status) values ('${projId}', 'Digital newsletter', 'Monthly newsletter', 'Complete') returning id`))[0].id);
     const app = await t.open('index.html', { email: 'putzke@demo.test' });
     try {
       await app.ready();
@@ -93,6 +94,60 @@ module.exports = {
       t.eq(await page.evaluate(() => _coWork.intake.docs[0].summary), 'Edited summary.', 'a summary can be edited');
       await page.evaluate(() => coDocRemove(1));
       t.eq(await page.evaluate(() => _coWork.intake.docs.length), 1, 'a document can be removed');
+
+      // ── more kinds: they fill the intake further down, never over typing ──
+      await page.evaluate(pid => {
+        const it = _coWork.intake;
+        it.praise = ''; it.scopeTitle = ''; it.scopeDate = ''; it.assumptions = '';
+        it.concerns = 'Typed by staff: access worries.';
+        it.deliverables = {};
+        const R = {
+          THANKS: 'KIND: thanks\nDATE: 2026-08-01\nTITLE: Thank you note\nOUTLET: none\nSUMMARY: A business owner thanked the team.\nDESCRIPTION: none\nPRAISE: A business owner on 400 North thanked the team for keeping access open.\nCONCERNS: none\nASSUMPTIONS: none',
+          SCOPE: 'KIND: scope\nDATE: 2025-04-10\nTITLE: 19739 PI Scope\nOUTLET: none\nSUMMARY: The scope required a hotline, newsletters and weekly reports.\nDESCRIPTION: none\nPRAISE: none\nCONCERNS: none\nASSUMPTIONS: - 18 months of effort\n- Hotline for the life of the project',
+          NL: 'KIND: newsletter\nDATE: 2026-06-01\nTITLE: Summer Update\nOUTLET: none\nSUMMARY: The June newsletter covered paving.\nDESCRIPTION: none\nPRAISE: none\nCONCERNS: none\nASSUMPTIONS: none',
+          PRESS: 'KIND: press\nDATE: 2026-07-04\nTITLE: 400 North reopens early\nOUTLET: Logan City\nSUMMARY: The city announced the early reopening.\nDESCRIPTION: none\nPRAISE: none\nCONCERNS: none\nASSUMPTIONS: none',
+          SUMM: 'KIND: summary\nDATE: 2026-02-01\nTITLE: Open house summary\nOUTLET: none\nSUMMARY: Thirty people attended.\nDESCRIPTION: none\nPRAISE: none\nCONCERNS: - Parking during construction\nASSUMPTIONS: none',
+        };
+        window._claudeNarrative = async (system, user) => { window.__calls.push({ system, user }); return R[atob(user[0].source.data).split(' ')[0]] || ''; };
+      }, projId);
+      const pdf = (tag) => Buffer.from(tag + ' %PDF-1.4 /Type /Page');
+      await page.setInputFiles('#co-sec-docs input[type=file]', [
+        { name: 'thanks.pdf', mimeType: 'application/pdf', buffer: pdf('THANKS') },
+        { name: 'scope.pdf', mimeType: 'application/pdf', buffer: pdf('SCOPE') },
+        { name: 'nl.pdf', mimeType: 'application/pdf', buffer: pdf('NL') },
+        { name: 'press.pdf', mimeType: 'application/pdf', buffer: pdf('PRESS') },
+        { name: 'summary.pdf', mimeType: 'application/pdf', buffer: pdf('SUMM') }]);
+      await page.waitForFunction(() => (_coWork.intake.docs || []).length === 6);
+      const sent = await page.evaluate(() => window.__calls.splice(0));
+      t.ok(/PRAISE:/.test(sent[0].user[1].text) && /ASSUMPTIONS:/.test(sent[0].user[1].text) && /never by name/.test(sent[0].system), 'one read per file asks for praise, concerns and scope assumptions too, and keeps private people unnamed');
+      const it2 = await page.evaluate(() => JSON.parse(JSON.stringify(_coWork.intake)));
+      t.eq(it2.praise, 'A business owner on 400 North thanked the team for keeping access open.', 'a thank-you fills the empty praise box');
+      t.eq(it2.concerns, 'Typed by staff: access worries.', 'a box staff typed in is never overwritten');
+      t.ok(it2.scopeTitle === '19739 PI Scope' && it2.scopeDate === '2025-04-10' && it2.assumptions === '18 months of effort\nHotline for the life of the project', 'the scope of work fills the scope document, its date and what it assumed');
+      t.eq((it2.deliverables[dnl] || {}).evidence, 'Newsletter: Summer Update (Jun 1, 2026)', 'a newsletter becomes the evidence on the newsletter deliverable');
+      t.ok(await page.evaluate(() => /Filled in: Notable outcomes/.test(document.getElementById('co-sec-docs').textContent)), 'the document says what it filled in');
+      // A second newsletter updates the evidence it filled; a typed one stays.
+      await page.evaluate(() => { _coWork.intake.docs.push({ id: 'x2', name: 'jul.pdf', kind: 'newsletter', date: '2026-07-01', title: 'July Update', summary: 'Paving done.' }); _coDocFill(_coWork.intake); });
+      t.eq(await page.evaluate(d => _coWork.intake.deliverables[d].evidence, dnl), 'Newsletters: Summer Update (Jun 1, 2026); July Update (Jul 1, 2026)', 'evidence it filled is updated by a later document');
+      await page.evaluate(d => { _coWork.intake.deliverables[d].evidence = 'Typed evidence'; _coWork.intake.docs.pop(); _coDocFill(_coWork.intake); }, dnl);
+      t.eq(await page.evaluate(d => _coWork.intake.deliverables[d].evidence, dnl), 'Typed evidence', 'evidence staff typed stays when a document is removed');
+      // Removing the thank-you takes back the praise it filled.
+      await page.evaluate(() => { window.confirm = () => true; coDocRemove(_coWork.intake.docs.findIndex(d => d.kind === 'thanks')); });
+      t.eq(await page.evaluate(() => _coWork.intake.praise), '', 'removing the document clears what it filled (and only that)');
+      // The facts reach the drafts.
+      const fc = await page.evaluate(() => _coHighlightFacts(_syncCache.closeouts.find(c => c.id === _coWork.id), 'concerns').lines.join('\n'));
+      t.ok(/From the survey or meeting summary \(Feb 1, 2026\) "Open house summary": Thirty people attended/.test(fc), 'a meeting summary reaches the concerns highlight');
+      // Add to Outreach log: prefilled, and once saved it reads as logged.
+      const pi = await page.evaluate(() => _coWork.intake.docs.findIndex(d => d.kind === 'press'));
+      t.ok(await page.evaluate(i => !!document.querySelector('[data-doc-ol="' + i + '"]'), pi), 'a press release offers Add to Outreach log');
+      await page.evaluate(i => coDocToOutreach(i), pi);
+      const form = await page.evaluate(() => ['f-out-proj', 'f-out-type', 'f-out-date', 'f-out-title', 'f-out-outlet'].map(x => document.getElementById(x).value));
+      t.eq(JSON.stringify(form), JSON.stringify([projId, 'Press release', '2026-07-04', '400 North reopens early', 'Logan City']), 'the Outreach dialog opens prefilled with project, type, date, title and outlet');
+      await page.evaluate(() => saveOutreach());
+      await page.waitForFunction(() => (DB.get('outreach_actions') || []).some(a => a.title === '400 North reopens early' && !/^tmp_/.test(String(a.id))));
+      await page.evaluate(() => render());
+      t.ok(await page.evaluate(() => /✓ In the Outreach log/.test(document.getElementById('co-sec-docs').textContent)), 'once logged, the document reads "In the Outreach log"');
+      t.ok(await page.evaluate(() => /Add what Cirrus Cc can.t see on its own/.test(document.getElementById('co-sec-docs').textContent) && !/Claude/.test(document.getElementById('co-sec-docs').textContent)), 'the note to users names Cirrus Cc, not Claude');
     } finally { await app.close(); }
   },
 };

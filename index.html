@@ -9299,9 +9299,11 @@ function _outCampaigns(projF){
 }
 function _outCampaignName(id){ const c=(DB.get('outreach_campaigns')||[]).find(x=>String(x.id)===String(id)); return c?c.name:''; }
 function _outHas(v){ return v!==null&&v!==undefined&&v!==''; }
+// "1 reaction", "2 reactions": one label rule for every count line.
+function _outCountLabel(n,l){ return Number(n).toLocaleString()+' '+(Number(n)===1?l.toLowerCase().replace(/s$/,''):l.toLowerCase()); }
 function _outCountsText(r){
   if(!r) return '';
-  return OUT_COUNTS.filter(([k])=>_outHas(r[k])).map(([k,l])=>Number(r[k]).toLocaleString()+' '+l.toLowerCase()).join(' · ');
+  return OUT_COUNTS.filter(([k])=>_outHas(r[k])).map(([k,l])=>_outCountLabel(r[k],l)).join(' · ');
 }
 // A date the link gave ("2026-10-08T18:02:46Z", "October 3, 2026") as the
 // local calendar day, or '' when it can't be read.
@@ -9718,7 +9720,7 @@ function _outTallyText(m, lower){
   return Object.keys(m).sort((a,b)=>m[b]-m[a]||a.localeCompare(b)).map(k=>m[k]+' '+(lower?k.toLowerCase():k)).join(', ');
 }
 // Totals with zeros left out: "2,400 reactions · 120 comments".
-function _outTotalsText(t){ return OUT_COUNTS.filter(([k])=>t[k]).map(([k,l])=>Number(t[k]).toLocaleString()+' '+l.toLowerCase()).join(' · '); }
+function _outTotalsText(t){ return OUT_COUNTS.filter(([k])=>t[k]).map(([k,l])=>_outCountLabel(t[k],l)).join(' · '); }
 function _outReadingNote(r){ return r?('as of '+_fmtMDY(r.readOn)+', '+(OUT_SOURCES[r.source]||r.source||'').toLowerCase()):''; }
 // The facts every AI narrative about outreach is given. Counts are computed
 // here; the model narrates them.
@@ -12882,7 +12884,7 @@ function _coHighlightLinks(kind, it, f) {
   if (kind === 'news') {
     (ol.news || []).forEach(function (x) {
       if (!fresh(x.a.url)) return;
-      const label = '(' + [x.a.outlet, x.a.title].filter(_coVal).join(' – ') + ')';
+      const label = '(' + [x.a.actionDate ? fmt(x.a.actionDate) : '', x.a.outlet, x.a.title].filter(_coVal).join(' – ') + ')';
       out.push(link(x.a.url, label === '()' ? '(News article)' : label));
     });
     (it.news || []).filter(_coRowHas).forEach(function (r) {
@@ -12916,7 +12918,8 @@ function _coHighlightLinks(kind, it, f) {
     const typed = (it.social || []).filter(_coRowHas);
     (ol.social || []).forEach(function (x) {
       if (!fresh(x.a.url)) return;
-      out.push(link(x.a.url, '(' + [x.a.outlet || x.a.author || 'Social post', x.r ? _outCountsText(x.r) : ''].filter(_coVal).join(' – ') + ')'));
+      // Dated (Jeff, Nov 2026): the post's date, then where, then its counts.
+      out.push(link(x.a.url, '(' + [x.a.actionDate ? fmt(x.a.actionDate) : '', x.a.outlet || x.a.author || 'Social post', x.r ? _outCountsText(x.r) : ''].filter(_coVal).join(' – ') + ')'));
       const k = _coUrlKey(x.a.url);
       typed.filter(function (r) { return k && _coUrlKey(r.url) === k && _coVal(r.comment); }).forEach(function (r) { out.push(sample(r)); });
     });

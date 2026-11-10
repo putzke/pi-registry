@@ -1678,6 +1678,13 @@ the model narrates, never counts.
   picture** (`coDescFromFile`) sends the file once to Claude as a document /
   image block and puts a 2–4 sentence description in `projDesc`; the file is not
   stored. Guarded by `test/tests/123-closeout-cover-letter.test.js` (fails on the old code).
+- **Dated outreach links (DEV, Nov 2026, Jeff).** Under the PI Highlights a
+  logged social post prints "(Mar 6, 2026 – UDOT Instagram – 1,863 reactions ·
+  29 comments)" and a logged news story "(date – outlet – title)" — the date
+  first, from the Outreach log (`_coHighlightLinks`). Newsletter editions were
+  already dated; typed intake rows print as typed. Counts read singular for one
+  (`_outCountLabel`: "1 reaction", "1 share") everywhere counts print.
+  Guarded by `test/tests/95-closeout-window-outreach.test.js`.
 
 ### PI Close-Out — step 5 BUILT: the Communications Log Summary (Oct 2026)
 **✦ AI Draft** on the Stakeholder Communications Log Summary box. The one long synthesis in the app: the model READS the whole

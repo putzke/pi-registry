@@ -72,11 +72,16 @@ module.exports = {
       }, coI);
       t.ok(/Covering /.test(doc), 'the interim title says which dates it covers');
       t.ok(/Period covered/.test(doc), 'Program at a Glance: "Period covered" instead of the whole programme');
-      t.ok(/\(KSL\.com – NEWSIN closures start\) <https:\/\/www\.ksl\.com\/a\/1\/>/.test(doc), 'the logged news story prints as a link');
+      t.ok(/\(Mar 5, 2026 – KSL\.com – NEWSIN closures start\) <https:\/\/www\.ksl\.com\/a\/1\/>/.test(doc), 'the logged news story prints as a link');
       t.ok(!/NEWSOUT/.test(doc), 'the story from before the window does not');
       t.eq((doc.match(/ksl\.com\/a\/1/g) || []).length, 1, 'the typed row with the same link prints once, not twice');
       t.ok(/TYPEDNEWS/.test(doc), 'a typed story the log doesn’t have still prints');
-      t.ok(/\(UDOT Instagram – 1,863 reactions · 29 comments\)/.test(doc), 'the post prints with the counts read inside the window, not the later reading');
+      t.ok(/\(Mar 6, 2026 – UDOT Instagram – 1,863 reactions · 29 comments\)/.test(doc), 'the post prints with the counts read inside the window, not the later reading');
+      t.ok(/\(Mar 6, 2026 – UDOT Instagram/.test(doc), 'a logged social post prints with its date first (Jeff, Nov 2026)');
+      t.ok(/\(Mar 5, 2026 – KSL\.com – NEWSIN closures start\)/.test(doc), 'a logged news story prints with its date first');
+      const soc = await page.evaluate((cid) => _coHighlightFacts(_syncCache.closeouts.find((c) => c.id === cid), 'social').lines.join('\n'), coI);
+      t.ok(/Social post — Mar 6, 2026: POSTIN weekend closures \(UDOT Instagram\) — 1,863 reactions · 29 comments as of /.test(soc), 'the AI facts for social media carry each post\u2019s date and counts');
+      t.eq(await app.page.evaluate(() => _outCountsText({ reactions: 1, comments: 2, shares: 1, views: null })), '1 reaction · 2 comments · 1 share', 'one of a thing reads singular');
       t.ok(/comment sample:.*COMMENTMARK/.test(doc) && (doc.match(/instagram\.com\/p\/abc/g) || []).length === 1, 'the typed comment sample sits under the logged post; the post prints once');
       t.ok(/EDITIONIN March update/.test(doc), 'the logged newsletter edition is linked');
       t.ok(/Outreach logged \(releases, posts, coverage\)/.test(doc), 'Program at a Glance counts the outreach in the window');

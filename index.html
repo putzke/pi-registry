@@ -11992,6 +11992,10 @@ const CLOSEOUT_TYPES = {
         feeds: 'cover letter, inbound concerns, Lessons Learned',
         hint: 'Only you know these. One thought per line. The AI writes around them and never invents a quote or a count.',
         fields: [
+          { kind: 'projdesc', key: 'projDesc' },
+          { key: 'letterAttach', label: 'What follows the letter (attachments)', kind: 'textarea', rows: 2, w: 3, br: true,
+            ph: 'e.g. the stakeholder registry, weekly PI reports, collateral materials, website content, newsletters and a sample communication log',
+            hint: 'Optional. The cover letter\u2019s last paragraph lists these. Left blank, it names what the report itself contains.' },
           { key: 'praise', label: 'Notable outcomes & praise', kind: 'textarea', rows: 5, w: 3 },
           { key: 'concerns', label: 'Concerns or complaints of note', kind: 'textarea', rows: 4, w: 3, br: true },
           { key: 'lessons', label: 'Lessons learned & recommendations', kind: 'textarea', rows: 4, w: 3, br: true }
@@ -12009,7 +12013,7 @@ const CLOSEOUT_TYPES = {
     ],
     // What each report section is built from — shown on the Close-Out tab.
     outline: [
-      ['Cover letter', 'project, PIN', 'recipient, route & mileposts, signature'],
+      ['Cover letter', 'project, PIN, the counts and what the report contains (✦ AI Draft)', 'recipient, route & mileposts, signature, project description, outcomes & praise, attachments'],
       ['PI Program at a Glance', 'interactions, stakeholders, PI reports, issues', 'website visits, subscribers, your metrics'],
       ['PI Highlights', 'interactions, events, PI reports, the Outreach log (news, posts, newsletters, 511 alerts)', 'links the Outreach log doesn’t have, comment samples'],
       ['Stakeholder Communications Log Summary', 'every interaction (an interim: only its dates)', ''],
@@ -12536,6 +12540,17 @@ function _coBlockField(fd, it, f, proj) {
       + '<div style="flex:3 1 320px;min-width:0">' + lbl('Project name' + cchip) + '<div class="co-lock">' + escHtml(proj.name || '—') + '</div></div>'
       + '<div style="flex:1 1 140px;min-width:0">' + lbl('PIN' + cchip) + '<div class="co-lock" style="font-family:var(--mono)">' + escHtml(proj.pid || '—') + '</div></div>'
       + '</div>';
+  }
+  if (fd.kind === 'projdesc') {
+    // What was built and why — the cover letter's first paragraph. Typed, or
+    // read from the project website saved as a PDF (or a screenshot): the AI
+    // pulls the description out and it lands here as ordinary text to check.
+    return '<div class="fr" style="margin-bottom:12px"><div style="display:flex;align-items:flex-end;justify-content:space-between;gap:10px;flex-wrap:wrap">'
+      + '<label for="co-f-projDesc">Project description (what was built, and why)</label>'
+      + '<label class="btn btn-sm" style="cursor:pointer;margin-bottom:4px" title="Save the project website page as a PDF (or take a screenshot) and pick it here. Claude reads it and fills this box for you to check.">📎 Fill from the website PDF or a picture…'
+      + '<input type="file" accept="application/pdf,image/*" style="display:none" onchange="coDescFromFile(this)"></label></div>'
+      + '<textarea id="co-f-projDesc" data-k="projDesc" oninput="_coSet(this)" rows="4" placeholder="e.g. The project built a new pedestrian and bicycle undercrossing beneath Main Street to connect the Logan River Trail, which required extended lane restrictions and overnight full closures along a busy commercial corridor.">' + escHtml(it.projDesc) + '</textarea>'
+      + '<div style="font-size:11px;color:var(--fog);margin-top:3px">Optional, but it makes the cover letter\u2019s first paragraph. The file itself is not kept; only the text in this box is.</div></div>';
   }
   if (fd.kind === 'reline') {
     return '<div style="padding:10px 12px;background:#0E1E30;border:1px dashed rgba(255,255,255,.18);border-radius:var(--radius);margin-bottom:12px">'
@@ -13703,8 +13718,9 @@ function renderCloseoutReport(el, co) {
     return slot('hl-' + h.id, h.h, '', 3, h.links ? linkNote(h.links) : '',
       '<button type="button" class="btn btn-sm" style="flex-shrink:0;margin-bottom:4px" onclick="coDraftHighlight(\'' + h.id + '\',this)">✦ AI Draft</button>');
   }).join('');
-  const editor = box('letter', 'Cover letter', slot('letter', 'Letter body', rt.slotHints.letter, 7)
-      + '<div style="font-size:11px;color:var(--fog)">Address block, date, Re: line, salutation and signature come from the intake.</div>')
+  const editor = box('letter', 'Cover letter', slot('letter', 'Letter body', rt.slotHints.letter, 7, '',
+        '<button type="button" class="btn btn-sm" style="flex-shrink:0;margin-bottom:4px" onclick="coDraftLetter(this)">✦ AI Draft</button>')
+      + '<div style="font-size:11px;color:var(--fog)">AI Draft writes the three paragraphs from the project\u2019s counts, the intake\u2019s project description, outcomes and praise, and what the report contains; draft the PI Highlights first so the letter matches them. Anything in the box is kept as notes. Address block, date, Re: line, salutation and signature come from the intake.</div>')
     + box('glance', 'PI Program at a Glance', '<div style="font-size:12px;color:var(--slate)">Counted from the project. Overrides, website visits, subscribers and your own metrics come from the intake’s <a href="#" onclick="openCloseoutIntake(\'' + co.id + '\');return false" style="color:var(--sky-lt)">Program metrics</a> and are marked † in the report.</div>')
     + box('highlights', 'PI Highlights', '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px">'
       + '<div style="font-size:11px;color:var(--fog)">A heading prints only when it has text or links. <strong style="color:var(--mist)">AI Draft</strong> writes from what Cirrus Cc recorded plus anything you type in the box — type a few notes for things Cirrus Cc doesn’t track (a traffic-app alert, a press release) and draft from them.</div>'
@@ -14143,6 +14159,152 @@ async function coDraftCommlog(btn) {
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = label; }
   }
+}
+
+// ── PI CLOSE-OUT: the cover letter (Nov 2026, Jeff) ──────────────────────
+// Three paragraphs, the shape of the reference letters (19739, 17894): thanks +
+// what the project was and why PI mattered; how the public responded and the
+// outcome; what the following pages contain. Same rules as the highlights:
+// counts computed here, the intake's own words authoritative, no private names.
+const CO_LETTER_WORDS = 280, CO_LETTER_MAX = 340;
+
+// What the report itself contains, in report order — the third paragraph names
+// only these, so the letter never promises a section that was left out.
+function _coLetterContents(co) {
+  const doc = _coReportDoc(co);
+  const names = { glance: 'a PI program summary', highlights: 'PI highlights', commlog: 'a summary of the stakeholder communications log',
+    figures: 'engagement charts and figures', commitments: 'the commitments made to the public', row: 'right-of-way and property owner outreach',
+    lessons: 'lessons learned and recommendations', scope: 'delivery against the scope of work', photos: 'a photo gallery' };
+  return doc.sections.filter(function (x) { return x.state === 'in' && names[x.id]; }).map(function (x) { return names[x.id]; });
+}
+
+function _coLetterFacts(co) {
+  const it = _coWithProjWeb(co, _coIt(co));
+  const pid = String(co.projectId), w = _coWindow(co);
+  const proj = (DB.get('projects') || []).find(function (p) { return String(p.id) === pid; }) || {};
+  const f = _coFactsFor(co);
+  const ints = (DB.get('interactions') || []).filter(function (i) { return String(i.projectId) === pid && _coInWin(i.date, w); });
+  const inbound = ints.filter(function (i) { return i.direction !== 'Outgoing'; });
+  const tally = function (arr, key) {
+    const t = {}; arr.forEach(function (x) { const k = x[key]; if (k) t[k] = (t[k] || 0) + 1; });
+    return Object.keys(t).sort(function (a, b) { return t[b] - t[a]; }).map(function (k) { return k + ' ' + t[k]; }).join(', ');
+  };
+  const L = [];
+  const region = _coVal(it.region) ? (/^udot\b/i.test(String(it.region).trim()) ? '' : 'UDOT ') + String(it.region).trim() : '';
+  L.push('Project: ' + (proj.name || '') + (_coVal(it.route) ? ' (' + String(it.route).trim() + ')' : '')
+    + ([proj.city, proj.county ? proj.county + ' County' : ''].filter(_coVal).length ? ', ' + [proj.city, proj.county ? proj.county + ' County' : ''].filter(_coVal).join(', ') : '') + '.');
+  if (region || proj.client) L.push('Client: ' + (region || proj.client) + '.');
+  if (proj.phase) L.push('Project phase: ' + proj.phase + '.');
+  if (f.duration) L.push((w ? 'Period covered: ' : 'PI program duration: ') + f.duration + '.');
+  const dels = (DB.get('deliverables') || []).filter(function (d) { return String(d.projectId) === pid && d.status !== 'Cancelled'; });
+  if (dels.length) L.push('The PI scope covered: ' + dels.map(function (d) { return d.type; }).filter(_coVal).filter(function (v, i, a) { return a.indexOf(v) === i; }).slice(0, 12).join(', ') + '.');
+  L.push('Stakeholders in the registry: ' + (_coVal(it.ovrStakeholders) ? String(it.ovrStakeholders).trim() : f.stakeholders) + '.');
+  L.push('Logged stakeholder interactions: ' + (_coVal(it.ovrInteractions) ? String(it.ovrInteractions).trim() : f.interactions) + (f.intSpan ? ' (' + f.intSpan + ')' : '') + '.');
+  if (inbound.length) {
+    L.push('Inbound and in-person contacts from the public: ' + inbound.length + '.');
+    const nat = tally(inbound, 'nature'); if (nat) L.push('Those inbound contacts by nature: ' + nat + '.');
+  }
+  L.push(f.issues ? 'Issues escalated to the project team: ' + f.issues + ', ' + f.issuesResolved + ' resolved.' : 'No issues were escalated to the project team.');
+  if (f.events) L.push('Events held: ' + f.events + '.');
+  if (f.commitments) L.push('Commitments made to the public: ' + f.commitments + ', ' + f.commitmentsKept + ' kept.');
+  if (f.piReports) L.push('PI reports issued to the project team: ' + (_coVal(it.ovrPiReports) ? String(it.ovrPiReports).trim() : f.piReports) + '.');
+  if (_coVal(it.websiteUrl)) L.push('A dedicated project website was used.');
+  if (_coVal(it.hotline)) L.push('A project hotline was used.');
+  const v = (it.visits || []).filter(function (r) { return r && _coVal(r.visits); });
+  if (v.length) L.push('Unique website visits: ' + String(v[v.length - 1].visits).trim() + (_coVal(v[v.length - 1].when) ? ' (as of ' + String(v[v.length - 1].when).trim() + ')' : '') + '.');
+  if (_coVal(it.subsEnd)) L.push('Email update subscribers at completion: ' + String(it.subsEnd).trim() + '.');
+  const out = { lines: L, desc: _coLines(it.projDesc), praise: _coLines(it.praise), concerns: _coLines(it.concerns),
+    contents: _coLetterContents(co), attach: String(it.letterAttach || '').trim(), highlights: [], notes: _coLines((it.draft || {}).letter) };
+  const dr = it.draft || {};
+  (_coReportType(co).highlights || []).forEach(function (h) { const t = _coLines(dr['hl-' + h.id]).join(' '); if (t) out.highlights.push(h.h + ': ' + t); });
+  return out;
+}
+
+function _coLetterRequest(co) {
+  const fx = _coLetterFacts(co);
+  const it = _coIt(co);
+  const user = 'Write the BODY of the cover letter for this PI close-out report: the paragraphs between the salutation and "Best regards,". '
+    + 'The address block, date, Re: line, salutation and signature are printed separately; do not write them.\n'
+    + (_coWindow(co) ? 'This is an interim close-out covering ' + _coWinLabel(_coWindow(co)) + ' only.\n' : '')
+    + 'Recipient: ' + (_coVal(it.scmName) ? String(it.scmName).trim() : 'the agency’s communication manager') + '.\n'
+    + 'Three paragraphs, separated by a blank line, about ' + CO_LETTER_WORDS + ' words in all and never more than ' + CO_LETTER_MAX + ':\n'
+    + '1. Thank the agency for the opportunity to partner as the Public Involvement consultant on the project; say in a sentence or two what the project built and why, and why early and continuous public involvement mattered (who was affected).\n'
+    + '2. How the public responded and the outcome: the overall sentiment, what people appreciated, the kinds of concerns raised and how the team handled them, and how construction ended for the public.\n'
+    + '3. What the following pages contain (name the items given below, in that order), and a closing sentence on the team being pleased to have led the project’s public involvement.\n\n'
+    + 'FACTS FROM THE PROJECT RECORD (authoritative; use each number exactly, and only where it helps):\n- ' + fx.lines.join('\n- ') + '\n\n'
+    + (fx.desc.length ? 'PROJECT DESCRIPTION (from the PI team; authoritative):\n' + fx.desc.join('\n') + '\n\n' : 'No project description was given: describe the project only from its name and the facts above, without inventing what was built.\n\n')
+    + (fx.praise.length ? 'OUTCOMES AND PRAISE (from the PI team; authoritative; include each):\n- ' + fx.praise.join('\n- ') + '\n\n' : '')
+    + (fx.concerns.length ? 'CONCERNS OF NOTE (from the PI team; authoritative):\n- ' + fx.concerns.join('\n- ') + '\n\n' : '')
+    + 'WHAT THE FOLLOWING PAGES CONTAIN: ' + (fx.contents.length ? fx.contents.join('; ') : 'the close-out report') + '.\n'
+    + (fx.attach ? 'ATTACHMENTS THAT FOLLOW THE REPORT (from the PI team): ' + fx.attach + '\n' : '')
+    + '\n'
+    + (fx.highlights.length ? 'THE PI HIGHLIGHTS ALREADY WRITTEN IN THIS REPORT (stay consistent with them; do not repeat them at length):\n- ' + fx.highlights.join('\n- ') + '\n\n' : '')
+    + (fx.notes.length ? 'NOTES ALREADY IN THE LETTER BOX (authoritative; keep every point):\n- ' + fx.notes.join('\n- ') + '\n\n' : '')
+    + 'Refer to private individuals by role, never by name. Write the three paragraphs now.';
+  return { system: _coCloseoutSystemPrompt().replace('You write one section of', 'You write the cover letter of') + ' A letter is the one place in the report where several paragraphs are expected.',
+    user: user, maxTokens: Math.round(CO_LETTER_MAX * 2.2) + 120 };
+}
+
+async function _coLetterDraftCall(co) {
+  const req = _coLetterRequest(co);
+  const text = await _claudeNarrative(req.system, req.user, req.maxTokens);
+  if (!text) return null;
+  return text.replace(/^\s*dear [^\n]*\n/i, '').replace(/\n\s*(best regards|sincerely)[\s\S]*$/i, '')
+    .split(/\n\s*\n/).map(function (p) { return p.replace(/\s*\n\s*/g, ' ').trim(); }).filter(Boolean).join('\n');
+}
+
+async function coDraftLetter(btn) {
+  const co = (_syncCache.closeouts || []).find(function (c) { return _coWork && c.id === _coWork.id; });
+  if (!co) return;
+  if (!_coHasKey()) return;
+  const fx = _coLetterFacts(co);
+  if (fx.notes.length && !confirm('Rewrite what is in the letter box as a drafted letter?\n\nYour text is used as notes, so every point in it is kept.')) return;
+  const label = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Drafting…'; }
+  try {
+    const text = await _coLetterDraftCall(co);
+    if (text) _coWriteSlot('letter', text);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  }
+}
+
+// Read the project description out of the project website saved as a PDF (or
+// a screenshot). The file goes to Claude once and is not kept; the description
+// lands in the intake box as ordinary text to check and edit.
+function _coFileB64(file) {
+  return new Promise(function (res, rej) {
+    const r = new FileReader();
+    r.onload = function () { res(String(r.result).split(',')[1] || ''); };
+    r.onerror = function () { rej(r.error); };
+    r.readAsDataURL(file);
+  });
+}
+async function coDescFromFile(input) {
+  const file = input && input.files && input.files[0];
+  if (input) input.value = '';
+  if (!file || !_coWork) return;
+  if (!_coHasKey()) return;
+  const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+  if (!isPdf && !/^image\/(png|jpe?g|gif|webp)$/.test(file.type)) { showToast('Pick a PDF or a picture (PNG, JPG).', 'warn', 5000); return; }
+  if (file.size > 20 * 1024 * 1024) { showToast('That file is over 20 MB. Save just the project page as a PDF and try again.', 'warn', 6000); return; }
+  const box = document.getElementById('co-f-projDesc');
+  if (box && box.value.trim() && !confirm('Replace what is in the Project description box with what Claude reads from this file?')) return;
+  showToast('Reading ' + file.name + '…', 'info', 4000);
+  const data = await _coFileB64(file);
+  const block = isPdf ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: data } }
+                      : { type: 'image', source: { type: 'base64', media_type: file.type, data: data } };
+  const text = await _claudeNarrative(
+    'You read a transportation project’s public web page or fact sheet and write a factual description of the project for a public involvement close-out letter. '
+      + 'Use only what the document says; never invent a date, figure, place or benefit. Plain prose, no headings, no bullet points, no web addresses.',
+    [block, { type: 'text', text: 'In 2 to 4 sentences (at most 90 words), say what the project built or repaired, where, why (the benefits the document names), and the construction impacts on the public it mentions (closures, detours, restrictions, schedule). If the document is not about a construction project, answer only: NO PROJECT DESCRIPTION FOUND.' }],
+    400);
+  if (!text) return;
+  if (/NO PROJECT DESCRIPTION FOUND/i.test(text)) { showToast('No project description was found in that file.', 'warn', 6000); return; }
+  const clean = text.replace(/\s*\n\s*/g, ' ').trim();
+  if (box) { box.value = clean; _coSet(box); }
+  else { _coWork.intake.projDesc = clean; _coSaveSoon(); }
+  showToast('Project description filled from ' + file.name + ' — check it before drafting the letter.', 'info', 5000);
 }
 
 let _coPreviewTimer = null;

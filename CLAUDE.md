@@ -1663,8 +1663,21 @@ the model narrates, never counts.
   one-paragraph-per-line format). A failed call leaves the box untouched.
 - Covered by `test/tests/58-closeout-ai-highlights.test.js` (32 checks,
   `_claudeNarrative` stubbed).
-- Not AI-drafted (yet): the cover letter, lessons and the ROW narrative stay
-  typed. The Communications Log Summary is step 5 (below).
+- Not AI-drafted (yet): lessons and the ROW narrative stay typed. The
+  Communications Log Summary is step 5 (below); the cover letter is below.
+- **Cover letter ✦ AI Draft (DEV, Nov 2026, Jeff).** `coDraftLetter` →
+  `_coLetterRequest` / `_coLetterFacts` (next to `coDraftCommlog`): three
+  paragraphs (~280 words, max 340) in the reference letters' shape — thanks +
+  what was built and why; public response and outcome; what follows. Facts:
+  counts from `_coFactsFor`, inbound by nature, scope deliverable types, the
+  intake's **Project description** (`projDesc`, new, Narrative pointers),
+  praise and concerns, **What follows the letter** (`letterAttach`, new), the
+  report's own sections (`_coLetterContents`, so it never names a left-out
+  section) and the PI Highlights already written. The box's text is notes; a
+  returned salutation/sign-off is stripped. **📎 Fill from the website PDF or a
+  picture** (`coDescFromFile`) sends the file once to Claude as a document /
+  image block and puts a 2–4 sentence description in `projDesc`; the file is not
+  stored. Guarded by `test/tests/123-closeout-cover-letter.test.js` (fails on the old code).
 
 ### PI Close-Out — step 5 BUILT: the Communications Log Summary (Oct 2026)
 **✦ AI Draft** on the Stakeholder Communications Log Summary box. The one long synthesis in the app: the model READS the whole

@@ -11891,6 +11891,10 @@ const CLOSEOUT_TYPES = {
   'udot-construction': {
     label: 'UDOT Construction-Phase PI Close-Out',
     sections: [
+      { id: 'docs', title: 'Project documents',
+        feeds: 'project description, cover letter, PI Highlights',
+        hint: 'Start here. Add the project website (saved as a PDF), the newsletters and the flyers. Each is read once by Claude into a short summary that every AI Draft in this close-out then uses. The files themselves are not kept, only the summaries, which you can edit. Weekly PI reports and emails are already in Cirrus Cc, so leave those out.',
+        fields: [ { kind: 'docs', key: 'docs' } ] },
       { id: 'recipient', title: 'Project & recipient', required: true,
         feeds: 'cover letter address block, Re: line, salutation',
         fields: [
@@ -12544,16 +12548,13 @@ function _coBlockField(fd, it, f, proj) {
       + '</div>';
   }
   if (fd.kind === 'projdesc') {
-    // What was built and why — the cover letter's first paragraph. Typed, or
-    // read from the project website saved as a PDF (or a screenshot): the AI
-    // pulls the description out and it lands here as ordinary text to check.
-    return '<div class="fr" style="margin-bottom:12px"><div style="display:flex;align-items:flex-end;justify-content:space-between;gap:10px;flex-wrap:wrap">'
-      + '<label for="co-f-projDesc">Project description (what was built, and why)</label>'
-      + '<label class="btn btn-sm" style="cursor:pointer;margin-bottom:4px" title="Save the project website page as a PDF (or take a screenshot) and pick it here. Claude reads it and fills this box for you to check.">📎 Fill from the website PDF or a picture…'
-      + '<input type="file" accept="application/pdf,image/*" style="display:none" onchange="coDescFromFile(this)"></label></div>'
+    // What was built and why — the cover letter's first paragraph. Filled
+    // from the project website when it is added under Project documents, or typed.
+    return '<div class="fr" style="margin-bottom:12px"><label for="co-f-projDesc">Project description (what was built, and why)</label>'
       + '<textarea id="co-f-projDesc" data-k="projDesc" oninput="_coSet(this)" rows="4" placeholder="e.g. The project built a new pedestrian and bicycle undercrossing beneath Main Street to connect the Logan River Trail, which required extended lane restrictions and overnight full closures along a busy commercial corridor.">' + escHtml(it.projDesc) + '</textarea>'
-      + '<div style="font-size:11px;color:var(--fog);margin-top:3px">Optional, but it makes the cover letter\u2019s first paragraph. The file itself is not kept; only the text in this box is.</div></div>';
+      + '<div style="font-size:11px;color:var(--fog);margin-top:3px">Optional, but it makes the cover letter\u2019s first paragraph. Filled for you from the project website when you add it under Project documents (step 1).</div></div>';
   }
+  if (fd.kind === 'docs') return _coDocsHTML(it);
   if (fd.kind === 'reline') {
     return '<div style="padding:10px 12px;background:#0E1E30;border:1px dashed rgba(255,255,255,.18);border-radius:var(--radius);margin-bottom:12px">'
       + '<div style="font-size:11px;color:var(--fog);margin-bottom:4px">Re: line, as it will print</div>'
@@ -13905,6 +13906,9 @@ function _coHighlightFacts(co, hid) {
       .slice(0, 10).forEach(function (e) { L.push('Meeting — ' + evLine(e) + '.'); });
     olLines(ol.coord, 'Shared with a partner to distribute');
   }
+  // What the website, newsletters and flyers told the public (Project documents).
+  const DOC_KINDS_FOR = { outreach: ['website', 'flyer', 'other'], website: ['website'], email: ['newsletter'], traffic: ['flyer', 'newsletter', 'website'] };
+  if (DOC_KINDS_FOR[hid]) _coDocLines(it, DOC_KINDS_FOR[hid]).forEach(function (x) { L.push(x); });
   const dr = it.draft || {};
   return { lines: L, notes: _coLines(dr['hl-' + hid]) };
 }
@@ -14217,7 +14221,8 @@ function _coLetterFacts(co) {
   if (v.length) L.push('Unique website visits: ' + String(v[v.length - 1].visits).trim() + (_coVal(v[v.length - 1].when) ? ' (as of ' + String(v[v.length - 1].when).trim() + ')' : '') + '.');
   if (_coVal(it.subsEnd)) L.push('Email update subscribers at completion: ' + String(it.subsEnd).trim() + '.');
   const out = { lines: L, desc: _coLines(it.projDesc), praise: _coLines(it.praise), concerns: _coLines(it.concerns),
-    contents: _coLetterContents(co), attach: String(it.letterAttach || '').trim(), highlights: [], notes: _coLines((it.draft || {}).letter) };
+    contents: _coLetterContents(co), attach: String(it.letterAttach || '').trim(), highlights: [], notes: _coLines((it.draft || {}).letter),
+    docs: _coDocLines(it) };
   const dr = it.draft || {};
   (_coReportType(co).highlights || []).forEach(function (h) { const t = _coLines(dr['hl-' + h.id]).join(' '); if (t) out.highlights.push(h.h + ': ' + t); });
   return out;
@@ -14236,6 +14241,7 @@ function _coLetterRequest(co) {
     + '3. What the following pages contain (name the items given below, in that order), and a closing sentence on the team being pleased to have led the project’s public involvement.\n\n'
     + 'FACTS FROM THE PROJECT RECORD (authoritative; use each number exactly, and only where it helps):\n- ' + fx.lines.join('\n- ') + '\n\n'
     + (fx.desc.length ? 'PROJECT DESCRIPTION (from the PI team; authoritative):\n' + fx.desc.join('\n') + '\n\n' : 'No project description was given: describe the project only from its name and the facts above, without inventing what was built.\n\n')
+    + (fx.docs.length ? 'WHAT THE PROJECT WEBSITE, NEWSLETTERS AND FLYERS TOLD THE PUBLIC (summaries of the documents; use for context, not for counts):\n- ' + fx.docs.join('\n- ') + '\n\n' : '')
     + (fx.praise.length ? 'OUTCOMES AND PRAISE (from the PI team; authoritative; include each):\n- ' + fx.praise.join('\n- ') + '\n\n' : '')
     + (fx.concerns.length ? 'CONCERNS OF NOTE (from the PI team; authoritative):\n- ' + fx.concerns.join('\n- ') + '\n\n' : '')
     + 'WHAT THE FOLLOWING PAGES CONTAIN: ' + (fx.contents.length ? fx.contents.join('; ') : 'the close-out report') + '.\n'
@@ -14272,9 +14278,38 @@ async function coDraftLetter(btn) {
   }
 }
 
-// Read the project description out of the project website saved as a PDF (or
-// a screenshot). The file goes to Claude once and is not kept; the description
-// lands in the intake box as ordinary text to check and edit.
+// ── PI CLOSE-OUT: Project documents (Nov 2026, Jeff) ─────────────────────
+// The website page (saved as a PDF), newsletters and flyers: the things the
+// public was told, whose CONTENT Cirrus Cc doesn't hold (the Outreach log knows
+// they went out, not what they said). Each file is read ONCE into a short
+// summary, kept in intake.docs = [{id,name,kind,date,summary}]; the files are
+// not stored. Every close-out AI draft then reads the summaries. Weekly PI
+// reports and emails are left out on purpose: Cirrus Cc already has them.
+const CO_DOC_KINDS = [['website', 'Project website'], ['newsletter', 'Newsletter'], ['flyer', 'Flyer or mailer'], ['other', 'Other']];
+const CO_DOC_MAX_MB = 20;
+const CO_DOC_PDF_PAGE_TOKENS = 2500, CO_DOC_IMG_TOKENS = 1600;
+function _coDocKindLabel(k) { const x = CO_DOC_KINDS.find(function (y) { return y[0] === k; }); return x ? x[1] : 'Document'; }
+function _coDocs(it) { return Array.isArray(it && it.docs) ? it.docs : []; }
+
+function _coDocsHTML(it) {
+  const docs = _coDocs(it);
+  const rows = docs.map(function (d, i) {
+    return '<div style="border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;background:rgba(255,255,255,.02)">'
+      + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">'
+      + '<strong style="font-size:13px;color:var(--white);flex:1 1 200px;min-width:0;overflow:hidden;text-overflow:ellipsis">' + escHtml(d.name || 'Document') + '</strong>'
+      + '<select aria-label="What it is" onchange="coDocEdit(' + i + ',\'kind\',this.value)" style="padding:4px 6px">'
+      + CO_DOC_KINDS.map(function (k) { return '<option value="' + k[0] + '"' + (d.kind === k[0] ? ' selected' : '') + '>' + k[1] + '</option>'; }).join('') + '</select>'
+      + '<input aria-label="Date" type="date" value="' + escHtml(d.date || '') + '" onchange="coDocEdit(' + i + ',\'date\',this.value)" style="padding:4px 6px">'
+      + '<button type="button" class="btn btn-sm" onclick="coDocRemove(' + i + ')">Remove</button></div>'
+      + '<textarea aria-label="Summary of ' + escHtml(d.name || 'document') + '" rows="3" oninput="coDocEdit(' + i + ',\'summary\',this.value)">' + escHtml(d.summary || '') + '</textarea></div>';
+  }).join('');
+  return '<div style="margin-bottom:12px">'
+    + '<label class="btn btn-sm btn-primary" style="cursor:pointer;display:inline-block;margin-bottom:10px">📎 Add files (PDF or pictures)…'
+    + '<input type="file" multiple accept="application/pdf,image/png,image/jpeg,image/gif,image/webp" style="display:none" onchange="coAddDocs(this)"></label>'
+    + '<span id="co-docs-status" style="font-size:12px;color:var(--fog);margin-left:10px">' + (docs.length ? docs.length + ' document' + (docs.length === 1 ? '' : 's') + ' read' : 'Nothing added yet.') + '</span>'
+    + rows + '</div>';
+}
+
 function _coFileB64(file) {
   return new Promise(function (res, rej) {
     const r = new FileReader();
@@ -14283,31 +14318,98 @@ function _coFileB64(file) {
     r.readAsDataURL(file);
   });
 }
-async function coDescFromFile(input) {
-  const file = input && input.files && input.files[0];
+function _coIsPdf(f) { return f.type === 'application/pdf' || /\.pdf$/i.test(f.name || ''); }
+function _coIsImg(f) { return /^image\/(png|jpe?g|gif|webp)$/.test(f.type || ''); }
+// Pages counted from the PDF itself (its /Type /Page objects), else ~1 per 40 KB.
+async function _coDocTokens(f) {
+  if (!_coIsPdf(f)) return CO_DOC_IMG_TOKENS;
+  let pages = 0;
+  try { const t = await f.text(); pages = (t.match(/\/Type\s*\/Page(?!s)/g) || []).length; } catch (e) {}
+  if (!pages) pages = Math.max(1, Math.round(f.size / 40960));
+  return pages * CO_DOC_PDF_PAGE_TOKENS;
+}
+
+const CO_DOC_SYSTEM = 'You read one public-facing document from a transportation project (its website page, a newsletter, a flyer or a mailer) '
+  + 'for the PI consultant’s close-out report. Use only what the document says; never invent a date, figure, place or outcome. '
+  + 'Describe private individuals by role, never by name, phone or email. Do not copy web addresses or email addresses.';
+const CO_DOC_TASK = 'Answer in exactly this form, nothing else:\n'
+  + 'KIND: website | newsletter | flyer | other\n'
+  + 'DATE: the date the document was issued, as YYYY-MM-DD, or unknown\n'
+  + 'SUMMARY: 60 to 120 words: what the document told the public (construction stages, closures, detours, restrictions, schedule, how to get updates or contact the team).\n'
+  + 'DESCRIPTION: 2 to 4 sentences (at most 90 words) on what the project builds or repairs, where, and why, if the document says so; otherwise none.';
+
+function _coParseDoc(text) {
+  const get = function (k) { const m = String(text || '').match(new RegExp('^\\s*' + k + ':\\s*([\\s\\S]*?)(?=\\n\\s*(KIND|DATE|SUMMARY|DESCRIPTION):|$)', 'im')); return m ? m[1].replace(/\s*\n\s*/g, ' ').trim() : ''; };
+  const kind = (get('KIND').toLowerCase().match(/website|newsletter|flyer|other/) || ['other'])[0];
+  const date = (get('DATE').match(/\d{4}-\d{2}-\d{2}/) || [''])[0];
+  const desc = get('DESCRIPTION');
+  return { kind: kind, date: date, summary: get('SUMMARY'), description: /^none\.?$/i.test(desc) ? '' : desc };
+}
+
+async function coAddDocs(input) {
+  const files = Array.from((input && input.files) || []);
   if (input) input.value = '';
-  if (!file || !_coWork) return;
+  if (!files.length || !_coWork) return;
   if (!_coHasKey()) return;
-  const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
-  if (!isPdf && !/^image\/(png|jpe?g|gif|webp)$/.test(file.type)) { showToast('Pick a PDF or a picture (PNG, JPG).', 'warn', 5000); return; }
-  if (file.size > 20 * 1024 * 1024) { showToast('That file is over 20 MB. Save just the project page as a PDF and try again.', 'warn', 6000); return; }
-  const box = document.getElementById('co-f-projDesc');
-  if (box && box.value.trim() && !confirm('Replace what is in the Project description box with what Claude reads from this file?')) return;
-  showToast('Reading ' + file.name + '…', 'info', 4000);
-  const data = await _coFileB64(file);
-  const block = isPdf ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: data } }
-                      : { type: 'image', source: { type: 'base64', media_type: file.type, data: data } };
-  const text = await _claudeNarrative(
-    'You read a transportation project’s public web page or fact sheet and write a factual description of the project for a public involvement close-out letter. '
-      + 'Use only what the document says; never invent a date, figure, place or benefit. Plain prose, no headings, no bullet points, no web addresses.',
-    [block, { type: 'text', text: 'In 2 to 4 sentences (at most 90 words), say what the project built or repaired, where, why (the benefits the document names), and the construction impacts on the public it mentions (closures, detours, restrictions, schedule). If the document is not about a construction project, answer only: NO PROJECT DESCRIPTION FOUND.' }],
-    400);
-  if (!text) return;
-  if (/NO PROJECT DESCRIPTION FOUND/i.test(text)) { showToast('No project description was found in that file.', 'warn', 6000); return; }
-  const clean = text.replace(/\s*\n\s*/g, ' ').trim();
-  if (box) { box.value = clean; _coSet(box); }
-  else { _coWork.intake.projDesc = clean; _coSaveSoon(); }
-  showToast('Project description filled from ' + file.name + ' — check it before drafting the letter.', 'info', 5000);
+  const ok = files.filter(function (f) { return (_coIsPdf(f) || _coIsImg(f)) && f.size <= CO_DOC_MAX_MB * 1024 * 1024; });
+  const skipped = files.length - ok.length;
+  if (!ok.length) { showToast('Pick PDFs or pictures (PNG, JPG), each under ' + CO_DOC_MAX_MB + ' MB.', 'warn', 6000); return; }
+  let tok = 0;
+  for (const f of ok) tok += await _coDocTokens(f);
+  const usd = tok / 1e6 * 2 + ok.length * 400 / 1e6 * 10;
+  if (!confirm('Read ' + ok.length + ' file' + (ok.length === 1 ? '' : 's') + ' with Claude?' + (skipped ? ' (' + skipped + ' skipped: not a PDF or picture, or over ' + CO_DOC_MAX_MB + ' MB.)' : '')
+    + '\n\nAbout ' + Math.round(tok / 1000) + 'K tokens. Estimated cost: about $' + Math.max(0.01, usd).toFixed(2) + '.\nEach file is read once; only its summary is kept.')) return;
+  const st = document.getElementById('co-docs-status');
+  let done = 0;
+  const say = function () { if (st) st.textContent = 'Reading… ' + done + ' of ' + ok.length; };
+  say();
+  const results = await _mapLimit(ok, 3, async function (f) {
+    try {
+      const data = await _coFileB64(f);
+      const block = _coIsPdf(f) ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: data } }
+                                : { type: 'image', source: { type: 'base64', media_type: f.type, data: data } };
+      const text = await _claudeNarrative(CO_DOC_SYSTEM, [block, { type: 'text', text: CO_DOC_TASK }], 500);
+      return text ? Object.assign({ name: f.name }, _coParseDoc(text)) : null;
+    } catch (e) { console.error('Close-out document read failed:', f.name, e); return null; }
+    finally { done++; say(); }
+  });
+  const it = _coWork.intake;
+  const docs = _coDocs(it).slice();
+  let added = 0;
+  results.forEach(function (r) {
+    if (!r || !r.summary) return;
+    if (!_coVal(it.projDesc) && r.description) it.projDesc = r.description;
+    docs.push({ id: DB.uid(), name: r.name, kind: r.kind, date: r.date, summary: r.summary });
+    added++;
+  });
+  it.docs = docs;
+  _coDirty = true; _coSaveSoon();
+  const failed = ok.length - added;
+  showToast(added + ' document' + (added === 1 ? '' : 's') + ' read' + (failed ? '; ' + failed + ' could not be read' : '') + '. Check the summaries, then draft.', failed ? 'warn' : 'info', 6000);
+  render();
+}
+function coDocEdit(i, field, value) {
+  if (!_coWork) return;
+  const docs = _coDocs(_coWork.intake);
+  if (!docs[i]) return;
+  docs[i][field] = value;
+  _coWork.intake.docs = docs;
+  _coDirty = true; _coSaveSoon();
+}
+function coDocRemove(i) {
+  if (!_coWork) return;
+  const docs = _coDocs(_coWork.intake).slice();
+  if (!docs[i] || !confirm('Remove "' + (docs[i].name || 'this document') + '" and its summary from this close-out?')) return;
+  docs.splice(i, 1);
+  _coWork.intake.docs = docs;
+  _coDirty = true; _coSaveSoon();
+  render();
+}
+// The summaries as fact lines, oldest first; kinds = which documents to include.
+function _coDocLines(it, kinds) {
+  return _coDocs(it).filter(function (d) { return _coVal(d.summary) && (!kinds || kinds.indexOf(d.kind) > -1); })
+    .slice().sort(function (a, b) { return String(a.date || '').localeCompare(String(b.date || '')); })
+    .map(function (d) { return 'From the ' + _coDocKindLabel(d.kind).toLowerCase() + (d.date ? ' (' + fmt(d.date) + ')' : '') + ': ' + String(d.summary).trim(); });
 }
 
 let _coPreviewTimer = null;

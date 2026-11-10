@@ -3,7 +3,7 @@
 // _claudeNarrative is stubbed, so this checks what is SENT and what happens to
 // what comes back.
 module.exports = {
-  name: 'close-out cover letter — AI draft from counts, description, praise and contents; description from a PDF',
+  name: 'close-out cover letter + Project documents — AI draft from counts, description, praise, contents and the website, newsletters and flyers',
   async run({ t }) {
     t.seed();
     const projId = String((await t.sql(`select id from pi_projects where pid='25-LC-400N'`))[0].id);
@@ -58,18 +58,41 @@ module.exports = {
       t.eq((await page.evaluate(() => window.__calls.splice(0))).length, 0, 'without an API key nothing is sent');
       await page.evaluate(() => _setClaudeKey('sk-ant-test'));
 
-      // ── the intake: description box + fill from a PDF ──
+      // ── the intake: Project documents (website PDF, newsletters, flyers) ──
+      await page.evaluate(() => { const co = _syncCache.closeouts.find(c => c.id === _coWork.id); _coWork.intake.projDesc = ''; });
+      await page.evaluate(() => { window._claudeNarrative = async (system, user) => { window.__calls.push({ system, user });
+        const name = window.__nextName.shift();
+        return name === 'site.pdf'
+          ? 'KIND: website\nDATE: 2026-03-01\nSUMMARY: The site explained overnight closures of 400 North and a detour on 300 North.\nDESCRIPTION: The project rebuilt the Main Street bridge. It closed one lane.'
+          : 'KIND: newsletter\nDATE: 2026-05-15\nSUMMARY: The May newsletter announced the lane shift and how to sign up for text alerts.\nDESCRIPTION: none'; };
+        window.__nextName = ['site.pdf', 'may.png']; });
       await page.evaluate(cid => openCloseoutIntake(cid), id);
-      t.ok(await page.evaluate(() => !!document.getElementById('co-f-projDesc') && !!document.getElementById('co-f-letterAttach')), 'the intake has the project description and attachments boxes');
-      await page.setInputFiles('#co-sec-narrative input[type=file]', { name: 'website.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 test') });
-      await page.waitForFunction(() => /Main Street bridge/.test(document.getElementById('co-f-projDesc').value));
-      const [d] = await page.evaluate(() => window.__calls.splice(0));
-      t.ok(Array.isArray(d.user) && d.user[0].type === 'document' && d.user[0].source.media_type === 'application/pdf', 'the PDF is sent to Claude as a document');
-      t.eq(await page.evaluate(() => document.getElementById('co-f-projDesc').value), 'The project rebuilt the Main Street bridge. It closed one lane.', 'the description fills the box, as one paragraph');
+      t.ok(await page.evaluate(() => !!document.getElementById('co-sec-docs') && document.querySelector('.co-sec').id === 'co-sec-docs'), 'Project documents is the first step of the intake');
+      t.ok(await page.evaluate(() => !!document.getElementById('co-f-projDesc') && !!document.getElementById('co-f-letterAttach')), 'the intake still has the project description and attachments boxes');
+      await page.setInputFiles('#co-sec-docs input[type=file]', [
+        { name: 'site.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 /Type /Page /Type /Page') },
+        { name: 'may.png', mimeType: 'image/png', buffer: Buffer.from('png') }]);
+      await page.waitForFunction(() => (_coWork.intake.docs || []).length === 2);
+      const calls2 = await page.evaluate(() => window.__calls.splice(0));
+      t.eq(calls2.length, 2, 'each file is read once');
+      t.ok(calls2.some(c => c.user[0].type === 'document' && c.user[0].source.media_type === 'application/pdf') && calls2.some(c => c.user[0].type === 'image'), 'PDFs go as documents, pictures as images');
+      const docs = await page.evaluate(() => _coWork.intake.docs.map(d => [d.name, d.kind, d.date]).sort());
+      t.eq(JSON.stringify(docs), JSON.stringify([['may.png', 'newsletter', '2026-05-15'], ['site.pdf', 'website', '2026-03-01']]), 'each file becomes a summary with its kind and date');
+      t.eq(await page.evaluate(() => _coWork.intake.projDesc), 'The project rebuilt the Main Street bridge. It closed one lane.', 'the website fills an empty Project description');
       await page.evaluate(() => _coSave && _coSave());
       await page.waitForTimeout(400);
-      const stored = (await t.sql(`select intake->>'projDesc' d from pi_closeouts where id=$1`, [id]))[0].d;
-      t.eq(stored, 'The project rebuilt the Main Street bridge. It closed one lane.', 'only the text is saved with the intake');
+      const stored = (await t.sql(`select intake->'docs' d, intake->>'projDesc' p from pi_closeouts where id=$1`, [id]))[0];
+      t.ok(stored.d.length === 2 && stored.d.every(d => d.summary && !('data' in d)) && /Main Street bridge/.test(stored.p), 'only the summaries are saved with the intake, never the file');
+      // ── the summaries reach the drafts ──
+      const lf = await page.evaluate(() => _coLetterRequest(_syncCache.closeouts.find(c => c.id === _coWork.id)).user);
+      t.ok(/TOLD THE PUBLIC[^\n]*\n- From the project website \(Mar 1, 2026\): The site explained overnight closures/.test(lf), 'the cover letter request carries the document summaries, oldest first');
+      const fe = await page.evaluate(() => _coHighlightFacts(_syncCache.closeouts.find(c => c.id === _coWork.id), 'email').lines.join('\n'));
+      t.ok(/From the newsletter \(May 15, 2026\): The May newsletter announced/.test(fe) && !/From the project website/.test(fe), 'the email-updates highlight gets the newsletters only');
+      // ── edit and remove ──
+      await page.evaluate(() => { window.confirm = () => true; coDocEdit(0, 'summary', 'Edited summary.'); });
+      t.eq(await page.evaluate(() => _coWork.intake.docs[0].summary), 'Edited summary.', 'a summary can be edited');
+      await page.evaluate(() => coDocRemove(1));
+      t.eq(await page.evaluate(() => _coWork.intake.docs.length), 1, 'a document can be removed');
     } finally { await app.close(); }
   },
 };

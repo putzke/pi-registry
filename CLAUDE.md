@@ -1678,6 +1678,20 @@ the model narrates, never counts.
   picture** (`coDescFromFile`) sends the file once to Claude as a document /
   image block and puts a 2–4 sentence description in `projDesc`; the file is not
   stored. Guarded by `test/tests/123-closeout-cover-letter.test.js` (fails on the old code).
+- **Project documents — step 1 of the intake (LIVE, Nov 2026, Jeff).** The
+  website page (saved as PDF), newsletters and flyers: what the public was
+  told, whose CONTENT Cirrus Cc doesn't hold. Weekly PI reports and emails are
+  left out on purpose (archived reports and the interaction log already have
+  them). **📎 Add files** (`coAddDocs`, PDFs/pictures, ≤20 MB each, cost
+  confirm from page counts) reads each file ONCE on `CLAUDE_TEXT_MODEL`
+  (3 at a time) into `intake.docs = [{id,name,kind,date,summary}]`
+  (`_coParseDoc`: KIND / DATE / SUMMARY / DESCRIPTION reply); the files are
+  never stored. The first DESCRIPTION fills an empty `projDesc` (this replaced
+  the one-file `coDescFromFile`). Summaries are editable / removable
+  (`coDocEdit`, `coDocRemove`). `_coDocLines(it, kinds)` feeds the cover letter
+  (all) and the highlights (outreach: website/flyer/other; website: website;
+  email: newsletter; traffic: flyer/newsletter/website) — context, never counts.
+  Pushed straight to LIVE on Jeff's word. Guarded by test 123.
 - **Dated outreach links (DEV, Nov 2026, Jeff).** Under the PI Highlights a
   logged social post prints "(Mar 6, 2026 – UDOT Instagram – 1,863 reactions ·
   29 comments)" and a logged news story "(date – outlet – title)" — the date

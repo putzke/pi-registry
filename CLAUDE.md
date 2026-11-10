@@ -1710,6 +1710,17 @@ the model narrates, never counts.
   says "Cirrus Cc reads each file…", never "Claude"; files over 25 pages are
   flagged in the cost confirm. `_coWorkProj()` = the close-out's project.
   Guarded by test 123 (fails on the old code).
+- **A web address instead of a file (LIVE, Nov 2026, Jeff).** Under 📎 Add
+  files: paste a URL → **🔗 Read web page** (`coAddDocUrl`). The link-preview
+  function, asked `{url, text:true}`, returns the page's readable text
+  (`pageText`: scripts/menus/headers/footers/forms dropped, `<main>`/`<article>`
+  preferred, `TEXT_MAX` 20,000 chars) or, for a linked PDF, the PDF itself
+  (base64, ≤ `PDF_MAX_BYTES` 10 MB) — same address rules, same staff check.
+  It is then read once like a file; only the summary, `url` and `readOn` are
+  kept (the card links to the page, "what it said then"). A page with under
+  `TEXT_THIN` (300) chars or a sign-in wall comes back `thin` and is refused
+  with "save it as a PDF". Function deployed: DEV v4, LIVE v2. Guarded by
+  tests 92 (reader) and 123 (intake).
 - **Dated outreach links (DEV, Nov 2026, Jeff).** Under the PI Highlights a
   logged social post prints "(Mar 6, 2026 – UDOT Instagram – 1,863 reactions ·
   29 comments)" and a logged news story "(date – outlet – title)" — the date

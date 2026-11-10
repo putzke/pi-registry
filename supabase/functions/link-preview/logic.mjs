@@ -17,6 +17,12 @@ export const LINK_UA = 'CirrusCcLinkReader/1.0 (+https://www.cirruscc.com; link 
 export const MAX_BYTES = 2 * 1024 * 1024;
 export const TIMEOUT_MS = 10000;
 export const MAX_REDIRECTS = 5;
+// Full-text mode (the close-out's Project documents, Nov 2026): the page's
+// readable text, or a linked PDF itself, so staff can paste a web address
+// instead of saving the page as a PDF.
+export const TEXT_MAX = 20000;
+export const TEXT_THIN = 300;
+export const PDF_MAX_BYTES = 10 * 1024 * 1024;
 
 export const CORS = {
   'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -229,18 +235,53 @@ export function readPage(html, url) {
   return { fields, engagement, engagementSource: source, notes, loginWall, ldBlocks: ld.length, metaCount: Object.keys(meta).length, url };
 }
 
-async function readBody(res) {
-  if (!res.body || !res.body.getReader) { const t = await res.text(); return t.slice(0, MAX_BYTES); }
+// The readable text of a page: scripts, styles, menus, headers, footers and
+// forms dropped; <main> or <article> preferred when it holds the content;
+// block elements become line breaks. Capped at TEXT_MAX characters.
+export function pageText(html) {
+  let h = String(html || '').replace(/<!--[\s\S]*?-->/g, ' ');
+  for (const t of ['script', 'style', 'noscript', 'svg', 'template', 'iframe', 'form', 'nav', 'header', 'footer', 'aside', 'button', 'select'])
+    h = h.replace(new RegExp('<' + t + '\\b[\\s\\S]*?<\\/' + t + '>', 'gi'), ' ');
+  // Line breaks travel as a marker through decodeEntities, which folds whitespace.
+  const strip = (x) => decodeEntities(x
+    .replace(/<(br|hr)\b[^>]*>/gi, ' \u0001 ')
+    .replace(/<\/?(p|div|section|article|main|li|ul|ol|h[1-6]|tr|table|blockquote|dd|dt|figcaption)\b[^>]*>/gi, ' \u0001 ')
+    .replace(/<[^>]+>/g, ' ')).replace(/\u0001/g, '\n')
+    .replace(/[ \t\u00a0]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  const body = (h.match(/<body\b[^>]*>([\s\S]*)<\/body>/i) || [])[1] || h;
+  const all = strip(body);
+  let text = all;
+  for (const tag of ['main', 'article']) {
+    const m = body.match(new RegExp('<' + tag + '\\b[^>]*>([\\s\\S]*)<\\/' + tag + '>', 'i'));
+    if (m) { const t = strip(m[1]); if (t.length >= Math.min(TEXT_THIN, all.length * 0.3)) { text = t; break; } }
+  }
+  const truncated = text.length > TEXT_MAX;
+  if (truncated) { text = text.slice(0, TEXT_MAX); text = text.slice(0, Math.max(text.lastIndexOf(' '), TEXT_MAX - 200)) + ' …'; }
+  return { text, chars: text.length, truncated };
+}
+
+async function readBody(res, max = MAX_BYTES) {
+  if (!res.body || !res.body.getReader) { const t = await res.text(); return t.slice(0, max); }
   const reader = res.body.getReader(); const chunks = []; let n = 0;
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
     chunks.push(value); n += value.length;
-    if (n >= MAX_BYTES) { try { await reader.cancel(); } catch { /* ignore */ } break; }
+    if (n >= max) { try { await reader.cancel(); } catch { /* ignore */ } break; }
   }
-  const all = new Uint8Array(Math.min(n, MAX_BYTES)); let off = 0;
+  const all = new Uint8Array(Math.min(n, max)); let off = 0;
   for (const c of chunks) { const take = Math.min(c.length, all.length - off); all.set(c.subarray(0, take), off); off += take; if (off >= all.length) break; }
   return new TextDecoder('utf-8', { fatal: false }).decode(all);
+}
+async function readBytes(res, max) {
+  if (Number(res.headers.get('content-length') || 0) > max) { try { await res.body?.cancel(); } catch { /* ignore */ } return null; }
+  const buf = new Uint8Array(await res.arrayBuffer());
+  return buf.length > max ? null : buf;
+}
+function b64(bytes) {
+  let s = ''; const CH = 0x8000;
+  for (let i = 0; i < bytes.length; i += CH) s += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+  return btoa(s);
 }
 
 export function createHandler({ env, fetchFn }) {
@@ -264,7 +305,7 @@ export function createHandler({ env, fetchFn }) {
   }
 
   // GET one URL, following redirects by hand so every hop is re-checked.
-  async function fetchPage(start) {
+  async function fetchPage(start, wantPdf) {
     let url = start; const hops = [];
     for (let i = 0; i <= MAX_REDIRECTS; i++) {
       const bad = urlProblem(url);
@@ -285,6 +326,11 @@ export function createHandler({ env, fetchFn }) {
         continue;
       }
       const type = res.headers.get('content-type') || '';
+      if (wantPdf && /application\/pdf/i.test(type)) {
+        const bytes = await readBytes(res, PDF_MAX_BYTES);
+        if (!bytes) return { status: res.status, finalUrl: url, hops, error: 'the PDF is over ' + (PDF_MAX_BYTES / 1048576) + ' MB — download it and add the file instead' };
+        return { status: res.status, finalUrl: url, hops, pdf: b64(bytes), pdfBytes: bytes.length };
+      }
       if (!/html|xml/i.test(type) && type) return { status: res.status, finalUrl: url, hops, error: 'not a web page (' + type.split(';')[0] + ')' };
       const html = await readBody(res);
       return { status: res.status, finalUrl: url, hops, html };
@@ -308,17 +354,25 @@ export function createHandler({ env, fetchFn }) {
     } catch { return { error: 'oEmbed could not be reached' }; }
   }
 
-  async function read(given) {
+  async function read(given, wantText) {
     const url = unwrapLink(given);
     const bad = urlProblem(url);
     if (bad) return { ok: false, url, error: bad };
     const platform = platformOf(url);
-    const page = await fetchPage(url);
+    const page = await fetchPage(url, wantText);
+    if (wantText && page.pdf) {
+      return { ok: true, url, platform, status: page.status, finalUrl: page.finalUrl, pdf: page.pdf, pdfBytes: page.pdfBytes, fields: {}, engagement: {}, notes: [] };
+    }
     const out = { ok: false, url, unwrapped: url !== given ? given : undefined, platform, status: page.status || null, finalUrl: page.finalUrl || null, redirects: (page.hops || []).length };
     if (page.html) {
       const p = readPage(page.html, page.finalUrl);
       Object.assign(out, { fields: p.fields, engagement: p.engagement, engagementSource: p.engagementSource, notes: p.notes, ok: !!p.fields.title });
       if (page.status >= 400) out.notes.push('The site answered ' + page.status + '.');
+      if (wantText) {
+        const pt = pageText(page.html);
+        Object.assign(out, { text: pt.text, textChars: pt.chars, textTruncated: pt.truncated, thin: pt.chars < TEXT_THIN || !!p.loginWall });
+        if (out.thin) out.notes.push('The page shows little readable text (it may be built in the browser, or behind a sign-in). Save it as a PDF and add the file instead.');
+      }
     } else {
       out.error = page.error; out.notes = []; out.fields = {}; out.engagement = {};
     }
@@ -348,6 +402,6 @@ export function createHandler({ env, fetchFn }) {
     let body; try { body = await req.json(); } catch { return json({ error: 'send {"url": "..."}' }, 400); }
     const url = String(body && body.url || '').trim();
     if (!url) return json({ error: 'no url' }, 400);
-    return json(await read(url));
+    return json(await read(url, !!(body && body.text)));
   };
 }

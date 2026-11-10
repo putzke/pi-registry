@@ -147,6 +147,30 @@ module.exports = {
       await page.waitForFunction(() => (DB.get('outreach_actions') || []).some(a => a.title === '400 North reopens early' && !/^tmp_/.test(String(a.id))));
       await page.evaluate(() => render());
       t.ok(await page.evaluate(() => /✓ In the Outreach log/.test(document.getElementById('co-sec-docs').textContent)), 'once logged, the document reads "In the Outreach log"');
+      // ── a web address instead of a file ──
+      await page.evaluate(() => {
+        window.__lr = [];
+        window._outReadLink = async (url, extra) => { window.__lr.push({ url, extra });
+          if (/thin/.test(url)) return { ok: true, thin: true, text: 'x', notes: ['The page shows little readable text. Save it as a PDF and add the file instead.'] };
+          return { ok: true, url, finalUrl: url, text: 'The I-84 Weber Bridges project replaces four bridges.', fields: { title: 'I-84 Weber Bridges', site: 'UDOT', published: '2026-03-02T00:00:00Z' } }; };
+        window._claudeNarrative = async (system, user) => { window.__calls.push({ system, user });
+          return 'KIND: website\nDATE: unknown\nTITLE: I-84 Weber Bridges\nOUTLET: UDOT\nSUMMARY: The page explains the bridge work and closures.\nDESCRIPTION: The project replaces four bridges.\nPRAISE: none\nCONCERNS: none\nASSUMPTIONS: none'; };
+      });
+      const before = await page.evaluate(() => _coWork.intake.docs.length);
+      await page.fill('#co-doc-url', 'https://www.udot.utah.gov/thin');
+      await page.evaluate(() => coAddDocUrl());
+      t.eq(await page.evaluate(() => _coWork.intake.docs.length), before, 'a page with little text is not read; nothing is added');
+      t.eq((await page.evaluate(() => window.__calls.splice(0))).length, 0, 'and nothing is sent to the model');
+      await page.fill('#co-doc-url', 'https://www.udot.utah.gov/i84');
+      await page.evaluate(() => coAddDocUrl());
+      await page.waitForFunction(n => _coWork.intake.docs.length === n + 1, before);
+      const lr = await page.evaluate(() => window.__lr.slice(-1)[0]);
+      t.ok(lr.extra && lr.extra.text === true, 'the link reader is asked for the page text');
+      const wc = await page.evaluate(() => window.__calls.splice(0));
+      t.ok(wc.length === 1 && wc[0].user[0].type === 'text' && /replaces four bridges/.test(wc[0].user[0].text), 'the page text is read once, like a file');
+      const wd = await page.evaluate(() => _coWork.intake.docs.slice(-1)[0]);
+      t.ok(wd.url === 'https://www.udot.utah.gov/i84' && wd.date === '2026-03-02' && wd.kind === 'website' && !('text' in wd), 'the address and summary are kept (with the page\'s published date), not the page text');
+      t.ok(await page.evaluate(() => /Read from <a[^>]*>udot\.utah\.gov\/i84/.test(document.getElementById('co-sec-docs').innerHTML)), 'the card links to the page it was read from');
       t.ok(await page.evaluate(() => /Add what Cirrus Cc can.t see on its own/.test(document.getElementById('co-sec-docs').textContent) && !/Claude/.test(document.getElementById('co-sec-docs').textContent)), 'the note to users names Cirrus Cc, not Claude');
     } finally { await app.close(); }
   },

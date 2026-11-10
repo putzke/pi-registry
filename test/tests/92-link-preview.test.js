@@ -50,6 +50,9 @@ module.exports = {
       'https://www.ksl.com/article/1': { body: NEWS_HTML },
       'https://short.example/evil': { status: 302, location: 'http://169.254.169.254/latest/meta-data' },
       'https://www.facebook.com/udot/posts/9': { body: FB_LOGIN },
+      'https://www.udot.utah.gov/i84': { body: '<html><head><title>I-84 Weber Bridges</title></head><body><nav>Home | Projects | Contact</nav><main><h1>I-84 Weber Bridges</h1><p>' + 'The project replaces four bridges over the Weber River and widens the shoulders. '.repeat(6) + '</p><script>var secret=1</script><p>Nighttime closures run through May.</p></main><footer>Copyright UDOT</footer></body></html>' },
+      'https://www.udot.utah.gov/app': { body: '<html><head><title>Project</title></head><body><div id="root"></div><script src="app.js"></script></body></html>' },
+      'https://www.udot.utah.gov/nl.pdf': { body: '%PDF-1.4 newsletter', type: 'application/pdf' },
     };
     const fetchFn = async (url, opts = {}) => {
       const u = String(url); seen.push({ u, ua: opts.headers && opts.headers['User-Agent'] });
@@ -65,11 +68,11 @@ module.exports = {
       const s = sites[u];
       if (!s) return new Response('nope', { status: 404, headers: { 'content-type': 'text/html' } });
       if (s.location) return new Response('', { status: s.status, headers: { location: s.location } });
-      return new Response(s.body, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } });
+      return new Response(s.body, { status: 200, headers: { 'content-type': s.type || 'text/html; charset=utf-8' } });
     };
     const handle = L.createHandler({ env: { SUPABASE_URL: SB, SUPABASE_SERVICE_ROLE_KEY: 'svc' }, fetchFn });
-    const call = async (url, who = 'staff') => {
-      const r = await handle(new Request('https://fn/link-preview', { method: 'POST', headers: { authorization: 'Bearer ' + who, 'content-type': 'application/json' }, body: JSON.stringify({ url }) }));
+    const call = async (url, who = 'staff', extra = {}) => {
+      const r = await handle(new Request('https://fn/link-preview', { method: 'POST', headers: { authorization: 'Bearer ' + who, 'content-type': 'application/json' }, body: JSON.stringify({ url, ...extra }) }));
       return { status: r.status, body: await r.json(), cors: r.headers.get('access-control-allow-origin') };
     };
 
@@ -114,6 +117,20 @@ module.exports = {
     const x = await call('https://x.com/UDOTRegionOne/status/123');
     t.ok(x.body.ok && /Overnight closures/.test(x.body.fields.description), 'X post text via public oEmbed');
     t.eq(x.body.fields.published, 'October 4, 2026', 'X post date via oEmbed');
+
+    // ── full-text mode (the close-out's Project documents, Nov 2026) ──
+    const pg = await call('https://www.udot.utah.gov/i84', 'staff', { text: true });
+    t.ok(pg.body.ok && /replaces four bridges/.test(pg.body.text) && /Nighttime closures/.test(pg.body.text), 'text mode returns the page\'s readable text');
+    t.ok(!/secret|Home \| Projects|Copyright/.test(pg.body.text), 'scripts, menus and footers are left out');
+    t.ok(!pg.body.thin, 'a page with real text is not flagged thin');
+    t.ok(!('text' in (await call('https://www.udot.utah.gov/i84')).body), 'an ordinary link read sends no page text');
+    const app = await call('https://www.udot.utah.gov/app', 'staff', { text: true });
+    t.ok(app.body.thin && app.body.notes.some((n) => /save it as a PDF/i.test(n)), 'a page built in the browser is flagged thin, with the PDF fallback named');
+    const pdf = await call('https://www.udot.utah.gov/nl.pdf', 'staff', { text: true });
+    t.ok(pdf.body.ok && Buffer.from(pdf.body.pdf, 'base64').toString().startsWith('%PDF'), 'a linked PDF comes back as the PDF itself');
+    t.ok(!(await call('https://www.udot.utah.gov/nl.pdf')).body.pdf, 'only text mode returns a PDF');
+    const long = L.pageText('<body><main><p>' + 'word '.repeat(10000) + '</p></main></body>');
+    t.ok(long.truncated && long.chars <= L.TEXT_MAX + 2, 'a very long page is cut at TEXT_MAX');
 
     // ── honest user agent on every outside request ──
     const outside = seen.filter((s) => !s.u.startsWith(SB));

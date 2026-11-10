@@ -9313,9 +9313,9 @@ function _outIsoDate(s){
   const d=new Date(s); if(isNaN(d)) return '';
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
-async function _outReadLink(url){
+async function _outReadLink(url, extra){
   const ss=getSession();
-  const r=await fetch(LINK_FN_URL,{method:'POST',headers:{'Content-Type':'application/json',apikey:SUPA_KEY,Authorization:'Bearer '+(ss?ss.access_token:SUPA_KEY)},body:JSON.stringify({url})});
+  const r=await fetch(LINK_FN_URL,{method:'POST',headers:{'Content-Type':'application/json',apikey:SUPA_KEY,Authorization:'Bearer '+(ss?ss.access_token:SUPA_KEY)},body:JSON.stringify(Object.assign({url},extra||{}))});
   const j=await r.json().catch(()=>({}));
   if(!r.ok) throw new Error(j.error==='not staff'?'only staff can read links':j.error==='not signed in'?'your sign-in has expired — sign in again':('the link reader answered '+r.status));
   return j;
@@ -11893,7 +11893,7 @@ const CLOSEOUT_TYPES = {
     sections: [
       { id: 'docs', title: 'Project documents',
         feeds: 'project description, praise, concerns, scope, deliverable evidence, the Outreach log, cover letter, PI Highlights',
-        hint: 'Start here. Add what Cirrus Cc can\u2019t see on its own, things published or made outside the app: the project website (saved as a PDF), newsletters, flyers and mailers, press releases, news stories, the PI scope of work, construction schedules or traffic phasing, thank-you letters, and survey or meeting summaries. Cirrus Cc reads each file once and keeps a short summary you can edit; the file itself is not stored. The summaries feed every AI Draft and fill in the sections further down (project description, praise, concerns, scope document, deliverable evidence) wherever a box is still empty. No need to add weekly PI reports (already archived), emails and calls already logged as interactions, or social posts already in the Outreach log.',
+        hint: 'Start here. Add what Cirrus Cc can\u2019t see on its own, things published or made outside the app: the project website (paste its address, or save it as a PDF), newsletters, flyers and mailers, press releases, news stories, the PI scope of work, construction schedules or traffic phasing, thank-you letters, and survey or meeting summaries. Cirrus Cc reads each file once and keeps a short summary you can edit; the file itself is not stored. The summaries feed every AI Draft and fill in the sections further down (project description, praise, concerns, scope document, deliverable evidence) wherever a box is still empty. No need to add weekly PI reports (already archived), emails and calls already logged as interactions, or social posts already in the Outreach log.',
         fields: [ { kind: 'docs', key: 'docs' } ] },
       { id: 'recipient', title: 'Project & recipient', required: true,
         feeds: 'cover letter address block, Re: line, salutation',
@@ -14348,6 +14348,7 @@ function _coDocsHTML(it) {
       + '<input aria-label="Date" type="date" value="' + escHtml(d.date || '') + '" onchange="coDocEdit(' + i + ',\'date\',this.value)" style="padding:4px 6px">'
       + '<button type="button" class="btn btn-sm" onclick="coDocRemove(' + i + ')">Remove</button></div>'
       + (_coVal(d.title) || _coVal(d.outlet) ? '<div style="font-size:12px;color:var(--mist);margin-bottom:6px">' + escHtml([d.title, d.outlet].filter(_coVal).join(' — ')) + '</div>' : '')
+      + (d.url && /^https?:\/\//i.test(d.url) ? '<div style="font-size:11px;color:var(--fog);margin-bottom:6px">Read from <a href="' + escHtml(d.url) + '" target="_blank" rel="noopener" style="color:var(--sky-lt)">' + escHtml(d.url.replace(/^https?:\/\/(www\.)?/i, '').slice(0, 70)) + '</a>' + (d.readOn ? ' on ' + fmt(d.readOn) : '') + ' — what it said then</div>' : '')
       + '<textarea aria-label="Summary of ' + escHtml(d.name || 'document') + '" rows="3" oninput="coDocEdit(' + i + ',\'summary\',this.value)">' + escHtml(d.summary || '') + '</textarea>'
       + ((used.length || CO_DOC_OUTREACH[d.kind]) ? '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px;font-size:12px;color:var(--fog)">'
         + (used.length ? '<span>Filled in: ' + escHtml(used.join(', ')) + '</span>' : '')
@@ -14361,6 +14362,9 @@ function _coDocsHTML(it) {
     + '<label class="btn btn-sm btn-primary" style="cursor:pointer;display:inline-block;margin-bottom:10px">📎 Add files (PDF or pictures)…'
     + '<input type="file" multiple accept="application/pdf,image/png,image/jpeg,image/gif,image/webp" style="display:none" onchange="coAddDocs(this)"></label>'
     + '<span id="co-docs-status" style="font-size:12px;color:var(--fog);margin-left:10px">' + (docs.length ? docs.length + ' document' + (docs.length === 1 ? '' : 's') + ' read' : 'Nothing added yet.') + '</span>'
+    + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:-2px 0 12px">'
+    + '<input id="co-doc-url" aria-label="Web address to read" placeholder="…or paste a web address: the project page, an online press release or news story, a PDF link" style="flex:1 1 320px;min-width:0" onkeydown="if(event.key===\'Enter\'){event.preventDefault();coAddDocUrl();}">'
+    + '<button type="button" class="btn btn-sm" id="co-doc-url-btn" onclick="coAddDocUrl()">🔗 Read web page</button></div>'
     + rows + '</div>';
 }
 
@@ -14505,6 +14509,55 @@ async function coAddDocs(input) {
   _coDirty = true; _coSaveSoon();
   const failed = ok.length - added;
   showToast(added + ' document' + (added === 1 ? '' : 's') + ' read' + (failed ? '; ' + failed + ' could not be read' : '') + '. Check the summaries and what they filled in further down.', failed ? 'warn' : 'info', 7000);
+  render();
+}
+// Read a web address instead of a saved file (Nov 2026, Jeff): the
+// link-preview function fetches the page's readable text (or a linked PDF
+// itself) on Cirrus Cc's server, then it is read ONCE like a file. Only the
+// summary and the address are kept. A page with little text (built in the
+// browser, or behind a sign-in) is refused with a note to save it as a PDF.
+async function coAddDocUrl() {
+  if (!_coWork) return;
+  const inp = document.getElementById('co-doc-url'), btn = document.getElementById('co-doc-url-btn');
+  const url = String((inp && inp.value) || '').trim();
+  if (!/^https?:\/\//i.test(url)) { showToast('Paste a web address that starts with http:// or https://', 'warn', 4000); return; }
+  if (!_coHasKey()) return;
+  const st = document.getElementById('co-docs-status');
+  const busy = function (on) { if (btn) { btn.disabled = on; btn.textContent = on ? 'Reading…' : '🔗 Read web page'; } };
+  busy(true); if (st) st.textContent = 'Reading the web page…';
+  let page;
+  try { page = await _outReadLink(url, { text: true }); }
+  catch (err) { busy(false); if (st) st.textContent = ''; showToast('The page could not be read: ' + (err.message || 'the link reader could not be reached') + '.', 'warn', 7000); return; }
+  if (!page.pdf && (!page.text || page.thin || page.error)) {
+    busy(false); if (st) st.textContent = '';
+    const why = [page.error].concat(page.notes || []).filter(Boolean).join(' ');
+    showToast('Not read: ' + (why || 'the page had no readable text.') + (page.thin || page.error ? '' : ' Save it as a PDF and add the file instead.'), 'warn', 9000);
+    return;
+  }
+  const tok = page.pdf ? Math.max(1, Math.round((page.pdfBytes || 0) / 40960)) * CO_DOC_PDF_PAGE_TOKENS : Math.round(page.text.length / 4);
+  const usd = tok / 1e6 * 2 + 600 / 1e6 * 10;
+  if (!confirm('Read ' + (page.pdf ? 'the PDF at ' : '') + (page.finalUrl || url) + '?\n\nAbout ' + Math.max(1, Math.round(tok / 1000)) + 'K tokens. Estimated cost: about $' + Math.max(0.01, usd).toFixed(2) + '.\nIt is read once; only its summary and the address are kept.'
+    + (page.textTruncated ? '\n\nThe page is long; only the first part is read.' : ''))) { busy(false); if (st) st.textContent = ''; return; }
+  const f = page.fields || {};
+  const block = page.pdf ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: page.pdf } }
+    : { type: 'text', text: 'WEB PAGE' + (f.title ? ' — ' + f.title : '') + (f.site ? ' (' + f.site + ')' : '') + (f.published ? ', published ' + f.published : '') + '\n\n' + page.text };
+  let r = null;
+  try {
+    const text = await _claudeNarrative(CO_DOC_SYSTEM, [block, { type: 'text', text: CO_DOC_TASK }], 900);
+    r = text ? _coParseDoc(text) : null;
+  } catch (e) { console.error('Close-out web page read failed:', url, e); }
+  busy(false);
+  if (!r || !r.summary) { if (st) st.textContent = ''; showToast('The page was fetched but could not be summarized. Try again, or save it as a PDF.', 'warn', 7000); return; }
+  const it = _coWork.intake, addr = page.finalUrl || page.url || url;
+  let host = ''; try { host = new URL(addr).hostname.replace(/^www\./, ''); } catch (e) {}
+  const docs = _coDocs(it).slice();
+  docs.push({ id: DB.uid(), name: String(f.title || '').trim() || host || addr, url: addr, readOn: localToday(),
+    kind: r.kind, date: r.date || _outIsoDate(f.published) || '', title: r.title || f.title || '', outlet: r.outlet || f.site || '',
+    summary: r.summary, description: r.description, praise: r.praise, concerns: r.concerns, assumptions: r.assumptions });
+  it.docs = docs;
+  _coDocFill(it);
+  _coDirty = true; _coSaveSoon();
+  showToast('Web page read. Check the summary and what it filled in further down.', 'info', 6000);
   render();
 }
 function coDocEdit(i, field, value) {

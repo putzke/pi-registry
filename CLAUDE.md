@@ -1721,6 +1721,12 @@ the model narrates, never counts.
   `TEXT_THIN` (300) chars or a sign-in wall comes back `thin` and is refused
   with "save it as a PDF". Function deployed: DEV v4, LIVE v2. Guarded by
   tests 92 (reader) and 123 (intake).
+- **The intake's lessons print (LIVE, Nov 2026, Jeff).** Lessons typed in
+  the intake (`it.lessons`) used to show only as a reference beside the
+  report's empty Lessons box, and the section read "Left out". `_coReportDoc`
+  now prints `draft.lessons` when it has text, else `it.lessons` (same
+  "Heading: text" run-in rule); the editor says so. Guarded by
+  `test/tests/124-closeout-lessons-from-intake.test.js` (fails on the old code).
 - **Dated outreach links (DEV, Nov 2026, Jeff).** Under the PI Highlights a
   logged social post prints "(Mar 6, 2026 – UDOT Instagram – 1,863 reactions ·
   29 comments)" and a logged news story "(date – outlet – title)" — the date

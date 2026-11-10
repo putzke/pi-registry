@@ -13128,7 +13128,10 @@ function _coReportDoc(co) {
   }
 
   // ── Lessons Learned ──
-  const ls = _coLines(dr.lessons);
+  // The report box wins; left empty, the intake's lessons print as written
+  // (Jeff, Nov 2026: typed in the intake, they never reached the report).
+  const lsOwn = _coLines(dr.lessons);
+  const ls = lsOwn.length ? lsOwn : _coLines(it.lessons);
   if (ls.length) {
     B.push({ t: 'section', text: 'Lessons Learned and Recommendations on PI Approach:' });
     ls.forEach(function (x) {
@@ -13138,7 +13141,7 @@ function _coReportDoc(co) {
     });
   }
   sections.push({ id: 'lessons', title: 'Lessons Learned & Recommendations', state: ls.length ? 'in' : 'out',
-    why: ls.length ? '' : 'Not written yet.' });
+    why: ls.length ? (lsOwn.length ? '' : 'Printing what you wrote in the intake.') : 'Not written yet.' });
 
   // ── Delivery Against Scope of Work ──
   // Wording defaults from the deliverable's own status (_coDefaultWording), so
@@ -13737,7 +13740,9 @@ function renderCloseoutReport(el, co) {
     + box('commitments', 'Commitments to the Public', '<div style="font-size:12px;color:var(--slate)">Listed from Commitments, with whether each was kept. Close any that were done before exporting.</div>')
     + box('row', 'Right-of-Way & Property Owner Outreach', slot('row', 'Narrative (optional)', 'What the outreach involved: tracing each parcel to the party who can sign, sharing legal descriptions and design exhibits, how owners received it. Counts are added below it from the Parcels view.', 4)
       + '<div style="font-size:11px;color:var(--fog)">Counts only. Owner names and concerns stay in the Parcels view’s Agent briefing for the ROW agents.</div>')
-    + box('lessons', 'Lessons Learned & Recommendations', slot('lessons', 'Lessons', rt.slotHints.lessons, 6) + ref('Your pointers', it.lessons))
+    + box('lessons', 'Lessons Learned & Recommendations', slot('lessons', 'Lessons', rt.slotHints.lessons, 6,
+        (_coVal(it.lessons) && !_coVal(dr.lessons) ? '<div style="font-size:11px;color:#5BD3A9;margin-top:4px">This box is empty, so the report prints your lessons from the intake (below). Type here only to replace them.</div>' : ''))
+      + ref('Your lessons', it.lessons))
     + box('scope', 'Delivery Against Scope of Work', '<div style="font-size:12px;color:var(--slate)">One row per deliverable. Wording and evidence are set in the intake’s <a href="#" onclick="openCloseoutIntake(\'' + co.id + '\');return false" style="color:var(--sky-lt)">Scope</a> section; a row with no evidence named prints highlighted.</div>')
     + box('photos', 'Photo gallery', '<div style="font-size:12px;color:var(--slate)">Insert photos in Word after export; a highlighted placeholder marks the spot.</div>');
 

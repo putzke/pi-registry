@@ -89,6 +89,9 @@ module.exports = {
       t.ok(/TOLD THE PUBLIC[^\n]*\n- From the project website \(Mar 1, 2026\): The site explained overnight closures/.test(lf), 'the cover letter request carries the document summaries, oldest first');
       const fe = await page.evaluate(() => _coHighlightFacts(_syncCache.closeouts.find(c => c.id === _coWork.id), 'email').lines.join('\n'));
       t.ok(/From the newsletter \(May 15, 2026\): The May newsletter announced/.test(fe) && !/From the project website/.test(fe), 'the email-updates highlight gets the newsletters only');
+      // The summary box spans the card (it drew ~140px wide on LIVE).
+      const wide = await page.evaluate(() => { const ta = document.querySelector('#co-sec-docs textarea[aria-label^="Summary of"]'), card = ta.parentElement; return ta.getBoundingClientRect().width / card.getBoundingClientRect().width; });
+      t.ok(wide > 0.9, 'the summary box is as wide as its card (' + Math.round(wide * 100) + '%)');
       // ── edit and remove ──
       await page.evaluate(() => { window.confirm = () => true; coDocEdit(0, 'summary', 'Edited summary.'); });
       t.eq(await page.evaluate(() => _coWork.intake.docs[0].summary), 'Edited summary.', 'a summary can be edited');

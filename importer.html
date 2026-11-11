@@ -766,7 +766,7 @@ async function signIn(email, password) {
 // refuses staff data to a session that is not aal2. Run it only once every
 // staff login has a factor. Lost phone: delete that user's row from
 // auth.mfa_factors (CLAUDE.md, "Two-step sign-in").
-const MFA_REQUIRED = false;
+const MFA_REQUIRED = true;
 let _mfaPending = null;
 
 function _jwtClaims(tok) {

@@ -2442,8 +2442,10 @@ shipped. Grep the actual functions before planning work off this list.
    numbers dropped from this file; `pi_report_archive_require_docx` search_path
    pinned (`sql/2026-10-11_…`); leaked-password protection is a dashboard
    toggle on BOTH projects (Authentication → Sign In / Providers → Email).
-3. Two-step sign-in rollout — staff enroll on LIVE → `MFA_REQUIRED = true` →
-   `sql/pending/2026-10-06_staff_require_aal2.sql` (see the two-step section).
+3. Two-step sign-in rollout — ✅ all 4 staff logins enrolled on LIVE
+   (checked 2026-11-11) → ✅ `MFA_REQUIRED = true` pushed 2026-11-11 →
+   `sql/pending/2026-10-06_staff_require_aal2.sql` for Jeff to paste on LIVE
+   (see the two-step section).
 4. Client email sign-in readiness — ✅ custom SMTP on live (Resend, see the
    portal section); ✅ branded sign-in email (both templates); ✅
    support@cirruscc.com forward + `SUPPORT_CONTACT`. Open: tighten DMARC to
@@ -3209,6 +3211,11 @@ code ("Other account"); push approval would need Entra ID SSO — not used.
   require `aal = 'aal2'`; portal clients and token links unaffected; staff sign
   out and back in. `sql/pending/` is not applied by the harness; test 66 runs
   it inside a rolled-back transaction.
+  **Steps 1–3 done 2026-11-11** (every `pi_staff` login had one verified
+  factor; `MFA_REQUIRED = true` in all three apps). Test 66 now runs the
+  optional mode on a copy switched back to `false` — that is the rollback.
+  Step 4 waits on Jeff pasting the pending SQL on LIVE; once it runs, move the
+  file out of `sql/pending/` into `sql/`.
 - **Lost phone:** `delete from auth.mfa_factors where user_id = (select id
   from auth.users where lower(email) = '…');` in the SQL Editor — confirm with
   the person first. They sign in with the password and set up again.

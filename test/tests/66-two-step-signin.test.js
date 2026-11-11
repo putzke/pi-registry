@@ -81,7 +81,7 @@ module.exports = {
     t.ok(block('index.html').length > 3000, 'index.html carries the two-step block');
     t.eq(block('mobile.html'), block('index.html'), 'mobile.html carries the identical block');
     t.eq(block('importer.html'), block('index.html'), 'importer.html carries the identical block');
-    t.ok(/const MFA_REQUIRED = false;/.test(block('index.html')), 'optional for now (MFA_REQUIRED = false)');
+    t.ok(/const MFA_REQUIRED = true;/.test(block('index.html')), 'required now that every staff login has set it up (MFA_REQUIRED = true)');
     t.ok(/clearSession\(\);\s*_mfaPending = sess;/.test(block('index.html')), 'the half-signed-in session is taken out of sessionStorage and held in memory');
 
     t.seed();
@@ -97,7 +97,11 @@ module.exports = {
     const stored = page => page.evaluate(() => { const s = JSON.parse(sessionStorage.getItem('pi_session') || 'null'); return s && _jwtClaims(s.access_token).aal; });
 
     // ── desktop: optional — no factor, no extra step ─────────────────────
-    let app = await t.open('index.html', { auth: auth.handler, session: false });
+    // The apps ship with MFA_REQUIRED = true (Nov 2026); the optional mode is
+    // the rollback, so it is still exercised, on a copy switched back off.
+    const optFile = '_mfa_optional_index.html';
+    fs.writeFileSync(path.join(ROOT, optFile), read('index.html').replace('const MFA_REQUIRED = true;', 'const MFA_REQUIRED = false;'));
+    let app = await t.open(optFile, { auth: auth.handler, session: false });
     const dialogs = [];
     app.page.on('dialog', d => { dialogs.push(d.message()); d.accept().catch(() => {}); });
     try {
@@ -183,13 +187,11 @@ module.exports = {
       t.eq(auth.users['jeff@sunrise.example'].factors, [], 'Turn off (after a confirm) removes it');
       t.ok(dialogs.some(d => /Turn off two-step sign-in/.test(d)), 'and asked first');
       t.eq(app.errors, [], 'no page errors');
-    } finally { await app.close(); }
+    } finally { await app.close(); fs.unlinkSync(path.join(ROOT, optFile)); }
 
     // ── desktop, required mode: no factor → set up at sign-in ────────────
-    const reqFile = '_mfa_required_index.html';
-    fs.writeFileSync(path.join(ROOT, reqFile), read('index.html').replace('const MFA_REQUIRED = false;', 'const MFA_REQUIRED = true;'));
     auth.add('new@sunrise.example', 'pw-new', false);
-    app = await t.open(reqFile, { auth: auth.handler, session: false });
+    app = await t.open('index.html', { auth: auth.handler, session: false });
     try {
       await loginAs(app.page, 'new@sunrise.example', 'pw-new');
       await app.page.waitForSelector('#mfa-qr');
@@ -201,7 +203,7 @@ module.exports = {
       await app.page.evaluate(() => setView('settings'));
       await app.page.waitForFunction(() => /On/.test(document.getElementById('mfa-card-body')?.textContent || ''));
       t.eq(await app.page.evaluate(() => /Turn off/.test(document.getElementById('mfa-card-body').textContent)), false, 'and there is no Turn off while it is required');
-    } finally { await app.close(); fs.unlinkSync(path.join(ROOT, reqFile)); }
+    } finally { await app.close(); }
 
     // ── mobile and the importer ask for the code too ─────────────────────
     app = await t.open('mobile.html', { auth: auth.handler, session: false });

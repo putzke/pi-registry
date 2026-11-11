@@ -69,7 +69,7 @@ async function openApp(file, { shimOrigin, email = 'putzke@demo.test', viewport,
   // Supabase auth -> a fixed fake session. getLoggedBy() derives its initials
   // from this email, so tests can control who "I" am.
   const session = {
-    access_token: 'hdr.' + Buffer.from(JSON.stringify({ email, sub: 'test-user' })).toString('base64') + '.sig',
+    access_token: 'hdr.' + Buffer.from(JSON.stringify({ email, sub: 'test-user', aal: 'aal2' })).toString('base64') + '.sig',
     refresh_token: 'refresh', expires_in: 3600,
     expires_at: Math.floor(Date.now() / 1000) + 3600,
     user: { id: 'test-user', email },

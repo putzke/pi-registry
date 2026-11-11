@@ -2444,8 +2444,8 @@ shipped. Grep the actual functions before planning work off this list.
    toggle on BOTH projects (Authentication → Sign In / Providers → Email).
 3. Two-step sign-in rollout — ✅ all 4 staff logins enrolled on LIVE
    (checked 2026-11-11) → ✅ `MFA_REQUIRED = true` pushed 2026-11-11 →
-   `sql/pending/2026-10-06_staff_require_aal2.sql` for Jeff to paste on LIVE
-   (see the two-step section).
+   ✅ `sql/pending/2026-10-06_staff_require_aal2.sql` pasted on LIVE
+   2026-11-11 (see the two-step section).
 4. Client email sign-in readiness — ✅ custom SMTP on live (Resend, see the
    portal section); ✅ branded sign-in email (both templates); ✅
    support@cirruscc.com forward + `SUPPORT_CONTACT`. Open: tighten DMARC to
@@ -3217,8 +3217,13 @@ code ("Other account"); push approval would need Entra ID SSO — not used.
   **Steps 1–3 done 2026-11-11** (every `pi_staff` login had one verified
   factor; `MFA_REQUIRED = true` in all three apps). Test 66 now runs the
   optional mode on a copy switched back to `false` — that is the rollback.
-  Step 4 waits on Jeff pasting the pending SQL on LIVE; once it runs, move the
-  file out of `sql/pending/` into `sql/`.
+  **Step 4 done 2026-11-11** — Jeff pasted the pending SQL on LIVE; verified
+  29/29 tables + the report-files rule, and a role-switched check: Jeff's
+  login reads 0 projects at aal1, all at aal2. The file stays in
+  `sql/pending/` (marked applied) so the harness doesn't apply it. **NOT on
+  DEV** — dev logins have no authenticators; a "Reset dev" copies live's
+  policies, so after one, dev needs an authenticator too (or re-run the
+  allowlist file on dev to undo it there).
 - **Lost phone:** `delete from auth.mfa_factors where user_id = (select id
   from auth.users where lower(email) = '…');` in the SQL Editor — confirm with
   the person first. They sign in with the password and set up again.

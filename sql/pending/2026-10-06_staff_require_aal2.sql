@@ -2,7 +2,13 @@
 -- Require two-step sign-in for staff, in the database
 -- ═══════════════════════════════════════════════════════════════════════════
 --
--- NOT YET RUN, deliberately — it sits in sql/pending/ so the test harness
+-- APPLIED ON LIVE 2026-11-11 (verified: 29/29 tables + report files; a
+-- password-only staff session reads 0 projects, a coded one reads them all).
+-- NOT on DEV (dev logins have no authenticators there). Kept in sql/pending/
+-- so the harness does not apply it; test 66 runs it in a rolled-back
+-- transaction.
+--
+-- (Original note:) NOT YET RUN, deliberately — it sits in sql/pending/ so the test harness
 -- does not apply it either (test 66 applies it inside a rolled-back
 -- transaction to prove it). Run it only when ALL of these are true:
 --   1. sql/2026-10-06_staff_allowlist.sql has been run (this replaces the

@@ -3177,6 +3177,9 @@ there was no "Forgot password?" anywhere.
   callable by a portal client. Team-list members could then get an "Invite to
   sign in" button.
 - Guarded by `test/tests/116-password-links.test.js` (fails on the old code).
+- **With two-step sign-in required (Nov 2026)** a new hire's invite goes
+  password → set up the authenticator → the app; a reset link still asks for
+  the code. The harness's built-in staff session (`test/lib/app.js`) is aal2.
 
 ### Two-step sign-in — Microsoft Authenticator (Oct 2026, OPTIONAL for now)
 Supabase Auth MFA (TOTP) over REST. Microsoft Authenticator gives a 6-digit

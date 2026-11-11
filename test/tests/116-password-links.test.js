@@ -18,7 +18,18 @@ function fakeAuth(state) {
     if (u.pathname.endsWith('/auth/v1/user')) {
       if (!tokenOk) return json(401, { msg: 'invalid JWT' });
       if (req.method() === 'PUT') { state.password = JSON.parse(req.postData() || '{}').password; }
-      return json(200, { id: 'u1', email: 'new.person@example.com', factors: [] });
+      return json(200, { id: 'u1', email: 'new.person@example.com', factors: state.factors || [] });
+    }
+    // Two-step sign-in is required for staff (Nov 2026): a new hire sets one
+    // up after the password; a reset still asks for the code.
+    if (/\/auth\/v1\/factors\/[^/]+\/challenge$/.test(u.pathname)) return json(200, { id: 'ch1' });
+    if (/\/auth\/v1\/factors\/[^/]+\/verify$/.test(u.pathname)) {
+      state.verified = (state.verified || 0) + 1;
+      const tok = 'h.' + Buffer.from(JSON.stringify({ email: 'new.person@example.com', aal: 'aal2' })).toString('base64') + '.s';
+      return json(200, { access_token: tok, refresh_token: 'R2', user: { email: 'new.person@example.com' } });
+    }
+    if (u.pathname.endsWith('/auth/v1/factors') && req.method() === 'POST') {
+      return json(200, { id: 'f-new', totp: { qr_code: '', secret: 'JBSWY3DPEHPK3PXP', uri: 'otpauth://totp/x' } });
     }
     return json(200, { access_token: 'x', refresh_token: 'y', user: { email: 'putzke@demo.test' } });
   };
@@ -45,10 +56,13 @@ module.exports = {
       t.ok(/different/.test(await p.textContent('#setpw-error')), 'two different passwords are refused');
       t.eq(st.password, undefined, 'nothing was saved yet');
       await p.fill('#setpw-2', 'longenough1'); await p.click('#setpw-btn');
-      await p.waitForFunction(() => !document.getElementById('setpw-overlay'));
+      await p.waitForSelector('#mfa-code');
       t.eq(st.password, 'longenough1', 'the password is saved with the link\'s session');
-      const sess = await p.evaluate(() => JSON.parse(sessionStorage.getItem('pi_session') || 'null'));
-      t.ok(sess && sess.access_token === 'GOODTOKEN' && sess.user && sess.user.email === 'new.person@example.com', 'signed in as that account');
+      t.ok(/now asks for a code/.test(await p.textContent('#mfa-overlay')), 'a new hire is then walked through setting up the authenticator');
+      await p.type('#mfa-code', '123456');
+      await p.waitForFunction(() => !document.getElementById('setpw-overlay') && !document.getElementById('mfa-overlay'));
+      const sess = await p.evaluate(() => { const s = JSON.parse(sessionStorage.getItem('pi_session') || 'null'); return s && Object.assign(s, { aal: _jwtClaims(s.access_token).aal }); });
+      t.ok(sess && sess.aal === 'aal2' && sess.user && sess.user.email === 'new.person@example.com', 'signed in as that account, with the code step done');
       await app.ready();
       t.ok(true, 'the app opens');
     } finally { await app.close(); }
@@ -76,7 +90,7 @@ module.exports = {
     } finally { await app.close(); }
 
     // 4. A reset link opened on a phone sets the password, then goes to the mobile app.
-    st = { recover: [] };
+    st = { recover: [], factors: [{ id: 'f1', factor_type: 'totp', status: 'verified' }] };
     app = await t.open('index.html', { session: false, auth: fakeAuth(st),
       userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148',
       query: '#access_token=GOODTOKEN&refresh_token=R1&type=recovery' });
@@ -85,8 +99,12 @@ module.exports = {
       await p.waitForSelector('#setpw-overlay');
       t.ok(/Set a new password/.test(await p.textContent('#setpw-overlay')), 'a reset reads as a new password, on the phone too');
       await p.fill('#setpw-1', 'phonepass9'); await p.fill('#setpw-2', 'phonepass9');
-      await Promise.all([p.waitForURL(/mobile\.html/), p.click('#setpw-btn')]);
+      await p.click('#setpw-btn');
+      await p.waitForSelector('#mfa-code');
       t.eq(st.password, 'phonepass9', 'saved');
+      t.eq(await p.evaluate(() => JSON.parse(sessionStorage.getItem('pi_session') || 'null')), null, 'a reset does not skip the code step');
+      await Promise.all([p.waitForURL(/mobile\.html/), p.type('#mfa-code', '123456')]);
+      t.eq(st.verified, 1, 'then the code, then the mobile app');
     } finally { await app.close(); }
 
     // 5. Mobile has the same block and the same "Forgot password?" link.

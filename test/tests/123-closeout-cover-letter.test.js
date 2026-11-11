@@ -17,7 +17,7 @@ module.exports = {
     };
     const id = String((await t.sql(`insert into pi_closeouts (project_id, label, intake, created_by)
       values (${projId}, 'Final', $1::jsonb, 'putzke@demo.test') returning id`, [JSON.stringify(intake)]))[0].id);
-    const inbound = (await t.sql(`select count(*)::int n from pi_interactions where project_id='${projId}' and coalesce(direction,'') <> 'Outgoing'`))[0].n;
+    const inbound = (await t.sql(`select count(*)::int n from pi_interactions i where project_id='${projId}' and (stakeholder_id is null or exists (select 1 from pi_project_stakeholders l where l.project_id=i.project_id and l.stakeholder_id=i.stakeholder_id and coalesce(nullif(l.stakeholder_role,''),'External')='External')) and coalesce(direction,'') <> 'Outgoing'`))[0].n;
     const dnl = String((await t.sql(`insert into pi_deliverables (project_id, deliverable_type, title, status) values ('${projId}', 'Digital newsletter', 'Monthly newsletter', 'Complete') returning id`))[0].id);
     const app = await t.open('index.html', { email: 'putzke@demo.test' });
     try {

@@ -17,8 +17,8 @@ module.exports = {
     t.seed();
     const proj = (await t.sql(`select id from pi_projects where pid='25-LC-400N'`))[0];
     const projId = String(proj.id);
-    const total = (await t.sql(`select count(*)::int n from pi_interactions where project_id='${projId}'`))[0].n;
-    const outbound = (await t.sql(`select count(*)::int n from pi_interactions where project_id='${projId}' and direction='Outgoing'`))[0].n;
+    const total = (await t.sql(`select count(*)::int n from pi_interactions i where project_id='${projId}' and (stakeholder_id is null or exists (select 1 from pi_project_stakeholders l where l.project_id=i.project_id and l.stakeholder_id=i.stakeholder_id and coalesce(nullif(l.stakeholder_role,''),'External')='External'))`))[0].n;
+    const outbound = (await t.sql(`select count(*)::int n from pi_interactions i where project_id='${projId}' and (stakeholder_id is null or exists (select 1 from pi_project_stakeholders l where l.project_id=i.project_id and l.stakeholder_id=i.stakeholder_id and coalesce(nullif(l.stakeholder_role,''),'External')='External')) and direction='Outgoing'`))[0].n;
     const issues = (await t.sql(`select count(*)::int n from pi_issues where project_id='${projId}'`))[0].n;
     // A very long summary, to check trimming.
     const longSum = 'Detailed call. '.repeat(60);

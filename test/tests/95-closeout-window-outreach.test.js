@@ -20,8 +20,13 @@ module.exports = {
     await t.sql(`insert into pi_issues (project_id, title, status, date_raised) values ($1,'ISSUE IN WINDOW','Open','2026-03-12'),($1,'ISSUE OUTSIDE','Open','2025-01-05')`, [P]);
     const inWin = async (tbl, col) => (await t.sql(`select count(*)::int n from ${tbl} where project_id::text=$1 and ${col} between $2 and $3`, [P, FROM, TO]))[0].n;
     const all = async (tbl) => (await t.sql(`select count(*)::int n from ${tbl} where project_id::text=$1`, [P]))[0].n;
-    const exp = { ints: await inWin('pi_interactions', 'interaction_date'), issues: await inWin('pi_issues', 'date_raised'),
-      events: await inWin('pi_meetings', 'meeting_date'), allInts: await all('pi_interactions'), allIssues: await all('pi_issues') };
+    // The close-out counts external stakeholders and the public only (an
+    // anonymous caller counts; a contact marked Internal does not).
+    const EXT = ` and (stakeholder_id is null or exists (select 1 from pi_project_stakeholders l where l.project_id=x.project_id and l.stakeholder_id=x.stakeholder_id and coalesce(nullif(l.stakeholder_role,''),'External')='External'))`;
+    const extIn = (await t.sql(`select count(*)::int n from pi_interactions x where project_id::text=$1 and interaction_date between $2 and $3` + EXT, [P, FROM, TO]))[0].n;
+    const extAll = (await t.sql(`select count(*)::int n from pi_interactions x where project_id::text=$1` + EXT, [P]))[0].n;
+    const exp = { ints: extIn, issues: await inWin('pi_issues', 'date_raised'),
+      events: await inWin('pi_meetings', 'meeting_date'), allInts: extAll, allIssues: await all('pi_issues') };
 
     // The Outreach log: one of each kind inside March, one news item outside.
     const act = async (date, type, title, url, outlet) => (await t.sql(`insert into pi_outreach_actions (project_id, action_date, action_type, party, title, url, outlet)

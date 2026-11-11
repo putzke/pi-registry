@@ -1727,6 +1727,17 @@ the model narrates, never counts.
   now prints `draft.lessons` when it has text, else `it.lessons` (same
   "Heading: text" run-in rule); the editor says so. Guarded by
   `test/tests/124-closeout-lessons-from-intake.test.js` (fails on the old code).
+- **The close-out counts external & public only (LIVE, Nov 2026, Jeff).**
+  Seen on SR-201: the report package said 43 interactions, the close-out 56;
+  the 13 were contacts marked Internal. `_coProjInts(pid, w, incInternal)`
+  (`_intIsExternal`, links via `_coExtIds`; an anonymous caller counts) now
+  feeds `_closeoutFacts` (interactions, inbound calls; stakeholders = external
+  links), `_coFigures`, `_coHighlightFacts`, `_coCommlogFacts` and
+  `_coLetterFacts`. Program metrics has **Include internal project-team
+  contacts in the counts** (`it.includeInternal`, `coSetIncInternal`); ticked,
+  the Glance table footnotes it. Events and outreach are counted either way.
+  Guarded by `test/tests/125-closeout-external-only.test.js` (fails on the old
+  code); tests 55/58/60/61/95/123 now expect external counts.
 - **Dated outreach links (DEV, Nov 2026, Jeff).** Under the PI Highlights a
   logged social post prints "(Mar 6, 2026 – UDOT Instagram – 1,863 reactions ·
   29 comments)" and a logged news story "(date – outlet – title)" — the date

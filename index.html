@@ -11987,6 +11987,7 @@ const CLOSEOUT_TYPES = {
       { id: 'metrics', title: 'Program metrics', auto: true,
         feeds: 'PI Program at a Glance',
         fields: [
+          { kind: 'incInternal' },
           { kind: 'metrics' },
           { kind: 'rows', key: 'customMetrics', label: 'Your own metrics',
             hint: 'Anything Cirrus Cc doesn’t track: text-message subscribers, flyers handed out, drone flights.',
@@ -12073,7 +12074,22 @@ function _coWinLabel(w) {
 }
 // The facts for ONE close-out: its window applied, and whether it is an interim.
 function _coFactsFor(co) {
-  return Object.assign(_closeoutFacts(co.projectId, _coWindow(co)), { interim: !!co && co.label !== 'Final' });
+  return Object.assign(_closeoutFacts(co.projectId, _coWindow(co), _coIncInternal(co)), { interim: !!co && co.label !== 'Final', includeInternal: _coIncInternal(co) });
+}
+// ── Who the close-out counts (Nov 2026, Jeff) ──
+// External stakeholders and the public only, as the PI reports and quick
+// reports count (_intIsExternal: an anonymous caller is external). The
+// intake's "Include internal project-team contacts" box adds the team back.
+function _coIncInternal(co) { return !!(co && _coIt(co).includeInternal); }
+function _coExtIds(pid) {
+  return (DB.get('project_stakeholders') || []).filter(function (l) { return String(l.projectId) === String(pid) && (l.stakeholderRole || 'External') === 'External'; })
+    .map(function (l) { return String(l.stakeholderId); });
+}
+function _coProjInts(pid, w, incInternal) {
+  const ext = incInternal ? null : _coExtIds(pid);
+  return (DB.get('interactions') || []).filter(function (i) {
+    return String(i.projectId) === String(pid) && _coInWin(i.date, w) && (incInternal || _intIsExternal(i, ext));
+  });
 }
 
 // ── The Outreach log in the close-out (step 3, Oct 2026) ──
@@ -12109,11 +12125,11 @@ function _coOutreachLine(x) {
 // Everything the report counts, computed live. Every id is compared as a
 // String: project_id is bigint on some tables and text on others.
 // w = the close-out's window (null = the whole project).
-function _closeoutFacts(projId, w) {
+function _closeoutFacts(projId, w, incInternal) {
   const pid = String(projId);
   w = w || null;
   const mine = function (k) { return (DB.get(k) || []).filter(function (x) { return String(x.projectId) === pid; }); };
-  const ints = mine('interactions').filter(function (i) { return _coInWin(i.date, w); });
+  const ints = _coProjInts(pid, w, incInternal);
   const dates = ints.map(function (i) { return i.date; }).filter(Boolean).sort();
   const issues = mine('issues').filter(function (i) { return _coInWin(i.dateRaised, w); });
   const comms = mine('commitments').filter(function (c) { return _coInWin(c.dateMade, w); });
@@ -12129,7 +12145,9 @@ function _closeoutFacts(projId, w) {
     intSpan: span(dates[0], dates[dates.length - 1]),
     inboundCalls: ints.filter(function (i) { return i.channel === 'Phone' && i.direction === 'Incoming'; }).length,
     // The registry as it stood at the end of the window.
-    stakeholders: mine('project_stakeholders').filter(function (l) { return !(w && w.to) || !_coVal(l.addedDate) || String(l.addedDate).slice(0, 10) <= w.to; }).length,
+    stakeholders: mine('project_stakeholders').filter(function (l) {
+      return (incInternal || (l.stakeholderRole || 'External') === 'External')
+        && (!(w && w.to) || !_coVal(l.addedDate) || String(l.addedDate).slice(0, 10) <= w.to); }).length,
     piReports: (_syncCache.report_archive || []).filter(function (r) { return String(r.projectId) === pid && _coInWin(String(r.archivedAt || '').slice(0, 10), w); }).length,
     events: mine('meetings').filter(function (m) { return _coInWin(m.date, w); }).length,
     issues: issues.length,
@@ -12620,12 +12638,18 @@ function _coBlockField(fd, it, f, proj) {
       + '<div class="fr" style="max-width:220px;margin:0"><label for="co-f-nlCount">Editions sent (typed)</label>'
       + '<input id="co-f-nlCount" data-k="nlCount" oninput="_coSet(this)" value="' + escHtml(it.nlCount) + '"></div></div>';
   }
+  if (fd.kind === 'incInternal') {
+    return '<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--mist);margin-bottom:12px;cursor:pointer">'
+      + '<input type="checkbox" id="co-f-incInternal" style="margin-top:3px"' + (it.includeInternal ? ' checked' : '') + ' onchange="coSetIncInternal(this)">'
+      + '<span><strong style="color:var(--white)">Include internal project-team contacts in the counts</strong><br>'
+      + '<span style="font-size:12px;color:var(--fog)">Off (the usual): every count, chart and AI draft in this close-out covers external stakeholders and the public only, as your PI reports and quick reports do. Internal = contacts marked Internal on the project. Events and outreach are counted either way.</span></span></label>';
+  }
   if (fd.kind === 'metrics') {
     const rows = [
       ['Program duration', f.duration || '—', 'project start & end dates', 'ovrDuration'],
       ['PI reports issued', f.piReports, 'Report Archive', 'ovrPiReports'],
-      ['Stakeholders in registry', f.stakeholders, 'linked to this project', 'ovrStakeholders'],
-      ['Logged interactions', f.interactions, f.intSpan || 'none yet', 'ovrInteractions'],
+      ['Stakeholders in registry', f.stakeholders, f.includeInternal ? 'linked to this project, internal included' : 'external contacts linked to this project', 'ovrStakeholders'],
+      ['Logged interactions', f.interactions, (f.intSpan || 'none yet') + (f.includeInternal ? ' · internal included' : ' · external & public'), 'ovrInteractions'],
       ['Issues escalated', f.issues, f.issuesResolved + ' resolved', 'ovrIssues']
     ];
     return '<div style="overflow-x:auto;margin-bottom:6px"><table class="co-tbl" style="min-width:600px"><thead><tr>'
@@ -12724,6 +12748,13 @@ function _coSet(el) {
 }
 
 // The dates an interim covers change every count, so the form is redrawn.
+function coSetIncInternal(el) {
+  if (!_coWork) return;
+  _coWork.intake.includeInternal = !!el.checked;
+  _coWork.facts = null;
+  _coDirty = true; _coSaveSoon();
+  _coRerender();
+}
 function _coSetPeriod(el) {
   if (!_coWork) return;
   _coWork.intake[el.dataset.k] = el.value;
@@ -13050,6 +13081,7 @@ function _coReportDoc(co) {
   B.push({ t: 'section', text: 'PI Program at a Glance:' });
   B.push({ t: 'table', cols: [{ h: 'Metric', w: 5200 }, { h: 'Result', w: 4400 }], rows: gl, boldCol: 0 });
   if (dag) P([{ text: '† Figure from the PI team’s own records (website analytics, email platform, field counts), not counted in Cirrus Cc.', i: true, size: 16 }], { before: 4 });
+  if (facts.includeInternal) P([{ text: 'Stakeholder and interaction counts include the internal project team.', i: true, size: 16 }], { before: 2 });
   sections.push({ id: 'glance', title: 'PI Program at a Glance', state: 'in', why: '' });
 
   // ── PI Highlights ──
@@ -13380,7 +13412,7 @@ function _coVisitPoints(rows) {
 // plus why anything was left out, for the report screen's section pill.
 function _coFigures(co, it) {
   const pid = String(co.projectId), w = _coWindow(co);
-  const ints = (DB.get('interactions') || []).filter(function (i) { return String(i.projectId) === pid && _coInWin(i.date, w); });
+  const ints = _coProjInts(pid, w, _coIncInternal(co));
   const stakes = DB.get('stakeholders') || [];
   const blocks = [], out = [];
   let fig = 0;
@@ -13817,7 +13849,7 @@ function _coHighlightFacts(co, hid) {
   const f = _coFactsFor(co);
   const ol = f.outreach;
   const olLines = function (arr, what, max) { arr.slice(0, max || 12).forEach(function (x) { L.push(what + ' — ' + _coOutreachLine(x) + '.'); }); if (arr.length > (max || 12)) L.push('(and ' + (arr.length - (max || 12)) + ' more ' + what.toLowerCase() + ' entries)'); };
-  const ints = mine('interactions');
+  const ints = _coProjInts(pid, w, _coIncInternal(co));
   const inbound = ints.filter(function (i) { return i.direction !== 'Outgoing'; });
   const outbound = ints.filter(function (i) { return i.direction === 'Outgoing'; });
   const events = mine('meetings').slice().sort(function (a, b) { return String(a.date || '').localeCompare(String(b.date || '')); });
@@ -14057,7 +14089,7 @@ function _coCommlogFacts(co) {
   const it = (_coWork && _coWork.id === co.id) ? _coWork.intake : (co.intake || {});
   const pid = String(co.projectId), w = _coWindow(co);
   const stakes = DB.get('stakeholders') || [];
-  const ints = (DB.get('interactions') || []).filter(function (i) { return String(i.projectId) === pid && _coInWin(i.date, w); })
+  const ints = _coProjInts(pid, w, _coIncInternal(co))
     .slice().sort(function (a, b) { return String(a.date || '').localeCompare(String(b.date || '')); });
   if (!ints.length) return null;
   const tally = function (arr, fn) {
@@ -14196,7 +14228,7 @@ function _coLetterFacts(co) {
   const pid = String(co.projectId), w = _coWindow(co);
   const proj = (DB.get('projects') || []).find(function (p) { return String(p.id) === pid; }) || {};
   const f = _coFactsFor(co);
-  const ints = (DB.get('interactions') || []).filter(function (i) { return String(i.projectId) === pid && _coInWin(i.date, w); });
+  const ints = _coProjInts(pid, w, _coIncInternal(co));
   const inbound = ints.filter(function (i) { return i.direction !== 'Outgoing'; });
   const tally = function (arr, key) {
     const t = {}; arr.forEach(function (x) { const k = x[key]; if (k) t[k] = (t[k] || 0) + 1; });

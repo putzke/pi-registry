@@ -16,9 +16,9 @@ module.exports = {
     const proj = (await t.sql(`select id from pi_projects where pid='25-LC-400N'`))[0];
     const projId = String(proj.id);
     const n = async q => (await t.sql(q))[0].n;
-    const total = await n(`select count(*)::int n from pi_interactions where project_id='${projId}'`);
-    const out = await n(`select count(*)::int n from pi_interactions where project_id='${projId}' and direction='Outgoing'`);
-    const dated = await n(`select count(*)::int n from pi_interactions where project_id='${projId}' and interaction_date is not null`);
+    const total = await n(`select count(*)::int n from pi_interactions i where project_id='${projId}' and (stakeholder_id is null or exists (select 1 from pi_project_stakeholders l where l.project_id=i.project_id and l.stakeholder_id=i.stakeholder_id and coalesce(nullif(l.stakeholder_role,''),'External')='External'))`);
+    const out = await n(`select count(*)::int n from pi_interactions i where project_id='${projId}' and (stakeholder_id is null or exists (select 1 from pi_project_stakeholders l where l.project_id=i.project_id and l.stakeholder_id=i.stakeholder_id and coalesce(nullif(l.stakeholder_role,''),'External')='External')) and direction='Outgoing'`);
+    const dated = await n(`select count(*)::int n from pi_interactions i where project_id='${projId}' and (stakeholder_id is null or exists (select 1 from pi_project_stakeholders l where l.project_id=i.project_id and l.stakeholder_id=i.stakeholder_id and coalesce(nullif(l.stakeholder_role,''),'External')='External')) and interaction_date is not null`);
     const issues = await n(`select count(*)::int n from pi_issues where project_id='${projId}'`);
     const names = (await t.sql(`select s.first_name, s.last_name from pi_stakeholders s join pi_project_stakeholders ps on ps.stakeholder_id = s.id::text
       where ps.project_id='${projId}' and coalesce(s.first_name,'') <> '' and coalesce(s.last_name,'') <> ''`)).map(r => r.first_name + ' ' + r.last_name);
@@ -34,7 +34,7 @@ module.exports = {
       const co = () => 'co = _syncCache.closeouts.find(c => c.id === _coWork.id)';
 
       // ── the numbers are the database's ──────────────────────────────────
-      const mo = await page.evaluate(pid => _coMonthly(DB.get('interactions').filter(i => String(i.projectId) === pid)), projId);
+      const mo = await page.evaluate(pid => _coMonthly(_coProjInts(pid, null, false)), projId);
       const sum = a => a.reduce((x, y) => x + y, 0);
       t.eq(sum(mo.a) + sum(mo.b), dated, 'monthly chart counts every dated interaction once');
       t.eq(sum(mo.a), out, 'outbound series = Outgoing interactions');
@@ -55,7 +55,7 @@ module.exports = {
       // Subject bars are inbound only: bars + the "plus N" note = inbound total.
       const subj = await page.evaluate(() => {
         const co = _syncCache.closeouts.find(c => c.id === _coWork.id);
-        const inn = DB.get('interactions').filter(i => String(i.projectId) === String(co.projectId) && i.direction !== 'Outgoing');
+        const inn = _coProjInts(String(co.projectId), null, false).filter(i => i.direction !== 'Outgoing');
         return { inbound: inn.length };
       });
       const sBars = [...charts[1].svg.matchAll(/<text[^>]*fill="#0b0b0b"[^>]*>([\d,]+)<\/text>/g)].map(m => +m[1].replace(/,/g, ''));

@@ -28,8 +28,8 @@ module.exports = {
                  values (${other.id}, 'Final', '{"sigName":"Jeff Putzke","sigTitle":"PI Manager","sigEmail":"jeff@demo.test","scmName":"Not carried"}'::jsonb,
                          '${me}', now() - interval '3 days')`);
 
-    const ints = (await t.sql(`select count(*)::int n from pi_interactions where project_id='${projId}'`))[0].n;
-    const calls = (await t.sql(`select count(*)::int n from pi_interactions where project_id='${projId}'
+    const ints = (await t.sql(`select count(*)::int n from pi_interactions i where project_id='${projId}' and (stakeholder_id is null or exists (select 1 from pi_project_stakeholders l where l.project_id=i.project_id and l.stakeholder_id=i.stakeholder_id and coalesce(nullif(l.stakeholder_role,''),'External')='External'))`))[0].n;
+    const calls = (await t.sql(`select count(*)::int n from pi_interactions i where project_id='${projId}' and (stakeholder_id is null or exists (select 1 from pi_project_stakeholders l where l.project_id=i.project_id and l.stakeholder_id=i.stakeholder_id and coalesce(nullif(l.stakeholder_role,''),'External')='External'))
                                 and channel='Phone' and direction='Incoming'`))[0].n;
     const dels = await t.sql(`select id from pi_deliverables where project_id='${projId}' order by id`);
     t.ok(ints > 0 && dels.length > 0, 'fixture: the project has interactions and deliverables');

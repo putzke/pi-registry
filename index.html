@@ -313,6 +313,40 @@ select optgroup{background:var(--navy-mid);color:var(--sky-lt);font-weight:700;f
 .fcheck{display:flex;align-items:center;gap:7px}
 .fcheck input[type=checkbox]{width:auto;accent-color:var(--sky)}
 .fcheck label{font-size:12px;color:var(--mist);text-transform:none;letter-spacing:0}
+/* Edit hotline dialog: numbered call-flow steps (Nov 2026) */
+.hl-modal input[type=radio],.hl-modal input[type=checkbox]{width:auto;padding:0;margin:0;accent-color:var(--sky);flex:none}
+.hl-step{border:1px solid var(--border);border-left:3px solid var(--c);border-radius:10px;padding:12px 14px 2px;margin-bottom:12px;background:rgba(255,255,255,.02)}
+.hl-basics{padding-top:14px}
+.hl-step-h{display:flex;gap:10px;align-items:center;margin-bottom:12px}
+.hl-num{width:22px;height:22px;border-radius:50%;background:var(--c);color:#0B1929;font-weight:700;font-size:12px;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.hl-step-t{font-size:14px;font-weight:600;color:var(--white)}
+.hl-step-s{font-size:11.5px;color:var(--fog);margin-top:1px}
+.hl-flow-title{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--slate);margin:4px 0 8px}
+.hl-flow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:14px}
+.hl-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 4px;border-radius:999px;border:1px solid var(--c);background:transparent;color:var(--mist);font:inherit;font-size:12px;cursor:pointer}
+.hl-chip:hover{background:rgba(255,255,255,.05)}
+.hl-chip.off{opacity:.4;border-style:dashed}
+.hl-arrow{color:var(--fog);font-size:12px}
+.hl-check{display:flex!important;gap:8px;align-items:center;text-transform:none!important;letter-spacing:0!important;font-weight:600!important;font-size:13px!important;color:var(--mist)!important}
+.hl-choices{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.hl-choice{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:13px;color:var(--mist);line-height:1.35}
+.hl-choice input{margin-top:3px!important}
+.hl-choice small{color:var(--fog);font-size:11.5px}
+.hl-choice.on{border-color:var(--c);background:rgba(155,123,232,.08)}
+.hot-ext-row{margin-bottom:6px}
+.hot-ext-grid{display:grid;grid-template-columns:56px minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr) 32px 32px;gap:6px;align-items:center}
+.hot-ext-grid select,.hot-ext-grid input{width:100%;min-width:0;padding:6px 8px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:var(--radius);color:var(--white);font-family:var(--font);font-size:12.5px}
+.hot-ext-grid .btn{padding:4px 0;justify-content:center}
+.hl-ext-head{font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--fog);margin-bottom:4px}
+.no-es .hot-ext-grid{grid-template-columns:56px minmax(0,1.3fr) minmax(0,1.2fr) 32px 32px}
+.no-es .hx-label-es,.no-es .hx-es-h{display:none}
+.hx-hours{margin:6px 0 10px 62px;padding:8px 10px;border-left:2px solid rgba(232,160,32,.45)}
+.hl-note{font-size:11.5px;color:var(--fog);line-height:1.5;margin:8px 0 10px}
+#f-hl-preview{display:flex;flex-direction:column;gap:7px;margin-bottom:12px}
+.hl-hear-line{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;line-height:1.5;color:var(--mist)}
+.hl-dot{width:9px;height:9px;border-radius:50%;background:var(--c);flex:none;margin-top:5px}
+.hl-lead{color:var(--fog)}
+@media (max-width:640px){.hl-choices{grid-template-columns:1fr}.hot-ext-grid,.no-es .hot-ext-grid{grid-template-columns:48px minmax(0,1fr) 32px 32px}.hot-ext-grid .hx-label,.hot-ext-grid .hx-label-es,.hl-ext-head span:nth-child(3),.hl-ext-head span:nth-child(4){grid-column:2/-1}}
 
 /* CHANNEL COLORS */
 .ch-phone{background:rgba(45,125,210,.15);color:var(--sky-lt)}
@@ -9792,20 +9826,40 @@ function _hotProjOptions(cur){
     .filter(p=>p.status!=='Complete'||String(p.id)===String(cur))
     .map(p=>`<option value="${escHtml(p.id)}"${String(p.id)===String(cur)?' selected':''}>${escHtml((p.pid?p.pid+' — ':'')+p.name)}</option>`).join('');
 }
+// The Edit hotline dialog is laid out in call order (Nov 2026, Jeff): a
+// numbered, colour-coded step per thing a caller meets — greeting, Spanish,
+// menu, ringing the PI Lead, voicemail — with a strip at the top that names
+// them and greys out the ones this hotline skips. Same field ids as before.
+const HOT_STEPS = [
+  {key:'greet', n:'1', title:'Greeting',            color:'#4A9BE8'},
+  {key:'es',    n:'2', title:'Spanish option',      color:'#2BB39A'},
+  {key:'route', n:'3', title:'Where callers go',    color:'#9B7BE8'},
+  {key:'ring',  n:'4', title:'Ring the PI Lead',    color:'#E8A020'},
+  {key:'vm',    n:'5', title:'Voicemail',           color:'#E8684A'}];
+function _hotStepColor(k){ return (HOT_STEPS.find(s=>s.key===k)||{}).color||'#94A3B8'; }
+function _hotStepHTML(key, sub, body){
+  const st=HOT_STEPS.find(s=>s.key===key)||{n:'',title:'This hotline',color:'#94A3B8'};
+  return `<section class="hl-step" id="hl-step-${key}" style="--c:${st.color}">
+    <div class="hl-step-h"><span class="hl-num">${st.n||'☎'}</span><div><div class="hl-step-t">${escHtml(st.title)}</div><div class="hl-step-s">${sub}</div></div></div>
+    ${body}</section>`;
+}
+function _hotFlowStripHTML(){
+  return `<div class="hl-flow" id="hl-flow">${HOT_STEPS.map((s,i)=>`${i?'<span class="hl-arrow">→</span>':''}<button type="button" class="hl-chip" data-step="${s.key}" style="--c:${s.color}" onclick="document.getElementById('hl-step-${s.key}').scrollIntoView({behavior:'smooth',block:'start'})"><span class="hl-num">${s.n}</span>${escHtml(s.title)}</button>`).join('')}</div>`;
+}
 function _hotExtRowHTML(e){
   e=e||{};
   const custom=!!(e.ringMode||e.hoursStart);
   const st=_hotRingSettings(_hotRingGlobal(),null,e);
-  return `<div class="hot-ext-row" data-id="${escHtml(e.id||'')}" style="margin-bottom:6px">
-   <div style="display:grid;grid-template-columns:70px 1fr 1fr 1fr 28px 28px;gap:6px;align-items:center">
-    <select class="hx-digit">${['1','2','3','4','5','6','7','8'].map(d=>`<option${String(e.digit)===d?' selected':''}>${d}</option>`).join('')}</select>
+  return `<div class="hot-ext-row" data-id="${escHtml(e.id||'')}">
+   <div class="hot-ext-grid">
+    <select class="hx-digit" title="The key callers press">${['1','2','3','4','5','6','7','8'].map(d=>`<option${String(e.digit)===d?' selected':''}>${d}</option>`).join('')}</select>
     <select class="hx-proj" onchange="_hotPreview()">${_hotProjOptions(e.projectId)}</select>
-    <input class="hx-label" value="${escHtml(e.label||'')}" placeholder="Menu says: For ___, press N" oninput="_hotPreview()">
-    <input class="hx-label-es" value="${escHtml(e.labelEs||'')}" placeholder="Spanish (optional)" oninput="_hotPreview()">
-    <button class="btn btn-sm hx-hours-btn" title="Ringing and business hours for this project" onclick="const h=this.closest('.hot-ext-row').querySelector('.hx-hours');h.style.display=h.style.display==='none'?'':'none'"${custom?' style="color:var(--sky-lt)"':''}>⏰</button>
-    <button class="btn btn-sm" title="Remove" onclick="this.closest('.hot-ext-row').remove();_hotPreview()">×</button>
+    <input class="hx-label" value="${escHtml(e.label||'')}" placeholder="the 400 North project" oninput="_hotPreview()">
+    <input class="hx-label-es" value="${escHtml(e.labelEs||'')}" placeholder="el proyecto 400 Norte" oninput="_hotPreview()">
+    <button type="button" class="btn btn-sm hx-hours-btn" title="Ringing and business hours for this project" onclick="const h=this.closest('.hot-ext-row').querySelector('.hx-hours');h.style.display=h.style.display==='none'?'':'none'"${custom?' style="color:var(--sky-lt)"':''}>⏰</button>
+    <button type="button" class="btn btn-sm" title="Remove" onclick="this.closest('.hot-ext-row').remove();_hotPreview()">×</button>
    </div>
-   <div class="hx-hours" style="display:none;margin:6px 0 10px 76px;padding:8px 10px;border-left:2px solid rgba(74,155,232,.35)">
+   <div class="hx-hours" style="display:none">
     <select class="hx-ruse" onchange="_hotToggleCustom(this)"><option value="default"${custom?'':' selected'}>Same as this hotline</option><option value="custom"${custom?' selected':''}>Its own ringing and hours</option></select>
     <div class="rf-custom" style="margin-top:8px;${custom?'':'display:none'}">${_hotRingFieldsHTML(st,false)}</div>
    </div>
@@ -9818,51 +9872,77 @@ function openHotlineModal(id){
   const menu=ex.length>0;
   const lbl='font-weight:400;text-transform:none;letter-spacing:0;color:var(--fog)';
   const hCustom=!!(h.ringMode||h.ringSeconds||h.hoursStart);
-  openM(id?'Edit hotline':'Add hotline',
-  `<div class="fgrid fg2f">
-    <div class="fr"><label>Name *</label><input id="f-hl-name" value="${escHtml(h.name||'')}" maxlength="80" placeholder="e.g. UDOT Region One" oninput="_hotPreview()"></div>
-    <div class="fr"><label>Twilio phone number *</label><input id="f-hl-num" value="${escHtml(_hotFmtPhone(h.phoneNumber||''))}" maxlength="20" placeholder="(801) 555-0123"></div>
-  </div>
-  <div class="fr"><label>Callers go to</label>
-    <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--mist)">
-      <label style="display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0;font-weight:400"><input type="radio" name="f-hl-mode" value="one"${menu?'':' checked'} onchange="_hotModeChanged()"> One project</label>
-      <label style="display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0;font-weight:400"><input type="radio" name="f-hl-mode" value="menu"${menu?' checked':''} onchange="_hotModeChanged()"> A menu: press 1, 2, 3… for each project</label>
+  const g=_hotRingGlobal()||{};
+  const vmRec=[g.voicemailAudioPath?'English':'', g.spanishVoicemailAudioPath?'Spanish':''].filter(Boolean);
+  const basics=`<section class="hl-step hl-basics" style="--c:#94A3B8">
+    <div class="fgrid fg2f">
+      <div class="fr"><label>Name *</label><input id="f-hl-name" value="${escHtml(h.name||'')}" maxlength="80" placeholder="e.g. UDOT Region One" oninput="_hotPreview()"></div>
+      <div class="fr"><label>Twilio phone number *</label><input id="f-hl-num" value="${escHtml(_hotFmtPhone(h.phoneNumber||''))}" maxlength="20" placeholder="(801) 555-0123"></div>
     </div>
-  </div>
-  <div id="f-hl-one" class="fr" style="${menu?'display:none':''}"><label>Project</label><select id="f-hl-proj" onchange="_hotPreview()">${_hotProjOptions(h.projectId)}</select></div>
-  <div id="f-hl-menu" style="${menu?'':'display:none'}">
-    <div style="font-size:11px;color:var(--fog);margin-bottom:6px">Key · project · what the menu says (“For <i>the 400 North project</i>, press 1”). 0 is always the general mailbox and 9 is Spanish, so keys 1–8 are available.</div>
-    <div id="f-hl-exts">${ex.map(_hotExtRowHTML).join('')}</div>
-    <button class="btn btn-sm" onclick="_hotAddExt()">+ Add extension</button>
-    ${_hotMenuRecHTML(h,'en')}
-  </div>
-  <div class="fr"><label>If the project has no PI Lead <span style="${lbl}">(and for the general mailbox), voicemails go to</span></label>
-    <select id="f-hl-assignee"><option value="">— Nobody: leave them unassigned —</option>${_team(true).map(t=>`<option value="${escHtml(t.initials)}"${String(t.initials).toUpperCase()===String(h.defaultAssignee||'').toUpperCase()?' selected':''}>${escHtml(t.name)} (${escHtml(t.initials)})</option>`).join('')}</select></div>
-  <div class="fsec">Greeting</div>
-  <div class="fr"><label>Voice</label><select id="f-hl-gmode" onchange="_hotPreview()">
-    <option value="voice"${h.greetingMode!=='recording'?' selected':''}>Computer voice reads the greeting below</option>
-    <option value="recording"${h.greetingMode==='recording'?' selected':''}>Play a recording I upload</option></select></div>
-  <div class="fr"><label>Greeting <span style="${lbl}">(the menu is added after it automatically)</span></label><textarea id="f-hl-gtext" rows="2" placeholder="${escHtml('Thank you for calling the '+(_hotName(h.name)||'…')+' hotline.')}" oninput="_hotPreview()">${escHtml(h.greetingText||'')}</textarea></div>
-  <div class="fr"><label>Recording <span style="${lbl}">(MP3 or WAV)${h.greetingAudioPath?' — one is uploaded':''}</span></label><input type="file" id="f-hl-gfile" accept="audio/mpeg,audio/mp3,audio/wav,audio/x-wav"></div>
-  <div class="fr"><div class="fcheck"><input type="checkbox" id="f-hl-es"${h.spanishEnabled?' checked':''} onchange="_hotPreview();document.getElementById('f-hl-es-wrap').style.display=this.checked?'':'none'"><label for="f-hl-es">Offer Spanish — “Para español, oprima 9.” Spanish voicemails are flagged LEP.</label></div></div>
-  <div id="f-hl-es-wrap" style="${h.spanishEnabled?'':'display:none'}">
-    <div class="fr"><label>Spanish greeting</label><textarea id="f-hl-gtext-es" rows="2" placeholder="${escHtml('Gracias por llamar a la línea de información del proyecto '+(_hotName(h.name)||'…')+'.')}" oninput="_hotPreview()">${escHtml(h.spanishGreetingText||'')}</textarea></div>
-    <div class="fr"><label>Spanish recording <span style="${lbl}">(optional)${h.spanishGreetingAudioPath?' — one is uploaded':''}</span></label><input type="file" id="f-hl-gfile-es" accept="audio/mpeg,audio/mp3,audio/wav,audio/x-wav"></div>
-    <div id="f-hl-mes-wrap" style="${menu?'':'display:none'}">${_hotMenuRecHTML(h,'es')}</div>
-  </div>
-  <div class="fsec">When someone calls</div>
-  <div class="fr" id="f-hl-ringwrap">
-    <select id="f-hl-ruse" onchange="_hotToggleCustom(this)"><option value="default"${hCustom?'':' selected'}>Use the defaults — ${escHtml(_hotRingSummary(_hotRingSettings(_hotRingGlobal(),null,null)))}</option><option value="custom"${hCustom?' selected':''}>This hotline’s own ringing and hours</option></select>
-    <div class="rf-custom" id="f-hl-ring" onchange="_hotPreview()" style="margin-top:8px;${hCustom?'':'display:none'}">${_hotRingFieldsHTML(_hotRingSettings(_hotRingGlobal(),h,null),true)}</div>
-    <div style="font-size:11px;color:var(--fog);margin-top:6px">On a menu hotline, each project can have its own hours — the ⏰ button on its row. Only the project’s PI Lead is rung (set on the Projects view, with a phone on the PI team list).</div>
-  </div>
-  <div class="fr"><label>Status</label><select id="f-hl-active"><option value="1"${h.active!==false?' selected':''}>Active</option><option value="0"${h.active===false?' selected':''}>Off — callers hear “not in service”</option></select></div>
-  <div class="fsec">What callers hear</div>
-  <div id="f-hl-preview" style="font-size:12px;line-height:1.6;color:var(--mist);background:rgba(255,255,255,.04);border-radius:8px;padding:10px 12px"></div>
-  <div style="font-size:11px;color:var(--fog);line-height:1.5;margin-top:10px">In Twilio, set this number's <b>A call comes in</b> webhook to <span style="font-family:var(--mono);color:var(--slate)">${escHtml(HOT_FN_URL)}/voice</span> (HTTP POST).</div>`,
+    <div class="fr"><label>Status</label><select id="f-hl-active"><option value="1"${h.active!==false?' selected':''}>Active — answering calls</option><option value="0"${h.active===false?' selected':''}>Off — callers hear “not in service”</option></select></div>
+  </section>`;
+  const greet=_hotStepHTML('greet','The first thing every caller hears.',`
+    <div class="fr"><label>Voice</label><select id="f-hl-gmode" onchange="_hotPreview()">
+      <option value="voice"${h.greetingMode!=='recording'?' selected':''}>Computer voice reads the greeting below</option>
+      <option value="recording"${h.greetingMode==='recording'?' selected':''}>Play a recording I upload</option></select></div>
+    <div class="fr"><label>Greeting <span style="${lbl}">(the menu is added after it automatically)</span></label><textarea id="f-hl-gtext" rows="2" placeholder="${escHtml('Thank you for calling the '+(_hotName(h.name)||'…')+' hotline.')}" oninput="_hotPreview()">${escHtml(h.greetingText||'')}</textarea></div>
+    <div class="fr"><label>Recording <span style="${lbl}">(MP3 or WAV)${h.greetingAudioPath?' — ✓ one is uploaded':''}</span></label><input type="file" id="f-hl-gfile" accept="audio/mpeg,audio/mp3,audio/wav,audio/x-wav"></div>`);
+  const es=_hotStepHTML('es','Right after the greeting: “Para español, oprima 9.”',`
+    <div class="fr"><label class="hl-check"><input type="checkbox" id="f-hl-es"${h.spanishEnabled?' checked':''} onchange="_hotSyncVis()"> Offer Spanish <span style="${lbl}">— Spanish voicemails are flagged LEP</span></label></div>
+    <div id="f-hl-es-wrap" style="${h.spanishEnabled?'':'display:none'}">
+      <div class="fr"><label>Spanish greeting</label><textarea id="f-hl-gtext-es" rows="2" placeholder="${escHtml('Gracias por llamar a la línea de información del proyecto '+(_hotName(h.name)||'…')+'.')}" oninput="_hotPreview()">${escHtml(h.spanishGreetingText||'')}</textarea></div>
+      <div class="fr"><label>Spanish recording <span style="${lbl}">(optional)${h.spanishGreetingAudioPath?' — ✓ one is uploaded':''}</span></label><input type="file" id="f-hl-gfile-es" accept="audio/mpeg,audio/mp3,audio/wav,audio/x-wav"></div>
+    </div>`);
+  const route=_hotStepHTML('route','One project, or a menu of projects (0 = general mailbox, 9 = Spanish).',`
+    <div class="hl-choices">
+      <label class="hl-choice"><input type="radio" name="f-hl-mode" value="one"${menu?'':' checked'} onchange="_hotModeChanged()"><span><b>One project</b><br><small>Every call goes to the same project.</small></span></label>
+      <label class="hl-choice"><input type="radio" name="f-hl-mode" value="menu"${menu?' checked':''} onchange="_hotModeChanged()"><span><b>A menu</b><br><small>Press 1, 2, 3… for each project.</small></span></label>
+    </div>
+    <div id="f-hl-one" class="fr" style="${menu?'display:none':''}"><label>Project</label><select id="f-hl-proj" onchange="_hotPreview()">${_hotProjOptions(h.projectId)}</select></div>
+    <div id="f-hl-menu" style="${menu?'':'display:none'}">
+      <div class="hot-ext-grid hl-ext-head"><span>Key</span><span>Project</span><span title="“For ___, press N”">Menu says</span><span class="hx-es-h">Spanish (optional)</span><span title="Hours">⏰</span><span></span></div>
+      <div id="f-hl-exts">${ex.map(_hotExtRowHTML).join('')}</div>
+      <button type="button" class="btn btn-sm" onclick="_hotAddExt()">+ Add extension</button>
+      ${_hotMenuRecHTML(h,'en')}
+      <div id="f-hl-mes-wrap" style="${menu&&h.spanishEnabled?'':'display:none'}">${_hotMenuRecHTML(h,'es')}</div>
+    </div>`);
+  const ring=_hotStepHTML('ring','During business hours, before voicemail. Skipped outside hours.',`
+    <div class="fr" id="f-hl-ringwrap">
+      <select id="f-hl-ruse" onchange="_hotToggleCustom(this)"><option value="default"${hCustom?'':' selected'}>Use the defaults — ${escHtml(_hotRingSummary(_hotRingSettings(_hotRingGlobal(),null,null)))}</option><option value="custom"${hCustom?' selected':''}>This hotline’s own ringing and hours</option></select>
+      <div class="rf-custom" id="f-hl-ring" onchange="_hotPreview()" style="margin-top:10px;${hCustom?'':'display:none'}">${_hotRingFieldsHTML(_hotRingSettings(_hotRingGlobal(),h,null),true)}</div>
+      <div class="hl-note">Only the project’s PI Lead is rung (set on the Projects view, with a phone on the PI team list). On a menu hotline, each project can have its own hours — the ⏰ button on its row.</div>
+    </div>`);
+  const vm=_hotStepHTML('vm','If nobody answers: the caller leaves a message (up to 2 minutes).',`
+    <div class="hl-note" style="margin:0 0 10px">The voicemail prompt is shared by every hotline — ${vmRec.length?'your '+vmRec.join(' and ')+' recording'+(vmRec.length>1?'s':''):'the computer voice'} (Settings → Project hotlines → Voicemail prompt).</div>
+    <div class="fr"><label>Voicemails go to <span style="${lbl}">— the project’s PI Lead; if it has none (or for the general mailbox):</span></label>
+      <select id="f-hl-assignee"><option value="">— Nobody: leave them unassigned —</option>${_team(true).map(t=>`<option value="${escHtml(t.initials)}"${String(t.initials).toUpperCase()===String(h.defaultAssignee||'').toUpperCase()?' selected':''}>${escHtml(t.name)} (${escHtml(t.initials)})</option>`).join('')}</select></div>`);
+  openM(id?'Edit hotline':'Add hotline',
+  `<div class="hl-modal">
+    ${basics}
+    <div class="hl-flow-title">What happens when someone calls</div>
+    ${_hotFlowStripHTML()}
+    ${greet}${es}${route}${ring}${vm}
+    <section class="hl-step hl-hear" style="--c:#94A3B8">
+      <div class="hl-step-h"><span class="hl-num">▶</span><div><div class="hl-step-t">What callers hear</div><div class="hl-step-s">Step by step, from what is set above.</div></div></div>
+      <div id="f-hl-preview"></div>
+    </section>
+    <div class="hl-note">In Twilio, set this number's <b>A call comes in</b> webhook to <span style="font-family:var(--mono);color:var(--slate)">${escHtml(HOT_FN_URL)}/voice</span> (HTTP POST).</div>
+  </div>`,
   `${id?`<button class="btn btn-danger" onclick="deleteHotline('${escHtml(id)}')">Delete</button>`:''}
    <button class="btn" onclick="closeM()">Cancel</button>
    <button class="btn btn-primary" onclick="saveHotline()">Save</button>`,true);
+  _hotSyncVis();
+}
+// Show what applies: Spanish fields only with Spanish on, the Spanish menu
+// recording only on a menu hotline with Spanish, and grey the flow chips for
+// the steps this hotline skips.
+function _hotSyncVis(){
+  const menu=document.querySelector('input[name="f-hl-mode"]:checked')?.value==='menu';
+  const es=!!document.getElementById('f-hl-es')?.checked;
+  const show=(id,on)=>{ const el=document.getElementById(id); if(el) el.style.display=on?'':'none'; };
+  show('f-hl-one',!menu); show('f-hl-menu',menu); show('f-hl-es-wrap',es); show('f-hl-mes-wrap',menu&&es);
+  document.getElementById('f-hl-menu')?.classList.toggle('no-es',!es);
+  document.querySelectorAll('.hl-choice').forEach(c=>c.classList.toggle('on',!!c.querySelector('input')?.checked));
   _hotPreview();
 }
 // The menu-recording box: the script to read (kept current by _hotPreview),
@@ -9880,11 +9960,8 @@ function _hotMenuRecHTML(h, lang){
 }
 function _hotModeChanged(){
   const menu=document.querySelector('input[name="f-hl-mode"]:checked')?.value==='menu';
-  document.getElementById('f-hl-one').style.display=menu?'none':'';
-  document.getElementById('f-hl-menu').style.display=menu?'':'none';
-  const mes=document.getElementById('f-hl-mes-wrap'); if(mes) mes.style.display=menu?'':'none';
   if(menu&&!document.querySelector('#f-hl-exts .hot-ext-row')) _hotAddExt();
-  _hotPreview();
+  _hotSyncVis();
 }
 function _hotAddExt(){
   const box=document.getElementById('f-hl-exts'); if(!box) return;
@@ -9924,13 +10001,23 @@ function _hotPreview(){
       :'';
   });
   const opts=_hotMenuOptions(ex,'en');
-  const m=[h.spanishEnabled?'Para español, oprima 9.':'', mrec.en&&opts?'[your menu recording]':opts].filter(Boolean).join(' ');
-  let html=greet+(m?' '+escHtml(m).replace('[your menu recording]','<i>[your menu recording]</i>'):'');
   const rst=_hotRingSettings(_hotRingGlobal(), document.getElementById('f-hl-ruse')?.value==='custom'?(()=>{const r=_hotReadRing(document.getElementById('f-hl-ring'),true)||{};return {ringMode:r.on?'on':'off',ringSeconds:r.seconds,hoursStart:r.start,hoursEnd:r.end,hoursDays:r.days};})():{}, null);
-  if(rst.enabled) html+='<br><span style="color:var(--fog)">'+escHtml(_hotDaysLabel(rst.days)+' '+_hotTime12(rst.start)+'–'+_hotTime12(rst.end))+':</span> '+escHtml('Please hold while we connect you.')+' <i>[the PI Lead’s phone rings for '+rst.seconds+' seconds; if nobody takes it:]</i>';
-  html+='<br><span style="color:var(--fog)">Then:</span> '+escHtml('Please leave your name, your phone number and your message after the tone. You have two minutes.');
-  if(h.spanishEnabled) html+='<br><span style="color:var(--fog)">Press 9:</span> '+(rec?'<i>[your Spanish recording, or the text]</i> ':escHtml(_hotGreeting(h,'es'))+' ')+(mrec.es?'<i>[your Spanish menu recording]</i>':escHtml(_hotMenuText(h,ex,'es')));
-  out.innerHTML=html;
+  // One line per step, in the order the caller hears them.
+  const lines=[];
+  const add=(k,lead,body)=>lines.push(`<div class="hl-hear-line" style="--c:${_hotStepColor(k)}"><span class="hl-dot"></span><div>${lead?`<span class="hl-lead">${lead}</span> `:''}${body}</div></div>`);
+  add('greet','',greet);
+  if(h.spanishEnabled) add('es','',escHtml('Para español, oprima 9.'));
+  if(menu) add('route','',mrec.en&&opts?'<i>[your menu recording]</i>':escHtml(opts||'(add an extension)'));
+  if(rst.enabled) add('ring',escHtml(_hotDaysLabel(rst.days)+' '+_hotTime12(rst.start)+'–'+_hotTime12(rst.end)+':'),escHtml('Please hold while we connect you.')+' <i>[the PI Lead’s phone rings for '+rst.seconds+' seconds; if nobody takes it:]</i>');
+  add('vm','Then:',escHtml('Please leave your name, your phone number and your message after the tone. You have two minutes.'));
+  if(h.spanishEnabled) add('es','Press 9:',(rec?'<i>[your Spanish recording, or the text]</i> ':escHtml(_hotGreeting(h,'es'))+' ')+(menu?(mrec.es?'<i>[your Spanish menu recording]</i>':escHtml(_hotMenuText(h,ex,'es'))):''));
+  out.innerHTML=lines.join('');
+  // Grey the flow chips for steps this hotline skips.
+  const skip={es:!h.spanishEnabled, route:!menu, ring:!rst.enabled};
+  document.querySelectorAll('#hl-flow .hl-chip').forEach(c=>{
+    const k=c.dataset.step; c.classList.toggle('off',!!skip[k]);
+    c.title=skip[k]?({es:'Spanish is off',route:'One project — no menu',ring:'Ringing is off'})[k]:'';
+  });
 }
 async function _hotUploadGreeting(hotlineId, fileInput, lang, folder){
   const f=fileInput&&fileInput.files&&fileInput.files[0]; if(!f) return null;

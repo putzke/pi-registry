@@ -3812,6 +3812,20 @@ a Twilio trial + one number on DEV for a real call, then release.
   `hotPlayPrompt`; suggested wording `HOT_VM_SCRIPT`). Applied to DEV + receiver
   v19. Guarded by `test/tests/99-hotline-voicemail-recording.test.js` (fails on
   the old receiver). Paste the SQL on LIVE with the hotline release.
+- **Edit hotline dialog in call order (DEV, Nov 2026, Jeff).** Basics (name,
+  number, status) on top, then a flow strip ("What happens when someone
+  calls": 1 Greeting → 2 Spanish option → 3 Where callers go → 4 Ring the PI
+  Lead → 5 Voicemail; `HOT_STEPS`, colours per step, a chip greys out when the
+  hotline skips that step and scrolls to it on click), one colour-ruled
+  section per step (`_hotStepHTML`), and "What callers hear" as one coloured
+  line per step. `_hotSyncVis()` shows only what applies (Spanish fields with
+  Spanish on; the Spanish menu recording only on a menu hotline with Spanish;
+  the extension rows drop their Spanish column with Spanish off). Field ids and
+  `saveHotline` unchanged. Spacing fix: `.fr input{width:100%}` was stretching
+  every radio button and checkbox — `.hl-modal` resets them; extension rows use
+  `minmax(0,1fr)` columns with a header row, so they no longer push the dialog
+  into sideways scrolling. Guarded by
+  `test/tests/126-hotline-dialog-layout.test.js` (fails on the old code).
 - **Fallback assignee (2026-10-12):** `pi_hotlines.default_assignee`
   (initials; "If the project has no PI Lead…" in the hotline dialog). The
   receiver assigns the project's active lead, else this person (also for the

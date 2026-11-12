@@ -14,6 +14,9 @@ module.exports = {
         [h.id, String(i + 1), p, 'a fairly long menu label for project number ' + (i + 1)]);
     const app = await t.open('index.html', { viewport: { width: 1280, height: 900 } });
     try {
+      // Wait for the hotline list to load before opening it (it loads after boot).
+      await app.page.waitForFunction(id => (DB.get('hotlines') || []).some(x => String(x.id) === id)
+        && (DB.get('hotline_extensions') || []).filter(x => String(x.hotlineId) === id).length === 3, String(h.id), { timeout: 10000 });
       await app.page.evaluate(id => { setView('settings'); openHotlineModal(id); }, String(h.id));
       const r = await app.page.evaluate(() => {
         const b = document.getElementById('m-body');
@@ -38,6 +41,21 @@ module.exports = {
       });
       t.eq(off.chips, ['es', 'route'], 'Spanish off and one project grey out those two steps');
       t.ok(off.esWrap === 'none' && off.menu === 'none' && off.one === '', 'and hide their fields');
+      // Settings: colour-coded groups with a jump strip; ring fields keep their size.
+      const st = await app.page.evaluate(() => { closeM(); setView('settings');
+        const c = document.querySelector('#main .content');
+        return { groups: [...document.querySelectorAll('.set-group')].map(g => g.id.replace('set-g-', '')),
+          chips: document.querySelectorAll('.set-strip .set-chip').length,
+          cards: document.querySelectorAll('.set-group .set-card').length,
+          ids: ['mfa-card-body', 'team-card-body', 'hotline-card-body', 'client-access-panel', 'integrity-results', 'duplicate-results', 'claude-api-key-input'].every(id => document.getElementById(id)),
+          danger: /Danger zone/.test(document.getElementById('main').textContent),
+          sw: c.scrollWidth, cw: c.clientWidth,
+          day: (document.querySelector('#hotline-card-body .rf-day-l span') || {}).textContent };
+      });
+      t.eq(st.groups, ['account', 'team', 'phone', 'data', 'about', 'danger'], 'Settings is grouped: account, team & access, hotlines, data tools, about, troubleshooting');
+      t.ok(st.chips === 6 && st.cards === 9 && st.ids, 'a chip per group, and all nine cards with their contents kept');
+      t.ok(!st.danger && st.sw <= st.cw + 1, 'no "Danger zone" (nothing there deletes data) and no sideways scrolling');
+      t.eq(st.day, 'Sun', 'the business-day boxes are labelled buttons');
       t.eq(app.errors, [], 'no page errors');
     } finally { await app.close(); }
   },

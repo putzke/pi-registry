@@ -3826,6 +3826,17 @@ a Twilio trial + one number on DEV for a real call, then release.
   `minmax(0,1fr)` columns with a header row, so they no longer push the dialog
   into sideways scrolling. Guarded by
   `test/tests/126-hotline-dialog-layout.test.js` (fails on the old code).
+- **Settings page in colour-coded groups (DEV, Nov 2026, Jeff).** `renderSettings`
+  wraps the same nine cards in `.set-group` sections with a jump strip
+  (`.set-strip`, sticky): Your account (two-step, Claude key) · Team & client
+  access (PI team, Client Portal Access) · Project hotlines (`set-g-phone`,
+  hidden with its chip when `HOTLINE_ON` is false) · Data tools (integrity,
+  duplicates) · About · Troubleshooting (was "Danger zone": its one button only
+  reloads data, deletes nothing; now "Reload data"). Cards are `.set-card`
+  (coloured left rule). Every card id kept. The ring fields
+  (`_hotRingFieldsHTML`, Settings defaults + hotline + menu row) now have
+  labelled boxes and day buttons (`.rf-day-l`, same `.rf-day` checkboxes).
+  Asserted in test 126.
 - **Fallback assignee (2026-10-12):** `pi_hotlines.default_assignee`
   (initials; "If the project has no PI Lead…" in the hotline dialog). The
   receiver assigns the project's active lead, else this person (also for the

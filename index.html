@@ -313,6 +313,34 @@ select optgroup{background:var(--navy-mid);color:var(--sky-lt);font-weight:700;f
 .fcheck{display:flex;align-items:center;gap:7px}
 .fcheck input[type=checkbox]{width:auto;accent-color:var(--sky)}
 .fcheck label{font-size:12px;color:var(--mist);text-transform:none;letter-spacing:0}
+/* Ring-the-PI-Lead fields (hotline dialog + Settings defaults) */
+.rf-on-row{display:flex!important;gap:8px;align-items:center;font-size:13px!important;color:var(--mist)!important;text-transform:none!important;letter-spacing:0!important;font-weight:500!important;margin-bottom:10px;cursor:pointer}
+.rf-on-row input{width:auto!important;margin:0;accent-color:var(--sky)}
+.rf-grid{display:flex;flex-wrap:wrap;gap:12px 16px;align-items:flex-start}
+.rf-f{display:flex!important;flex-direction:column;gap:4px;margin:0!important;font-size:11px!important;color:var(--fog)!important;text-transform:uppercase!important;letter-spacing:.4px!important;font-weight:600!important}
+.rf-inl{display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-weight:400;font-size:12px}
+.rf-f input[type=number],.rf-f input[type=time]{width:auto!important;padding:6px 8px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:var(--radius);color:var(--white);font-family:var(--font);font-size:13px;color-scheme:dark}
+.rf-f input[type=number]{width:70px!important}
+.rf-days{display:flex;flex-wrap:wrap;gap:4px}
+.rf-day-l{position:relative;display:inline-flex!important;margin:0!important;cursor:pointer;text-transform:none!important;letter-spacing:0!important}
+.rf-day-l input{position:absolute;opacity:0;width:1px!important;height:1px}
+.rf-day-l span{padding:5px 9px;border-radius:6px;border:1px solid rgba(255,255,255,.14);font-size:12px;font-weight:500;color:var(--fog)}
+.rf-day-l input:checked+span{background:rgba(232,160,32,.16);border-color:#E8A020;color:var(--white)}
+.rf-day-l input:focus-visible+span{outline:2px solid var(--sky);outline-offset:1px}
+/* Settings: colour-coded groups (Nov 2026) */
+.set-wrap{padding:20px 24px 32px;max-width:820px;margin:0 auto}
+.set-strip{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px;position:sticky;top:0;z-index:2;background:var(--navy);padding:6px 0 10px}
+.set-chip{display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border-radius:999px;border:1px solid var(--c);background:transparent;color:var(--mist);font:inherit;font-size:12px;cursor:pointer}
+.set-chip:hover{background:rgba(255,255,255,.05)}
+.set-dot{width:9px;height:9px;border-radius:50%;background:var(--c);flex:none}
+.set-group{margin-bottom:22px;scroll-margin-top:56px}
+.set-group-h{display:flex;gap:10px;align-items:flex-start;margin:0 0 10px 2px}
+.set-group-h .set-dot{width:11px;height:11px;margin-top:3px}
+.set-group-t{font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--c)}
+.set-group-s{font-size:12px;color:var(--fog);margin-top:2px}
+.set-card{background:var(--navy-mid);border:1px solid var(--border);border-left:3px solid var(--c);border-radius:var(--radius-lg);padding:18px 20px;margin-bottom:12px}
+.set-card input[type=checkbox],.set-card input[type=radio]{width:auto;accent-color:var(--sky)}
+@media (max-width:640px){.set-wrap{padding:14px 12px 24px}}
 /* Edit hotline dialog: numbered call-flow steps (Nov 2026) */
 .hl-modal input[type=radio],.hl-modal input[type=checkbox]{width:auto;padding:0;margin:0;accent-color:var(--sky);flex:none}
 .hl-step{border:1px solid var(--border);border-left:3px solid var(--c);border-radius:10px;padding:12px 14px 2px;margin-bottom:12px;background:rgba(255,255,255,.02)}
@@ -9190,13 +9218,12 @@ function _hotRingSummary(st){
 // The ring/hours fields, by class, so the same block works in three places.
 function _hotRingFieldsHTML(st,withSecs){
   const days=String(st.days||'').split(',').map(x=>x.trim());
-  const lbl='font-weight:400;text-transform:none;letter-spacing:0';
-  return `<div class="fcheck" style="margin-bottom:8px"><label style="${lbl};display:flex;gap:6px;align-items:center"><input type="checkbox" class="rf-on"${st.enabled?' checked':''}> Ring the project’s PI Lead before voicemail</label></div>
-    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
-      ${withSecs?`<label style="font-size:11px;color:var(--fog);${lbl}">Ring for<br><input type="number" class="rf-secs" min="5" max="60" step="1" value="${escHtml(st.seconds)}" style="width:64px"> seconds</label>`:''}
-      <label style="font-size:11px;color:var(--fog);${lbl}">From<br><input type="time" class="rf-start" value="${escHtml(st.start)}"></label>
-      <label style="font-size:11px;color:var(--fog);${lbl}">To<br><input type="time" class="rf-end" value="${escHtml(st.end)}"></label>
-      <div style="font-size:11px;color:var(--fog)">Days<br>${HOT_DAY_NAMES.map((n,i)=>`<label style="${lbl};margin-right:6px;white-space:nowrap"><input type="checkbox" class="rf-day" value="${i}"${days.includes(String(i))?' checked':''}> ${n}</label>`).join('')}</div>
+  return `<label class="rf-on-row"><input type="checkbox" class="rf-on"${st.enabled?' checked':''}> Ring the project’s PI Lead before voicemail</label>
+    <div class="rf-grid">
+      ${withSecs?`<label class="rf-f"><span>Ring for</span><span class="rf-inl"><input type="number" class="rf-secs" min="5" max="60" step="1" value="${escHtml(st.seconds)}"> seconds</span></label>`:''}
+      <label class="rf-f"><span>From</span><input type="time" class="rf-start" value="${escHtml(st.start)}"></label>
+      <label class="rf-f"><span>To</span><input type="time" class="rf-end" value="${escHtml(st.end)}"></label>
+      <div class="rf-f"><span>Days</span><div class="rf-days">${HOT_DAY_NAMES.map((n,i)=>`<label class="rf-day-l"><input type="checkbox" class="rf-day" value="${i}"${days.includes(String(i))?' checked':''}><span>${n}</span></label>`).join('')}</div></div>
     </div>`;
 }
 function _hotReadRing(el,withSecs){
@@ -27990,31 +28017,17 @@ function renderSettings(m) {
     <div class="topbar-sub">App configuration and data tools</div>
   </div>
   <div class="content" style="display:block;overflow-y:auto">
-  <div style="padding:24px;max-width:800px;margin:0 auto">
+  <div class="set-wrap">
+    <div class="set-strip"><button type="button" class="set-chip" style="--c:#4A9BE8" onclick="document.getElementById('set-g-account').scrollIntoView({behavior:'smooth',block:'start'})"><span class="set-dot"></span>Your account</button><button type="button" class="set-chip" style="--c:#2BB39A" onclick="document.getElementById('set-g-team').scrollIntoView({behavior:'smooth',block:'start'})"><span class="set-dot"></span>Team & client access</button><button type="button" class="set-chip" style="--c:#9B7BE8" id="set-chip-phone" onclick="document.getElementById('set-g-phone').scrollIntoView({behavior:'smooth',block:'start'})"><span class="set-dot"></span>Project hotlines</button><button type="button" class="set-chip" style="--c:#E8A020" onclick="document.getElementById('set-g-data').scrollIntoView({behavior:'smooth',block:'start'})"><span class="set-dot"></span>Data tools</button><button type="button" class="set-chip" style="--c:#94A3B8" onclick="document.getElementById('set-g-about').scrollIntoView({behavior:'smooth',block:'start'})"><span class="set-dot"></span>About</button><button type="button" class="set-chip" style="--c:#E8684A" onclick="document.getElementById('set-g-danger').scrollIntoView({behavior:'smooth',block:'start'})"><span class="set-dot"></span>Troubleshooting</button></div>
 
-    <!-- Two-step sign-in -->
-    <div style="background:var(--navy-mid);border:1px solid rgba(74,155,232,.25);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">
+    <section class="set-group" id="set-g-account" style="--c:#4A9BE8">
+      <div class="set-group-h"><span class="set-dot"></span><div><div class="set-group-t">Your account</div><div class="set-group-s">How you sign in, and your own AI key (kept in this browser only).</div></div></div>
+    <div class="set-card">
       <div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:4px">Two-step sign-in</div>
       <div style="font-size:12px;color:var(--fog);margin-bottom:14px;line-height:1.5">After your password, Cirrus Cc asks for a 6-digit code from Microsoft Authenticator on your phone, so a stolen password alone can't open client data. Set up once; then each sign-in takes one extra step. This is your own login only — clients signing in to the portal are not affected.</div>
       <div id="mfa-card-body" style="font-size:13px;color:var(--fog)">Checking…</div>
     </div>
-
-    <!-- PI team -->
-    <div style="background:var(--navy-mid);border:1px solid rgba(74,155,232,.25);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">
-      <div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:4px">PI team</div>
-      <div style="font-size:12px;color:var(--fog);margin-bottom:14px;line-height:1.5">The people who lead projects and take follow-ups. Each project's PI Lead is picked from this list (Edit project), and the dashboard and Projects page can show just the projects you lead. Deactivate someone who leaves rather than removing them — their initials stay in the logs and project histories.</div>
-      <div id="team-card-body" style="font-size:13px;color:var(--fog)"></div>
-    </div>
-
-    <!-- Project hotlines -->
-    <div id="hotline-card" style="display:${HOTLINE_ON?'block':'none'};background:var(--navy-mid);border:1px solid rgba(74,155,232,.25);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">
-      <div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:4px">Project hotlines</div>
-      <div style="font-size:12px;color:var(--fog);margin-bottom:14px;line-height:1.5">Phone numbers the public calls to leave a voicemail. One number can serve one project, or several with a menu (press 1, 2, 3…). Voicemails land in the Hotline inbox, assigned to the project's PI Lead, and only become interactions when someone logs them.</div>
-      <div id="hotline-card-body" style="font-size:13px;color:var(--fog)"></div>
-    </div>
-
-    <!-- Claude AI -->
-    <div style="background:var(--navy-mid);border:1px solid rgba(74,155,232,.25);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">
+    <div class="set-card">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
         <div style="font-size:15px;font-weight:700;color:var(--white)">Claude AI Narrative Generation</div>
         <span id="claude-key-status" style="font-size:11px;padding:2px 8px;border-radius:10px;background:${_getClaudeKey()?'rgba(40,168,112,.2)':'rgba(255,255,255,.07)'};color:${_getClaudeKey()?'var(--green)':'var(--fog)'};">${_getClaudeKey()?'Key saved (obfuscated)':'No key'}</span>
@@ -28035,16 +28048,34 @@ function renderSettings(m) {
       </div>
       <div style="margin-top:12px;font-size:11px;color:var(--fog)">Model: <span style="color:var(--slate)">${CLAUDE_TEXT_MODEL}</span> (effort ${CLAUDE_EFFORT}) · Reply length per call: <span style="color:var(--slate)">400–600 tokens</span> · Typical cost: ~$0.005–0.02 per narrative</div>
     </div>
+    </section>
 
-    <!-- Client Portal Access -->
-    <div style="background:var(--navy-mid);border:1px solid rgba(74,155,232,.25);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">
+    <section class="set-group" id="set-g-team" style="--c:#2BB39A">
+      <div class="set-group-h"><span class="set-dot"></span><div><div class="set-group-t">Team & client access</div><div class="set-group-s">Who leads projects, and which clients can open the portal.</div></div></div>
+    <div class="set-card">
+      <div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:4px">PI team</div>
+      <div style="font-size:12px;color:var(--fog);margin-bottom:14px;line-height:1.5">The people who lead projects and take follow-ups. Each project's PI Lead is picked from this list (Edit project), and the dashboard and Projects page can show just the projects you lead. Deactivate someone who leaves rather than removing them — their initials stay in the logs and project histories.</div>
+      <div id="team-card-body" style="font-size:13px;color:var(--fog)"></div>
+    </div>
+    <div class="set-card">
       <div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:4px">Client Portal Access <span style="font-size:11px;font-weight:600;color:var(--sky-lt);background:rgba(74,155,232,.15);border-radius:8px;padding:2px 8px;margin-left:6px">multi-project login</span></div>
       <div style="font-size:12px;color:var(--fog);margin-bottom:14px;line-height:1.5">Grant a client one magic-link login that shows every project you pick — they get a project switcher in the portal. <strong style="color:var(--slate)">Provisioning is manual for now:</strong> choose the client + projects, copy the generated SQL, and run it once in the Supabase SQL Editor. The client then signs in at <span style="font-family:var(--mono);color:var(--slate)">client-portal.html</span> with their email.</div>
       <div id="client-access-panel" style="font-size:13px;color:var(--fog)">Loading current access…</div>
     </div>
+    </section>
 
-    <!-- Data Integrity -->
-    <div style="background:var(--navy-mid);border:1px solid rgba(255,255,255,.12);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">
+    <section class="set-group" id="set-g-phone" style="--c:#9B7BE8">
+      <div class="set-group-h"><span class="set-dot"></span><div><div class="set-group-t">Project hotlines</div><div class="set-group-s">The numbers the public calls, and what callers hear.</div></div></div>
+    <div id="hotline-card" class="set-card" style="display:${HOTLINE_ON?'block':'none'}">
+      <div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:4px">Project hotlines</div>
+      <div style="font-size:12px;color:var(--fog);margin-bottom:14px;line-height:1.5">Phone numbers the public calls to leave a voicemail. One number can serve one project, or several with a menu (press 1, 2, 3…). Voicemails land in the Hotline inbox, assigned to the project's PI Lead, and only become interactions when someone logs them.</div>
+      <div id="hotline-card-body" style="font-size:13px;color:var(--fog)"></div>
+    </div>
+    </section>
+
+    <section class="set-group" id="set-g-data" style="--c:#E8A020">
+      <div class="set-group-h"><span class="set-dot"></span><div><div class="set-group-t">Data tools</div><div class="set-group-s">Checks that find loose ends in the contact list.</div></div></div>
+    <div class="set-card">
       <div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:4px">Data Integrity Scanner</div>
       <div style="font-size:12px;color:var(--fog);margin-bottom:16px">Finds stakeholders with interactions logged on a project but not formally linked to it in project_stakeholders.</div>
       <div style="display:flex;gap:10px;margin-bottom:14px">
@@ -28053,9 +28084,7 @@ function renderSettings(m) {
       </div>
       <div id="integrity-results"></div>
     </div>
-
-    <!-- Duplicate Detector -->
-    <div style="background:var(--navy-mid);border:1px solid rgba(255,255,255,.12);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">
+    <div class="set-card">
       <div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:4px">Duplicate Stakeholder Detector</div>
       <div style="font-size:12px;color:var(--fog);margin-bottom:16px">Finds master list contacts who share the same email address or full name — potential duplicates to review and merge manually.</div>
       <div style="margin-bottom:14px">
@@ -28063,29 +28092,35 @@ function renderSettings(m) {
       </div>
       <div id="duplicate-results"></div>
     </div>
+    </section>
 
-    <!-- App info -->
-    <div style="background:var(--navy-mid);border:1px solid rgba(255,255,255,.12);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px">
+    <section class="set-group" id="set-g-about" style="--c:#94A3B8">
+      <div class="set-group-h"><span class="set-dot"></span><div><div class="set-group-t">About</div><div class="set-group-s">This copy of Cirrus Cc.</div></div></div>
+    <div class="set-card">
       <div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:12px">App information</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px">
         <div><span style="color:var(--fog)">Version</span> <span style="color:var(--white);margin-left:8px">Cirrus Cc 2.0</span></div>
-        <div><span style="color:var(--fog)">Hosted</span> <span style="color:var(--white);margin-left:8px">GitHub Pages</span></div>
+        <div><span style="color:var(--fog)">Hosted</span> <span style="color:var(--white);margin-left:8px">${CC_ENV==='live'?'LIVE — GitHub Pages':'DEV — Cloudflare Pages'}</span></div>
         <div><span style="color:var(--fog)">Backend</span> <span style="color:var(--white);margin-left:8px">Supabase</span></div>
         <div><span style="color:var(--fog)">Projects</span> <span style="color:var(--white);margin-left:8px">${DB.get('projects').length}</span></div>
         <div><span style="color:var(--fog)">Stakeholders</span> <span style="color:var(--white);margin-left:8px">${DB.getActive('stakeholders').length}</span></div>
         <div><span style="color:var(--fog)">Interactions</span> <span style="color:var(--white);margin-left:8px">${DB.get('interactions').length}</span></div>
       </div>
     </div>
+    </section>
 
-    <!-- Danger zone -->
-    <div style="background:rgba(192,57,43,.08);border:1px solid rgba(192,57,43,.25);border-radius:var(--radius-lg);padding:20px">
-      <div style="font-size:15px;font-weight:700;color:var(--red);margin-bottom:4px">Danger zone</div>
-      <div style="font-size:12px;color:var(--fog);margin-bottom:14px">These actions cannot be undone. Use with caution.</div>
-      <button class="btn" style="border-color:rgba(192,57,43,.4);color:var(--red)" onclick="if(confirm('Clear ALL local cache and reload from Supabase? This will not delete any data.')){Object.keys(_syncCache).forEach(k=>delete _syncCache[k]);loadAllData().then(()=>{showToast('Cache cleared and reloaded','info');renderSettings(document.getElementById(\'main\'));});}">Clear cache &amp; reload</button>
+    <section class="set-group" id="set-g-danger" style="--c:#E8684A">
+      <div class="set-group-h"><span class="set-dot"></span><div><div class="set-group-t">Troubleshooting</div><div class="set-group-s">If something looks out of date.</div></div></div>
+    <div class="set-card">
+      <div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:4px">Reload data</div>
+      <div style="font-size:12px;color:var(--fog);margin-bottom:14px;line-height:1.5">Clears what this browser has loaded and reloads everything from the database. Nothing is deleted — use it if a list looks out of date or a count seems wrong.</div>
+      <button class="btn" onclick="if(confirm('Clear ALL local cache and reload from Supabase? This will not delete any data.')){Object.keys(_syncCache).forEach(k=>delete _syncCache[k]);loadAllData().then(()=>{showToast('Cache cleared and reloaded','info');renderSettings(document.getElementById(\'main\'));});}">Reload data</button>
     </div>
+    </section>
 
   </div>
   </div>`;
+  if(!HOTLINE_ON){ ['set-g-phone','set-chip-phone'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; }); }
   setTimeout(function(){ if(document.getElementById('client-access-panel')) renderClientAccessPanel(); }, 0);
   setTimeout(function(){ if(document.getElementById('mfa-card-body')) renderMfaCard(); }, 0);
   renderTeamCard();

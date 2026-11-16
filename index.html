@@ -17838,6 +17838,41 @@ function _rptSetDraft(ta, text) {
   schedulePreview();
 }
 
+// Some sections can have nothing worth an AI summary (Nov 2026, Jeff): no
+// follow-ups in the report window, no commitments, or every commitment already
+// fulfilled before the last report with nothing new since. Then the AI Draft
+// button is greyed with the reason, a click says why, and "Draft all" skips the
+// section. Returns the reason, or '' when there is something to summarize.
+var RPT_TYPE_YOUR_OWN=' You can still type your own summary for this section.';
+function _sectionDraftBlock(secType){
+  var projF=S.projectFilter; if(!projF) return '';
+  var mine=function(x){ return String(x.projectId)===String(projF); };
+  if(secType==='auto-followups'){
+    var saved=loadReportSections(projF)||{};
+    var fus=(DB.get('interactions')||[]).filter(function(i){ return mine(i)&&i.followUp; });
+    if(!fus.length) return 'This project has no follow-ups yet, so there is nothing for an AI summary to describe.'+RPT_TYPE_YOUR_OWN;
+    if(!_fuForReport(fus, saved.periodStart||'', saved.periodEnd||'').length)
+      return 'No follow-ups are open, and none were resolved in this report period, so there is nothing for an AI summary to describe.'+RPT_TYPE_YOUR_OWN;
+    return '';
+  }
+  if(secType==='auto-commitments'){
+    var cs=(DB.get('commitments')||[]).filter(mine);
+    if(!cs.length) return 'No commitments have been recorded for this project, so there is nothing for an AI summary to describe.'+RPT_TYPE_YOUR_OWN;
+    var done=function(st){ return /fulfill|complet|cancel/i.test(st||''); };
+    if(cs.some(function(c){ return !done(c.status||'Open'); })) return '';
+    var prev=_rptPrevForSection(projF,'auto-commitments'); if(!prev) return '';
+    var was=prev.snapshot.trendFacts.commitments||[], norm=function(t){ return String(t||'').trim().toLowerCase(); };
+    var byId={}, byText={}; was.forEach(function(o){ if(o.id) byId[String(o.id)]=o; byText[norm(o.text)]=o; });
+    var changed=cs.some(function(c){ var w=byId[String(c.id)]||byText[norm(String(c.commitment||'Untitled').slice(0,90))]; return !w||!done(w.status); });
+    if(changed) return '';
+    var when=prev.archivedAt?fmt(String(prev.archivedAt).slice(0,10)):'';
+    return (cs.length===1?'The only commitment was':'All '+cs.length+' commitments were')+' already fulfilled by the last report'
+      +(prev.reportNum?' (#'+prev.reportNum+(when?', '+when:'')+')':(when?' ('+when+')':''))
+      +', and nothing has changed since, so there is nothing new for an AI summary.'+RPT_TYPE_YOUR_OWN;
+  }
+  return '';
+}
+
 async function generateSectionDraft(secType, textareaIdx) {
   var ta = document.querySelector('.rpt-sec-summary[data-idx="'+textareaIdx+'"]');
   if (!ta) return;
@@ -17846,17 +17881,18 @@ async function generateSectionDraft(secType, textareaIdx) {
   }
 
   if (RPT_SINCE_TYPES.indexOf(secType) >= 0) await _rptEnsureArchiveSnapshots(S.projectFilter);
+  var blocked = _sectionDraftBlock(secType);
+  if (blocked) { showToast(blocked, 'info', 8000); return; }
   var templateDraft = _buildSectionDraft(secType);
+  // What goes in the box when the AI does not run: the plain sentences only.
+  // templateDraft also carries the "since the last report" lines, which are
+  // instructions to the model and must never land in the report (seen live).
+  var plainDraft = _buildSectionDraftBase(secType);
   var key = _getClaudeKey();
 
-  if (!key) {
-    // Fall back to template draft
-    if (!templateDraft) { showToast('Not enough data yet to generate a draft for this section.', 'warn'); return; }
-    _rptSetDraft(ta, templateDraft);
-    return;
-  }
+  if (!templateDraft) { showToast('There is not enough recorded for this section yet to draft a summary.' + RPT_TYPE_YOUR_OWN, 'info', 7000); return; }
 
-  if (!templateDraft) { showToast('Not enough data yet to generate a draft for this section.', 'warn'); return; }
+  if (!key) { _rptSetDraft(ta, plainDraft || ''); return; }
 
   // Use Claude to turn stats into narrative
   var btn = document.getElementById('sec-draft-btn-'+textareaIdx);
@@ -17866,7 +17902,7 @@ async function generateSectionDraft(secType, textareaIdx) {
   var narrative = await _sectionDraftCall(secType, templateDraft);
 
   if (btn) { btn.textContent = origText; btn.disabled = false; }
-  _rptSetDraft(ta, narrative || templateDraft);
+  _rptSetDraft(ta, narrative || plainDraft || '');
   if (narrative) showToast('AI narrative generated', 'info', 2000);
 }
 
@@ -17925,15 +17961,16 @@ async function generateAllSectionDrafts() {
   if (autoSections.some(function(s){ return RPT_SINCE_TYPES.indexOf(s.secType) >= 0; }))
     await _rptEnsureArchiveSnapshots(S.projectFilter);
   autoSections.forEach(function(s) {
+    if (_sectionDraftBlock(s.secType)) { skipped.push(s.secType); return; }
     var templateDraft = _buildSectionDraft(s.secType) || '';
     if (!templateDraft) { skipped.push(s.secType); return; }
-    jobs.push({ kind: 'section', ta: s.ta, secType: s.secType, templateDraft: templateDraft });
+    jobs.push({ kind: 'section', ta: s.ta, secType: s.secType, templateDraft: templateDraft, plainDraft: _buildSectionDraftBase(s.secType) || '' });
   });
 
   var total = jobs.length;
   if (!total) {
     showToast(skipped.length
-      ? 'Not enough data yet to draft ' + (skipped.length===1?'that section':'those sections') + '.'
+      ? 'Nothing to summarize yet in ' + (skipped.length===1?'that section':'those sections') + ' — you can still type your own summaries.'
       : 'No auto-generated sections to draft', 'warn', 4000);
     return;
   }
@@ -17965,13 +18002,13 @@ async function generateAllSectionDrafts() {
         // Template text is raw facts, not prose. Writing it silently looks
         // exactly like a weak AI draft, which makes a failed call impossible
         // to spot — so it is named below.
-        if (j.templateDraft) _rptSetDraft(j.ta, j.templateDraft);
+        if (j.plainDraft) _rptSetDraft(j.ta, j.plainDraft);
         failed.push(j.secType);
       }
       progress();
     }).catch(function(e) {
       console.warn('AI draft-all: ' + j.secType + ' failed —', e && e.message);
-      if (j.templateDraft) _rptSetDraft(j.ta, j.templateDraft);
+      if (j.plainDraft) _rptSetDraft(j.ta, j.plainDraft);
       failed.push(j.secType);
       progress();
     });
@@ -17986,7 +18023,7 @@ async function generateAllSectionDrafts() {
       + 'show raw facts — use the section’s own AI Draft button to retry.', 'warn', 6000);
   } else if (skipped.length) {
     showToast('Drafted ' + total + ' section' + (total!==1?'s':'') + '. ' + skipped.length
-      + ' skipped — not enough data yet.', 'info', 5000);
+      + ' skipped — nothing to summarize yet (you can type your own).', 'info', 6000);
   } else {
     showToast('All section drafts generated', 'success', 3000);
   }
@@ -18600,7 +18637,7 @@ async function openPIReport(_isReopen){
           +'<span style="font-size:11px;color:var(--slate)">Include data table in report</span>'
           +'</label>'
         : '')
-      +'<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.07)">'      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">'      +'<div style="font-size:11px;color:var(--slate);font-style:italic">Section summary <span style="color:var(--fog)">(optional — prints above the section data)</span></div>'      +(isAuto&&RPT_NO_AI_TYPES.indexOf(sec.type)<0?'<button id="sec-draft-btn-'+idx+'" class="btn btn-xs" style="background:rgba(74,155,232,.15);border-color:rgba(74,155,232,.4);color:var(--sky-lt);font-size:10px;padding:2px 8px;white-space:nowrap" onclick="generateSectionDraft(\''+sec.type+'\','+idx+')">'+(_getClaudeKey()?'✦ AI Draft':'✦ Draft')+'</button>':'')      +'</div>'      +'<textarea class="rpt-sec-summary" data-idx="'+idx+'" data-sectype="'+sec.type+'" style="width:100%;min-height:60px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;color:var(--mist);font-family:var(--font);font-size:12px;padding:8px 12px;outline:none;resize:vertical;line-height:1.6" placeholder="Optional narrative or summary for this section...">'+(sec.summary||'')+'</textarea>'      +'</div>'      +'</div>';
+      +'<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.07)">'      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">'      +'<div style="font-size:11px;color:var(--slate);font-style:italic">Section summary <span style="color:var(--fog)">(optional — prints above the section data)</span></div>'      +(isAuto&&RPT_NO_AI_TYPES.indexOf(sec.type)<0?(function(){ var why=_sectionDraftBlock(sec.type); return '<button id="sec-draft-btn-'+idx+'" class="btn btn-xs"'+(why?' title="'+escHtml(why)+'" data-blocked="1"':'')+' style="background:rgba(74,155,232,.15);border-color:rgba(74,155,232,.4);color:var(--sky-lt);font-size:10px;padding:2px 8px;white-space:nowrap'+(why?';opacity:.45':'')+'" onclick="generateSectionDraft(\''+sec.type+'\','+idx+')">'+(_getClaudeKey()?'✦ AI Draft':'✦ Draft')+'</button>'; })():'')      +'</div>'      +'<textarea class="rpt-sec-summary" data-idx="'+idx+'" data-sectype="'+sec.type+'" style="width:100%;min-height:60px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;color:var(--mist);font-family:var(--font);font-size:12px;padding:8px 12px;outline:none;resize:vertical;line-height:1.6" placeholder="Optional narrative or summary for this section...">'+(sec.summary||'')+'</textarea>'      +'</div>'      +'</div>';
   });
 
   var available=getAvailableSections();
@@ -18825,7 +18862,7 @@ function _buildSectionPreviewTable(secType, projF, pstart, pend, includeInternal
     var nowStr = new Date().toISOString().slice(0,10);
     tbl += '<colgroup><col style="width:13%"><col style="width:35%"><col style="width:24%"><col style="width:28%"></colgroup>'
       +'<thead><tr><th style="'+thStyle+'">Due Date</th><th style="'+thStyle+'">Action</th><th style="'+thStyle+'">Stakeholder</th><th style="'+thStyle+'">Status</th></tr></thead><tbody>';
-    if (!fuItems.length) { tbl += '<tr><td colspan="4" style="'+tdStyle+';color:#aaa;font-style:italic">No follow-up items.</td></tr>'; }
+    if (!fuItems.length) { tbl += '<tr><td colspan="4" style="'+tdStyle+';color:#aaa;font-style:italic">No follow-up items to report.</td></tr>'; }
     fuItems.forEach(function(i){
       var s = allStakes.find(function(x){ return String(x.id)===String(i.stakeholderId); });
       var od = !i.followUpDone && i.followUpDue && i.followUpDue < nowStr;
@@ -18906,7 +18943,7 @@ function _buildSectionPreviewTable(secType, projF, pstart, pend, includeInternal
       .sort(function(a,b){ if(a.status==='Fulfilled'&&b.status!=='Fulfilled')return 1; if(a.status!=='Fulfilled'&&b.status==='Fulfilled')return -1; return 0; });
     tbl += '<colgroup><col style="width:14%"><col style="width:34%"><col style="width:20%"><col style="width:14%"><col style="width:18%"></colgroup>'
       +'<thead><tr><th style="'+thStyle+'">Category</th><th style="'+thStyle+'">Commitment</th><th style="'+thStyle+'">Made To</th><th style="'+thStyle+'">Due</th><th style="'+thStyle+'">Status</th></tr></thead><tbody>';
-    if (!comms.length) { tbl += '<tr><td colspan="5" style="'+tdStyle+';color:#aaa;font-style:italic">No commitments recorded.</td></tr>'; }
+    if (!comms.length) { tbl += '<tr><td colspan="5" style="'+tdStyle+';color:#aaa;font-style:italic">No commitments to report.</td></tr>'; }
     comms.forEach(function(c){
       var sk = c.stakeholderId ? allStakes.find(function(x){ return String(x.id)===String(c.stakeholderId); }) : null;
       var madeTo = sk ? dispName(sk) : (c.madeTo||'—');
@@ -21332,7 +21369,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
       if(sec.showTable){
         var fuCols=[1400,3600,2260,2300]; var fuHdrs=['Due Date','Action','Stakeholder','Status'];
         var fuRows=tblHdrRow(fuHdrs,fuCols);
-        if(!fuItems.length)fuRows+=tblDataRow(['No follow-up items.','','',''],fuCols,false);
+        if(!fuItems.length)fuRows+=tblDataRow(['No follow-up items to report.','','',''],fuCols,false);
         fuItems.forEach(function(i,ri){
           var sk=allStakes.find(function(x){return String(x.id)===String(i.stakeholderId)});
           var nm=sk?sk.firstName+' '+sk.lastName:(i.anonLabel||'Anonymous');

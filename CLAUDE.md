@@ -1303,6 +1303,25 @@ The ✦ AI Draft for Issues, Commitments, Follow-ups and Deliverables
   lazily). Guarded by `test/tests/112-since-last-report.test.js` (fails on the
   old code).
 
+### Sections with nothing to say; the draft fallback (DEV, Nov 2026, Jeff)
+Seen live on 3600 West: with no API key in the browser, Commitments' AI Draft
+pasted the "SINCE THE LAST REPORT … worked out already; use exactly as given"
+block — instructions to the MODEL — into the summary, which then printed.
+- **The fallback box text is `_buildSectionDraftBase` only** (plain
+  sentences), on every path: no key, a failed call, and "Draft all". The
+  since-lines stay in the AI request only.
+- **`_sectionDraftBlock(secType)`** (before `generateSectionDraft`) returns the
+  reason a section has nothing for an AI summary, else '': Follow-ups — none on
+  the project, or none open and none resolved in the window (`_fuForReport`);
+  Commitments — none recorded, or every one fulfilled/cancelled BEFORE the last
+  archived report that included the section, with nothing new or changed since
+  (a first report with all fulfilled is still drafted). The button is greyed
+  with the reason as its tooltip (`data-blocked`), a click toasts it ("You can
+  still type your own summary…") and writes nothing, and "Draft all" skips it.
+- Empty tables read "No follow-up items to report." / "No commitments to
+  report." (preview, snapshot, .docx for follow-ups).
+- Guarded by `test/tests/127-section-draft-fallbacks.test.js` (fails on the old code).
+
 ### "Include data table" hid the table in the .docx, not the data (Sep 2026)
 Every `TABLE_ELIGIBLE_TYPES` section's `.docx` renderer (`_buildDocxWithTemplate`)
 had a THIRD state the checkbox never offered: `showTable` on printed a Word

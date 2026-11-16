@@ -1279,6 +1279,27 @@ redundant by construction. History of the attempts (Sep–Oct 2026) is in git.
   deliverables that way).
 - Guarded by `test/tests/105-report-at-a-glance.test.js` (fails on the old code).
 
+### Events & outreach log: held in the window, planned since the start (DEV, Nov 2026, Jeff)
+Seen live on 3600 West: the section listed every event the project ever had
+and no outreach at all. `_eventsLogModel(projF, pstart, pend, sections, today)`
+(next to `_reportGlance`) is the ONE model: events HELD (status Completed —
+`_evIsDone` also reads the old "Complete") inside the window; outreach actions
+dated in the window up to today; everything still PLANNED since the project
+began (events not Completed/Cancelled, whatever their date; outreach dated
+after today = "Scheduled"), a planned date that passed reading "date passed N
+days ago" (`_evLateText`). Outreach is left out here when the report also has
+the Outreach section (it would print twice). Used by the preview + snapshot
+table (`_eventsLogTableHTML`, two groups in one table; `_buildSectionPreviewTable`
+now takes `sections`), the counts chip (`_eventsLogCounts`, both surfaces), the
+.docx, the AI facts (`_eventsLogFactLines` + its own `_sectionAIRequest` branch:
+~150 words, held/done, then what is still planned and how long past its date,
+never blaming) and the no-key sentences. Report at a glance: "Outreach
+actions" also shows with this section (done only, not scheduled); attention
+names a planned event whose date passed; **"Follow-ups resolved" (this period |
+to date, `_fuResolvedOn`) replaced "Open follow-ups now"** (past-due follow-ups
+stay in the attention list). Guarded by
+`test/tests/128-events-log-and-followups-glance.test.js` (fails on the old code).
+
 ### "Since the last report" in the section drafts (DEV, Nov 2026, Jeff)
 The ✦ AI Draft for Issues, Commitments, Follow-ups and Deliverables
 (`RPT_SINCE_TYPES`) now says what changed since the last report the client got.

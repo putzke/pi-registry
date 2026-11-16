@@ -118,7 +118,7 @@ module.exports = {
         t.ok(off.doc.indexOf('Summary: 0 of 1 complete, 1 in progress') >= 0, 'auto-del: aggregate line still prints');
         t.ok(off.doc.indexOf('1 public comment(s) received') >= 0, 'auto-comments: aggregate line still prints');
         t.ok(off.doc.indexOf('formal public comment') >= 0, 'auto-comment-matrix: aggregate line still prints');
-        t.ok(off.doc.indexOf('1 event logged') >= 0, 'auto-events: aggregate line still prints');
+        t.ok(off.doc.indexOf('1 event held this period') >= 0, 'auto-events: aggregate line still prints');
         t.ok(off.doc.indexOf('Open commitments: 1') >= 0, 'auto-commitments: aggregate line still prints');
         t.ok(off.doc.indexOf('1 issue') >= 0 && off.doc.indexOf('open') >= 0, 'auto-issues: aggregate line still prints');
       }

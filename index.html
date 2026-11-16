@@ -17175,7 +17175,7 @@ function getSectionDesc(type){
     'auto-del':'Auto-populates deliverable progress showing contracted vs delivered counts.',
     'auto-comments':'Auto-populates public comments received with response status for formal documentation.',
     'auto-comment-matrix':'Auto-populates formal public comments grouped by topic/category with response status — formatted as a response matrix for FHWA/NEPA documentation.',
-    'auto-events':'Auto-populates all logged public events and outreach activities with attendance counts and notes.',
+    'auto-events':'Auto-populates the events held and outreach done during the report period, then everything still planned since the project began (flagging a planned date that has passed). Outreach moves to its own section when the report has one.',
     'auto-issues':'Auto-populates open and resolved issues with priority, status, category, and linked interaction details.',
     'auto-commitments':'Auto-populates open and fulfilled commitments made to stakeholders, grouped by category and status.',
     'auto-pi-compliance':'Auto-populates a FHWA/NEPA PI compliance summary: NEPA checklist progress, public meetings, comment response rate, LEP/EJ outreach, and commitment fulfillment.',
@@ -17541,6 +17541,101 @@ function _concernsGlanceHTML(projF, pstart, pend, includeInternal){
   return h+'</div>';
 }
 
+// ── Events & outreach log: ONE model (DEV, Nov 2026, Jeff) ──────────────────
+// What was DONE inside the report window — events marked Completed and
+// outreach actions dated in the window (up to today) — and everything still
+// PLANNED since the project began: events not Completed or Cancelled,
+// whatever their date, and outreach dated after today. A planned event whose
+// date has passed is called out with the days since, so the narrative can say
+// so. Outreach is left out here when the report has its own Outreach section
+// (it would print twice). Used by the preview + snapshot table, the counts
+// label, the .docx, the AI facts and Report at a glance.
+function _evIsDone(m){ return /^complete/i.test(String(m.status||'')); }
+function _evDaysBetween(a, b){ return Math.round((new Date(b+'T00:00:00Z') - new Date(a+'T00:00:00Z'))/86400000); }
+function _eventsLogModel(projF, pstart, pend, sections, today){
+  today = today || localToday();
+  var a = pstart||'', b = pend||'';
+  var withOutreach = !(sections||[]).some(function(s){ return s && s.type==='auto-outreach'; });
+  var mine = function(x){ return String(x.projectId)===String(projF); };
+  var evs = (DB.get('meetings')||[]).filter(mine);
+  var held = evs.filter(function(m){ return _evIsDone(m) && m.date && (!a||m.date>=a) && (!b||m.date<=b); })
+    .sort(function(x,y){ return String(y.date).localeCompare(String(x.date)); });
+  var heldToDate = evs.filter(function(m){ return _evIsDone(m) && m.date && (!b||m.date<=b); }).length;
+  var planned = evs.filter(function(m){ return !_evIsDone(m) && m.status!=='Cancelled'; })
+    .sort(function(x,y){ return String(x.date||'9999').localeCompare(String(y.date||'9999')); })
+    .map(function(m){ return { m:m, late: (m.date && m.date<today) ? _evDaysBetween(m.date, today) : 0 }; });
+  var attendance = held.reduce(function(n,m){ return n+(Number(m.attendanceCount)||0); }, 0);
+  var out = null, outPlanned = [];
+  if (withOutreach) {
+    var end = (!b || b>today) ? today : b;
+    out = _outreachStats(projF, a, end);
+    outPlanned = (DB.get('outreach_actions')||[]).filter(function(x){ return mine(x) && String(x.actionDate||'')>today; })
+      .sort(function(x,y){ return String(x.actionDate).localeCompare(String(y.actionDate)); });
+  }
+  return { projF:projF, today:today, pstart:a, pend:b, withOutreach:withOutreach,
+    held:held, heldToDate:heldToDate, attendance:attendance,
+    planned:planned, late:planned.filter(function(p){ return p.late>0; }),
+    out:out, outDone: out ? out.total : 0, outPlanned:outPlanned };
+}
+// The chip under the section title (preview and snapshot must match).
+function _eventsLogCounts(md){
+  var c = [md.held.length+' event'+(md.held.length!==1?'s':'')+' held this period'];
+  if (md.withOutreach) c.push(md.outDone+' outreach action'+(md.outDone!==1?'s':'')+' this period');
+  var pl = md.planned.length + md.outPlanned.length;
+  if (pl) c.push(pl+' planned'+(md.late.length?' ('+md.late.length+' past their date)':''));
+  return c;
+}
+function _evLateText(p){ return p.late ? 'date passed '+p.late+' day'+(p.late!==1?'s':'')+' ago' : ''; }
+// Facts for the AI narrative and the no-key fallback. Counted here; the model narrates.
+function _eventsLogFactLines(md){
+  var L = [], per = (md.pstart||md.pend) ? _fmtDateRange(md.pstart, md.pend) : 'the report period';
+  L.push('Report period: '+per+'. Today: '+_fmtDateRange(md.today, md.today)+'.');
+  L.push('Events held in the period: '+md.held.length+(md.held.length?' (attendance recorded: '+md.attendance+')':'')+'. Events held project to date: '+md.heldToDate+'.');
+  md.held.slice(0,25).forEach(function(m){ L.push('- held '+m.date+' · '+(m.type||'Event')+' · '+String(m.title||'').slice(0,120)+(m.attendanceCount?' · '+m.attendanceCount+' attended':'')+(m.location?' · '+String(m.location).slice(0,60):'')); });
+  if (md.withOutreach && md.out) {
+    L.push('Outreach actions done in the period: '+md.outDone+'.');
+    if (md.outDone) L = L.concat(_outreachFactLines(md.out));
+  }
+  if (!md.planned.length && !md.outPlanned.length) L.push('Nothing is planned or scheduled that has not happened yet.');
+  if (md.planned.length) {
+    L.push('Events planned and not yet held (back to the start of the project): '+md.planned.length+(md.late.length?', of which '+md.late.length+' have a planned date that has passed without being marked completed':'')+'.');
+    md.planned.slice(0,25).forEach(function(p){ var m=p.m; L.push('- planned '+(m.date||'no date set')+' · '+(m.type||'Event')+' · '+String(m.title||'').slice(0,120)+(p.late?' · '+_evLateText(p):'')); });
+  }
+  if (md.outPlanned.length) {
+    L.push('Outreach scheduled for a later date: '+md.outPlanned.length+'.');
+    md.outPlanned.slice(0,25).forEach(function(x){ L.push('- scheduled '+x.actionDate+' · '+(x.actionType||'Outreach')+' · '+String(x.title||'').slice(0,120)); });
+  }
+  return L;
+}
+// The table (inline-styled: it is frozen into the archive). Two groups, one table.
+function _eventsLogTableHTML(md, thStyle, tdStyle){
+  var grp = 'padding:6px 8px;background:#e8eef4;color:#1e3a5f;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px';
+  var h = '<colgroup><col style="width:11%"><col style="width:29%"><col style="width:15%"><col style="width:15%"><col style="width:9%"><col style="width:21%"></colgroup>'
+    +'<thead><tr><th style="'+thStyle+'">Date</th><th style="'+thStyle+'">Event / outreach</th><th style="'+thStyle+'">Type</th><th style="'+thStyle+'">Status</th><th style="'+thStyle+'">Attend. / reach</th><th style="'+thStyle+'">Notes</th></tr></thead><tbody>';
+  var row = function(date, title, sub, type, status, stColor, num, notes){
+    return '<tr><td style="'+tdStyle+';white-space:nowrap">'+escHtml(date?_fmtMDY(date):'Not set')+'</td>'
+      +'<td style="'+tdStyle+'">'+escHtml(title||'—')+(sub?'<div style="font-size:10px;color:#595959">'+escHtml(sub)+'</div>':'')+'</td>'
+      +'<td style="'+tdStyle+'">'+escHtml(type||'—')+'</td>'
+      +'<td style="'+tdStyle+(stColor?';color:'+stColor+';font-weight:600':'')+'">'+escHtml(status)+'</td>'
+      +'<td style="'+tdStyle+';text-align:center">'+escHtml(num||'—')+'</td>'
+      +'<td style="'+tdStyle+'">'+escHtml(notes||'—')+'</td></tr>';
+  };
+  // Completed in the period, newest first, events and outreach together.
+  var done = md.held.map(function(m){ return { d:m.date, html: row(m.date, m.title, m.location, m.type||'Other', 'Completed', '#1a7a50', m.attendanceCount?String(m.attendanceCount):'', String(m.notes||'').slice(0,120)) }; });
+  if (md.out) md.out.rows.forEach(function(x){ var a=x.a;
+    done.push({ d:a.actionDate, html: row(a.actionDate, a.title, a.outlet, a.actionType||'Outreach', 'Done', '#1a7a50', _outHas(a.reach)?Number(a.reach).toLocaleString():'', x.r?(_outCountsText(x.r)||'')+' ('+_outReadingNote(x.r)+')':String(a.delivery||'')) }); });
+  done.sort(function(x,y){ return String(y.d).localeCompare(String(x.d)); });
+  h += '<tr><td colspan="6" style="'+grp+'">Completed this period ('+done.length+')</td></tr>';
+  h += done.length ? done.map(function(x){ return x.html; }).join('') : '<tr><td colspan="6" style="'+tdStyle+';color:#aaa;font-style:italic">No events or outreach completed in this period.</td></tr>';
+  // Planned and not yet held, since the project began, oldest date first.
+  var pl = md.planned.map(function(p){ var m=p.m; return { d:m.date||'9999', html: row(m.date, m.title, m.location, m.type||'Other', p.late?'Planned — '+_evLateText(p):'Planned', p.late?'#c0392b':'#b36b00', '', String(m.notes||'').slice(0,120)) }; });
+  md.outPlanned.forEach(function(a){ pl.push({ d:a.actionDate, html: row(a.actionDate, a.title, a.outlet, a.actionType||'Outreach', 'Scheduled', '#b36b00', '', String(a.delivery||'')) }); });
+  pl.sort(function(x,y){ return String(x.d).localeCompare(String(y.d)); });
+  h += '<tr><td colspan="6" style="'+grp+'">Planned, not yet held — since the project began ('+pl.length+')</td></tr>';
+  h += pl.length ? pl.map(function(x){ return x.html; }).join('') : '<tr><td colspan="6" style="'+tdStyle+';color:#aaa;font-style:italic">Nothing planned that has not happened yet.</td></tr>';
+  return h;   // the caller closes the tbody and table
+}
+
 // ── "Report at a glance" — the report's opener (Oct 2026, Jeff) ─────────────
 // Replaced the AI executive summary, which could only retell the sections in
 // fewer words. This is COUNTED, never written by the model: one line on what
@@ -17585,16 +17680,21 @@ function _reportGlance(projF, o){
     pair('Inbound and in-person contacts', cs.inbound.length, cs.toDate.inbound);
     pair('Outbound notifications by the team', cs.outbound.length, cs.toDate.outbound);
   }
-  if(has('auto-outreach')){
-    both('Outreach actions (releases, posts, flyers, coverage)', function(x,y){ return _outreachStats(projF,x,y).total; });
+  if(has('auto-outreach','auto-events')){
+    // Outreach done: dated on or before today (a later date is still scheduled).
+    both('Outreach actions (releases, posts, flyers, coverage)', function(x,y){ return _outreachStats(projF,x,(!y||y>today)?today:y).total; });
   }
   if(has('auto-events')){
     var evs=(DB.get('meetings')||[]).filter(mine);
-    var held=function(x,y){ return evs.filter(function(m){ return m.status==='Completed' && inW(m.date,x,y); }); };
+    var held=function(x,y){ return evs.filter(function(m){ return _evIsDone(m) && inW(m.date,x,y); }); };
     both('Events held', function(x,y){ return held(x,y).length; });
     var att=function(x,y){ return held(x,y).reduce(function(n,m){ return n+(Number(m.attendanceCount)||0); },0); };
     both('Attendance at events held', att);
-    listOr('auto-events', evs.filter(function(m){ return m.status!=='Cancelled' && m.status!=='Completed' && m.date && m.date>=today && m.date<=_isoAddDays(today,GLANCE_SOON_DAYS); })
+    listOr('auto-events', evs.filter(function(m){ return m.status!=='Cancelled' && !_evIsDone(m) && m.date && m.date<today; })
+      .sort(function(x,y){ return String(x.date).localeCompare(String(y.date)); }),
+      '1 planned event has a date that has passed.', 'planned events have a date that has passed.',
+      function(m){ return 'Planned for '+fmtD(m.date)+', not marked held: '+(m.title||m.type||'Event'); });
+    listOr('auto-events', evs.filter(function(m){ return m.status!=='Cancelled' && !_evIsDone(m) && m.date && m.date>=today && m.date<=_isoAddDays(today,GLANCE_SOON_DAYS); })
       .sort(function(x,y){ return String(x.date).localeCompare(String(y.date)); }),
       '1 event is scheduled in the next two weeks.', 'events are scheduled in the next two weeks.',
       function(m){ return 'Coming up '+fmtD(m.date)+': '+(m.title||m.type||'Event')+(m.type&&m.title?' ('+m.type+')':''); });
@@ -17632,7 +17732,9 @@ function _reportGlance(projF, o){
   if(has('auto-followups')){
     var fo=(DB.get('interactions')||[]).filter(function(i){ return mine(i) && i.followUp && !i.followUpDone; });
     var fl=fo.filter(function(i){ return i.followUpDue && i.followUpDue<today; });
-    now('Open follow-ups now', fo.length+(fl.length?' ('+fl.length+' past due)':''));
+    // Resolved, this period and to date (Jeff, Nov 2026 — was "Open follow-ups now").
+    var fr=(DB.get('interactions')||[]).filter(function(i){ return mine(i) && i.followUp && i.followUpDone; });
+    both('Follow-ups resolved', function(x,y){ return fr.filter(function(i){ return inW(_fuResolvedOn(i),x,y); }).length; });
     if(fl.length) attn.push(fl.length+' follow-up'+(fl.length!==1?'s are':' is')+' past due.');
   }
   if(has('auto-del')){
@@ -17783,6 +17885,24 @@ function _sectionAIRequest(secType, templateDraft) {
         + 'Base it strictly on these facts:\n\n' + facts,
       // Reply budget: words to tokens with room to finish the last sentence.
       maxTokens: Math.round(tier.words * 1.6) + 200
+    };
+  }
+  if (secType === 'auto-events') {
+    var svE = S.projectFilter ? loadReportSections(S.projectFilter) : null;
+    var mdA = svE ? _eventsLogModel(S.projectFilter, svE.periodStart, svE.periodEnd, svE.sections) : null;
+    var factsE = mdA ? _eventsLogFactLines(mdA).join('\n') : (templateDraft || '');
+    return {
+      userContent: 'Write the narrative for the "Events & outreach log" section of a public involvement progress report.\n\n'
+        + 'LENGTH: about 150 words, no more than 180, in 2 paragraphs separated by a blank line.\n\n'
+        + 'ORDER:\n1. What was held and done during the report period: the events (with attendance where given)'
+        + (mdA && mdA.withOutreach ? ' and the outreach actions (releases, posts, flyers, coverage, with reach or engagement where given, as of the date read)' : '')
+        + '.\n2. What is still planned and not yet held. Where a planned date has already passed, say so plainly using the days given '
+        + '(for example "planned for June 5 and not yet held, 160 days later") and that it still needs to be held, rescheduled or cancelled '
+        + '— factual, never blaming anyone. Then what is coming up.\n\n'
+        + 'Use every number exactly as given; never count, add up or estimate yourself. Do not list every item; group similar ones '
+        + '(for example "weekly partnering meetings"). Never name a private individual. If nothing was held in the period, say so in one sentence.\n\n'
+        + 'Base it strictly on these facts:\n\n' + factsE,
+      maxTokens: 450
     };
   }
   if (secType === 'auto-outreach') {
@@ -18242,13 +18362,15 @@ function _buildSectionDraftBase(secType) {
   }
 
   if (secType === 'auto-events') {
-    if (meetings.length === 0) return null;
-    var completed = meetings.filter(function(m){ return m.status==='Completed'; }).length;
-    var totalAtt  = meetings.reduce(function(sum,m){ return sum+(parseInt(m.attendanceCount)||0); }, 0);
-    var txt7 = meetings.length+' public event'+(meetings.length!==1?'s have':' has')+' been logged for this project.';
-    if (completed > 0) txt7 += ' '+completed+' event'+(completed!==1?'s have':' has')+' been completed.';
-    if (totalAtt > 0) txt7 += ' Total attendance across all events is estimated at '+totalAtt+' participant'+(totalAtt!==1?'s':'')+'.';
-    return txt7;
+    var mdE = _eventsLogModel(projF, saved.periodStart, saved.periodEnd, saved.sections);
+    if (!mdE.held.length && !mdE.outDone && !mdE.planned.length && !mdE.outPlanned.length) return null;
+    var tE = mdE.held.length+' event'+(mdE.held.length!==1?'s were':' was')+' held during '+periodLabel
+      +(mdE.attendance?', with '+mdE.attendance+' attending in all':'')+'.';
+    if (mdE.withOutreach) tE += ' '+mdE.outDone+' outreach action'+(mdE.outDone!==1?'s were':' was')+' completed in the period.';
+    if (mdE.planned.length) tE += ' '+mdE.planned.length+' event'+(mdE.planned.length!==1?'s are':' is')+' planned and not yet held'
+      +(mdE.late.length?'; '+mdE.late.length+' of them '+(mdE.late.length!==1?'have':'has')+' a planned date that has passed':'')+'.';
+    if (mdE.outPlanned.length) tE += ' '+mdE.outPlanned.length+' outreach action'+(mdE.outPlanned.length!==1?'s are':' is')+' scheduled.';
+    return tE;
   }
 
   if (secType === 'auto-contacts') {
@@ -18789,7 +18911,7 @@ function _intIsExternal(i, externalIds){
   return externalIds.indexOf(String(i.stakeholderId)) >= 0;
 }
 
-function _buildSectionPreviewTable(secType, projF, pstart, pend, includeInternal) {
+function _buildSectionPreviewTable(secType, projF, pstart, pend, includeInternal, sections) {
   var allStakes = DB.get('stakeholders');
   var ps = DB.get('project_stakeholders').filter(function(lk){ return String(lk.projectId)===String(projF); });
   var externalPS = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; });
@@ -18841,19 +18963,7 @@ function _buildSectionPreviewTable(secType, projF, pstart, pend, includeInternal
     });
 
   } else if (secType === 'auto-events') {
-    var evts = (DB.get('meetings')||[]).filter(function(m){ return String(m.projectId)===String(projF); })
-      .sort(function(a,b){ return b.date.localeCompare(a.date); });
-    tbl += '<colgroup><col style="width:11%"><col style="width:28%"><col style="width:14%"><col style="width:12%"><col style="width:8%"><col style="width:27%"></colgroup>'
-      +'<thead><tr><th style="'+thStyle+'">Date</th><th style="'+thStyle+'">Event</th><th style="'+thStyle+'">Type</th><th style="'+thStyle+'">Status</th><th style="'+thStyle+'">Attend.</th><th style="'+thStyle+'">Notes</th></tr></thead><tbody>';
-    if (!evts.length) { tbl += '<tr><td colspan="6" style="'+tdStyle+';color:#aaa;font-style:italic">No events logged.</td></tr>'; }
-    evts.forEach(function(m){
-      tbl += '<tr><td style="'+tdStyle+';white-space:nowrap">'+escHtml(_fmtMDY(m.date))+'</td>'
-        +'<td style="'+tdStyle+'">'+escHtml(m.title||'—')+'<div style="font-size:10px;color:#595959">'+escHtml(m.location||'')+'</div></td>'
-        +'<td style="'+tdStyle+'">'+escHtml(m.type||'Other')+'</td>'
-        +'<td style="'+tdStyle+'">'+escHtml(m.status||'Planned')+'</td>'
-        +'<td style="'+tdStyle+';text-align:center">'+escHtml(String(m.attendanceCount||'—'))+'</td>'
-        +'<td style="'+tdStyle+'">'+escHtml((m.notes||'—').slice(0,120))+'</td></tr>';
-    });
+    tbl += _eventsLogTableHTML(_eventsLogModel(projF, pstart, pend, sections || (loadReportSections(projF)||{}).sections), thStyle, tdStyle);
 
   } else if (secType === 'auto-followups') {
     var allInts = DB.get('interactions').filter(function(i){ return String(i.projectId)===String(projF); });
@@ -19229,6 +19339,7 @@ function renderLivePreview() {
         var extCt = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; }).length;
         counts.push(extCt + ' external contact' + (extCt !== 1 ? 's' : ''));
       }
+      if (sec.type === 'auto-events') counts = counts.concat(_eventsLogCounts(_eventsLogModel(projF, pstart, pend, sections)));
       if (sec.type === 'auto-outreach') {
         var _ost = _outreachStats(projF, pstart, pend);
         counts.push(_ost.total + ' outreach action' + (_ost.total !== 1 ? 's' : ''));
@@ -19257,7 +19368,7 @@ function renderLivePreview() {
       if (sec.type === 'auto-website') html += _websiteBlockHTML(_websiteModel(projF, sec, pend));
       // Data table (when toggled on)
       if (sec.showTable && TABLE_ELIGIBLE_TYPES.indexOf(sec.type) >= 0) {
-        html += _buildSectionPreviewTable(sec.type, projF, pstart, pend, includeInternal);
+        html += _buildSectionPreviewTable(sec.type, projF, pstart, pend, includeInternal, sections);
       }
     } else if (sec.content) {
       // Render manual bullet content
@@ -19656,6 +19767,7 @@ function _buildReportSnapshot(projF, saved) {
         var extCt = ps.filter(function(lk){ return (lk.stakeholderRole||'External')==='External'; }).length;
         counts.push(extCt + ' external contact' + (extCt !== 1 ? 's' : ''));
       }
+      if (sec.type === 'auto-events') counts = counts.concat(_eventsLogCounts(_eventsLogModel(projF, pstart, pend, sections)));
       if (sec.type === 'auto-outreach') {
         var ostS = _outreachStats(projF, pstart, pend);
         counts.push(ostS.total + ' outreach action' + (ostS.total !== 1 ? 's' : ''));
@@ -19684,7 +19796,7 @@ function _buildReportSnapshot(projF, saved) {
       // The website block always prints (address, visits, the changes made).
       if (sec.type === 'auto-website') tableHtml = _websiteBlockHTML(_websiteModel(projF, sec, pend));
       if (sec.showTable && TABLE_ELIGIBLE_TYPES.indexOf(sec.type) >= 0) {
-        try { tableHtml = _buildSectionPreviewTable(sec.type, projF, pstart, pend, includeInternal) || ''; }
+        try { tableHtml = _buildSectionPreviewTable(sec.type, projF, pstart, pend, includeInternal, sections) || ''; }
         catch(e) { console.warn('Snapshot table failed for '+sec.type+':', e.message); }
       }
     }
@@ -21529,25 +21641,28 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
       }
 
     } else if(sec.type==='auto-events'){
-      var projEvts=(DB.get('meetings')||[]).filter(function(m){return String(m.projectId)===String(proj.id);});
-      projEvts.sort(function(a,b){return b.date.localeCompare(a.date);});
-      if(projEvts.length===0){
-        xml+=bullet('No events logged for this project.');
-      } else {
-        xml+=para(projEvts.length+' event'+(projEvts.length!==1?'s':'')+' logged');
-        xml+=spacer();
-        if(sec.showTable){
-          var evCols=[1300,2900,1400,1200,900,1860]; var evHdrs=['Date','Event','Type','Status','Attend.','Notes'];
-          var evRows=tblHdrRow(evHdrs,evCols);
-          projEvts.forEach(function(m,ri){
-            evRows+=tblDataRow([_fmtMDY(m.date),m.title+(m.location?' — '+m.location:''),m.type||'Other',m.status||'Planned',String(m.attendanceCount||'—'),(m.notes||'—').slice(0,100)],evCols,ri%2!==0);
-          });
-          xml+=tblWrap(9560,evCols,evRows); xml+=spacer();
-        }
-        // No "else" — see the note on auto-concerns above; same rule, same
-        // reason. The "N event(s) logged" line above already conveys the
-        // aggregate.
+      var mdX=_eventsLogModel(proj.id,saved.periodStart,saved.periodEnd,saved.sections);
+      xml+=para(_eventsLogCounts(mdX).join(' · '));
+      xml+=spacer();
+      if(sec.showTable){
+        var evCols=[1200,2800,1400,1500,900,1760]; var evHdrs=['Date','Event / outreach','Type','Status','Attend. / reach','Notes'];
+        var evRows=tblHdrRow(evHdrs,evCols), ri=0;
+        var doneX=mdX.held.map(function(m){ return {d:m.date,c:[_fmtMDY(m.date),(m.title||'—')+(m.location?' — '+m.location:''),m.type||'Other','Completed',String(m.attendanceCount||'—'),String(m.notes||'—').slice(0,100)]}; });
+        if(mdX.out) mdX.out.rows.forEach(function(x){ var a=x.a; doneX.push({d:a.actionDate,c:[_fmtMDY(a.actionDate),String(a.title||'—').slice(0,140)+(a.outlet?' — '+a.outlet:''),a.actionType||'Outreach','Done',_outHas(a.reach)?Number(a.reach).toLocaleString():'—',x.r?((_outCountsText(x.r)||'—')+' ('+_outReadingNote(x.r)+')'):(a.delivery||'—')]}); });
+        doneX.sort(function(x,y){ return String(y.d).localeCompare(String(x.d)); });
+        var plX=mdX.planned.map(function(p){ var m=p.m; return {d:m.date||'9999',c:[m.date?_fmtMDY(m.date):'Not set',(m.title||'—')+(m.location?' — '+m.location:''),m.type||'Other',p.late?'Planned — '+_evLateText(p):'Planned','—',String(m.notes||'—').slice(0,100)]}; });
+        mdX.outPlanned.forEach(function(a){ plX.push({d:a.actionDate,c:[_fmtMDY(a.actionDate),String(a.title||'—').slice(0,140),a.actionType||'Outreach','Scheduled','—',a.delivery||'—']}); });
+        plX.sort(function(x,y){ return String(x.d).localeCompare(String(y.d)); });
+        evRows+=tblDataRow(['Completed this period ('+doneX.length+')','','','','',''],evCols,false);
+        doneX.forEach(function(x){ evRows+=tblDataRow(x.c,evCols,(ri++)%2!==0); });
+        if(!doneX.length) evRows+=tblDataRow(['','No events or outreach completed in this period.','','','',''],evCols,false);
+        evRows+=tblDataRow(['Planned, not yet held — since the project began ('+plX.length+')','','','','',''],evCols,false);
+        plX.forEach(function(x){ evRows+=tblDataRow(x.c,evCols,(ri++)%2!==0); });
+        if(!plX.length) evRows+=tblDataRow(['','Nothing planned that has not happened yet.','','','',''],evCols,false);
+        xml+=tblWrap(9560,evCols,evRows); xml+=spacer();
       }
+      // No "else" — the counts line above is all the .docx carries when the
+      // table is off (same rule as every other section).
 
     } else if(sec.type==='auto-commitments'){
       var projComm=(DB.get('commitments')||[]).filter(function(c){return String(c.projectId)===String(proj.id)});

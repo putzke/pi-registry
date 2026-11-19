@@ -5221,7 +5221,7 @@ async function openIssueModal(id, projectId){
   </div>
   <div class="fgrid fg2f">
     <div class="fr"><label>Priority</label><select id="iss-pri">${ISSUE_PRIORITIES.map(p=>`<option${(iss.priority||'Medium')=== p?' selected':''}>${p}</option>`).join('')}</select></div>
-    <div class="fr"><label>Assigned to</label><input id="iss-assigned" value="${iss.assignedTo||''}" placeholder="Name or team member"></div>
+    <div class="fr"><label>Assigned to</label><input id="iss-assigned" value="${escHtml(iss.assignedTo||'')}" maxlength="${ISS_ASSIGNED_MAX}" placeholder="PI contact or Project team member"></div>
   </div>
   <div class="fgrid fg2f">
     <div class="fr"><label>Date raised</label><input type="date" id="iss-raised" value="${_toDateInput(iss.dateRaised)}"></div>
@@ -5268,7 +5268,7 @@ async function saveIssue(projectId){
     category:v('iss-cat-f'),
     status:v('iss-status-f')||'Open',
     priority:v('iss-pri')||'Medium',
-    assignedTo:v('iss-assigned'),
+    assignedTo:String(v('iss-assigned')||'').trim().slice(0,ISS_ASSIGNED_MAX),
     dateRaised:v('iss-raised')||localToday(),
     dateResolved:v('iss-resolved')||'',
     description:document.getElementById('iss-desc')?.value||'',
@@ -8066,6 +8066,9 @@ const QL_DIRECTIONS = ['Incoming','Outgoing','In-person'];
 // Shared with the Log/Edit interaction modals (f-isub / f-inat) and Quick
 // Log's own Subject/Nature columns — one list each, not three copies to keep
 // in sync.
+// Issue "Assigned to" is open text (Jeff, Nov 2026) but prints in a report
+// column, so it is capped. LIVE's longest on 2026-11-19 was 22 characters.
+const ISS_ASSIGNED_MAX = 30;
 const INT_SUBJECTS = ['General','Traffic','Property Access','Property Issue','Environmental','Utility Service','Information','Noise / Hours','ROW / Easement','Other'];
 const INT_NATURES = ['Inquiry','Complaint','Compliment','Comment','Request','Concern','Support','Notification'];
 const QL_INP = 'width:100%;font-size:11px;padding:4px 5px;height:28px;background:var(--navy-mid);border:1px solid var(--border);border-radius:4px;color:var(--white);box-sizing:border-box';

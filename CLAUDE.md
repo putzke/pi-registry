@@ -565,6 +565,17 @@ the project (`_groupNameKey`: case and spacing ignored). An id the cache no
 longer has redraws the list with a toast instead of throwing. Guarded by
 `test/tests/113-group-save-race.test.js` (fails on the old code).
 
+### Issue "Assigned to" stays open text, capped at 30 (DEV, Nov 2026, Jeff)
+Discussed with Jeff: the field is a free-text label for who owns getting the
+issue resolved — not tied to the team list or contacts, not used by any
+filter, badge or Team view; it prints in the issue exports and quick report
+(not the portal). Kept open (a team picker / "owner + being handled by" split
+was offered and deferred). Placeholder "PI contact or Project team member";
+`ISS_ASSIGNED_MAX` (30, next to `INT_SUBJECTS`) as the input's maxlength and
+in `saveIssue` (trimmed, sliced) because it fills a report column; the stored
+value is now escaped in the box. LIVE's longest on 2026-11-19 was 22. Guarded
+by `test/tests/129-issue-assigned-to-limit.test.js` (fails on the old code).
+
 ### Follow-up resolution note (Oct 2026)
 `sql/2026-10-11_followup_resolution_note.sql` adds `pi_interactions.follow_up_resolution`
 (`followUpResolution`) — **must be pasted in the SQL Editor**; until then `toSB`

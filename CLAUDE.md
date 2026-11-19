@@ -590,6 +590,11 @@ old notes appended to Description ("Notes: …"); the next save stores them
 there and clears `notes`. Displays and exports still print `notes` for issues
 not re-saved (LIVE had 2 on 2026-11-19). Guarded by
 `test/tests/130-issue-interaction-picker.test.js` (fails on the old code).
+**+ Add / ✕ update in place (Jeff, Nov 2026):** redrawing the whole picker
+sent the search list back to the top after every click. `_issPickToggle` now
+redraws only the linked box (`#iss-pick-linked-box`, `_issPickLinkedHTML`) and
+the clicked row, and scrolls the dialog by however much the linked box grew,
+so the row stays under the pointer. Same test asserts it.
 
 ### Follow-up resolution note (Oct 2026)
 `sql/2026-10-11_followup_resolution_note.sql` adds `pi_interactions.follow_up_resolution`

@@ -44,6 +44,18 @@ module.exports = {
         out.addedMark = document.querySelector(`#iss-pick-list .iss-pick-row[data-id="${i2}"]`).textContent.includes('✓ Linked');
         document.querySelector(`#iss-pick-linked .iss-pick-row[data-id="${i1}"] button`).click();
         out.linked1 = ids('#iss-pick-linked').sort();
+        // + Add keeps the list where it is (it used to jump back to the top).
+        _issPickSet('q', '');
+        const list = document.getElementById('iss-pick-list');
+        list.scrollTop = 400;
+        const vis = [...list.querySelectorAll('.iss-pick-row')].find(r => { const b = r.getBoundingClientRect(), l = list.getBoundingClientRect(); return b.top > l.top + 5 && b.bottom < l.bottom - 5 && r.querySelector('button'); });
+        const vid = vis.dataset.id, top0 = vis.getBoundingClientRect().top, st0 = list.scrollTop;
+        vis.querySelector('button').click();
+        const list2 = document.getElementById('iss-pick-list'), vis2 = list2.querySelector(`.iss-pick-row[data-id="${vid}"]`);
+        out.keep = { same: list2 === list, st: list2.scrollTop - st0, moved: Math.abs(vis2.getBoundingClientRect().top - top0), linked: vis2.textContent.includes('✓ Linked'),
+          count: /Linked to this issue \(3\)/.test(document.getElementById('iss-pick-linked-box').textContent) };
+        document.querySelector(`#iss-pick-linked .iss-pick-row[data-id="${vid}"] button`).click();
+        out.keep.undone = document.querySelector(`#iss-pick-list .iss-pick-row[data-id="${vid}"]`).textContent.includes('+ Add');
         await saveIssue(A);
         await new Promise(r => setTimeout(r, 300));
         out.savedLinks = (DB.get('issue_interactions') || []).filter(l => String(l.issueId) === String(id)).map(l => String(l.interactionId)).sort();
@@ -62,6 +74,10 @@ module.exports = {
       t.eq(r.byName.sort().join(), [i1, i2].map(String).sort().join(), 'clicking a name narrows to that person');
       t.ok(r.addedMark, 'an added row reads ✓ Linked');
       t.eq(r.linked1.join(), [i2, i3].map(String).sort().join(), '+ Add and ✕ change the linked list');
+      t.ok(r.keep.same && r.keep.st === 0, '+ Add leaves the list in place (no jump to the top)');
+      t.ok(r.keep.moved <= 2, 'the clicked row stays under the pointer (moved ' + r.keep.moved + 'px)');
+      t.ok(r.keep.linked && r.keep.count, 'the row reads ✓ Linked and the linked count goes up');
+      t.ok(r.keep.undone, '✕ in the linked list turns the row back to + Add');
       t.eq(r.savedLinks.join(), [i2, i3].map(String).sort().join(), 'save writes exactly the linked list');
       const [row] = await t.sql(`select description, notes from pi_issues where id=$1`, [iss.id]);
       t.ok(/Drainage complaint/.test(row.description) && /Notes: Resurfaced/.test(row.description) && !row.notes, 'saved: notes kept in the description, notes column cleared');

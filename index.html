@@ -5276,7 +5276,7 @@ function _issPickRender(){
   const el=document.getElementById('iss-int-picker'); if(!el||!_issPick) return;
   const P=_issPick, rows=_issPickRows();
   const byId={}; rows.forEach(r=>byId[r.id]=r);
-  const linked=P.ids.map(id=>byId[id]).filter(Boolean).sort((a,b)=>String(b.i.date||'').localeCompare(String(a.i.date||'')));
+  const linked=_issPickLinkedRows(byId);
   const q=P.q.trim().toLowerCase();
   let list=rows.filter(r=>!q||(r.name+' '+r.org+' '+(r.i.summary||'')+' '+(r.i.subject||'')).toLowerCase().includes(q));
   const byDate=(a,b)=>String(b.i.date||'').localeCompare(String(a.i.date||''))||_intLoggedOrder(b.i,a.i);
@@ -5286,10 +5286,7 @@ function _issPickRender(){
   const total=list.length, shown=list.slice(0,ISS_PICK_SHOW);
   const box='border:1px solid var(--border);border-radius:7px;background:rgba(255,255,255,.03)';
   el.innerHTML=`
-    <div style="${box};margin-bottom:8px">
-      <div style="padding:5px 8px;font-size:11px;color:var(--fog);border-bottom:1px solid rgba(255,255,255,.06)">Linked to this issue (${linked.length})</div>
-      <div id="iss-pick-linked">${linked.length?linked.map(r=>_issPickRowHTML(r,true)).join(''):'<div style="padding:8px;font-size:12px;color:var(--fog)">None yet. Find interactions below and press + Add.</div>'}</div>
-    </div>
+    <div id="iss-pick-linked-box" style="${box};margin-bottom:8px">${_issPickLinkedHTML(linked)}</div>
     <div style="display:flex;gap:6px;margin-bottom:6px">
       <input id="iss-pick-q" type="search" autocomplete="off" placeholder="Search name, organization or words in the summary" value="${escHtml(P.q)}" oninput="_issPickSet('q',this.value)" style="flex:1">
       <select id="iss-pick-sort" onchange="_issPickSet('sort',this.value)" style="width:auto">
@@ -5308,11 +5305,32 @@ function _issPickSet(k, v){
   _issPickRender();
   if(focus){ const q=document.getElementById('iss-pick-q'); if(q){ q.focus(); q.setSelectionRange(q.value.length,q.value.length); } }
 }
+function _issPickLinkedRows(byId){
+  return _issPick.ids.map(id=>byId[id]).filter(Boolean).sort((a,b)=>String(b.i.date||'').localeCompare(String(a.i.date||'')));
+}
+function _issPickLinkedHTML(linked){
+  return `<div style="padding:5px 8px;font-size:11px;color:var(--fog);border-bottom:1px solid rgba(255,255,255,.06)">Linked to this issue (${linked.length})</div>
+      <div id="iss-pick-linked">${linked.length?linked.map(r=>_issPickRowHTML(r,true)).join(''):'<div style="padding:8px;font-size:12px;color:var(--fog)">None yet. Find interactions below and press + Add.</div>'}</div>`;
+}
+// + Add / ✕ update in place (Jeff, Nov 2026): redrawing the whole picker sent
+// the search list back to the top after every click. Now only the linked box
+// and the one row's button change; the list keeps its scroll, and the dialog
+// is scrolled by however much the linked box grew or shrank, so the row you
+// just clicked stays under the pointer.
 function _issPickToggle(id){
   if(!_issPick) return;
-  const k=_issPick.ids.indexOf(String(id));
-  if(k>=0) _issPick.ids.splice(k,1); else _issPick.ids.push(String(id));
-  _issPickRender();
+  id=String(id);
+  const k=_issPick.ids.indexOf(id);
+  if(k>=0) _issPick.ids.splice(k,1); else _issPick.ids.push(id);
+  const box=document.getElementById('iss-pick-linked-box');
+  if(!box){ _issPickRender(); return; }
+  const byId={}; _issPickRows().forEach(r=>byId[r.id]=r);
+  const h0=box.offsetHeight;
+  box.innerHTML=_issPickLinkedHTML(_issPickLinkedRows(byId));
+  const dh=box.offsetHeight-h0;
+  if(dh){ let sc=box.parentElement; while(sc&&sc!==document.body&&!(sc.scrollHeight>sc.clientHeight&&/(auto|scroll)/.test(getComputedStyle(sc).overflowY))) sc=sc.parentElement; if(sc&&sc!==document.body) sc.scrollTop+=dh; }
+  const row=document.querySelector('#iss-pick-list .iss-pick-row[data-id="'+(window.CSS&&CSS.escape?CSS.escape(id):id)+'"]');
+  if(row&&byId[id]) row.outerHTML=_issPickRowHTML(byId[id],false);
 }
 
 async function saveIssue(projectId){

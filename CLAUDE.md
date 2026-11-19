@@ -576,6 +576,21 @@ in `saveIssue` (trimmed, sliced) because it fills a report column; the stored
 value is now escaped in the box. LIVE's longest on 2026-11-19 was 22. Guarded
 by `test/tests/129-issue-assigned-to-limit.test.js` (fails on the old code).
 
+### Edit issue: linked-interaction picker; Notes folded into Description (DEV, Nov 2026, Jeff)
+The "Link interactions" Ctrl/Cmd multi-select (unusable past a few dozen
+interactions) is replaced by a picker (`_issPick` state, `_issPickRender`,
+`_issPickSet`, `_issPickToggle`, next to `openIssueModal`): a "Linked to this
+issue" list with ✕, a search box (name, organization, summary, subject), a
+sort (newest / oldest / by name) and "+ Add" per row; clicking a name narrows
+the list to that person; at most `ISS_PICK_SHOW` (60) rows show, with a
+"type to narrow" note. `saveIssue` rewrites the issue's links whenever the
+picker was open — it used to skip an empty selection, so the last link could
+never be removed. **Notes box removed:** `_issDescWithNotes` shows an issue's
+old notes appended to Description ("Notes: …"); the next save stores them
+there and clears `notes`. Displays and exports still print `notes` for issues
+not re-saved (LIVE had 2 on 2026-11-19). Guarded by
+`test/tests/130-issue-interaction-picker.test.js` (fails on the old code).
+
 ### Follow-up resolution note (Oct 2026)
 `sql/2026-10-11_followup_resolution_note.sql` adds `pi_interactions.follow_up_resolution`
 (`followUpResolution`) — **must be pasted in the SQL Editor**; until then `toSB`

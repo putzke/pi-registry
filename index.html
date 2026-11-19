@@ -5208,8 +5208,7 @@ async function openIssueModal(id, projectId){
   const ints=DB.get('interactions')||[];
   const iLinks=DB.get('issue_interactions')||[];
   const linkedIds=id?iLinks.filter(l=>String(l.issueId)===String(id)).map(l=>String(l.interactionId)):[];
-  const projInts=ints.filter(i=>i.projectId===projectId);
-  const stakes=DB.getActive('stakeholders')||[];
+  _issPick={ids:linkedIds.slice(), projectId:String(projectId), q:'', sort:'newest'};
 
   openM(id?'Edit issue':'New issue',`
   <div class="fgrid fg2f">
@@ -5227,21 +5226,93 @@ async function openIssueModal(id, projectId){
     <div class="fr"><label>Date raised</label><input type="date" id="iss-raised" value="${_toDateInput(iss.dateRaised)}"></div>
     <div class="fr"><label>Date resolved</label><input type="date" id="iss-resolved" value="${_toDateInput(iss.dateResolved)}" onchange="_issStatusResolvedSync('resolved')"></div>
   </div>
-  <div class="fr"><label>Description</label><textarea id="iss-desc" style="height:70px">${iss.description||''}</textarea></div>
+  <div class="fr"><label>Description <span style="font-weight:400;color:var(--fog)">(what the issue is, and any notes)</span></label><textarea id="iss-desc" style="height:110px">${escHtml(_issDescWithNotes(iss))}</textarea></div>
   <div class="fr"><label>Resolution summary</label><textarea id="iss-resolution" style="height:60px" placeholder="What was done to address this issue?">${iss.resolutionSummary||''}</textarea></div>
   <div class="fr"><label>Logged by</label><div style="font-size:13px;color:var(--white);padding:6px 0" id="iss-by-display">${iss.createdBy||getLoggedBy()||'—'}</div><input type="hidden" id="iss-by" value="${iss.createdBy||getLoggedBy()}"></div>
-  <div class="fr"><label>Notes</label><textarea id="iss-notes">${iss.notes||''}</textarea></div>
-  <div class="fr"><label>Link interactions <span style="font-weight:400;color:var(--fog)">(hold Ctrl/Cmd for multiple)</span></label>
-    <select id="iss-int-links" multiple style="height:100px">${projInts.map(i=>{
-      const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
-      const name=s?(s.firstName+' '+s.lastName).trim():(i.anonLabel||'Anonymous');
-      const sel=linkedIds.includes(String(i.id))?' selected':'';
-      return`<option value="${i.id}"${sel}>${i.date} — ${name} — ${(i.summary||'').slice(0,40)}</option>`;
-    }).join('')}</select>
+  <div class="fr"><label>Linked interactions</label><div id="iss-int-picker"></div></div>
   </div>`,
   `${id?`<button class="btn btn-danger btn-sm" onclick="deleteIssue('${id}','${projectId}')">Delete</button>`:''}
    <button class="btn" onclick="closeM()">Cancel</button>
    <button class="btn btn-primary" onclick="saveIssue('${projectId}')">Save issue</button>`);
+  _issPickRender();
+}
+
+// ── Linked interactions picker (Edit issue; DEV, Nov 2026, Jeff) ──────────
+// Replaced a Ctrl/Cmd multi-select that became unusable past a few dozen
+// interactions. Linked ones sit in a list at the top (✕ removes); below,
+// search (name, organization, summary) and sort (newest / oldest / name) the
+// project's interactions and "+ Add" one at a time. A name in a row narrows
+// the list to that person. The issue's old Notes box was folded into
+// Description: an issue with notes shows them appended there, and the next
+// save stores them as part of the description (notes cleared).
+var _issPick=null, ISS_PICK_SHOW=60;
+function _issDescWithNotes(iss){
+  const d=String(iss.description||''), n=String(iss.notes||'').trim();
+  if(!n || d.indexOf(n)>=0) return d;
+  return (d.trim()?d.replace(/\s+$/,'')+'\n\n':'')+'Notes: '+n;
+}
+function _issPickRows(){
+  const P=_issPick; if(!P) return [];
+  const stakes=DB.get('stakeholders')||[];
+  return (DB.get('interactions')||[]).filter(i=>String(i.projectId)===P.projectId).map(i=>{
+    const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
+    const name=s?(dispName(s)||'Unnamed contact'):(i.anonLabel||'Anonymous');
+    return {i, id:String(i.id), name, org:s?String(s.org||''):''};
+  });
+}
+function _issPickRowHTML(r, linked){
+  const i=r.i, sum=String(i.summary||'').replace(/\s+/g,' ').trim();
+  return `<div class="iss-pick-row" data-id="${escHtml(r.id)}" style="display:flex;gap:8px;align-items:flex-start;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.06)">
+    <div style="flex:1;min-width:0;font-size:12px;line-height:1.4">
+      <div><span style="color:var(--fog)">${escHtml(_fmtMDY(i.date)||'No date')}</span> · <a href="#" class="iss-pick-name" onclick="event.preventDefault();_issPickSet('q',this.dataset.n)" data-n="${escHtml(r.name)}" title="Show only this person's interactions" style="color:var(--sky-lt);font-weight:600;text-decoration:none">${escHtml(r.name)}</a>${r.org?` <span style="color:var(--fog)">· ${escHtml(r.org)}</span>`:''} <span style="color:var(--fog)">· ${escHtml(i.channel||'')}${i.direction?' '+escHtml(i.direction):''}</span></div>
+      <div style="color:var(--mist);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(sum)}">${escHtml(sum.slice(0,140)||'—')}</div>
+    </div>
+    ${linked?`<button class="btn btn-sm" type="button" onclick="_issPickToggle('${escHtml(r.id)}')" title="Remove this link">✕</button>`
+      :(_issPick.ids.includes(r.id)?`<span style="font-size:11px;color:var(--green,#28A870);white-space:nowrap;padding-top:2px">✓ Linked</span>`
+      :`<button class="btn btn-sm" type="button" onclick="_issPickToggle('${escHtml(r.id)}')">+ Add</button>`)}
+  </div>`;
+}
+function _issPickRender(){
+  const el=document.getElementById('iss-int-picker'); if(!el||!_issPick) return;
+  const P=_issPick, rows=_issPickRows();
+  const byId={}; rows.forEach(r=>byId[r.id]=r);
+  const linked=P.ids.map(id=>byId[id]).filter(Boolean).sort((a,b)=>String(b.i.date||'').localeCompare(String(a.i.date||'')));
+  const q=P.q.trim().toLowerCase();
+  let list=rows.filter(r=>!q||(r.name+' '+r.org+' '+(r.i.summary||'')+' '+(r.i.subject||'')).toLowerCase().includes(q));
+  const byDate=(a,b)=>String(b.i.date||'').localeCompare(String(a.i.date||''))||_intLoggedOrder(b.i,a.i);
+  if(P.sort==='oldest') list.sort((a,b)=>-byDate(a,b));
+  else if(P.sort==='name') list.sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'})||byDate(a,b));
+  else list.sort(byDate);
+  const total=list.length, shown=list.slice(0,ISS_PICK_SHOW);
+  const box='border:1px solid var(--border);border-radius:7px;background:rgba(255,255,255,.03)';
+  el.innerHTML=`
+    <div style="${box};margin-bottom:8px">
+      <div style="padding:5px 8px;font-size:11px;color:var(--fog);border-bottom:1px solid rgba(255,255,255,.06)">Linked to this issue (${linked.length})</div>
+      <div id="iss-pick-linked">${linked.length?linked.map(r=>_issPickRowHTML(r,true)).join(''):'<div style="padding:8px;font-size:12px;color:var(--fog)">None yet. Find interactions below and press + Add.</div>'}</div>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:6px">
+      <input id="iss-pick-q" type="search" autocomplete="off" placeholder="Search name, organization or words in the summary" value="${escHtml(P.q)}" oninput="_issPickSet('q',this.value)" style="flex:1">
+      <select id="iss-pick-sort" onchange="_issPickSet('sort',this.value)" style="width:auto">
+        <option value="newest"${P.sort==='newest'?' selected':''}>Newest first</option>
+        <option value="oldest"${P.sort==='oldest'?' selected':''}>Oldest first</option>
+        <option value="name"${P.sort==='name'?' selected':''}>By name</option>
+      </select>
+    </div>
+    <div id="iss-pick-list" style="${box};max-height:200px;overflow-y:auto">${shown.length?shown.map(r=>_issPickRowHTML(r,false)).join(''):`<div style="padding:8px;font-size:12px;color:var(--fog)">${rows.length?'No interactions match.':'No interactions logged on this project yet.'}</div>`}</div>
+    <div id="iss-pick-count" style="font-size:11px;color:var(--fog);margin-top:4px">${total>shown.length?`Showing ${shown.length} of ${total}. Type a name or a word to narrow the list.`:`${total} interaction${total!==1?'s':''}${q?' match':''}.`}${q?` <a href="#" onclick="event.preventDefault();_issPickSet('q','')" style="color:var(--sky-lt)">Clear search</a>`:''}</div>`;
+}
+function _issPickSet(k, v){
+  if(!_issPick) return;
+  _issPick[k]=v;
+  const focus=k==='q'&&document.activeElement&&document.activeElement.id==='iss-pick-q';
+  _issPickRender();
+  if(focus){ const q=document.getElementById('iss-pick-q'); if(q){ q.focus(); q.setSelectionRange(q.value.length,q.value.length); } }
+}
+function _issPickToggle(id){
+  if(!_issPick) return;
+  const k=_issPick.ids.indexOf(String(id));
+  if(k>=0) _issPick.ids.splice(k,1); else _issPick.ids.push(String(id));
+  _issPickRender();
 }
 
 async function saveIssue(projectId){
@@ -5258,7 +5329,7 @@ async function saveIssue(projectId){
   if(issStatus==='Resolved'&&!resDate){alert('Status is set to Resolved — you cannot save until a Date Resolved is entered.');return;}
   if(issStatus==='Resolved'&&!resSummary){alert('A Resolution Summary is required when status is Resolved.');return;}
 
-  const linkedSel=Array.from(document.getElementById('iss-int-links')?.selectedOptions||[]).map(o=>o.value);
+  const linkedSel=_issPick?_issPick.ids.slice():[];
   const tmpId=S.editId||DB.uid();
 
   const data={
@@ -5274,7 +5345,7 @@ async function saveIssue(projectId){
     description:document.getElementById('iss-desc')?.value||'',
     resolutionSummary:document.getElementById('iss-resolution')?.value||'',
     createdBy:v('iss-by'),
-    notes:document.getElementById('iss-notes')?.value||''
+    notes:''   // folded into Description (Nov 2026); the box shows old notes there
   };
 
   const all=DB.get('issues')||[];
@@ -5305,7 +5376,9 @@ async function saveIssue(projectId){
   }
 
   // Save issue-interaction links using the real ID
-  if(linkedSel.length){
+  // Rewritten whenever the picker was open — also when every link was removed
+  // (it used to skip an empty selection, so the last link could never go).
+  if(_issPick){
     const iLinks=(DB.get('issue_interactions')||[]).filter(l=>String(l.issueId)!==String(realId)&&String(l.issueId)!==String(tmpId));
     for(const intId of linkedSel){
       iLinks.push({id:DB.uid(), issueId:realId, interactionId:intId});

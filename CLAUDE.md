@@ -219,6 +219,15 @@ now the first chip, not the last) and the portal chip keeps its own, so the two
 sit at opposite ends. The `psSt` / `champ` / `opp` / `ints2` scans went with the
 markup — they ran per card on every render for numbers nothing displayed.
 
+**The follow-up tag links to the follow-ups (DEV, Nov 2026, Jeff).** It counts
+ONLY follow-ups (interactions with an open follow-up) — not commitments,
+deliverables or issues. Now reads "N overdue follow-ups" / "N open follow-ups"
+and opens Follow-ups for that project (`_dashOpenFollowups`, before `setView`):
+Overdue only (or Open), **All follow-ups** (the card counts the whole team's;
+"Assigned to me" would hide a colleague's), set AFTER `setView`, which clears
+those filters. `stopPropagation` keeps the card's own click (Interactions)
+from firing. Guarded by `test/tests/131-dashboard-overdue-link.test.js`.
+
 ### A freshly logged interaction could open its own Edit modal blank (Aug 2026)
 `saveQuickLog()` and `saveInt()` push a new row into the cache under a
 **temporary local id** (`DB.uid()`, prefixed `tmp_`) before the real Supabase

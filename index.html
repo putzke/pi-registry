@@ -2570,6 +2570,15 @@ function initDashRows(){
     }
   });
 }
+// Dashboard card → that project's follow-ups (Jeff, Nov 2026). setView clears
+// the follow-up filters, so they are set after it; "Everyone" because the card
+// counts the whole team's follow-ups, not only mine.
+function _dashOpenFollowups(projId, status){
+  S.projectFilter=projId; S.selStakeholder=null;
+  setView('followups');
+  S.fuProj=String(projId); S.fuStatus=status||'open'; S.fuUser='all';
+  const m=document.getElementById('main'); if(m) renderFollowups(m);
+}
 function setView(v){if(v==='tribal'){showToast('Tribal consultation module is not available yet.','info',2500);return;}if(v==='hotline'&&!HOTLINE_ON){showToast('Project hotlines are not available yet.','info',2500);return;}S.masterSearch='';S.stakeSearch='';S.masterOnly=false;S.showArchived=false;S.showDuplicates=false;S.showBulkAdd=false;S.showQuickLog=false;S.showEmailPanel=false;S.coId=null;S.archivedSearch='';S.masterType='';S.stakeType='';S.intSearch='';S.intProj='';S.intCh='';S.intFu='';S.fuSearch='';S.fuProj='';S.fuStatus='';S.bulkSelected=[];S.masterBulkSelected=[];S.groupFilter='';S.masterSort='az';S.meetSearch='';S.issViewStatus='';S.issViewCat='';S.issViewPri='';S.selIssueView=null;S.cmtSearch='';S.cmtStatus='';S.cmtPeriod='';S.cmtPeriodId='';S.cmtTab='comments';S.parcSearch='';S.parcStatus='';S.commStatus=COMM_FILTER_DEFAULT;S.commCat='';S.outSearch='';S.outType='';S.outCampaign='';
   S.view=v;S.mapPicked=undefined;S.selStakeholder=null;S.selInteraction=null;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
@@ -2846,7 +2855,10 @@ function renderDash(el){
     const projFU=ints.filter(i=>i.projectId===p.id&&i.followUp&&!i.followUpDone).length;
     const projOD=ints.filter(i=>i.projectId===p.id&&i.followUp&&!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<new Date()).length;
     var pStatus=p.status==='Active'?'var(--green)':p.status==='On hold'?'var(--amber)':'var(--fog)';
-    const fuTag=projFU>0?`<span style="color:${projOD>0?'var(--red)':'var(--amber)'};font-weight:500">${projOD>0?projOD+' overdue':projFU+' open FU'}</span>`:'';
+    // The tag opens that project's follow-ups (Jeff, Nov 2026): overdue ones
+    // when any are late, else all open ones — everyone's, not just mine, since
+    // the card counts the whole team's.
+    const fuTag=projFU>0?`<a href="#" class="dash-fu-tag" onclick="event.preventDefault();event.stopPropagation();_dashOpenFollowups('${p.id}',${projOD>0?"'overdue'":"'open'"})" title="${projOD>0?'Follow-ups on this project past their due date — click to see them':'Open follow-ups on this project — click to see them'}" style="color:${projOD>0?'var(--red)':'var(--amber)'};font-weight:500;text-decoration:underline;text-underline-offset:2px">${projOD>0?projOD+' overdue follow-up'+(projOD!==1?'s':''):projFU+' open follow-up'+(projFU!==1?'s':'')}</a>`:'';
     // When the client last got a report (Oct 2026; was "Portal: <date>", the
     // last AI Project Status Report only — blank on every project reported by
     // shared PDFs). Amber at 30 days; an active project with none says so.

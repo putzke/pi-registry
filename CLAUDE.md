@@ -2379,6 +2379,17 @@ Field companion for logging interactions, managing contacts, follow-ups, and iss
   direction buttons were mocked up and declined (too cramped). Guarded by
   `test/tests/114-mobile-address-order.test.js` (fails on the old code).
 
+- **Follow-up card + issue view catch-up (Nov 2026, Jeff)** — mobile mirror of
+  two desktop changes. Home's "Open F/U" card reads "N overdue F/U" when any
+  are overdue and opens Follow-ups for the same project with ALL follow-ups
+  (`_homeOpenFollowups`; overdue already sort first) — the desktop dashboard
+  tag. An issue's linked interactions open the interaction (`editInteraction`).
+  The read-only issue view also shows "Assigned to" (mobile now maps
+  `assigned_to`; it still never writes issues) and escapes issue text. Checked
+  the rest of the Nov work: reports, close-out, issue picker/30-char limit and
+  deliverables are desktop-only on mobile. Guarded by
+  `test/tests/132-mobile-fu-card-and-issue-links.test.js` (fails on the old code).
+
 - **Same-day interactions in logged order (Nov 2026, Jeff)** — mobile's
   Dashboard, Interactions list and a contact's history sort newest first by
   date, then by `_intLoggedOrder` (a copy of desktop's, asserted identical):

@@ -1425,7 +1425,7 @@ const SB_TO_INT = {
     id:'id', projectId:'project_id', title:'title', category:'category',
     status:'status', priority:'priority', description:'description',
     raisedBy:'created_by', dateRaised:'date_raised', resolutionSummary:'resolution_summary',
-    notes:'notes'
+    notes:'notes', assignedTo:'assigned_to'
   },
   pi_issue_interactions: {
     id:'id', issueId:'issue_id', interactionId:'interaction_id'
@@ -1858,23 +1858,24 @@ function openIssueDetail(id){
       <div style="font-size:13px;color:var(--text3);margin-bottom:4px">${p?p.pid+' — '+p.name:'No project'}</div>
       ${iss.category?`<div style="font-size:13px;color:var(--text3)">Category: ${iss.category}</div>`:''}
     </div>
-    ${iss.description?`<div class="section-hdr">Description</div><div style="font-size:14px;color:var(--text2);line-height:1.5;margin-bottom:16px">${iss.description}</div>`:''}
-    ${iss.raisedBy||iss.dateRaised?`<div class="section-hdr">Details</div>
+    ${iss.description?`<div class="section-hdr">Description</div><div style="font-size:14px;color:var(--text2);line-height:1.5;margin-bottom:16px;white-space:pre-wrap">${escHtml(iss.description)}</div>`:''}
+    ${iss.raisedBy||iss.dateRaised||iss.assignedTo?`<div class="section-hdr">Details</div>
     <div style="margin-bottom:16px">
-      ${iss.raisedBy?`<div class="list-item" style="cursor:default"><div style="font-size:12px;color:var(--text3);width:90px">Raised by</div><div style="font-size:14px">${iss.raisedBy}</div></div>`:''}
+      ${iss.assignedTo?`<div class="list-item" style="cursor:default"><div style="font-size:12px;color:var(--text3);width:90px">Assigned to</div><div style="font-size:14px">${escHtml(iss.assignedTo)}</div></div>`:''}
+      ${iss.raisedBy?`<div class="list-item" style="cursor:default"><div style="font-size:12px;color:var(--text3);width:90px">Raised by</div><div style="font-size:14px">${escHtml(iss.raisedBy)}</div></div>`:''}
       ${iss.dateRaised?`<div class="list-item" style="cursor:default"><div style="font-size:12px;color:var(--text3);width:90px">Date raised</div><div style="font-size:14px">${fmt(iss.dateRaised)}</div></div>`:''}
     </div>`:''}
-    ${iss.resolutionSummary?`<div class="section-hdr">Resolution</div><div style="font-size:14px;color:var(--text2);line-height:1.5;margin-bottom:16px">${iss.resolutionSummary}</div>`:''}
-    ${iss.notes?`<div class="section-hdr">Notes</div><div style="font-size:14px;color:var(--text2);line-height:1.5;margin-bottom:16px">${iss.notes}</div>`:''}
+    ${iss.resolutionSummary?`<div class="section-hdr">Resolution</div><div style="font-size:14px;color:var(--text2);line-height:1.5;margin-bottom:16px;white-space:pre-wrap">${escHtml(iss.resolutionSummary)}</div>`:''}
+    ${iss.notes?`<div class="section-hdr">Notes</div><div style="font-size:14px;color:var(--text2);line-height:1.5;margin-bottom:16px;white-space:pre-wrap">${escHtml(iss.notes)}</div>`:''}
     <div class="section-hdr">Linked interactions (${linkedInts.length})</div>
     <div style="margin-bottom:20px">
       ${linkedInts.length===0?'<div class="empty" style="padding:20px"><div class="empty-title">No linked interactions</div></div>':
         linkedInts.map(i=>{
           const s=stakes.find(x=>String(x.id)===String(i.stakeholderId));
-          return`<div class="list-item" style="cursor:default">
+          return`<div class="list-item" onclick="editInteraction('${i.id}')" style="cursor:pointer">
             <div style="flex:1">
               <div style="font-size:12px;color:var(--text3)">${i.date?fmt(i.date):''} · ${i.channel||''}</div>
-              <div style="font-size:14px;margin-top:2px">${i.summary||'—'}</div>
+              <div style="font-size:14px;margin-top:2px">${escHtml(i.summary||'—')}</div>
               <div style="font-size:13px;color:var(--sky);margin-top:2px">${s?((s.firstName||'')+' '+(s.lastName||'')).trim():(i.anonLabel||'Anonymous')}</div>
             </div>
           </div>`;
@@ -1891,6 +1892,16 @@ function closeIssueDetail(){
 }
 
 // ── HOME SCREEN ────────────────────────────────────────────────────────
+// The Home "Open F/U" card opens Follow-ups for the same project, ALL
+// follow-ups (the card counts the whole team's — "My follow-ups" would hide a
+// colleague's). Overdue ones already sort first there. Mirrors the desktop
+// dashboard card's tag (Nov 2026, Jeff).
+function _homeOpenFollowups(projId){
+  const fp=document.getElementById('fu-proj'), fu=document.getElementById('fu-user');
+  if(fp) fp.value=projId||'';
+  if(fu) fu.value='all';
+  showScreen('screen-followups');
+}
 function refreshHome(){
   const pF=document.getElementById('home-proj').value;
   const projs=DB.get('projects');
@@ -1911,7 +1922,7 @@ function refreshHome(){
   document.getElementById('home-stats').innerHTML=`
     <div class="stat-card"><div class="stat-val" style="color:var(--sky)">${stakeCount}</div><div class="stat-lbl">${pF?'Contacts':'Stakeholders'}</div></div>
     <div class="stat-card"><div class="stat-val" style="color:var(--green)">${projInts.length}</div><div class="stat-lbl">Interactions</div></div>
-    <div class="stat-card"><div class="stat-val" style="color:${overdueFU.length>0?'var(--red)':'var(--amber)'}">${openFU.length}</div><div class="stat-lbl">Open F/U</div></div>
+    <div class="stat-card" role="button" tabindex="0" onclick="_homeOpenFollowups('${pF}')" style="cursor:pointer" title="Open these follow-ups"><div class="stat-val" style="color:${overdueFU.length>0?'var(--red)':'var(--amber)'}">${openFU.length}</div><div class="stat-lbl">${overdueFU.length?overdueFU.length+' overdue F/U':'Open F/U'}</div></div>
   `;
 
   // Recent interactions (up to 20)

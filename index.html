@@ -451,6 +451,36 @@ select optgroup{background:var(--navy-mid);color:var(--sky-lt);font-weight:700;f
 .pac-item{padding:8px 12px;cursor:pointer;font-size:13px;}
 .pac-item:hover{background:#f0f4f8;}
 .pac-item-query{font-weight:600;}
+/* Client update + Projects card "More" menu (Nov 2026) */
+.cu-strip{margin-top:10px;border:1px solid var(--border);background:rgba(11,25,41,.45);border-radius:8px;padding:7px 10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px}
+.cu-portal{display:inline-flex;align-items:center;gap:5px;color:var(--fog)}
+.cu-portal.on{color:var(--green)}
+.cu-dot{width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block}
+.cu-last{color:var(--mist)}
+.cu-nudge{margin-left:auto;font-family:var(--font);font-size:11.5px;font-weight:600;border-radius:6px;padding:3px 9px;cursor:pointer;background:transparent}
+.cu-nudge.due{background:var(--amber-lt);border:1px solid rgba(232,160,32,.55);color:var(--amber)}
+.cu-nudge.ok{border:1px solid rgba(40,168,112,.45);color:var(--green)}
+.proj-more-btn{margin-left:auto;background:rgba(74,155,232,.16)!important;border-color:var(--sky-lt)!important;color:#cfe5fb!important;font-weight:600;box-shadow:0 0 0 2px rgba(74,155,232,.16)}
+.proj-more-n{display:inline-block;min-width:15px;padding:0 3px;margin-left:4px;border-radius:8px;background:var(--sky);color:#fff;font-size:10.5px;line-height:15px;text-align:center}
+.proj-more-menu{position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:50;background:#0f2135;border:1px solid var(--sky-lt);border-radius:10px;padding:8px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 12px;box-shadow:0 10px 28px rgba(0,0,0,.45)}
+.pm-col{display:flex;flex-direction:column;gap:1px;min-width:0}
+.pm-h{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--fog);padding:2px 8px 4px}
+.pm-item{display:flex;align-items:center;gap:8px;font:inherit;font-size:12.5px;padding:6px 8px;border-radius:6px;border:0;background:transparent;color:var(--mist);cursor:pointer;text-align:left}
+.pm-item:hover,.pm-item:focus-visible{background:rgba(255,255,255,.07)}
+.pm-item small{color:var(--fog);font-size:11px;margin-left:2px}
+.pm-ic{width:16px;text-align:center;font-family:var(--mono);font-size:12px}
+.cu-dlg .cu-sub{font-size:12px;color:var(--fog);margin-bottom:12px}
+.cu-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:18px}
+.cu-lbl{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--fog);margin-bottom:6px}
+.cu-facts{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mist)}
+.cu-empty,.cu-note{font-size:12px;color:var(--fog);margin-top:8px}
+#cu-text{width:100%;min-height:200px;padding:9px 11px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);border-radius:var(--radius);color:var(--white);font-family:var(--font);font-size:13px;line-height:1.55;resize:vertical;outline:none}
+#cu-text:focus{border-color:var(--sky-lt)}
+.proj-acts .btn-sm{font-size:12px;padding:4px 8px}
+.cu-status{font-size:12px;min-height:18px;margin:4px 0}
+.cu-btns{display:flex;gap:6px;flex-wrap:wrap}
+.cu-foot-note{font-size:12px;color:var(--fog);margin-right:auto}
+@media (max-width:760px){.cu-grid{grid-template-columns:1fr}}
 </style>
 <!-- SheetJS loaded on demand for Excel export -->
 <script>/* JSZip 3.10.1 - embedded for offline use */
@@ -1407,7 +1437,10 @@ const SB_TO_INT = {
   pi_client_summaries: {
     id:'id', projectId:'project_id', contentRecent:'content_recent',
     contentFull:'content_full', periodStart:'period_start', periodEnd:'period_end',
-    publishedAt:'published_at', publishedBy:'published_by'
+    publishedAt:'published_at', publishedBy:'published_by',
+    // kind: 'status' (Project Status Report) | 'update' (client update) | 'kept'
+    // ("Keep the current one"); sql/2026-11-21_client_update_briefing.sql.
+    kind:'kind', sinceDate:'since_date'
   },
   // PI close-outs (sql/2026-10-03_closeouts.sql). Written only by the close-out
   // code with explicit field lists — never by passing a cached record back —
@@ -1509,7 +1542,7 @@ function localToday(){
   return y+'-'+m+'-'+day;
 }
 
-const DATE_FIELDS = new Set(['legal_desc_shared','exhibit_shared','interaction_date','follow_up_due','follow_up_resolved','due_date','start_date','end_date','precon_date','added_date','meeting_date','date_raised','date_resolved','date_made','fulfilled_date','last_exported','comment_date','response_date','notification_date','response_deadline','ura_notice_date','follow_up_date','period_start','period_end','hearing_date','first_ad_date','second_ad_date','federal_register_date','notice_date','action_date','read_on']);
+const DATE_FIELDS = new Set(['legal_desc_shared','exhibit_shared','interaction_date','follow_up_due','follow_up_resolved','due_date','start_date','end_date','precon_date','added_date','meeting_date','date_raised','date_resolved','date_made','fulfilled_date','last_exported','comment_date','response_date','notification_date','response_deadline','ura_notice_date','follow_up_date','period_start','period_end','hearing_date','first_ad_date','second_ad_date','federal_register_date','notice_date','action_date','read_on','since_date']);
 
 // Integer FK columns that Supabase expects as numbers
 const SB_INT_FIELDS = new Set(['project_id','stakeholder_id','issue_id','interaction_id','meeting_id','related_to','hotline_id','logged_interaction_id','campaign_id','action_id']);
@@ -2873,6 +2906,9 @@ function renderDash(el){
     }else{
       portalChip='<span title="No PI report has been shared to the client portal and no Project Status Report published." style="color:var(--amber);font-size:11px;font-weight:600;margin-left:auto;cursor:help">No report shared yet</span>';
     }
+    // Client update due (Nov 2026): the dashboard only speaks up when it is.
+    var cuS=_cuState(p.id);
+    if(cuS.due) portalChip+='<a href="#" class="dash-cu-due" onclick="event.preventDefault();event.stopPropagation();openClientUpdate(\''+p.id+'\')" title="'+escHtml(cuS.tip)+'" style="color:var(--amber);font-size:11px;font-weight:600;margin-left:6px;text-decoration:underline;text-underline-offset:2px">· client update due</a>';
     // The dashboard card is IDENTITY + EXCEPTIONS, nothing else.
     //
     // It used to carry a sentiment mix bar, a NEPA checklist bar, and a row of
@@ -7179,8 +7215,6 @@ function renderProjects(el){
       : `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:start">
       ${projs.map(p=>{
         const psSt=ps.filter(x=>x.projectId===p.id);
-        const champ=psSt.filter(x=>x.support==='Champion').length;
-        const opp=psSt.filter(x=>x.support==='Opponent').length;
         const intCt=ints.filter(i=>i.projectId===p.id).length;
         const openFU=ints.filter(i=>i.projectId===p.id&&i.followUp&&!i.followUpDone).length;
         const isArchived=p.status==='Complete'||p.status==='Cancelled';
@@ -7219,48 +7253,18 @@ function renderProjects(el){
           </div>`:''}
           <div style="display:flex;gap:10px;font-size:12px;padding-top:9px;border-top:1px solid var(--border)">
             <span style="color:var(--mist)">${psSt.length} stakeholders</span>
-            <span style="color:var(--green)">${champ} champ.</span>
-            <span style="color:${opp>0?'var(--red)':'var(--fog)'}">${opp} opp.</span>
             <span style="color:var(--slate)">${intCt} interactions</span>
             ${openFU>0?`<span style="color:var(--amber);margin-left:auto">${openFU} open FU</span>`:''}
           </div>
-          ${(()=>{
-            const le=p.lastExported;
-            if(!le)return '<div style="font-size:11px;margin-top:6px;padding:4px 8px;border-radius:5px;background:rgba(255,255,255,.04);color:var(--fog);display:inline-flex;align-items:center;gap:5px"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" style="width:10px;height:10px"><circle cx="6" cy="6" r="5"/><path d="M6 3v3l2 1"/></svg>Never exported</div>';
-            const days=Math.floor((new Date()-new Date(le+'T00:00:00'))/86400000);
-            const col=days<=14?'#1a7a50':days<=30?'#b36b00':'#b32020';
-            const bg=days<=14?'rgba(26,122,80,.12)':days<=30?'rgba(179,107,0,.12)':'rgba(179,50,50,.12)';
-            const label=days===0?'Exported today':days===1?'Exported yesterday':`Exported ${days}d ago`;
-            return `<div style="font-size:11px;margin-top:6px;padding:4px 8px;border-radius:5px;background:${bg};color:${col};display:inline-flex;align-items:center;gap:5px"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" style="width:10px;height:10px"><path d="M6 1v4M4 3l2 2 2-2"/><rect x="1" y="7" width="10" height="3" rx="1"/></svg>${label} · ${fmt(le)}</div>`;
-          })()}
-          <div style="margin-top:11px">
-            <div style="display:flex;gap:5px;margin-bottom:5px">
-              <button class="btn btn-sm" onclick="filterByProject('${p.id}');setView('stakeholders')">Contacts</button>
-              <button class="btn btn-sm" onclick="filterByProject('${p.id}');setView('interactions')">Interactions</button>
-              <button class="btn btn-sm" onclick="filterByProject('${p.id}');setView('followups')">Follow-ups${openFU>0?` (${openFU})`:''}</button>
-              <button class="btn btn-sm" onclick="filterByProject('${p.id}');setView('deliverables')">Deliverables</button>
-              <button class="btn btn-ghost btn-sm" onclick="openProjModal('${p.id}')">Edit</button>
-            </div>
-            <div style="display:flex;gap:5px;align-items:center">
-              <button class="btn btn-sm" style="color:var(--sky-lt);border-color:rgba(90,135,198,.4)" onclick="showStakeholderMap('${p.id}')">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px"><path d="M8 2C5.8 2 4 3.8 4 6c0 3 4 8 4 8s4-5 4-8c0-2.2-1.8-4-4-4z"/><circle cx="8" cy="6" r="1.5"/></svg> Map
-              </button>
-              <button class="btn btn-sm" style="color:#4db6ac;border-color:rgba(77,182,172,.4)" onclick="showGroupsManager('${p.id}')">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px"><circle cx="6" cy="5" r="2.5"/><circle cx="11" cy="5" r="2.5"/><path d="M1 13c0-2.2 2.2-4 5-4s5 1.8 5 4"/><path d="M11 9c1.7.4 3 1.9 3 3.5"/></svg> Groups
-              </button>
-              <button class="btn btn-sm" style="color:#b39ddb;border-color:rgba(179,157,219,.4)" onclick="showEngagementMatrix('${p.id}')">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg> Matrix
-              </button>
-              <button class="btn btn-sm" style="margin-left:auto;color:var(--green);border-color:rgba(40,168,112,.4)" onclick="exportProject('${p.id}')">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:11px;height:11px"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2"/></svg> Export
-              </button>
-              <div class="portal-btn-container" data-proj="${p.id}" data-style="compact" style="display:flex;align-items:center;gap:3px">
-                <button class="btn btn-sm" style="color:#60a5fa;border-color:rgba(96,165,250,.4)" onclick="sharePortalLink('${p.id}',this)" title="Generate client portal link">
-                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:10px;height:10px"><circle cx="12" cy="4" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="12" r="2"/><path d="M6 7.5l4-2M6 8.5l4 2"/></svg> Portal
-                </button>
-              </div>
+          ${_cuStripHTML(p)}
+          <div class="proj-acts" style="margin-top:10px;display:flex;gap:4px;flex-wrap:wrap;align-items:center;position:relative">
+            <button class="btn btn-sm" onclick="filterByProject('${p.id}');setView('stakeholders')">Contacts</button>
+            <button class="btn btn-sm" onclick="filterByProject('${p.id}');setView('interactions')">Interactions</button>
+            <button class="btn btn-sm" onclick="filterByProject('${p.id}');setView('followups')">Follow-ups${openFU>0?` (${openFU})`:''}</button>
+            <button class="btn btn-sm" onclick="filterByProject('${p.id}');setView('deliverables')">Deliverables</button>
+            <button class="btn btn-sm" onclick="openProjModal('${p.id}')">Edit</button>
+            <button class="btn btn-sm proj-more-btn" aria-haspopup="menu" aria-expanded="false" onclick="event.stopPropagation();toggleProjMore('${p.id}',this)" title="Map, Groups, Matrix, Export and the client portal link">More ▾<span class="proj-more-n">7</span></button>
           </div>
-        </div>
         </div>`;
       }).join('')}
       </div>`
@@ -7272,29 +7276,36 @@ function renderProjects(el){
 
 // ── SHARE PORTAL LINK ─────────────────────────
 function _renderPortalBtnActive(projId, url) {
+  _portalLinks[String(projId)] = url;
   document.querySelectorAll('.portal-btn-container[data-proj="'+projId+'"]').forEach(function(c){
-    if(c.dataset.style==='full'){
+    if(c.dataset.style==='strip'){
+      c.innerHTML='<span class="cu-portal on" title="Clients can open this project’s portal with the link. Copy or turn it off under More."><span class="cu-dot"></span>Client portal link on</span>';
+    } else if(c.dataset.style==='full'){
       c.innerHTML='<div style="background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.25);border-radius:8px;padding:12px 16px">'
-        +'<div style="font-size:12px;font-weight:600;color:#34d399;margin-bottom:8px">✓ Portal link active</div>'
+        +'<div style="font-size:12px;font-weight:600;color:#34d399;margin-bottom:8px">✓ Client portal link active</div>'
         +'<div style="font-family:var(--mono);font-size:11px;color:var(--slate);word-break:break-all;margin-bottom:10px;padding:6px 8px;background:rgba(255,255,255,.04);border-radius:5px">'+url+'</div>'
         +'<div style="display:flex;gap:8px">'
         +'<button class="btn btn-sm" style="color:#34d399;border-color:rgba(52,211,153,.4)" data-url="'+url+'" onclick="copyPortalUrl(this.dataset.url,this)">Copy link</button>'
-        +'<button class="btn btn-sm" style="color:#f87171;border-color:rgba(248,113,113,.4)" onclick="revokePortalLink('+projId+',this)">Revoke</button>'
+        +'<button class="btn btn-sm" style="color:#f87171;border-color:rgba(248,113,113,.4)" onclick="revokePortalLink('+projId+',this)">Turn off</button>'
         +'</div></div>';
     } else {
       c.innerHTML='<button class="btn btn-sm" style="color:#34d399;border-color:rgba(52,211,153,.4)" data-url="'+url+'" onclick="copyPortalUrl(this.dataset.url,this)" title="Copy client portal link">'
         +'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px"><path d="M2 8l4 4 8-8"/></svg> Active</button>'
-        +'<button class="btn btn-sm" style="color:#f87171;border-color:rgba(248,113,113,.4);padding:4px 7px" onclick="revokePortalLink('+projId+',this)" title="Revoke portal link">✕</button>';
+        +'<button class="btn btn-sm" style="color:#f87171;border-color:rgba(248,113,113,.4);padding:4px 7px" onclick="revokePortalLink('+projId+',this)" title="Turn off client portal link">✕</button>';
     }
   });
 }
 function _renderPortalBtnInactive(projId) {
+  delete _portalLinks[String(projId)];
+  delete _portalTokenCache[String(projId)];
   document.querySelectorAll('.portal-btn-container[data-proj="'+projId+'"]').forEach(function(c){
-    if(c.dataset.style==='full'){
-      c.innerHTML='<button class="btn btn-sm" style="color:#60a5fa;border-color:rgba(96,165,250,.4)" onclick="sharePortalLink(\''+projId+'\',this)">Generate portal link</button>';
+    if(c.dataset.style==='strip'){
+      c.innerHTML='<span class="cu-portal off" title="No client portal link yet. Create one under More."><span class="cu-dot"></span>No client portal link</span>';
+    } else if(c.dataset.style==='full'){
+      c.innerHTML='<button class="btn btn-sm" style="color:#60a5fa;border-color:rgba(96,165,250,.4)" onclick="sharePortalLink(\''+projId+'\',this)">Create client portal link</button>';
     } else {
       c.innerHTML='<button class="btn btn-sm" style="color:#60a5fa;border-color:rgba(96,165,250,.4)" onclick="sharePortalLink(\''+projId+'\',this)" title="Generate client portal link">'
-        +'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:10px;height:10px"><circle cx="12" cy="4" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="12" r="2"/><path d="M6 7.5l4-2M6 8.5l4 2"/></svg> Portal</button>';
+        +'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:10px;height:10px"><circle cx="12" cy="4" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="12" r="2"/><path d="M6 7.5l4-2M6 8.5l4 2"/></svg> Client portal link</button>';
     }
   });
 }
@@ -7311,6 +7322,8 @@ async function updatePortalButtons() {
     if (!res.ok) return;
     const links = await res.json();
     document.querySelectorAll('.portal-btn-container button').forEach(b => { b.disabled = false; });
+    // Every container starts as "no link"; the projects that have one turn on below.
+    document.querySelectorAll('.portal-btn-container[data-style="strip"]').forEach(c => _renderPortalBtnInactive(c.dataset.proj));
     links.forEach(lnk => {
       _renderPortalBtnActive(lnk.project_id, `${APP_BASE_URL}/client-portal.html?token=${lnk.token}`);
     });
@@ -7333,18 +7346,19 @@ async function sharePortalLink(projId, btn) {
       const e = await res.json().catch(()=>({}));
       if (res.status === 409 || e.code === '23505' || String(e.message||'').toLowerCase().includes('unique')) {
         btn.innerHTML = orig; btn.disabled = false;
-        alert('A portal link already exists for this project. Revoke it first to generate a new URL.');
+        alert('A client portal link already exists for this project. Turn it off first to make a new one.');
         updatePortalButtons();
         return;
       }
       throw new Error(e.message||`API ${res.status}`);
     }
     const rows = await res.json();
-    if (!rows.length) throw new Error('Could not create portal link.');
+    if (!rows.length) throw new Error('Could not create the client portal link.');
     const token = rows[0].token;
     const url = `${APP_BASE_URL}/client-portal.html?token=${token}`;
     await navigator.clipboard.writeText(url).catch(() => prompt('Copy this link:', url));
     _renderPortalBtnActive(projId, url);
+    showToast('Client portal link created and copied', 'success', 3000);
     const copyBtn = document.querySelector('.portal-btn-container[data-proj="'+projId+'"] [data-url]');
     if (copyBtn) {
       const ao = copyBtn.innerHTML;
@@ -7357,9 +7371,9 @@ async function sharePortalLink(projId, btn) {
   }
 }
 async function revokePortalLink(projId, btn) {
-  if (!confirm('Revoke this portal link? The client will immediately lose access.')) return;
+  if (!confirm('Turn off this client portal link? Anyone using it, the client included, loses access at once.')) return;
   btn.disabled = true;
-  btn.textContent = 'Revoking…';
+  btn.textContent = 'Turning off…';
   try {
     const res = await fetch(`${SUPA_REST}/pi_portal_links?project_id=eq.${projId}`, {
       method: 'DELETE',
@@ -7368,9 +7382,326 @@ async function revokePortalLink(projId, btn) {
     if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.message||`API ${res.status}`); }
     _renderPortalBtnInactive(projId);
   } catch(err) {
-    btn.disabled = false; btn.textContent = 'Revoke';
+    btn.disabled = false; btn.textContent = 'Turn off client portal link';
     alert('Error: ' + err.message);
   }
+}
+
+// ── CLIENT UPDATE BRIEFING (Nov 2026, Jeff) ──────────────────────────────────
+// A short, staff-approved note on the client portal: what is new since the last
+// PI report the client received. Stored in pi_client_summaries as kind
+// 'update' (published) or 'kept' ("Keep the current one"); the Project Status
+// Report stays kind 'status'. sql/2026-11-21_client_update_briefing.sql.
+// The AI only DRAFTS; nothing reaches the client until someone publishes.
+// Numbers are counted here and handed to the model as authoritative; people
+// are described by type/organization (_coWho), never by name.
+var _portalLinks = {};
+const CU_QUIET_DAYS = 7;          // never due this soon after a report / update / keep
+const CU_ANY_DAYS = 21;           // due after this long if ANYTHING new happened
+const CU_CONTACTS_SIGNIFICANT = 5; // this many new public contacts is "something"
+const CU_LOG_LINES = 40;          // newest inbound log lines the model may read
+const CU_COMING_DAYS = 30;
+
+function _cuDay(ts) { return String(ts || '').slice(0, 10); }
+function _cuDaysBetween(a, b) {
+  if (!a || !b) return null;
+  return Math.floor((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
+}
+function _cuRows(projId, kind) {
+  return (DB.get('client_summaries') || [])
+    .filter(function (x) { return String(x.projectId) === String(projId) && (x.kind || 'status') === kind; })
+    .sort(function (a, b) { return String(b.publishedAt || '').localeCompare(String(a.publishedAt || '')); });
+}
+// The newest PI report the client actually received (shared to the portal).
+function _cuLastReport(projId) {
+  var best = null;
+  (DB.get('report_archive') || []).forEach(function (r) {
+    if (String(r.projectId) !== String(projId) || !r.clientVisible) return;
+    var d = _cuDay(r.archivedAt || r.docxUploadedAt);
+    if (d && (!best || d > best.date)) best = { date: d, rec: r };
+  });
+  return best;
+}
+function _cuReportName(r) {
+  if (!r) return '';
+  return (r.rec.reportTitle || 'PI report') + (r.rec.reportNum ? ' #' + r.rec.reportNum : '');
+}
+
+// Everything that happened on the project after `from` (exclusive) up to
+// `to` (inclusive). External and anonymous contacts only (_intIsExternal).
+function _cuCounts(projId, from, to) {
+  var pid = String(projId), ext = _coExtIds(pid);
+  var inW = function (d) { d = _cuDay(d); return !!d && (!from || d > from) && d <= to; };
+  var ints = (DB.get('interactions') || []).filter(function (i) {
+    return String(i.projectId) === pid && inW(i.date) && _intIsExternal(i, ext);
+  });
+  var inbound = ints.filter(function (i) { return i.direction !== 'Outgoing'; });
+  var subj = {};
+  inbound.forEach(function (i) { var k = i.subject || 'General'; subj[k] = (subj[k] || 0) + 1; });
+  var subjects = Object.keys(subj).sort(function (a, b) { return subj[b] - subj[a]; }).map(function (k) { return [k, subj[k]]; });
+  var issues = (DB.get('issues') || []).filter(function (x) { return String(x.projectId) === pid; });
+  var coms = (DB.get('commitments') || []).filter(function (x) { return String(x.projectId) === pid; });
+  var evs = (DB.get('meetings') || []).filter(function (m) { return String(m.projectId) === pid && _evIsDone(m) && inW(m.date); });
+  var outs = (DB.get('outreach_actions') || []).filter(function (o) { return String(o.projectId) === pid && inW(o.actionDate); });
+  var stakes = DB.get('stakeholders') || [];
+  return {
+    inbound: inbound.length, outbound: ints.length - inbound.length, subjects: subjects,
+    log: inbound.slice().sort(function (a, b) { return String(b.date || '').localeCompare(String(a.date || '')); })
+      .slice(0, CU_LOG_LINES).map(function (i) {
+        var t = String(i.summary || '').replace(/\s+/g, ' ').trim();
+        if (t.length > 220) t = t.slice(0, 217) + '…';
+        return fmt(i.date) + ' · ' + (i.channel || 'Contact') + ' · ' + _coWho(i, stakes) + ' · ' + (i.subject || 'General') + (t ? ' — ' + t : '');
+      }),
+    issuesRaised: issues.filter(function (x) { return inW(x.dateRaised); }),
+    issuesResolved: issues.filter(function (x) { return inW(x.dateResolved); }),
+    commitsDone: coms.filter(function (x) { return inW(x.fulfilledDate); }),
+    commitsLate: coms.filter(function (x) { return x.dueDate && inW(x.dueDate) && !/fulfill|cancel|complete/i.test(String(x.status || '')); }),
+    events: evs,
+    outreach: outs
+  };
+}
+// Short human lines for the dialog and the due tooltip; [] when nothing happened.
+function _cuFactLines(c) {
+  var L = [];
+  if (c.inbound) L.push(c.inbound + ' public contact' + (c.inbound !== 1 ? 's' : '') + (c.subjects.length ? ' (most about ' + c.subjects[0][0] + ', ' + c.subjects[0][1] + ')' : ''));
+  if (c.outbound) L.push(c.outbound + ' contact' + (c.outbound !== 1 ? 's' : '') + ' made by the team');
+  if (c.issuesResolved.length) L.push(c.issuesResolved.length + ' issue' + (c.issuesResolved.length !== 1 ? 's' : '') + ' resolved');
+  if (c.issuesRaised.length) L.push(c.issuesRaised.length + ' new issue' + (c.issuesRaised.length !== 1 ? 's' : ''));
+  if (c.commitsDone.length) L.push(c.commitsDone.length + ' commitment' + (c.commitsDone.length !== 1 ? 's' : '') + ' fulfilled');
+  if (c.commitsLate.length) L.push(c.commitsLate.length + ' commitment' + (c.commitsLate.length !== 1 ? 's' : '') + ' now past due');
+  if (c.events.length) {
+    var att = c.events.reduce(function (n, m) { return n + (Number(m.attendanceCount) || 0); }, 0);
+    L.push(c.events.length + ' event' + (c.events.length !== 1 ? 's' : '') + ' held' + (att ? ' · ' + att + ' attended' : ''));
+  }
+  if (c.outreach.length) L.push(c.outreach.length + ' outreach action' + (c.outreach.length !== 1 ? 's' : ''));
+  return L;
+}
+// What is coming up in the next CU_COMING_DAYS days (events, scheduled outreach,
+// comment periods opening or closing).
+function _cuComing(projId, today) {
+  var pid = String(projId), end = new Date(new Date(today + 'T00:00:00').getTime() + CU_COMING_DAYS * 86400000).toISOString().slice(0, 10);
+  var soon = function (d) { d = _cuDay(d); return !!d && d >= today && d <= end; };
+  var L = [];
+  (DB.get('meetings') || []).filter(function (m) { return String(m.projectId) === pid && !_evIsDone(m) && !/cancel/i.test(String(m.status || '')) && soon(m.date); })
+    .forEach(function (m) { L.push(fmt(m.date) + ': ' + (m.title || m.type || 'Event')); });
+  (DB.get('outreach_actions') || []).filter(function (o) { return String(o.projectId) === pid && _cuDay(o.actionDate) > today && soon(o.actionDate); })
+    .forEach(function (o) { L.push(fmt(o.actionDate) + ': ' + (o.actionType || 'Outreach') + (o.title ? ' — ' + o.title : '')); });
+  (DB.get('comment_periods') || []).filter(function (c) { return String(c.projectId) === pid; }).forEach(function (c) {
+    if (soon(c.startDate)) L.push(fmt(c.startDate) + ': comment period opens — ' + (c.name || 'public comment'));
+    if (soon(c.endDate)) L.push(fmt(c.endDate) + ': comment period closes — ' + (c.name || 'public comment'));
+  });
+  return L.sort();
+}
+
+// The one rule for "Update due" (agreed with Jeff, Nov 2026):
+//  - never within CU_QUIET_DAYS of the last shared report, published update or "keep";
+//  - after that, due when something significant happened since then (an issue
+//    raised or resolved, a commitment fulfilled or newly past due, an event
+//    held, CU_CONTACTS_SIGNIFICANT+ new public contacts);
+//  - after CU_ANY_DAYS, due when anything at all happened;
+//  - never due with nothing new; Active projects only.
+function _cuState(projId, today) {
+  today = today || localToday();
+  var p = (DB.get('projects') || []).find(function (x) { return String(x.id) === String(projId); }) || {};
+  var rep = _cuLastReport(projId);
+  var upd = _cuRows(projId, 'update')[0] || null;
+  var kept = _cuRows(projId, 'kept')[0] || null;
+  var anchor = [rep && rep.date, upd && _cuDay(upd.publishedAt), kept && _cuDay(kept.publishedAt)]
+    .filter(Boolean).sort().pop() || '';
+  var since = rep ? rep.date : '';
+  var fresh = _cuCounts(projId, anchor, today);
+  var freshLines = _cuFactLines(fresh);
+  var days = anchor ? _cuDaysBetween(anchor, today) : null;
+  var significant = fresh.issuesRaised.length || fresh.issuesResolved.length || fresh.commitsDone.length
+    || fresh.commitsLate.length || fresh.events.length || fresh.inbound >= CU_CONTACTS_SIGNIFICANT;
+  var due = p.status === 'Active' && freshLines.length > 0
+    && (days === null || (days >= CU_QUIET_DAYS && (significant || days >= CU_ANY_DAYS)));
+  var tip = due
+    ? 'New since ' + (anchor ? fmt(anchor) : 'the project began') + ': ' + freshLines.join('; ') + '. Click to review a client update.'
+    : (upd ? 'Client update published ' + fmt(_cuDay(upd.publishedAt)) + '.' : 'Nothing new to tell the client yet.');
+  return { due: !!due, changes: freshLines.length, anchor: anchor, since: since, report: rep, update: upd, kept: kept, tip: tip, days: days };
+}
+
+// The Client strip on the Projects view card.
+function _cuStripHTML(p) {
+  var st = _cuState(p.id);
+  var rep = st.report;
+  var btn = st.due
+    ? '<button class="cu-nudge due" onclick="openClientUpdate(\'' + p.id + '\')" title="' + escHtml(st.tip) + '">Update due · ' + st.changes + ' change' + (st.changes !== 1 ? 's' : '') + '</button>'
+    : (st.update
+      ? '<button class="cu-nudge ok" onclick="openClientUpdate(\'' + p.id + '\')" title="' + escHtml(st.tip) + '">Update current</button>'
+      : '');
+  return '<div class="cu-strip">'
+    + '<div class="portal-btn-container" data-proj="' + p.id + '" data-style="strip"><span class="cu-portal">…</span></div>'
+    + '<span class="cu-last">' + (rep ? 'Last report ' + fmt(rep.date) : 'No report shared yet') + '</span>'
+    + btn + '</div>';
+}
+
+// "More ▾" on the Projects view card: two columns, project tools | client.
+function toggleProjMore(projId, btn) {
+  var open = document.querySelector('.proj-more-menu');
+  var same = open && open.dataset.proj === String(projId);
+  if (open) { open.remove(); document.querySelectorAll('.proj-more-btn').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); }); }
+  if (same) return;
+  var p = (DB.get('projects') || []).find(function (x) { return String(x.id) === String(projId); }) || {};
+  var url = _portalLinks[String(projId)];
+  var le = p.lastExported;
+  var item = function (ic, color, label, onclick, extra) {
+    return '<button class="pm-item" role="menuitem" onclick="' + onclick + '"><span class="pm-ic" style="color:' + color + '">' + ic + '</span>' + label + (extra || '') + '</button>';
+  };
+  var m = document.createElement('div');
+  m.className = 'proj-more-menu'; m.dataset.proj = String(projId); m.setAttribute('role', 'menu');
+  m.innerHTML = '<div class="pm-col"><div class="pm-h">Project tools</div>'
+    + item('⌖', 'var(--sky-lt)', 'Map', "_pmClose();showStakeholderMap('" + projId + "')")
+    + item('◎', '#4db6ac', 'Groups', "_pmClose();showGroupsManager('" + projId + "')")
+    + item('▦', '#b39ddb', 'Matrix', "_pmClose();showEngagementMatrix('" + projId + "')")
+    + item('⇩', 'var(--green)', 'Export', "_pmClose();exportProject('" + projId + "')", le ? '<small>· last ' + fmt(le) + '</small>' : '<small>· never</small>')
+    + '</div><div class="pm-col"><div class="pm-h">Client</div>'
+    + item('✦', 'var(--amber)', 'Review client update', "_pmClose();openClientUpdate('" + projId + "')")
+    + (url
+      ? item('⧉', 'var(--sky-lt)', 'Copy client portal link', "copyPortalUrl(this.dataset.url,this)").replace('<button ', '<button data-url="' + escHtml(url) + '" ')
+        + item('✕', '#f87171', '<span style="color:#f87171">Turn off client portal link</span>', "_pmClose();revokePortalLink(" + Number(projId) + ",this)")
+      : item('＋', 'var(--sky-lt)', 'Create client portal link', "_pmClose();sharePortalLink('" + projId + "',this)"))
+    + '</div>';
+  btn.parentNode.appendChild(m);
+  btn.setAttribute('aria-expanded', 'true');
+}
+function _pmClose() {
+  var m = document.querySelector('.proj-more-menu'); if (m) m.remove();
+  document.querySelectorAll('.proj-more-btn').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+}
+document.addEventListener('click', function (e) {
+  if (!e.target.closest || e.target.closest('.proj-more-menu') || e.target.closest('.proj-more-btn')) return;
+  _pmClose();
+});
+
+// ── The review dialog ──
+var _cu = null; // { projId, since, today }
+function openClientUpdate(projId) {
+  var p = (DB.get('projects') || []).find(function (x) { return String(x.id) === String(projId); });
+  if (!p) return;
+  var today = localToday(), st = _cuState(projId, today);
+  _cu = { projId: String(projId), since: st.since, today: today };
+  var c = _cuCounts(projId, st.since, today);
+  var lines = _cuFactLines(c), coming = _cuComing(projId, today);
+  var sinceTxt = st.report ? 'your ' + fmt(st.since) + ' report' : 'the start of the project';
+  var onPortal = st.update
+    ? 'On the client portal now: update published ' + fmt(_cuDay(st.update.publishedAt)) + (st.update.publishedBy ? ' by ' + escHtml(st.update.publishedBy) : '')
+    : 'No client update published yet';
+  var body = '<div class="cu-dlg">'
+    + '<div class="cu-sub">' + onPortal + '</div>'
+    + '<div class="cu-grid"><div class="cu-col">'
+    + '<div class="cu-lbl">New since ' + escHtml(sinceTxt) + '</div>'
+    + (lines.length ? '<ul class="cu-facts">' + lines.map(function (l) { return '<li>' + escHtml(l) + '</li>'; }).join('') + '</ul>'
+      : '<div class="cu-empty">Nothing new logged since ' + escHtml(sinceTxt) + '.</div>')
+    + (coming.length ? '<div class="cu-lbl" style="margin-top:12px">Coming up (next ' + CU_COMING_DAYS + ' days)</div><ul class="cu-facts">' + coming.map(function (l) { return '<li>' + escHtml(l) + '</li>'; }).join('') + '</ul>' : '')
+    + '<div class="cu-note">Counted by Cirrus Cc. People are described by type, never by name.</div>'
+    + '</div><div class="cu-col">'
+    + '<div class="cu-lbl">Draft for the client · about 150 words</div>'
+    + '<textarea id="cu-text" rows="11" placeholder="' + (_getClaudeKey() ? 'Drafting…' : 'Type the update here, or add a Claude API key in Settings to draft it with AI.') + '"></textarea>'
+    + '<div id="cu-status" class="cu-status"></div>'
+    + '<div class="cu-btns"><button class="btn btn-sm" id="cu-redraft" onclick="cuDraft()">✦ Redraft with AI</button>'
+    + '<button class="btn btn-sm" onclick="cuPreview()">Preview as client</button></div>'
+    + '<div id="cu-preview"></div>'
+    + '</div></div></div>';
+  var foot = '<span class="cu-foot-note">The client sees nothing until you publish.</span>'
+    + '<button class="btn" onclick="cuKeep()">Keep the current one</button>'
+    + '<button class="btn btn-primary" id="cu-publish" onclick="cuPublish()">Publish to client portal</button>';
+  openM('Client update · ' + (p.name || ''), body, foot, true);
+  if (_getClaudeKey() && lines.length) cuDraft();
+}
+function _cuRequest(projId, since, today) {
+  var c = _cuCounts(projId, since, today);
+  var lines = _cuFactLines(c), coming = _cuComing(projId, today);
+  var rep = _cuLastReport(projId);
+  var f = [];
+  f.push('PERIOD: since ' + (rep ? 'the ' + fmt(rep.date) + ' PI report the client received' : 'the start of the project') + ', through ' + fmt(today) + '.');
+  f.push('COUNTS (authoritative; use exactly, never recount): ' + (lines.length ? lines.join('; ') : 'nothing new logged') + '.');
+  if (c.subjects.length) f.push('What the public contacted us about: ' + c.subjects.slice(0, 6).map(function (s) { return s[0] + ' ' + s[1]; }).join(', ') + '.');
+  if (c.issuesResolved.length) f.push('Issues resolved: ' + c.issuesResolved.map(function (x) { return x.title; }).join('; ') + '.');
+  if (c.issuesRaised.length) f.push('New issues: ' + c.issuesRaised.map(function (x) { return x.title; }).join('; ') + '.');
+  if (c.commitsDone.length) f.push('Commitments fulfilled: ' + c.commitsDone.map(function (x) { return x.commitment; }).join('; ') + '.');
+  if (c.commitsLate.length) f.push('Commitments now past due: ' + c.commitsLate.map(function (x) { return x.commitment; }).join('; ') + '.');
+  if (c.events.length) f.push('Events held: ' + c.events.map(function (m) { return (m.title || m.type || 'Event') + (m.attendanceCount ? ' (' + m.attendanceCount + ' attended)' : ''); }).join('; ') + '.');
+  if (c.outreach.length) f.push('Outreach done: ' + c.outreach.map(function (o) { return (o.actionType || 'Outreach') + (o.title ? ' — ' + o.title : ''); }).join('; ') + '.');
+  f.push('COMING UP: ' + (coming.length ? coming.join('; ') : 'nothing scheduled') + '.');
+  if (c.log.length) f.push('INBOUND LOG, newest first (context only; do not count from it):\n' + c.log.join('\n'));
+  var task = 'Write a short update for the client (the agency project manager) that tells them what is new on this project since the last PI report they received. '
+    + 'About 150 words, never more than 170. Two or three short paragraphs separated by a blank line: '
+    + '(1) what the public raised, with the counts as given; (2) what our team did — issues resolved, commitments kept, events held, outreach; '
+    + '(3) only if COMING UP lists anything, one or two sentences starting "Coming up:". '
+    + 'Write as "our team", past tense, plain English at about a 9th–10th grade level. Refer to the project as "the project", never by its number. '
+    + 'Never name a private individual, phone number, email or street address; describe people by type or organization as the facts do. '
+    + 'Do not mention reports, documents or data that are missing. If little happened, say so in one or two sentences instead of padding. '
+    + 'No headings, bullets or markdown.';
+  return task + '\n\nFACTS:\n' + f.join('\n');
+}
+async function cuDraft() {
+  if (!_cu) return;
+  if (!_coHasKey()) return;
+  var ta = document.getElementById('cu-text'), st = document.getElementById('cu-status'), b = document.getElementById('cu-redraft');
+  if (st) { st.textContent = 'Drafting…'; st.style.color = 'var(--fog)'; }
+  if (b) b.disabled = true;
+  var my = _cu;
+  var text = await _claudeNarrative(_claudeSectionSystemPrompt(), _cuRequest(my.projId, my.since, my.today), 500);
+  if (_cu !== my) return; // the dialog was closed or reopened meanwhile
+  if (b) b.disabled = false;
+  if (!text) { if (st) { st.textContent = 'No draft came back — try again, or type the update yourself.'; st.style.color = 'var(--amber)'; } return; }
+  if (ta) ta.value = String(text).trim();
+  if (st) { st.textContent = 'Draft ready — edit anything before publishing.'; st.style.color = 'var(--green)'; }
+}
+// The same card the portal shows (client-portal.html clientUpdateCard), inline-styled.
+function _cuCardHTML(text, since, publishedOn) {
+  var paras = String(text || '').split(/\n\s*\n|\n/).map(function (t) { return t.trim(); }).filter(Boolean);
+  return '<div style="background:#fff;border-radius:10px;border-left:4px solid #1D9E75;padding:16px 18px;color:#2b3442;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif">'
+    + '<div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#1D9E75">Update from your PI team</div>'
+    + '<div style="font-size:16px;font-weight:700;color:#1a1a2e;margin:2px 0 4px">' + (since ? 'Since your ' + escHtml(_cuLongDate(since)) + ' report' : 'Project update') + '</div>'
+    + '<div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Published ' + escHtml(fmt(publishedOn)) + '</div>'
+    + paras.map(function (t) { return '<p style="margin:0 0 9px;font-size:13.5px;line-height:1.6">' + escHtml(t) + '</p>'; }).join('')
+    + '</div>';
+}
+function _cuLongDate(d) {
+  var x = new Date(String(d).slice(0, 10) + 'T00:00:00');
+  return isNaN(x) ? fmt(d) : x.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+}
+function cuPreview() {
+  if (!_cu) return;
+  var t = (document.getElementById('cu-text') || {}).value || '';
+  var el = document.getElementById('cu-preview');
+  if (!el) return;
+  el.innerHTML = t.trim() ? '<div class="cu-lbl" style="margin-top:12px">What the client will see</div>' + _cuCardHTML(t, _cu.since, _cu.today)
+    : '<div class="cu-empty" style="margin-top:10px">Nothing to preview yet.</div>';
+}
+async function _cuSave(row, okMsg) {
+  try {
+    var id = await sbAdd('client_summaries', row);
+    if (!id) throw new Error('the database did not accept it');
+    row.id = id; row.publishedAt = new Date().toISOString();
+    _syncCache['client_summaries'] = (_syncCache['client_summaries'] || []).concat([row]);
+    closeM(); _cu = null;
+    showToast(okMsg, 'success', 3000);
+    render();
+    return true;
+  } catch (e) {
+    console.error('client update save failed:', e);
+    showToast('Could not save: ' + e.message + '. (The client update needs the Nov 21 database update — see sql/2026-11-21_client_update_briefing.sql.)', 'error', 8000);
+    return false;
+  }
+}
+async function cuPublish() {
+  if (!_cu) return;
+  var t = ((document.getElementById('cu-text') || {}).value || '').trim();
+  if (!t) { showToast('Write or draft the update first.', 'warn', 3000); return; }
+  var b = document.getElementById('cu-publish'); if (b) b.disabled = true;
+  var ok = await _cuSave({ projectId: _cu.projId, kind: 'update', contentFull: t, contentRecent: null,
+    sinceDate: _cu.since || null, periodStart: _cu.since || null, periodEnd: _cu.today,
+    publishedBy: _myInitials() || getLoggedBy() || null }, 'Published to the client portal');
+  if (!ok && b) b.disabled = false;
+}
+async function cuKeep() {
+  if (!_cu) return;
+  await _cuSave({ projectId: _cu.projId, kind: 'kept', contentFull: null, contentRecent: null,
+    publishedBy: _myInitials() || getLoggedBy() || null }, 'Kept the current update');
 }
 
 // ── MODALS ────────────────────────────────────
@@ -8999,7 +9330,9 @@ function _lastClientReport(projId){
     if(d&&d>best.date) best={date:d,what:(r.reportTitle||'PI report')+(r.reportNum?' #'+r.reportNum:'')};
   });
   (DB.get('client_summaries')||[]).forEach(x=>{
-    if(String(x.projectId)!==k) return;
+    // Only a Project Status Report counts as a report; a client update or a
+    // "kept" mark is not one (Nov 2026).
+    if(String(x.projectId)!==k||(x.kind||'status')!=='status') return;
     const d=String(x.publishedAt||'').slice(0,10);
     if(d&&d>best.date) best={date:d,what:'Project Status Report'};
   });
@@ -20130,19 +20463,19 @@ async function _portalTokenFor(projId, create) {
   var k = String(projId);
   if (_portalTokenCache[k]) return _portalTokenCache[k];
   var res = await fetch(SUPA_REST + '/pi_portal_links?project_id=eq.' + encodeURIComponent(k) + '&select=token', { headers: getAuthHeaders() });
-  if (!res.ok) throw new Error('Could not read the portal link (' + res.status + ')');
+  if (!res.ok) throw new Error('Could not read the client portal link (' + res.status + ')');
   var rows = await res.json();
   if (rows.length) return (_portalTokenCache[k] = rows[0].token);
   if (!create) return null;
   var p = (DB.get('projects') || []).find(function(x){ return String(x.id) === k; }) || {};
-  if (!confirm('"' + (p.name || 'This project') + '" has no client portal link yet. Report links open through it, and anyone holding a report link can also open this project\'s portal.\n\nCreate the portal link now?')) return null;
+  if (!confirm('"' + (p.name || 'This project') + '" has no client portal link yet. Report links open through it, and anyone holding a report link can also open this project\'s portal.\n\nCreate the client portal link now?')) return null;
   var cr = await fetch(SUPA_REST + '/pi_portal_links', {
     method: 'POST', headers: Object.assign({}, getAuthHeaders(), { 'Prefer': 'return=representation' }),
     body: JSON.stringify({ project_id: Number(k) })
   });
-  if (!cr.ok) throw new Error('Could not create the portal link (' + cr.status + ')');
+  if (!cr.ok) throw new Error('Could not create the client portal link (' + cr.status + ')');
   var made = await cr.json();
-  if (!made.length) throw new Error('Could not create the portal link');
+  if (!made.length) throw new Error('Could not create the client portal link');
   return (_portalTokenCache[k] = made[0].token);
 }
 function _reportLinkLabel(rec) {
@@ -20300,7 +20633,7 @@ function _buildArchiveHTML(projF) {
       : (archives.length >= 2 && !hasKey ? '<span style="font-size:11px;color:var(--fog)">Add Claude API key in Settings to enable trend analysis</span>' : ''))
     +'</div>'
     +(function(){
-      var trends=(DB.get('client_summaries')||[]).filter(function(s){return String(s.projectId)===String(projF);})
+      var trends=(DB.get('client_summaries')||[]).filter(function(s){return String(s.projectId)===String(projF)&&(s.kind||'status')==='status';})
         .sort(function(a,b){return (b.publishedAt||'').localeCompare(a.publishedAt||'');});
       var sharedCt=archives.filter(function(r){return r.clientVisible;}).length;
       var t=trends[0];
@@ -20308,7 +20641,7 @@ function _buildArchiveHTML(projF) {
         +'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:12px;height:12px;color:var(--green);flex-shrink:0"><circle cx="12" cy="4" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="12" r="2"/><path d="M6 7.5l4-2M6 8.5l4 2"/></svg>'
         +'<span><strong style="color:var(--mist)">Client portal:</strong> '+sharedCt+' report'+(sharedCt!==1?'s':'')+' shared'
         +(t?' · trend last published '+fmt((t.publishedAt||'').slice(0,10))+(t.publishedBy?' by '+escHtml(t.publishedBy):''):' · no trend published yet')
-        +'</span></div>';
+        +'</span><button class="btn btn-sm" style="margin-left:auto" onclick="openClientUpdate(\''+projF+'\')">Client update…</button></div>';
     })()
     +'<div id="trend-result"></div>'
     +'<div style="display:flex;flex-direction:column;gap:6px">';

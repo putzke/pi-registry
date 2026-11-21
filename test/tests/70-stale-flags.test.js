@@ -28,27 +28,32 @@ module.exports = {
       await app.page.evaluate(STUB_XLSX);
 
       // ── 1. single-project export ────────────────────────────────────────
+      // The export date lives in the card's More ▾ menu (Nov 2026): "Export ·
+      // last <date>". It must show the new date straight after exporting.
       const card = (pid) => app.page.evaluate(pid => {
-        const btn = [...document.querySelectorAll('#main button')].find(b => (b.getAttribute('onclick') || '') === `exportProject('${pid}')`);
-        let el = btn; while (el && el.parentElement && el.parentElement.querySelectorAll('button[onclick^="exportProject("]').length === 1) el = el.parentElement;
-        return el ? el.textContent.replace(/\s+/g, ' ') : null;
+        const btn = [...document.querySelectorAll('#main .proj-more-btn')].find(b => (b.getAttribute('onclick') || '').includes(`'${pid}'`));
+        if (!btn) return null;
+        _pmClose(); btn.click();
+        const m = document.querySelector('.proj-more-menu');
+        const exp = m && [...m.querySelectorAll('.pm-item')].find(x => /Export/.test(x.textContent));
+        const txt = exp ? exp.textContent.replace(/\s+/g, ' ') : null;
+        _pmClose();
+        return txt;
       }, pid);
+      const today = await app.page.evaluate(() => fmt(localToday()));
       await app.page.evaluate(() => { S.view = 'projects'; render(); });
       const before = await card(P);
-      t.ok(before && !/Exported today/.test(before), 'card shows no export flag beforehand');
+      t.ok(before && /never/.test(before), 'the More menu says the project was never exported: ' + before);
       await app.page.evaluate(pid => exportProject(pid), P);
       const after = await card(P);
-      t.ok(after && /Exported today/.test(after), 'the card says "Exported today" straight after exporting, no refresh');
+      t.ok(after && after.includes('last ' + today), 'straight after exporting it shows today, no refresh: ' + after);
 
       // ── 1b. portfolio export ────────────────────────────────────────────
       const others = await app.page.evaluate(pid => DB.get('projects').filter(p => String(p.id) !== pid && p.status !== 'Archived').map(p => String(p.id)), P);
       await app.page.evaluate(() => { S.view = 'projects'; render(); exportPortfolio(); });
-      const flagged = await app.page.evaluate(ids => ids.filter(id => {
-        const btn = [...document.querySelectorAll('#main button')].find(b => (b.getAttribute('onclick') || '') === `exportProject('${id}')`);
-        let el = btn; while (el && el.parentElement && el.parentElement.querySelectorAll('button[onclick^="exportProject("]').length === 1) el = el.parentElement;
-        return el && /Exported today/.test(el.textContent);
-      }).length, others);
-      t.ok(flagged > 0, `after a portfolio export the other cards are flagged too (${flagged})`);
+      let flagged = 0;
+      for (const id of others) { const x = await card(id); if (x && x.includes('last ' + today)) flagged++; }
+      t.ok(flagged > 0, `after a portfolio export the other projects show today too (${flagged})`);
 
       // ── 2. sidebar counts follow the data ───────────────────────────────
       const badge = () => app.page.evaluate(() => {

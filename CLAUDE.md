@@ -228,6 +228,51 @@ Overdue only (or Open), **All follow-ups** (the card counts the whole team's;
 those filters. `stopPropagation` keeps the card's own click (Interactions)
 from firing. Guarded by `test/tests/131-dashboard-overdue-link.test.js`.
 
+### Client update briefing + the Projects card cleanup (DEV, Nov 2026, Jeff)
+A short, staff-approved note at the top of the client portal Overview: what is
+new since the last PI report the client received. Designed with Jeff from
+mockups (Nov 21). `sql/2026-11-21_client_update_briefing.sql` adds
+`pi_client_summaries.kind` ('status' = Project Status Report, every older row;
+'update' = a published client update; 'kept' = "Keep the current one") and
+`since_date`. Applied to DEV; **paste on LIVE before the code release**.
+- **One rule for "Update due"** (`_cuState`, next to `revokePortalLink`):
+  never within `CU_QUIET_DAYS` (7) of the last shared report / published update
+  / keep; after that due on something significant (issue raised or resolved,
+  commitment fulfilled or newly past due, event held, `CU_CONTACTS_SIGNIFICANT`
+  (5)+ new public contacts); after `CU_ANY_DAYS` (21) due on anything; never
+  with nothing new; Active projects only. Counts external + anonymous contacts
+  only (`_intIsExternal`).
+- **Review dialog** `openClientUpdate(projId)` — from the card's amber
+  "Update due · N changes" (or green "Update current"), More → Review client
+  update, the dashboard card's "· client update due", and Reports → Archive
+  ("Client update…"). Left: counted facts since the last shared report
+  (`_cuCounts`, `_cuFactLines`) + Coming up (`_cuComing`, 30 days). Right: the
+  draft, made automatically on open when a key is saved (`cuDraft` →
+  `_claudeNarrative(_claudeSectionSystemPrompt(), _cuRequest(...))`: ~150
+  words, max 170, 2–3 paragraphs, counts authoritative, people by type via
+  `_coWho`, never a name), editable; Preview as client (`_cuCardHTML`); Keep
+  the current one (`cuKeep`, a 'kept' row); Publish (`cuPublish`, an 'update'
+  row). The AI never publishes; opening the portal never calls the AI.
+- **Portal** (`client-portal.html`): `_fetchSummaries` asks for `kind,
+  since_date` and falls back to the old column list if the migration hasn't
+  run. `clientUpdateCard()` replaces the "Latest PI report" strip on the
+  Overview (it carries the latest report and its buttons); a report shared
+  AFTER the update supersedes it. Project PI Reports shows status rows only.
+  `_lastClientReport` and the archive's trend line count status rows only.
+- **Projects view card cleanup:** stats line without champ./opp.; one Client
+  strip (`_cuStripHTML`: "Client portal link on/No client portal link", last
+  report date, the update button); one row Contacts · Interactions · Follow-ups
+  · Deliverables · Edit · **More ▾** (highlighted, count badge) →
+  `toggleProjMore`: two columns, Project tools (Map, Groups, Matrix, Export ·
+  last date) | Client (Review client update, Copy / Turn off client portal link,
+  or Create one). The old "✓ Active" / ✕ portal buttons and the export badge
+  are gone from the card. `_portalLinks` (filled by `updatePortalButtons`) feeds
+  the menu. **"Client portal link"** wording everywhere the app said "portal
+  link" (Revoke → Turn off).
+- Guarded by `test/tests/134-client-update-briefing.test.js` (fails on the old
+  code); tests 70 and 73 now read the export date from More and find cards by
+  Edit.
+
 ### A freshly logged interaction could open its own Edit modal blank (Aug 2026)
 `saveQuickLog()` and `saveInt()` push a new row into the cache under a
 **temporary local id** (`DB.uid()`, prefixed `tmp_`) before the real Supabase

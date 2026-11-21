@@ -105,7 +105,7 @@ module.exports = {
       t.ok(await app.page.evaluate(() => /Lead · Jeff Putzke/.test(document.getElementById('dash-proj-cards').textContent)), 'the card names the lead');
 
       await app.page.evaluate(() => { S.view = 'projects'; S.projTab = 'active'; render(); });
-      const projCards = () => app.page.evaluate(() => [...document.querySelectorAll('#main button')].filter(b => /^exportProject\(/.test(b.getAttribute('onclick') || '')).map(b => b.getAttribute('onclick').match(/'([^']+)'/)[1]));
+      const projCards = () => app.page.evaluate(() => [...document.querySelectorAll('#main button')].filter(b => /^openProjModal\('/.test(b.getAttribute('onclick') || '')).map(b => b.getAttribute('onclick').match(/'([^']+)'/)[1]));
       t.eq(await projCards(), [A], 'the Projects view is scoped the same way');
       await app.page.evaluate(() => setProjScope('all'));
       t.ok((await projCards()).length === projs.length, 'All shows every active project');

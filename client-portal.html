@@ -106,6 +106,19 @@
     .section-header h2 { font-size: 20px; font-weight: 700; color: #111827; }
     .section-header p  { font-size: 13px; color: #6b7280; margin-top: 4px; }
 
+    /* Client update card (Nov 2026) */
+    .cu-card { background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,0.06); border-left:4px solid #1D9E75; margin-bottom:20px; }
+    .cu-hd { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:baseline; padding:18px 22px 4px; }
+    .cu-eyebrow { font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#1D9E75; }
+    .cu-hd h3 { font-size:17px; font-weight:700; color:#1a1a2e; margin-top:2px; }
+    .cu-when { font-size:12px; color:#9ca3af; white-space:nowrap; }
+    .cu-body { padding:6px 22px 6px; max-width:72ch; }
+    .cu-body p { font-size:14px; line-height:1.65; color:#2b3442; margin-bottom:10px; }
+    .cu-foot { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; padding:12px 22px; border-top:1px solid #e5e7eb; background:#fafbfd; border-radius:0 0 10px 10px; }
+    .cu-lr { font-size:12.5px; color:#6b7280; }
+    .cu-lr b { color:#374151; }
+    .cu-foot .lr-actions { display:flex; gap:8px; flex-wrap:wrap; }
+
     /* ── Project banner ───────────────────────────────────────────────── */
     .proj-banner { background: white; border-radius: 10px; padding: 20px 24px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); border-left: 4px solid #3b5bdb; }
     .proj-banner h1 { font-size: 19px; font-weight: 700; margin-bottom: 10px; }
@@ -670,6 +683,17 @@ function anonHdrs() {
   if (_portalToken) h['x-portal-token'] = _portalToken;
   return h;
 }
+// Client summaries: the Project Status Report (kind 'status'), client updates
+// (kind 'update') and staff "keep" marks (kind 'kept', never shown). The kind
+// and since_date columns arrive with sql/2026-11-21_client_update_briefing.sql;
+// until that has run, fall back to the old column list (every row a status).
+async function _fetchSummaries(filter) {
+  const cols = 'id,project_id,content_recent,content_full,period_start,period_end,published_at,published_by';
+  try { return await sbFetch(`pi_client_summaries?${filter}&select=${cols},kind,since_date&order=published_at.desc`); }
+  catch (_) { return sbFetch(`pi_client_summaries?${filter}&select=${cols}&order=published_at.desc`); }
+}
+function _sumKind(s) { return (s && s.kind) || 'status'; }
+
 async function sbFetch(path) {
   const headers = _tokenMode ? anonHdrs() : authHdrs();
   const res = await fetch(`${SUPA_URL}/rest/v1/${path}`, { headers });
@@ -691,7 +715,7 @@ async function bootApp() {
     const [projects, deliverables, clientSummaries, sharedReports] = await Promise.all([
       sbFetch(`pi_projects?id=in.(${ids})&select=id,name,pid,client,phase,status,start_date,end_date,nepa_classification,nepa_stage&order=name.asc`),
       sbFetch(`pi_deliverables?project_id=in.(${ids})&select=id,project_id,title,deliverable_type,scope_type,freq,status,progress,contracted_qty,delivered_count,due_date,milestone_start,milestone_end&order=due_date.asc.nullslast`),
-      sbFetch(`pi_client_summaries?project_id=in.(${ids})&select=id,project_id,content_recent,content_full,period_start,period_end,published_at,published_by&order=published_at.desc`),
+      _fetchSummaries(`project_id=in.(${ids})`),
       sbFetch(`pi_report_archive?project_id=in.(${ids})&client_visible=eq.true&select=id,project_id,report_num,report_title,report_subtitle,period_start,period_end,overall_summary,sections,snapshot,archived_at,docx_path,docx_uploaded_at&order=archived_at.desc`)
     ]);
     if (!projects.length) {
@@ -731,7 +755,7 @@ async function bootFromToken(token, reportId) {
     const [projects, deliverables, clientSummaries, sharedReports] = await Promise.all([
       sbFetch(`pi_projects?id=eq.${projId}&select=id,name,pid,client,phase,status,start_date,end_date,nepa_classification,nepa_stage`),
       sbFetch(`pi_deliverables?project_id=eq.${projId}&select=id,project_id,title,deliverable_type,scope_type,freq,status,progress,contracted_qty,delivered_count,due_date,milestone_start,milestone_end&order=due_date.asc.nullslast`),
-      sbFetch(`pi_client_summaries?project_id=eq.${projId}&select=id,project_id,content_recent,content_full,period_start,period_end,published_at,published_by&order=published_at.desc`),
+      _fetchSummaries(`project_id=eq.${projId}`),
       sbFetch(`pi_report_archive?project_id=eq.${projId}&client_visible=eq.true&select=id,project_id,report_num,report_title,report_subtitle,period_start,period_end,overall_summary,sections,snapshot,archived_at,docx_path,docx_uploaded_at&order=archived_at.desc`)
     ]);
     if (!projects.length) {
@@ -1015,6 +1039,39 @@ function latestReportCard() {
   </div>`;
 }
 
+// ── Client update (Nov 2026) ──────────────────────────────────────────────────
+// The newest update the PI team published: what is new since the last PI
+// report. It carries the latest report's link too, so it takes the place of the
+// "Latest PI report" strip. A report shared AFTER the update supersedes it (the
+// report covers that ground), and the plain strip comes back.
+function clientUpdateCard() {
+  const u = _clientSummaries.filter(s => String(s.project_id) === String(_projId) && _sumKind(s) === 'update')
+    .sort((a,b) => (a.published_at||'') > (b.published_at||'') ? -1 : 1)[0];
+  if (!u || !String(u.content_full || '').trim()) return '';
+  const reports = _sharedReports.filter(r => String(r.project_id) === String(_projId))
+    .sort((a,b) => (a.archived_at||'') > (b.archived_at||'') ? -1 : 1);
+  const r = reports[0];
+  if (r && String(r.archived_at || '') > String(u.published_at || '')) return '';
+  const longDate = d => { const x = new Date(String(d).slice(0,10) + 'T00:00:00'); return isNaN(x) ? fmt(d) : x.toLocaleDateString('en-US', { month:'long', day:'numeric' }); };
+  const paras = String(u.content_full).split(/\n\s*\n|\n/).map(t => t.trim()).filter(Boolean)
+    .map(t => `<p>${esc(t)}</p>`).join('');
+  let foot = '';
+  if (r) {
+    const pl = (r.period_start||r.period_end) ? ` · ${fmt(r.period_start)} – ${fmt(r.period_end)}` : '';
+    const isPdf = /\.pdf$/i.test(r.docx_path || '');
+    foot = `<div class="cu-foot">
+      <span class="cu-lr">Latest PI report: <b>${esc(r.report_title||'PI Report')}${r.report_num ? ` #${esc(String(r.report_num))}` : ''}</b>${pl}</span>
+      <span class="lr-actions">${isPdf ? `<button class="lr-btn lr-primary" onclick="openSharedReportPdf('${r.id}')">Open latest report (PDF)</button>` : ''}<button class="lr-btn" onclick="setView('summary')">All PI reports (${reports.length}) &rarr;</button></span>
+    </div>`;
+  }
+  return `<section class="cu-card" aria-label="Update from your PI team">
+    <div class="cu-hd"><div><div class="cu-eyebrow">Update from your PI team</div>
+      <h3>${u.since_date ? `Since your ${esc(longDate(u.since_date))} report` : 'Project update'}</h3></div>
+      <div class="cu-when">Published ${fmt(String(u.published_at||'').slice(0,10))}</div></div>
+    <div class="cu-body">${paras}</div>${foot}
+  </section>`;
+}
+
 // ── A link to ONE report (Oct 2026) ───────────────────────────────────────────
 // client-portal.html?token=…&report=<archive id> — what "Copy client link" on a
 // desktop archive card produces, to paste into an email. Opens that report's
@@ -1088,7 +1145,7 @@ async function renderOverview() {
 
   setContent(`${projCardsGrid()}${projBanner()}
     <div id="ov-contact"></div>
-    ${latestReportCard()}
+    ${clientUpdateCard() || latestReportCard()}
     <div id="ov-attention"></div>
     <div class="stat-row">
       <div class="stat-tile stat-blue">
@@ -1879,7 +1936,7 @@ function progCell(d) {
 
 // ── Project PI Reports (shared reports first, then the status update + history) ──
 function renderSummary() {
-  const trends = _clientSummaries.filter(s => String(s.project_id) === String(_projId))
+  const trends = _clientSummaries.filter(s => String(s.project_id) === String(_projId) && _sumKind(s) === 'status')
     .sort((a,b) => (a.published_at||'') > (b.published_at||'') ? -1 : 1);
   const current = trends[0];
   const reports = _sharedReports.filter(r => String(r.project_id) === String(_projId))

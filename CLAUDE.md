@@ -484,6 +484,13 @@ first time a fetched project row carries a `lead` key — so a save never 400s).
   (`_lastClientReport` — shared PI report or status report, the dashboard
   card's "Last report" date). Banner
   lists active projects with no lead.
+- **On hold projects are not "No report 30+ days" (DEV, Nov 2026, Jeff).**
+  A paused project isn't expected to report. `_teamWorkload` sets them aside
+  (`r.held`); the column counts Active projects only ("1 of 1" + a grey
+  "1 on hold" line, or just "On hold" when that's all the person leads). The
+  On hold project's button is dashed, never amber, and reads "· on hold".
+  The dashboard card's "Last report" chip is unchanged. Guarded by
+  `test/tests/133-team-on-hold-not-stale.test.js` (fails on the old code).
 - The test REST shim's RPC now passes request headers as `request.headers`
   and returns rows for set-returning functions, as PostgREST does.
 - Guarded by `test/tests/74-lead-defaults-and-team-view.test.js` (31 checks,

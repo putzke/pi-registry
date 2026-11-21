@@ -9012,13 +9012,16 @@ function _teamWorkload(){
   const d30=new Date(now.getTime()-30*86400000).toISOString().slice(0,10);
   const rows={};
   const row=ini=>{ const k=String(ini||'').trim().toUpperCase(); if(!k) return null;
-    if(!rows[k]){ const m=_teamByIni(k); rows[k]={ini:k,member:m,projects:[],open:0,overdue:0,logged30:0,stale:[]}; }
+    if(!rows[k]){ const m=_teamByIni(k); rows[k]={ini:k,member:m,projects:[],open:0,overdue:0,logged30:0,stale:[],held:0}; }
     return rows[k]; };
   _team(true).forEach(m=>row(m.initials));
   projs.forEach(p=>{ const r=row(p.lead); if(!r) return;
     const lp=_lastClientReport(p.id).date;
     const age=lp?Math.floor((new Date(today+'T00:00:00')-new Date(lp+'T00:00:00'))/86400000):null;
     r.projects.push({p,lastPub:lp,age});
+    // On hold projects are paused: no report is expected, so they are not
+    // counted in "No report 30+ days" (Jeff, Nov 2026) — named "on hold" instead.
+    if(p.status==='On hold'){ r.held++; return; }
     if(age===null||age>=TEAM_STALE_DAYS) r.stale.push({p,age}); });
   ints.forEach(i=>{
     if(i.followUp&&!i.followUpDone){ const r=row(_fuOwner(i)); if(r){ r.open++; if(i.followUpDue&&i.followUpDue<today) r.overdue++; } }
@@ -9032,13 +9035,17 @@ function renderTeam(el){
   const {rows,noLead}=_teamWorkload();
   const me=_myInitials();
   const chip=x=>{
-    const tip=x.lastPub?'Last report to the client '+fmt(x.lastPub)+' ('+x.age+' days ago)':'No report shared with the client yet';
-    const amber=x.age===null||x.age>=TEAM_STALE_DAYS;
-    return `<button class="btn btn-sm" title="${escHtml(x.p.name+' — '+tip+'. Click to edit the project (PI Lead).')}" onclick="openProjModal('${escHtml(x.p.id)}')" style="margin:2px 4px 2px 0;font-size:11px;${amber?'border-color:rgba(232,160,32,.45);':''}">${escHtml(x.p.pid||'')} ${escHtml(String(x.p.name||'').slice(0,28))}</button>`;
+    const held=x.p.status==='On hold';
+    const tip=(held?'On hold — not counted in No report 30+ days. ':'')+(x.lastPub?'Last report to the client '+fmt(x.lastPub)+' ('+x.age+' days ago)':'No report shared with the client yet');
+    const amber=!held&&(x.age===null||x.age>=TEAM_STALE_DAYS);
+    return `<button class="btn btn-sm" title="${escHtml(x.p.name+' — '+tip+'. Click to edit the project (PI Lead).')}" onclick="openProjModal('${escHtml(x.p.id)}')" style="margin:2px 4px 2px 0;font-size:11px;${amber?'border-color:rgba(232,160,32,.45);':''}${held?'border-style:dashed;opacity:.75;':''}">${escHtml(x.p.pid||'')} ${escHtml(String(x.p.name||'').slice(0,28))}${held?' <span class="team-held-tag" style="font-size:10px;color:var(--fog)">· on hold</span>':''}</button>`;
   };
   const body=rows.map(r=>{
     const m=r.member, flag=!m?'<span style="color:var(--amber);font-size:11px"> · not on the team list</span>':m.active===false?'<span style="color:var(--amber);font-size:11px"> · inactive</span>':'';
-    const stale=r.projects.length?(r.stale.length?`<span style="color:var(--amber)">${r.stale.length} of ${r.projects.length}</span>`:`<span style="color:var(--green)">0 of ${r.projects.length}</span>`):'<span style="opacity:.5">—</span>';
+    const nAct=r.projects.length-r.held;
+    const heldNote=r.held?`<div class="team-held" style="font-size:11px;color:var(--fog)">${r.held} on hold</div>`:'';
+    const stale=nAct?((r.stale.length?`<span style="color:var(--amber)">${r.stale.length} of ${nAct}</span>`:`<span style="color:var(--green)">0 of ${nAct}</span>`)+heldNote)
+      :r.held?`<span class="team-held" style="font-size:11px;color:var(--fog)">On hold</span>`:'<span style="opacity:.5">—</span>';
     return `<tr class="team-row" data-ini="${escHtml(r.ini)}" style="border-top:1px solid var(--border);${r.ini===me?'background:rgba(74,155,232,.06)':''}">
       <td style="padding:10px 8px;vertical-align:top;min-width:150px"><div style="color:var(--white);font-weight:600">${escHtml(m?m.name:r.ini)}${flag}</div><div style="font-size:11px;color:var(--fog)">${escHtml(r.ini)}${m&&m.title?' · '+escHtml(m.title):''}</div></td>
       <td style="padding:10px 8px;vertical-align:top;text-align:center;font-size:16px;font-weight:700;color:var(--white)">${r.projects.length}</td>
@@ -9060,7 +9067,7 @@ function renderTeam(el){
         <th style="padding:6px 8px;text-align:center">Open follow-ups</th><th style="padding:6px 8px;text-align:center">Overdue</th>
         <th style="padding:6px 8px;text-align:center">Logged · 30 days</th><th style="padding:6px 8px;text-align:center">No report ${TEAM_STALE_DAYS}+ days</th></tr></thead>
       <tbody>${body}</tbody></table></div>`:`<div style="color:var(--fog);font-size:13px;padding:40px;text-align:center">No one on the team list yet. <a href="#" onclick="setView('settings');return false" style="color:var(--sky-lt)">Add your team in Settings</a>.</div>`}
-    <div style="font-size:11px;color:var(--fog);margin-top:12px;line-height:1.5">Projects counted are Active and On hold. Follow-ups belong to whoever they are assigned to, or whoever logged them when unassigned — the same rule as the Follow-ups page. Amber project buttons have had no report reach the client (a PI report shared to the portal, or a Project Status Report) in ${TEAM_STALE_DAYS} days, or ever.</div>
+    <div style="font-size:11px;color:var(--fog);margin-top:12px;line-height:1.5">Projects counted are Active and On hold; "No report 30+ days" counts Active projects only (On hold ones are paused and marked "on hold"). Follow-ups belong to whoever they are assigned to, or whoever logged them when unassigned — the same rule as the Follow-ups page. Amber project buttons have had no report reach the client (a PI report shared to the portal, or a Project Status Report) in ${TEAM_STALE_DAYS} days, or ever.</div>
   </div></div>`;
 }
 

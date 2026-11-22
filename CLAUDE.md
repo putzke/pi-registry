@@ -303,6 +303,10 @@ dropped as overkill). Code next to `renderReports` (`RPT_GROUPS`,
   (`S.pfQuick`: mine / overdue / issues / stale); search `S.pfQ`; Show
   Active & on hold (default) / Complete / All. Cross-project reports moved into
   one menu. UDOT regions stay separate groups (Jeff).
+- **The project select always lists the project in scope** (even Complete),
+  and its empty option reads "All projects — portfolio". Seen live on SR-201
+  (Complete): the select read "— Select project —" over the project's cards,
+  and picking it fired no change, so the portfolio was unreachable.
 - **Card buttons keep your place** (`_rptRedraw`): Insight, ＋ Package, the
   period switch and the internal toggle redraw without jumping to the top, and
   an opened Insight panel is scrolled into view (Jeff: bottom-row panels opened

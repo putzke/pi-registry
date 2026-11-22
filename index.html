@@ -12708,9 +12708,13 @@ function renderReports(el){
   }
 
   // Build project selector options
-  var projOpts='<option value="">— Select project —</option>';
-  projs.filter(function(p){return p.status==='Active'||p.status==='On hold'}).forEach(function(p){
-    projOpts+='<option value="'+p.id+'"'+(p.id===projF?' selected':'')+'>'+p.pid+' — '+p.name+'</option>';
+  // "All projects" opens the portfolio. The project in scope is always listed,
+  // even when Complete — otherwise the select reads "All projects" while a
+  // project is on screen, and picking it changes nothing (Jeff, Nov 2026).
+  var projOpts='<option value="">All projects — portfolio</option>';
+  projs.filter(function(p){return p.status==='Active'||p.status==='On hold'||String(p.id)===String(projF)}).forEach(function(p){
+    var st=(p.status==='Active'||p.status==='On hold')?'':' ('+escHtml(p.status||'no status')+')';
+    projOpts+='<option value="'+p.id+'"'+(String(p.id)===String(projF)?' selected':'')+'>'+escHtml(p.pid+' — '+p.name)+st+'</option>';
   });
 
   // Build distribution group checkboxes

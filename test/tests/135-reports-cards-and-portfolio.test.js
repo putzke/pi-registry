@@ -119,6 +119,20 @@ module.exports = {
         out.dbg = groups(); const row = [...document.querySelectorAll('.pf-row')][0]; if (row) { row.click(); out.opened = S.projectFilter; }
         return out;
       });
+      // A Complete project in scope: the select shows it, and "All projects"
+      // opens the portfolio (Jeff: the select read "Select project" over a
+      // Complete project, so the portfolio could not be reached).
+      const cp = await app.page.evaluate(() => {
+        S.projectFilter = '904'; render();
+        const sel = document.getElementById('rpt-proj');
+        const out = { val: sel.value, first: sel.options[0].textContent };
+        sel.value = ''; sel.dispatchEvent(new Event('change'));
+        out.portfolio = !!document.querySelector('.pf-group');
+        return out;
+      });
+      t.eq(cp.val, '904', 'the select shows a Complete project that is in scope');
+      t.ok(/All projects/.test(cp.first), 'first option reads All projects');
+      t.ok(cp.portfolio, 'choosing All projects opens the portfolio');
       t.ok(!pf.oldCards, 'old Portfolio Overview cards replaced');
       t.eq(pf.start, [{ k: 'Client A', rows: 2, flag: '1 overdue' }, { k: 'Client B', rows: 0, flag: '' }],
         'grouped by client; flagged group open, quiet group collapsed; Complete hidden');

@@ -11,6 +11,12 @@
 module.exports = {
   name: 'client update briefing — due rule, project card, review + publish, portal card',
   async run({ t }) {
+    // The update text uses the card's full width (Jeff, Nov 2026: a 72ch cap
+    // left half the card empty on a wide screen).
+    {
+      const css = require('fs').readFileSync(require('path').join(__dirname, '..', '..', 'client-portal.html'), 'utf8').match(/\.cu-body \{[^}]*\}/);
+      t.ok(css && !/max-width/.test(css[0]), 'portal update text is not capped in width');
+    }
     t.seed();
     const [proj] = await t.sql(`select id, name from pi_projects where pid='25-LC-400N'`);
     const P = String(proj.id);

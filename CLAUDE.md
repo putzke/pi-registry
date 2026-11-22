@@ -269,6 +269,8 @@ mockups (Nov 21). `sql/2026-11-21_client_update_briefing.sql` adds
   are gone from the card. `_portalLinks` (filled by `updatePortalButtons`) feeds
   the menu. **"Client portal link"** wording everywhere the app said "portal
   link" (Revoke → Turn off).
+- The update text fills the card's width (`.cu-body` has no `max-width`; a
+  72ch cap left half the card empty on a wide screen — Jeff, Nov 2026).
 - Guarded by `test/tests/134-client-update-briefing.test.js` (fails on the old
   code); tests 70 and 73 now read the export date from More and find cards by
   Edit.

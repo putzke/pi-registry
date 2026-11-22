@@ -450,6 +450,11 @@ report on pace whose contract-window date had passed). Now, next to
   rule as `devProgress()` (Overview tile, project cards, health card).
 - Guarded by `test/tests/101-deliverable-progress-rule.test.js` (fails on the
   old code).
+- **"Ongoing · no set number" = how many ITEMS have no contracted number**
+  (Jeff, Nov 2026): the desktop tile showed the sum of their delivered counts
+  (0 on SR-154) while the portal said "5 ongoing" (items). Both count items
+  now; the tooltip lists each item's delivered count. The portal's Schedule
+  column reads "3 contracted", not "3 issues" (it called a registry an issue).
 - **An item's OWN % is never capped (DEV, Nov 2026, Jeff).** Reported live on
   3600 West: door hangers 8 of 1 read "8 (100%)" in the Deliverable / scope
   status quick report while the Deliverables view read 800% "+7 over".

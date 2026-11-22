@@ -6648,7 +6648,7 @@ function renderDelScope(pF){
         <div class="scope-stat"><b style="color:var(--amber)">${inprog}</b><span style="font-size:12px;color:var(--slate)">in progress</span></div>
         <div class="scope-stat"><b style="color:var(--red)">${cancelled}</b><span style="font-size:12px;color:var(--slate)">cancelled</span></div>
         <div class="scope-stat" title="Each item counted up to its contracted number; items with no set number are not included"><b>${_g.delivered}/${_g.contracted}</b><span style="font-size:12px;color:var(--slate)">delivered vs contracted</span></div>
-        ${_g.open.length?`<div class="scope-stat" title="${escHtml(_g.open.map(x=>(x.deliveredCount||0)+' '+(x.title||x.type)).join(', '))}"><b>${_g.openDelivered}</b><span style="font-size:12px;color:var(--slate)">ongoing · no set number</span></div>`:''}
+        ${_g.open.length?`<div class="scope-stat" title="${escHtml(_g.open.map(x=>(x.title||x.type)+': '+(x.deliveredCount||0)+' delivered').join(', '))}"><b>${_g.open.length}</b><span style="font-size:12px;color:var(--slate)">ongoing · no set number</span></div>`:''}
       </div>
       ${dels.length===0?`<div style="text-align:center;padding:12px;color:var(--fog);font-size:13px">No deliverables yet. <button class="btn btn-sm btn-primary" style="margin-left:8px" onclick="openTplApply('${proj.id}')">Apply template</button></div>`:`
       <div style="overflow-x:auto"><table class="dtable">
@@ -16773,7 +16773,7 @@ function generateReport(type, opts){
       +'<div class="scope-stat"><b style="color:var(--sky-lt)">'+inprog+'</b><span style="font-size:12px;color:var(--slate)">In progress</span></div>'
       +'<div class="scope-stat"><b>'+_g.delivered+'/'+_g.contracted+(_g.pct!==null?' ('+_g.pct+'%)':'')+'</b><span style="font-size:12px;color:var(--slate)">Delivered vs contracted</span></div>'
       +(_g.over.length?'<div class="scope-stat"><b style="color:var(--amber)">+'+_g.over.reduce(function(n,d){return n+_delOver(d)},0)+'</b><span style="font-size:12px;color:var(--slate)">Beyond contract · '+_g.over.length+' item'+(_g.over.length!==1?'s':'')+'</span></div>':'')
-      +(_g.open.length?'<div class="scope-stat"><b>'+_g.openDelivered+'</b><span style="font-size:12px;color:var(--slate)">Ongoing · no set number</span></div>':'')+'</div>'
+      +(_g.open.length?'<div class="scope-stat"><b>'+_g.open.length+'</b><span style="font-size:12px;color:var(--slate)">Ongoing · no set number</span></div>':'')+'</div>'
       // Set column widths (Jeff, Nov 2026): the numbers and the date need little
       // room, so Type gets more and its badge stops wrapping. The report frame
       // uses table-layout:fixed, which otherwise splits the width evenly.

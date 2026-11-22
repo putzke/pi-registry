@@ -1901,7 +1901,7 @@ function devSchedule(d) {
   }
   if (kind === 'fixed') {
     const n = parseInt(d.contracted_qty, 10);
-    if (n > 0) return `${n} ${n === 1 ? 'issue' : 'issues'} <span class="sched-note">contracted</span>`;
+    if (n > 0) return `${n} <span class="sched-note">contracted</span>`;
   }
   if (d.due_date) return fmt(d.due_date);
   const me = String(d.milestone_end || '').trim();

@@ -142,7 +142,7 @@ module.exports = {
            'and its window verbatim — milestone_end is TEXT, and fmt() would have '
            + 'rendered it as an em dash and lost it');
       const fix = find('Construction update newsletter');
-      t.ok(fix && /3 issues/.test(fix[4]), `a fixed one shows its contracted count ("${fix && fix[4]}")`);
+      t.ok(fix && /^3\s*contracted/.test(fix[4].trim()), `a fixed one shows its contracted count ("${fix && fix[4]}")`);
       const mil = find('Pre-construction notice flyer');
       t.ok(mil && /\d{4}/.test(mil[4]), `a milestone still shows its date ("${mil && mil[4]}")`);
 

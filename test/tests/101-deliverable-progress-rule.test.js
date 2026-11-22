@@ -64,10 +64,14 @@ module.exports = {
       t.ok(/<b>11\/13<\/b>/.test(r.header), 'desktop header shows 11/13 delivered vs contracted');
       t.ok(/>85%</.test(r.header), 'desktop header bar reads 85%');
       t.ok(!/>100%</.test(r.header), 'desktop header no longer reads 100%');
+      // The "ongoing" tile counts ITEMS with no set number, as the portal and
+      // the AI facts do (Jeff, Nov 2026: desktop said 0, portal said 5).
+      t.ok(/<b>3<\/b><span[^>]*>ongoing · no set number/.test(r.header), 'desktop ongoing tile counts the 3 open-ended items');
     } finally { await app.close(); }
 
     // the client portal reads the same rule
     const src = fs.readFileSync(path.join(__dirname, '../../client-portal.html'), 'utf8');
+    t.ok(!/'issue' : 'issues'/.test(src), 'portal schedule no longer calls every contracted item an "issue"');
     const fn = src.match(/function devProgress\(devs\) \{[\s\S]*?\n\}/);
     t.ok(!!fn, 'portal has devProgress');
     const devProgress = new Function('const isComplete = s => /complete/i.test(s || "");' + fn[0] + '; return devProgress;')();

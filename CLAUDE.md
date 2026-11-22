@@ -503,6 +503,9 @@ field lives in `pi_projects.nepa_checklist` (jsonb).
   Reports card, PI summary, NEPA report, PI report section, snapshot, AI facts).
   `saveProj` keeps checked, started and N/A items when the classification
   changes. Start dates and owners stay internal (no report prints them).
+- The header bar shows the % done beside it (`.nepa-pct`), the same figure as
+  the summary line; bar segments are done and in progress out of the items that
+  apply (N/A left out, as in the %).
 - Guarded by `test/tests/136-nepa-checklist-compact.test.js`.
 
 ### Flags that updated only after a refresh (Oct 2026)

@@ -54,6 +54,9 @@ module.exports = {
         const after = _nepaLive(DB.get('projects').find(p => String(p.id) === P).nepaChecklist).length;
         out.naDrop = before - after;
         out.summary = panel().querySelector('.nepa-summary').textContent;
+        const lv = _nepaLive(DB.get('projects').find(p => String(p.id) === P).nepaChecklist);
+        out.pct = panel().querySelector('.nepa-pct').textContent; out.pctWant = Math.round(lv.filter(x => x.checked).length / lv.length * 100) + '%';
+        out.pctInSummary = out.summary.includes('(' + out.pct + ')');
         // Group not applicable, then back.
         nepaGroup(P, 'Comment Resolution'); nepaGroupNa(P);
         out.groupNa = (DB.get('projects').find(p => String(p.id) === P).nepaChecklist).filter(x => x.group === 'Comment Resolution').every(x => x.na);
@@ -87,6 +90,8 @@ module.exports = {
       t.ok(r.took, 'a finished item shows how long it took');
       t.eq(r.naDrop, 1, 'not applicable leaves the count');
       t.ok(/1 not applicable/.test(r.summary), 'summary counts not applicable: ' + r.summary);
+      t.eq(r.pct, r.pctWant, 'the bar shows the % done, not applicable left out');
+      t.ok(r.pctInSummary, 'bar % matches the summary line');
       t.ok(r.groupNa && r.groupBack, 'a whole group can be not applicable and back');
       t.eq(r.untick, 'progress', 'unticking a started item returns it to In progress');
       t.eq(r.cardBig, r.cardWant, 'Reports card % ignores not applicable items');

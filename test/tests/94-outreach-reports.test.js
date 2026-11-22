@@ -46,7 +46,7 @@ module.exports = {
       // ── quick report ──
       const qr = await P_.evaluate((p) => {
         S.view = 'reports'; S.rptTab = 'reports'; S.projectFilter = p; render();
-        const card = [...document.querySelectorAll('#main [onclick]')].some((e) => /generateReport\('outreach-log'\)/.test(e.getAttribute('onclick')));
+        const card = !!document.querySelector('#main .rpt-card[data-rid="outreach-log"] .rpt-open');
         generateReport('outreach-log');
         const f = document.getElementById('inline-rpt-frame');
         return { card, html: f ? f.srcdoc : '', ai: !!document.getElementById('qr-ai-btn') };

@@ -481,6 +481,14 @@ select optgroup{background:var(--navy-mid);color:var(--sky-lt);font-weight:700;f
 .cu-btns{display:flex;gap:6px;flex-wrap:wrap}
 .cu-foot-note{font-size:12px;color:var(--fog);margin-right:auto}
 @media (max-width:760px){.cu-grid{grid-template-columns:1fr}}
+.rpt-grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.rpt-card:hover{border-color:rgba(74,155,232,.55)!important}
+.rpt-ins-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr);gap:22px}
+.rpt-ins-grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:22px}
+.pf-tiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.pf-row:hover{background:#1b3556}
+@media (max-width:1200px){.rpt-grid4{grid-template-columns:repeat(2,minmax(0,1fr))}.rpt-ins-grid,.rpt-ins-grid2{grid-template-columns:minmax(0,1fr)}.pf-tiles{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:640px){.rpt-grid4{grid-template-columns:minmax(0,1fr)}.pf-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 <!-- SheetJS loaded on demand for Excel export -->
 <script>/* JSZip 3.10.1 - embedded for offline use */
@@ -12087,6 +12095,463 @@ function exportIssuesPdf(opts){
   _openRptPopup(bodyHtml,'Issues Tracker',issProjLabel,issDateStr,(opts&&opts.summary)||'');
 }
 
+// ── REPORTS VIEW: Quick Reports cards + portfolio (DEV, Nov 2026, Jeff) ────
+// Designed with Jeff from mockups (Nov 22). Quick Reports: no stat row; a slim
+// "Send to" strip; 12 report cards, 4 across, in three groups, each with a
+// small live picture of its data; ＋ Package on the card pre-numbers the
+// package dialog in click order; Insight ▾ opens a panel under the row (four
+// cards so far, RPT_INSIGHT_IDS). The period switch (RPT_PERIODS, remembered
+// per person in localStorage cc_rpt_period) sets the window for the
+// interaction log, comments, events and outreach pictures only — the others
+// show the project as it is now, and the printed reports are unchanged.
+// Portfolio (no project picked): one grouped list, a header row per client
+// with totals, collapsed unless a project in it has an overdue follow-up or no
+// report in LAST_REPORT_STALE_DAYS.
+var RPT_PERIODS=[['30','Last 30 days'],['90','Last 90 days'],['all','Project to date']];
+var RPT_INSIGHT_IDS=['interaction-log','followup-status','deliverable-status','comment-matrix'];
+// Validated categorical order (dark surface): blue, orange, aqua, violet, yellow.
+var RV_CAT=['#3987e5','#d95926','#199e70','#9085e9','#c98500'];
+var RV_IN='#d95926', RV_OUT='#3987e5';
+var RV_ST={red:'#e66767',amber:'#E8A020',green:'#3CC48A',blue:'#3987e5',gray:'#5D7A96'};
+var RPT_GROUPS=[
+  {title:'Engagement', sub:'Who we heard from and what is still owed to them', ids:['interaction-log','followup-status','sentiment-summary','contact-list']},
+  {title:'Public record', sub:'What the public said and what we did with it', ids:['comment-matrix','issues-report','events-log','outreach-log']},
+  {title:'Scope & compliance', sub:'What the contract and FHWA/NEPA ask us to show', ids:['deliverable-status','pi-summary','nepa-compliance','parcel-status']}
+];
+var RPT_CARD_INFO={
+  'interaction-log':{name:'Interaction log', desc:'Every contact, in date order', glyph:'✉'},
+  'followup-status':{name:'Follow-up status', desc:'Open and resolved action items', glyph:'◷'},
+  'sentiment-summary':{name:'Sentiment & engagement', desc:'Positions of external contacts', glyph:'◐'},
+  'contact-list':{name:'Stakeholder contact list', desc:'Roster with contact info', glyph:'☰'},
+  'comment-matrix':{name:'Public comment matrix', desc:'Formal comments and responses', glyph:'❝'},
+  'issues-report':{name:'Issues tracker', desc:'Issues with linked interactions', glyph:'!'},
+  'events-log':{name:'Events & outreach log', desc:'Events held and attendance', glyph:'▦'},
+  'outreach-log':{name:'Outreach log', desc:'Releases, posts, mailers, coverage', glyph:'◢'},
+  'deliverable-status':{name:'Deliverable / scope status', desc:'Contracted vs delivered', glyph:'✓'},
+  'pi-summary':{name:'PI compliance summary', desc:'FHWA/NEPA checks at a glance', glyph:'§'},
+  'nepa-compliance':{name:'NEPA compliance', desc:'Checklist by phase', glyph:'◆'},
+  'parcel-status':{name:'Right-of-way parcels', desc:'Notice and ownership coverage', glyph:'▤'}
+};
+function _rptPeriod(){ var v=''; try{ v=localStorage.getItem('cc_rpt_period')||''; }catch(e){} return RPT_PERIODS.some(function(p){return p[0]===v;})?v:'90'; }
+function setRptPeriod(v){ try{ localStorage.setItem('cc_rpt_period',v); }catch(e){} renderReports(document.getElementById('main')); }
+function _rptPeriodStart(){ var p=_rptPeriod(); return p==='all'?'':_isoAddDays(localToday(),-(Number(p)-1)); }
+function _rptRunCard(id){
+  if(id==='issues-report') return generateIssuesReport();
+  if(id==='pi-summary') return generatePISummary();
+  if(id==='nepa-compliance') return generateNepaComplianceReport();
+  if(id==='parcel-status') return generateParcelReport();
+  return generateReport(id);
+}
+function _rptPkgList(){ var p=S.rptPkg; return (p&&String(p.projId)===String(S.projectFilter))?p.ids:[]; }
+function rptPkgToggle(id){
+  var ids=_rptPkgList().slice(), i=ids.indexOf(id);
+  if(i>=0) ids.splice(i,1); else ids.push(id);
+  S.rptPkg={projId:S.projectFilter, ids:ids};
+  renderReports(document.getElementById('main'));
+}
+function rptInsight(id){ S.rptInsight=S.rptInsight===id?'':id; renderReports(document.getElementById('main')); }
+function rptSetIncInt(on){ S.rptIncInt=!!on; renderReports(document.getElementById('main')); }
+// Number the package dialog from the cards' ＋ Package picks, in click order.
+function _rptPkgPrefill(){
+  var ids=_rptPkgList(); if(!ids.length) return;
+  document.querySelectorAll('.rpt-seq-sel').forEach(function(sel){
+    var k=ids.indexOf(sel.getAttribute('data-rid')); if(k>=0) sel.value=String(k+1);
+  });
+}
+
+// ── small pictures (all inline, hex only; every mark has a title for hover) ──
+function _rvSeg(segs){
+  var t=segs.reduce(function(a,s){return a+s.n;},0);
+  var bar=t?segs.filter(function(s){return s.n>0;}).map(function(s){
+    return '<div title="'+escHtml(s.label+': '+s.n)+'" style="width:'+(s.n/t*100).toFixed(1)+'%;background:'+s.c+'"></div>'; }).join(''):'';
+  return '<div style="display:flex;flex-direction:column;gap:6px">'
+    +'<div style="display:flex;gap:2px;height:8px;border-radius:4px;overflow:hidden;background:rgba(255,255,255,.06)">'+bar+'</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:3px 10px">'+segs.map(function(s){
+      return '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--slate)"><span style="width:8px;height:8px;border-radius:2px;background:'+s.c+'"></span>'+escHtml(s.label)+' <b style="color:var(--white);font-weight:600">'+s.n+'</b></span>'; }).join('')
+    +'</div></div>';
+}
+// Stacked in/out (or single) mini bars; arr = [{a,b,tip}] (b optional).
+function _rvBars(arr, h, w){
+  h=h||44; w=w||8;
+  var m=Math.max.apply(null,arr.map(function(x){return (x.a||0)+(x.b||0);}).concat([1]));
+  return '<div class="rv-bars" aria-hidden="true" style="display:flex;align-items:flex-end;gap:3px;height:'+h+'px">'+arr.map(function(x){
+    var ha=Math.round((x.a||0)/m*h), hb=Math.round((x.b||0)/m*h);
+    return '<div title="'+escHtml(x.tip||'')+'" style="display:flex;flex-direction:column;justify-content:flex-end;gap:'+(ha&&hb?2:0)+'px;width:'+w+'px;height:'+h+'px">'
+      +(ha?'<div style="height:'+ha+'px;background:'+(x.ca||RV_IN)+';border-radius:3px 3px 0 0"></div>':'')
+      +(hb?'<div style="height:'+hb+'px;background:'+(x.cb||RV_OUT)+';border-radius:'+(ha?'0':'3px 3px 0 0')+'"></div>':'')
+      +'</div>'; }).join('')+'</div>';
+}
+function _rvRing(pct, label){
+  var p=Math.max(0,Math.min(100,pct||0)), c=p>=75?RV_ST.green:p>=40?RV_ST.blue:RV_ST.amber;
+  return '<div role="img" aria-label="'+escHtml(label||p+'%')+'" style="width:52px;height:52px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;background:conic-gradient('+c+' 0 '+p+'%,rgba(255,255,255,.1) '+p+'% 100%)">'
+    +'<div style="width:40px;height:40px;border-radius:50%;background:#152B47;display:grid;place-items:center;font-size:11.5px;font-weight:700;color:var(--white)">'+escHtml(label||p+'%')+'</div></div>';
+}
+function _rvChecks(list){
+  return '<div style="display:flex;flex-direction:column;gap:4px">'+list.map(function(k){
+    var ok=k.ok===true, warn=k.ok===null;
+    var bg=ok?'rgba(60,196,138,.18)':warn?'rgba(141,175,200,.15)':'rgba(232,160,32,.2)', fg=ok?RV_ST.green:warn?'#A8C2D8':RV_ST.amber;
+    return '<div style="display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--mist)"><span style="width:16px;height:16px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:700;background:'+bg+';color:'+fg+'">'+(ok?'✓':warn?'–':'!')+'</span>'+escHtml(k.label)+'</div>'; }).join('')+'</div>';
+}
+function _rvHBars(rows, color){
+  var m=Math.max.apply(null,rows.map(function(r){return r.n;}).concat([1]));
+  return rows.map(function(r){
+    return '<div title="'+escHtml(r.label+': '+r.n)+'" style="display:grid;grid-template-columns:minmax(0,120px) minmax(0,1fr) 30px;align-items:center;gap:8px;font-size:12px">'
+      +'<span style="color:var(--mist);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(r.label)+'</span>'
+      +'<div style="height:10px;background:rgba(255,255,255,.06);border-radius:4px"><div style="height:10px;width:'+Math.round(r.n/m*100)+'%;background:'+(r.c||color||RV_OUT)+';border-radius:4px"></div></div>'
+      +'<span style="text-align:right;color:var(--white);font-variant-numeric:tabular-nums">'+r.n+'</span></div>'; }).join('');
+}
+function _rvTop(map, n){ return Object.keys(map).map(function(k){return {label:k,n:map[k]};}).sort(function(a,b){return b.n-a.n||a.label.localeCompare(b.label);}).slice(0,n); }
+
+// Week (or month, for Project to date) buckets for interactions.
+function _rvBuckets(ints, start){
+  var today=localToday(), out=[];
+  if(start){
+    // weeks ending today, oldest first
+    var nW=Math.ceil((_qrDaysBetween(start,today)+1)/7);
+    for(var w=nW-1;w>=0;w--){
+      var e=_isoAddDays(today,-7*w), s=_isoAddDays(e,-6);
+      out.push({s:s,e:e,label:fmt(s).replace(/, \d{4}$/,''),a:0,b:0});
+    }
+  } else {
+    var ds=ints.map(function(i){return String(i.date||'').slice(0,10);}).filter(Boolean).sort();
+    var first=ds[0]||today, y=Number(first.slice(0,4)), mo=Number(first.slice(5,7));
+    var ty=Number(today.slice(0,4)), tm=Number(today.slice(5,7));
+    var list=[]; while(y<ty||(y===ty&&mo<=tm)){ list.push([y,mo]); mo++; if(mo>12){mo=1;y++;} }
+    list=list.slice(-18);
+    list.forEach(function(ym){
+      var k=ym[0]+'-'+String(ym[1]).padStart(2,'0');
+      out.push({s:k+'-01',e:k+'-31',label:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][ym[1]-1]+(ym[1]===1?' '+String(ym[0]).slice(2):''),a:0,b:0});
+    });
+  }
+  ints.forEach(function(i){
+    var d=String(i.date||'').slice(0,10); if(!d) return;
+    for(var k=0;k<out.length;k++) if(d>=out[k].s&&d<=out[k].e){ if(i.direction==='Outgoing') out[k].b++; else out[k].a++; break; }
+  });
+  out.forEach(function(x){ x.tip=(start?'Week of ':'')+x.label+': '+x.a+' inbound, '+x.b+' outbound'; });
+  return out;
+}
+
+// Everything the cards and insight panels show, from the app's own rules.
+function _rptModel(projF){
+  var today=localToday(), start=_rptPeriodStart();
+  var inP=function(d){ d=String(d||'').slice(0,10); return !!d&&(!start||d>=start)&&d<=today; };
+  var proj=(DB.get('projects')||[]).find(function(p){return String(p.id)===String(projF);})||{};
+  var ps=DB.get('project_stakeholders').filter(function(x){return String(x.projectId)===String(projF);});
+  var stakes=DB.get('stakeholders');
+  var extIds=ps.filter(function(x){return (x.stakeholderRole||'External')==='External';}).map(function(x){return String(x.stakeholderId);});
+  var allInts=DB.get('interactions').filter(function(i){return String(i.projectId)===String(projF);});
+  var logInts=allInts.filter(function(i){ return S.rptIncInt||_intIsExternal(i,extIds); });
+  var perInts=logInts.filter(function(i){return inP(i.date);});
+  var fus=allInts.filter(function(i){return i.followUp;});
+  var fuSt={Overdue:0,Soon:0,Open:0,Resolved:0};
+  fus.forEach(function(i){ var k=_qrFuState(i,today).k; if(k==='Resolved')fuSt.Resolved++; else if(k==='Overdue')fuSt.Overdue++; else if(/^Due within/.test(k))fuSt.Soon++; else fuSt.Open++; });
+  var cmts=(DB.get('public_comments')||[]).filter(function(c){return String(c.projectId)===String(projF);});
+  var perCmts=cmts.filter(function(c){return inP(c.commentDate);});
+  var iss=(DB.get('issues')||[]).filter(function(x){return String(x.projectId)===String(projF);});
+  var openIss=iss.filter(function(x){return x.status!=='Resolved'&&x.status!=='Closed';});
+  var mtgs=(DB.get('meetings')||[]).filter(function(m){return String(m.projectId)===String(projF);});
+  var held=mtgs.filter(function(m){return _evIsDone(m)&&inP(m.date);}).sort(function(a,b){return String(a.date).localeCompare(String(b.date));});
+  var dels=(DB.get('deliverables')||[]).filter(function(d){return String(d.projectId)===String(projF);});
+  var coms=(DB.get('commitments')||[]).filter(function(c){return String(c.projectId)===String(projF);});
+  return {today:today,start:start,proj:proj,ps:ps,stakes:stakes,extIds:extIds,allInts:allInts,logInts:logInts,perInts:perInts,
+    fus:fus,fuSt:fuSt,cmts:cmts,perCmts:perCmts,iss:iss,openIss:openIss,mtgs:mtgs,held:held,dels:dels,coms:coms,
+    outSt:_outreachStats(projF,start,today), parc:_parcelStats(projF), dg:_delProgress(dels,today)};
+}
+function _rptCardBody(id, M){
+  var pl=RPT_PERIODS.filter(function(p){return p[0]===_rptPeriod();})[0][1].toLowerCase();
+  var big='', sub='', viz='', under='';
+  if(id==='interaction-log'){
+    var nIn=M.perInts.filter(function(i){return i.direction!=='Outgoing';}).length;
+    big=M.perInts.length; sub=nIn+' in · '+(M.perInts.length-nIn)+' out · '+pl;
+    viz=_rvBars(_rvBuckets(M.perInts,M.start).slice(-13),44,7);
+  } else if(id==='followup-status'){
+    var open=M.fuSt.Overdue+M.fuSt.Soon+M.fuSt.Open;
+    big=open+' open'; sub=M.fuSt.Overdue?M.fuSt.Overdue+' overdue':(M.fuSt.Soon?M.fuSt.Soon+' due within '+QR_SOON_DAYS+' days':'none overdue');
+    under=_rvSeg([{label:'Overdue',n:M.fuSt.Overdue,c:RV_ST.red},{label:'Due soon',n:M.fuSt.Soon,c:RV_ST.amber},{label:'Open',n:M.fuSt.Open,c:RV_ST.blue},{label:'Resolved',n:M.fuSt.Resolved,c:RV_ST.green}]);
+  } else if(id==='sentiment-summary'){
+    var ext=M.ps.filter(function(x){return (x.stakeholderRole||'External')==='External';});
+    var c=function(v){return ext.filter(function(x){return x.support===v;}).length;};
+    var ch=c('Champion'), ne=c('Neutral'), op=c('Opponent');
+    big=ext.length; sub='external contacts';
+    under=_rvSeg([{label:'Champion',n:ch,c:RV_CAT[2]},{label:'Neutral',n:ne,c:RV_ST.gray},{label:'Opponent',n:op,c:RV_CAT[1]},{label:'Not rated',n:ext.length-ch-ne-op,c:'#34506e'}]);
+  } else if(id==='contact-list'){
+    var ext2=M.ps.filter(function(x){return (x.stakeholderRole||'External')==='External';}).length;
+    big=M.ps.length; sub=ext2+' external · '+(M.ps.length-ext2)+' internal';
+    var byT={}; M.ps.forEach(function(x){ var s=M.stakes.find(function(z){return String(z.id)===String(x.stakeholderId);}); var t=(s&&s.type)||'Other'; byT[t]=(byT[t]||0)+1; });
+    var top=_rvTop(byT,3), rest=M.ps.length-top.reduce(function(a,r){return a+r.n;},0);
+    var segs=top.map(function(r,i){return {label:r.label,n:r.n,c:RV_CAT[[0,3,2][i]]};}); if(rest>0) segs.push({label:'Other',n:rest,c:RV_ST.gray});
+    under=_rvSeg(segs);
+  } else if(id==='comment-matrix'){
+    var rs=function(v){return M.perCmts.filter(function(x){return (x.responseStatus||'Pending')===v;}).length;};
+    var ans=rs('Responded'), pend=rs('Pending'), prog=rs('In progress'), nn=rs('No response needed');
+    big=M.perCmts.length; sub=ans+' answered · '+pend+' pending · '+pl;
+    under=_rvSeg([{label:'Answered',n:ans,c:RV_ST.green},{label:'In progress',n:prog,c:RV_ST.blue},{label:'Pending',n:pend,c:RV_ST.amber},{label:'No response needed',n:nn,c:RV_ST.gray}]);
+  } else if(id==='issues-report'){
+    big=M.openIss.length+' open';
+    var oldest=M.openIss.map(function(x){return x.dateRaised;}).filter(Boolean).sort()[0];
+    sub=(M.iss.length-M.openIss.length)+' resolved'+(oldest?' · oldest '+_qrDaysBetween(oldest,M.today)+' days':'');
+    under=_rvSeg([{label:'Open',n:M.openIss.filter(function(x){return x.status==='Open';}).length,c:RV_ST.red},{label:'In progress',n:M.openIss.filter(function(x){return x.status!=='Open';}).length,c:RV_ST.amber},{label:'Resolved',n:M.iss.length-M.openIss.length,c:RV_ST.green}]);
+  } else if(id==='events-log'){
+    var att=M.held.reduce(function(a,m){return a+(Number(m.attendanceCount)||0);},0);
+    big=att; sub='attended · '+M.held.length+' held · '+pl;
+    viz=M.held.length?_rvBars(M.held.slice(-10).map(function(m){return {a:Number(m.attendanceCount)||0,ca:RV_CAT[2],tip:(m.title||'Event')+' · '+fmt(m.date)+' · '+(m.attendanceCount||0)+' attended'};}),44,9):'';
+  } else if(id==='outreach-log'){
+    var st=M.outSt; big=st.total; sub='actions · '+st.campaigns.length+' campaign'+(st.campaigns.length!==1?'s':'')+' · '+pl;
+    var top2=_rvTop(st.byType,3), rest2=st.total-top2.reduce(function(a,r){return a+r.n;},0);
+    var s2=top2.map(function(r,i){return {label:r.label,n:r.n,c:RV_CAT[[0,2,3][i]]};}); if(rest2>0) s2.push({label:'Other',n:rest2,c:RV_ST.gray});
+    under=st.total?_rvSeg(s2):'';
+  } else if(id==='deliverable-status'){
+    var g=M.dg, pct=g.pct===null?g.completeShare:g.pct;
+    big=g.complete+' of '+g.total; sub='complete'+(g.pastDue.length?' · '+g.pastDue.length+' past due':'');
+    viz=g.total?_rvRing(pct,pct+'%'):'';
+  } else if(id==='pi-summary'){
+    var resp=M.cmts.filter(function(x){return x.responseStatus==='Responded'||x.responseStatus==='No response needed';}).length;
+    var lepIds=M.ps.map(function(x){return M.stakes.find(function(z){return String(z.id)===String(x.stakeholderId);});}).filter(function(s){return s&&(s.lep||_isEJ(s));}).map(function(s){return String(s.id);});
+    var lepReached=M.allInts.some(function(i){return lepIds.indexOf(String(i.stakeholderId))>=0;});
+    var late=M.coms.filter(function(c){return c.status!=='Fulfilled'&&c.status!=='Cancelled'&&c.dueDate&&c.dueDate<M.today;}).length;
+    var cl=M.proj.nepaChecklist||[];
+    var checks=[
+      {label:M.cmts.length?'Comments answered '+Math.round(resp/M.cmts.length*100)+'%':'No public comments logged', ok:M.cmts.length?resp===M.cmts.length:null},
+      {label:lepIds.length?(lepReached?'LEP / EJ contacts reached':'LEP / EJ contacts not yet contacted'):'No LEP / EJ contacts flagged', ok:lepIds.length?lepReached:null},
+      {label:late?late+' commitment'+(late!==1?'s':'')+' past due':'Commitments on time', ok:M.coms.length?!late:null},
+      {label:cl.length?'NEPA checklist '+Math.round(cl.filter(function(x){return x.checked;}).length/cl.length*100)+'%':'No NEPA checklist', ok:cl.length?cl.every(function(x){return x.checked;}):null}
+    ];
+    var rated=checks.filter(function(k){return k.ok!==null;});
+    big=rated.filter(function(k){return k.ok;}).length+' of '+rated.length; sub='checks met';
+    under=_rvChecks(checks);
+  } else if(id==='nepa-compliance'){
+    var cl2=M.proj.nepaChecklist||[], done=cl2.filter(function(x){return x.checked;}).length;
+    big=cl2.length?Math.round(done/cl2.length*100)+'%':'—'; sub=cl2.length?(cl2.length-done)+' checklist items open':'No NEPA checklist on this project';
+    under=cl2.length?_rvSeg([{label:'Done',n:done,c:RV_ST.green},{label:'Open',n:cl2.length-done,c:RV_ST.amber}]):'';
+  } else if(id==='parcel-status'){
+    var P=M.parc; big=P.total; sub=P.total?P.noticedCt+' noticed · '+P.unownedCt+' no owner':'No parcels on this project';
+    under=P.total?_rvSeg([{label:'Noticed',n:P.noticedCt,c:RV_ST.green},{label:'No notice yet',n:P.total-P.noticedCt,c:RV_ST.amber}]):'';
+  }
+  return {big:big,sub:sub,viz:viz,under:under};
+}
+function _rptCardHTML(id, M){
+  var info=RPT_CARD_INFO[id], b=_rptCardBody(id,M);
+  var open=S.rptInsight===id, pk=_rptPkgList(), inPkg=pk.indexOf(id)>=0;
+  var canPkg=PACKAGE_REPORTS.some(function(r){return r.id===id;});
+  var hasIns=RPT_INSIGHT_IDS.indexOf(id)>=0;
+  var btn='font-family:inherit;font-size:12px;border-radius:6px;padding:6px 9px;min-height:32px;cursor:pointer;white-space:nowrap;';
+  return '<article class="rpt-card" data-rid="'+id+'" style="background:#152B47;border:1px solid '+(open?'var(--sky-lt)':'rgba(255,255,255,.12)')+';box-shadow:'+(open?'0 0 0 2px rgba(74,155,232,.25)':'none')+';border-radius:12px;padding:14px 14px 10px;display:flex;flex-direction:column;gap:10px;min-width:0">'
+    +'<div style="display:flex;align-items:flex-start;gap:9px"><span aria-hidden="true" style="width:26px;height:26px;border-radius:7px;background:rgba(74,155,232,.14);color:var(--sky-lt);display:grid;place-items:center;font-size:13px;flex-shrink:0">'+info.glyph+'</span>'
+    +'<div style="min-width:0"><div style="font-size:13.5px;font-weight:600;color:var(--white)">'+info.name+'</div><div style="font-size:11.5px;color:var(--slate)">'+info.desc+'</div></div></div>'
+    +'<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:10px;min-height:52px"><div style="min-width:0">'
+    +'<div class="rpt-card-big" style="font-size:24px;font-weight:700;color:var(--white);line-height:1;font-variant-numeric:tabular-nums">'+escHtml(String(b.big))+'</div>'
+    +'<div style="font-size:11.5px;color:var(--slate);margin-top:4px">'+escHtml(b.sub)+'</div></div>'+b.viz+'</div>'
+    +b.under
+    +'<div style="display:flex;align-items:center;gap:6px;border-top:1px solid rgba(255,255,255,.08);padding-top:8px;margin-top:auto">'
+    +'<button class="rpt-open" onclick="_rptRunCard(\''+id+'\')" title="Open the '+info.name+' report" style="'+btn+'font-weight:600;color:#fff;background:var(--sky);border:0">Open</button>'
+    +(canPkg?'<button class="rpt-pkg" onclick="rptPkgToggle(\''+id+'\')" aria-pressed="'+inPkg+'" title="Add to the report package" style="'+btn+'color:'+(inPkg?RV_ST.green:'var(--slate)')+';background:transparent;border:1px solid '+(inPkg?'rgba(60,196,138,.5)':'rgba(255,255,255,.18)')+'">'+(inPkg?'✓ Package '+(pk.indexOf(id)+1):'＋ Package')+'</button>':'')
+    +(id==='contact-list'?'<button onclick="setView(\'map\')" title="Open the map" style="'+btn+'color:var(--sky-lt);background:transparent;border:0;padding:6px 4px">Map ↗</button>':'')
+    +(hasIns?'<button class="rpt-ins" onclick="rptInsight(\''+id+'\')" aria-expanded="'+open+'" style="'+btn+'margin-left:auto;font-weight:600;color:'+(open?'#fff':'#cfe5fb')+';background:'+(open?'var(--sky)':'rgba(74,155,232,.14)')+';border:1px solid '+(open?'var(--sky)':'rgba(74,155,232,.5)')+'">Insight '+(open?'▴':'▾')+'</button>':'')
+    +'</div></article>';
+}
+function _rptInsightHTML(id, M){
+  var info=RPT_CARD_INFO[id], body='', scope='';
+  var pl=RPT_PERIODS.filter(function(p){return p[0]===_rptPeriod();})[0][1];
+  var cap='font-size:12px;color:var(--mist);font-weight:600;margin-bottom:8px';
+  var th='text-align:left;color:var(--fog);font-weight:500;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.12)';
+  var td='padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.06);vertical-align:top';
+  if(id==='interaction-log'){
+    scope=pl+' · '+(S.rptIncInt?'all contacts, internal included':'external & public contacts');
+    var bk=_rvBuckets(M.perInts,M.start).slice(-18);
+    var ch={}, subj={};
+    M.perInts.forEach(function(i){ ch[i.channel||'Other']=(ch[i.channel||'Other']||0)+1; if(i.direction!=='Outgoing'){ var s=i.subject||'General'; subj[s]=(subj[s]||0)+1; } });
+    body='<div class="rpt-ins-grid">'
+      +'<figure style="margin:0"><figcaption style="'+cap+'">Contacts per '+(M.start?'week':'month')+'</figcaption>'
+      +'<div style="display:flex;gap:14px;font-size:11.5px;color:var(--slate);margin-bottom:8px"><span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:'+RV_IN+';margin-right:5px"></span>Inbound (the public)</span><span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:'+RV_OUT+';margin-right:5px"></span>Outbound (our team)</span></div>'
+      +'<div style="border-bottom:1px solid rgba(255,255,255,.16)">'+_rvBars(bk,140,Math.max(10,Math.min(28,Math.floor(560/Math.max(bk.length,1))-4)))+'</div>'
+      +'<div style="display:flex;gap:3px;margin-top:4px">'+bk.map(function(x,i){return '<span style="width:'+Math.max(10,Math.min(28,Math.floor(560/Math.max(bk.length,1))-4))+'px;font-size:9.5px;color:var(--fog);text-align:center;overflow:hidden;white-space:nowrap">'+(i%2===bk.length%2?'':x.label)+'</span>';}).join('')+'</div></figure>'
+      +'<figure style="margin:0"><figcaption style="'+cap+'">By channel</figcaption><div style="display:flex;flex-direction:column;gap:6px">'+(M.perInts.length?_rvHBars(_rvTop(ch,6),RV_OUT):'<div style="font-size:12px;color:var(--fog)">No contacts in this period.</div>')+'</div></figure>'
+      +'<figure style="margin:0"><figcaption style="'+cap+'">What the public contacted us about</figcaption><div style="display:flex;flex-direction:column;gap:6px">'+(Object.keys(subj).length?_rvHBars(_rvTop(subj,6),RV_IN):'<div style="font-size:12px;color:var(--fog)">No inbound contacts in this period.</div>')+'</div></figure>'
+      +'</div>';
+  } else if(id==='followup-status'){
+    scope='all follow-ups on the project';
+    var tiles=[['Overdue',M.fuSt.Overdue,RV_ST.red],['Due within '+QR_SOON_DAYS+' days',M.fuSt.Soon,RV_ST.amber],['Open',M.fuSt.Open,RV_ST.blue],['Resolved',M.fuSt.Resolved,RV_ST.green]];
+    var openF=M.fus.filter(function(i){return !i.followUpDone;}).sort(function(a,b){return String(a.followUpDue||'9999').localeCompare(String(b.followUpDue||'9999'));});
+    body='<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px">'+tiles.map(function(t){return '<div style="flex:1 1 140px;background:#152B47;border-radius:9px;padding:10px 12px;border-top:3px solid '+t[2]+'"><div style="font-size:22px;font-weight:700;color:var(--white)">'+t[1]+'</div><div style="font-size:11.5px;color:var(--slate)">'+t[0]+'</div></div>';}).join('')+'</div>'
+      +(openF.length?'<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;min-width:620px;font-size:12.5px"><thead><tr><th style="'+th+'">State</th><th style="'+th+'">Due</th><th style="'+th+'">Contact</th><th style="'+th+'">Action</th><th style="'+th+'">Owner</th></tr></thead><tbody>'
+        +openF.slice(0,12).map(function(i){ var s=_qrFuState(i,M.today), c=s.k==='Overdue'?RV_ST.red:/^Due within/.test(s.k)?RV_ST.amber:RV_ST.blue;
+          var sk=M.stakes.find(function(z){return String(z.id)===String(i.stakeholderId);});
+          return '<tr onclick="openEditIntModal(\''+i.id+'\')" style="cursor:pointer"><td style="'+td+';border-left:3px solid '+c+'"><span style="font-size:11px;font-weight:600;color:'+c+'">'+escHtml(s.k)+'</span></td><td style="'+td+';color:var(--white)">'+(i.followUpDue?_fmtMDY(i.followUpDue):'—')+'</td><td style="'+td+';color:var(--mist)">'+escHtml(sk?((sk.firstName||'')+' '+(sk.lastName||'')).trim()||sk.org||'Contact':(i.anonLabel||'Anonymous'))+'</td><td style="'+td+';color:var(--white)">'+escHtml(i.followUpNote||i.summary||'').slice(0,140)+'</td><td style="'+td+';color:var(--mist)">'+escHtml(_fuOwner(i)||'—')+'</td></tr>'; }).join('')
+        +'</tbody></table></div>'+(openF.length>12?'<div style="font-size:11.5px;color:var(--fog);margin-top:6px">Showing 12 of '+openF.length+' — the full list is in the report.</div>':''):'<div style="font-size:12.5px;color:var(--fog)">No open follow-ups.</div>');
+  } else if(id==='deliverable-status'){
+    scope='contract scope, as it stands today';
+    var g=M.dg;
+    body='<div style="display:flex;flex-direction:column;gap:8px">'+(M.dels.length?M.dels.map(function(d){
+        var pct=_delPct(d), over=_delOver(d), late=_delPastDue(d,M.today,M.proj);
+        var c=d.status==='Cancelled'||d.status==='On hold'?RV_ST.gray:late?RV_ST.amber:(pct!==null&&pct>=100)||d.status==='Complete'?RV_ST.green:RV_ST.blue;
+        var txt=pct===null?(d.deliveredCount||0)+' delivered · no target':(d.deliveredCount||0)+' of '+d.contractedQty+(over?' · +'+over+' over':'')+(late?' · past due':'')+(d.status==='On hold'||d.status==='Cancelled'?' · '+d.status.toLowerCase():'');
+        return '<div style="display:grid;grid-template-columns:minmax(0,240px) minmax(0,1fr) minmax(0,190px);align-items:center;gap:12px;font-size:12.5px">'
+          +'<span style="color:var(--white);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escHtml(d.title||d.type||'')+'">'+escHtml(d.title||d.type||'Deliverable')+'</span>'
+          +'<div style="height:10px;background:rgba(255,255,255,.06);border-radius:4px"><div style="height:10px;width:'+(pct===null?0:Math.min(100,pct))+'%;background:'+c+';border-radius:4px"></div></div>'
+          +'<span style="color:'+(late?RV_ST.amber:'var(--mist)')+';font-variant-numeric:tabular-nums">'+escHtml(txt)+'</span></div>'; }).join('')
+      +'<div style="font-size:11.5px;color:var(--fog);margin-top:4px">'+(g.pct!==null?'Overall '+g.pct+'%, each item counted up to its own target':'No item has a contracted quantity; '+g.completeShare+'% are marked Complete')+'. Items with no target show a count, never a percentage.</div>'
+      :'<div style="font-size:12.5px;color:var(--fog)">No deliverables tracked on this project.</div>')+'</div>';
+  } else if(id==='comment-matrix'){
+    scope=pl+' · formal public comments';
+    var cat={}; M.perCmts.forEach(function(c){ var k=c.category||'Uncategorized'; cat[k]=(cat[k]||0)+1; });
+    var pend=M.perCmts.filter(function(c){return (c.responseStatus||'Pending')==='Pending'||c.responseStatus==='In progress';}).sort(function(a,b){return String(a.commentDate||'').localeCompare(String(b.commentDate||''));});
+    body='<div class="rpt-ins-grid2">'
+      +'<figure style="margin:0"><figcaption style="'+cap+'">By topic</figcaption><div style="display:flex;flex-direction:column;gap:6px">'+(M.perCmts.length?_rvHBars(_rvTop(cat,8),RV_CAT[3]):'<div style="font-size:12px;color:var(--fog)">No comments in this period.</div>')+'</div></figure>'
+      +'<div><div style="'+cap+'">Still awaiting a response ('+pend.length+')</div>'+(pend.length?'<table style="border-collapse:collapse;width:100%;font-size:12.5px"><tbody>'+pend.slice(0,8).map(function(c){
+          return '<tr><td style="'+td+';color:var(--white);white-space:nowrap">'+(c.commentDate?_fmtMDY(c.commentDate):'—')+'</td><td style="'+td+';color:var(--mist)">'+escHtml(c.category||'')+'</td><td style="'+td+';color:var(--white)">'+escHtml(String(c.summary||'').slice(0,120))+'</td></tr>'; }).join('')+'</tbody></table>':'<div style="font-size:12.5px;color:var(--green)">Every comment in this period has a response.</div>')+'</div>'
+      +'</div>';
+  }
+  return '<div class="rpt-insight" data-rid="'+id+'" style="background:#112236;border:1px solid var(--sky-lt);border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:14px">'
+    +'<div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px"><div style="font-size:15px;font-weight:600;color:var(--white)">'+info.name+'</div>'
+    +'<span style="font-size:12px;color:var(--slate)">'+escHtml(scope)+'</span>'
+    +'<span style="margin-left:auto;display:flex;gap:6px"><button class="btn btn-sm btn-primary" onclick="_rptRunCard(\''+id+'\')">Open full report</button>'
+    +'<button class="btn btn-sm" onclick="rptInsight(\''+id+'\')" aria-label="Close insight">✕</button></span></div>'
+    +body+'</div>';
+}
+function _rptQuickHTML(projF, grpHTML, internalCt){
+  var M=_rptModel(projF), per=_rptPeriod(), pk=_rptPkgList();
+  var seg=RPT_PERIODS.map(function(p){ var on=p[0]===per;
+    return '<button onclick="setRptPeriod(\''+p[0]+'\')" aria-pressed="'+on+'" style="font-family:inherit;font-size:12px;font-weight:600;border:0;border-radius:6px;padding:7px 12px;min-height:34px;cursor:pointer;color:'+(on?'#fff':'var(--slate)')+';background:'+(on?'var(--sky)':'transparent')+'">'+p[1]+'</button>'; }).join('');
+  var strip='<div class="rpt-sendto" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;background:#112236;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:8px 14px;margin-bottom:14px">'
+    +'<span style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--fog)">Send to</span>'+grpHTML
+    +'<label title="Applies to the Interaction log report and its card" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--slate);cursor:pointer"><input type="checkbox" id="rpt-include-internal"'+(S.rptIncInt?' checked':'')+' onchange="rptSetIncInt(this.checked)" style="accent-color:var(--sky);width:14px;height:14px">Include internal contacts in the interaction log <span style="font-family:var(--mono);font-size:11px">'+internalCt+'</span></label>'
+    +'<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--slate);margin-left:auto">Letterhead'
+    +'<select id="rpt-brand-sel" onchange="_rptBrandSet(this.value)" style="background:var(--navy);border:1px solid rgba(255,255,255,.2);border-radius:6px;color:var(--white);font-size:12px;padding:4px 6px">'
+    +['off','sunrise','udot'].map(function(m){return '<option value="'+m+'"'+(_rptBrandModeQ()===m?' selected':'')+'>'+(m==='off'?'None':m==='udot'?'UDOT':'Sunrise')+'</option>';}).join('')+'</select></label>'
+    +'<button class="btn btn-sm'+(pk.length?' btn-primary':'')+'" onclick="openReportSequenceModal()" style="white-space:nowrap">Report package · '+pk.length+' ▸ Build</button>'
+    +'</div>';
+  var head='<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-bottom:12px">'
+    +'<div style="font-size:12px;color:var(--fog)">Pictures show <b style="color:var(--mist)">'+RPT_PERIODS.filter(function(p){return p[0]===per;})[0][1].toLowerCase()+'</b> for contacts, comments, events and outreach; the rest show the project today. Reports print as before.</div>'
+    +'<div role="group" aria-label="Period shown on the cards" style="margin-left:auto;display:flex;background:#112236;border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:3px;gap:2px">'+seg+'</div></div>';
+  var groups=RPT_GROUPS.map(function(g){
+    var openHere=g.ids.indexOf(S.rptInsight)>=0;
+    return '<section class="rpt-group" style="display:flex;flex-direction:column;gap:10px;margin-bottom:18px">'
+      +'<div style="display:flex;align-items:baseline;gap:10px"><div style="font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--white)">'+g.title+'</div><span style="font-size:12px;color:var(--fog)">'+g.sub+'</span></div>'
+      +'<div class="rpt-grid4">'+g.ids.map(function(id){return _rptCardHTML(id,M);}).join('')+'</div>'
+      +(openHere?_rptInsightHTML(S.rptInsight,M):'')
+      +'</section>';
+  }).join('');
+  return strip+head+groups+'<div id="rpt-output"></div>';
+}
+
+// ── PORTFOLIO (no project selected) ──
+function _pfRow(p){
+  var today=localToday();
+  var ps=DB.get('project_stakeholders').filter(function(x){return String(x.projectId)===String(p.id);});
+  var ints=DB.get('interactions').filter(function(i){return String(i.projectId)===String(p.id)&&i.followUp&&!i.followUpDone;});
+  var over=ints.filter(function(i){return i.followUpDue&&i.followUpDue<today;}).length;
+  var iss=(DB.get('issues')||[]).filter(function(x){return String(x.projectId)===String(p.id)&&x.status!=='Resolved'&&x.status!=='Closed';}).length;
+  var com=(DB.get('commitments')||[]).filter(function(c){return String(c.projectId)===String(p.id)&&c.status!=='Fulfilled'&&c.status!=='Cancelled';}).length;
+  var lr=_lastClientReport(p.id);
+  var stale=p.status==='Active'&&(!lr.date||_qrDaysBetween(lr.date,today)>LAST_REPORT_STALE_DAYS);
+  return {p:p,contacts:ps.length,fu:ints.length,over:over,iss:iss,com:com,last:lr.date,stale:stale};
+}
+function _pfDone(p){ return p.status==='Complete'||p.status==='Completed'; }
+function _pfKey(r){ var by=S.pfBy||'client';
+  return by==='county'?((r.p.county||'No county')+(r.p.county?' County':'')):by==='lead'?(r.p.lead||'No PI Lead'):(r.p.client||'(No client)'); }
+function pfSet(k,v){ S[k]=v; if(k==='pfBy'||k==='pfShow') S.pfOpen={}; _pfRender(); }
+function pfToggle(key){ S.pfOpen=S.pfOpen||{}; var cur=S.pfOpen[key]; if(cur===undefined) cur=!!(S._pfFlagged||{})[key]; S.pfOpen[key]=!cur; _pfRender(); }
+function pfToggleAll(open){ S.pfOpen={}; (S._pfKeys||[]).forEach(function(k){ S.pfOpen[k]=open; }); _pfRender(); }
+function pfOpenProject(id){ S.projectFilter=id; renderReports(document.getElementById('main')); }
+function pfMenu(){ var m=document.getElementById('pf-xmenu'); if(m) m.style.display=m.style.display==='none'?'flex':'none'; }
+function _pfRender(){ var el=document.getElementById('pf-body'); if(el) el.innerHTML=_pfBodyHTML(); }
+function _pfBodyHTML(){
+  var me=(typeof _myInitials==='function'?_myInitials():'')||'';
+  var all=(DB.get('projects')||[]).filter(function(p){return p.status!=='Cancelled';}).map(_pfRow);
+  var show=S.pfShow||'current', quick=S.pfQuick||'', q=(S.pfQ||'').toLowerCase();
+  var cur=all.filter(function(r){return !_pfDone(r.p);});
+  var vis=all.filter(function(r){
+    if(show==='current'&&_pfDone(r.p)) return false;
+    if(show==='complete'&&!_pfDone(r.p)) return false;
+    if(quick==='mine'&&String(r.p.lead||'').toUpperCase()!==me.toUpperCase()) return false;
+    if(quick==='overdue'&&!r.over) return false;
+    if(quick==='issues'&&!r.iss) return false;
+    if(quick==='stale'&&!r.stale) return false;
+    return !q||[r.p.name,r.p.pid,r.p.county,r.p.client,r.p.lead].join(' ').toLowerCase().indexOf(q)>=0;
+  });
+  var tile=function(id,label,n,sub,color){ var on=quick===id;
+    return '<button class="pf-tile" onclick="pfSet(\'pfQuick\',\''+(on&&id?'':id)+'\')" aria-pressed="'+on+'" style="text-align:left;font-family:inherit;background:'+(on?'rgba(57,135,229,.18)':'#152B47')+';border:1px solid '+(on?'#3987e5':'rgba(255,255,255,.12)')+';border-radius:10px;padding:10px 14px;min-height:62px;cursor:pointer">'
+      +'<div style="font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--slate)">'+label+'</div><div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:22px;font-weight:700;color:'+color+'">'+n+'</span><span style="font-size:11.5px;color:var(--slate)">'+sub+'</span></div></button>'; };
+  var clients={}; cur.forEach(function(r){ clients[r.p.client||'']=1; });
+  var tiles='<div class="pf-tiles">'
+    +tile('','Projects',cur.length,Object.keys(clients).length+' client'+(Object.keys(clients).length!==1?'s':''),'var(--white)')
+    +tile('mine','My projects',cur.filter(function(r){return me&&String(r.p.lead||'').toUpperCase()===me.toUpperCase();}).length,'led by you','#8cbcf2')
+    +tile('overdue','Overdue follow-ups',cur.reduce(function(a,r){return a+r.over;},0),'click to show those projects',RV_ST.red)
+    +tile('issues','Open issues',cur.reduce(function(a,r){return a+r.iss;},0),'across '+cur.filter(function(r){return r.iss;}).length+' projects','var(--white)')
+    +tile('stale','No report '+LAST_REPORT_STALE_DAYS+'+ days',cur.filter(function(r){return r.stale;}).length,'active projects',RV_ST.amber)
+    +'</div>';
+  var segBtn=function(k,v,label){ var on=(S[k]||(k==='pfBy'?'client':'current'))===v;
+    return '<button onclick="pfSet(\''+k+'\',\''+v+'\')" aria-pressed="'+on+'" style="font-family:inherit;font-size:12px;font-weight:600;border:1px solid '+(on?'var(--sky)':'rgba(255,255,255,.18)')+';border-radius:6px;padding:6px 10px;min-height:32px;cursor:pointer;color:'+(on?'#fff':'var(--slate)')+';background:'+(on?'var(--sky)':'transparent')+'">'+label+'</button>'; };
+  var map={}, order=[]; vis.forEach(function(r){ var k=_pfKey(r); if(!map[k]){map[k]=[];order.push(k);} map[k].push(r); });
+  order.sort(function(a,b){return a.localeCompare(b);});
+  S._pfKeys=order; S._pfFlagged={};
+  var dim='#5D7A96', thS='text-align:right;padding:9px 8px;color:var(--fog);font-weight:500';
+  var rowsHTML=order.map(function(k){
+    var rs=map[k].sort(function(a,b){return String(a.p.name).localeCompare(String(b.p.name));});
+    var sum=function(f){return rs.reduce(function(a,r){return a+r[f];},0);};
+    var over=sum('over'), stale=rs.filter(function(r){return r.stale;}).length;
+    S._pfFlagged[k]=!!(over||stale);
+    var open=(S.pfOpen||{})[k]; if(open===undefined) open=!!(over||stale)||!!q||!!quick;
+    var flag=over?'<span class="pf-flag" style="font-size:11px;font-weight:600;color:'+RV_ST.red+';border:1px solid '+RV_ST.red+';border-radius:10px;padding:1px 8px">'+over+' overdue</span>'
+      :stale?'<span class="pf-flag" style="font-size:11px;font-weight:600;color:'+RV_ST.amber+';border:1px solid '+RV_ST.amber+';border-radius:10px;padding:1px 8px">'+stale+' no report '+LAST_REPORT_STALE_DAYS+'+ days</span>':'';
+    var newest=rs.map(function(r){return r.last;}).filter(Boolean).sort().slice(-1)[0];
+    var fu=sum('fu'), iss=sum('iss'), com=sum('com');
+    var h='<tbody class="pf-group" data-key="'+escHtml(k)+'"><tr style="background:#16304D;border-top:1px solid rgba(255,255,255,.08)">'
+      +'<th scope="rowgroup" colspan="4" style="text-align:left;padding:0"><button class="pf-ghead" onclick="pfToggle(this.closest(\'tbody\').getAttribute(\'data-key\'))" aria-expanded="'+open+'" style="display:flex;align-items:center;gap:10px;width:100%;background:transparent;border:0;padding:10px 14px;min-height:44px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;color:var(--white);text-align:left">'
+      +'<span aria-hidden="true" style="color:var(--sky-lt);width:12px">'+(open?'▾':'▸')+'</span>'+escHtml(k)+' <span style="font-weight:400;font-size:12px;color:var(--slate)">'+rs.length+' project'+(rs.length!==1?'s':'')+'</span>'+flag+'</button></th>'
+      +'<td style="text-align:right;padding:0 8px;color:var(--mist)">'+sum('contacts')+'</td>'
+      +'<td style="text-align:right;padding:0 8px;font-weight:600;color:'+(over?RV_ST.red:fu?'var(--white)':dim)+'">'+(fu||'—')+'</td>'
+      +'<td style="text-align:right;padding:0 8px;color:'+(iss?'var(--white)':dim)+'">'+(iss||'—')+'</td>'
+      +'<td style="text-align:right;padding:0 8px;color:'+(com?'var(--white)':dim)+'">'+(com||'—')+'</td>'
+      +'<td style="padding:0 14px;color:var(--slate)">'+(newest?'Newest '+fmt(newest):'—')+'</td></tr>';
+    if(open) rs.forEach(function(r){
+      var p=r.p, ST={Active:[RV_ST.green,'rgba(60,196,138,.14)'],'On hold':[RV_ST.amber,'rgba(232,160,32,.14)']}[p.status]||['#8cbcf2','rgba(57,135,229,.16)'];
+      var last=p.status==='On hold'?(r.last?fmt(r.last):'—')+' · on hold':r.last?fmt(r.last)+(r.stale?' · '+LAST_REPORT_STALE_DAYS+'+ days':''):'No report yet';
+      var lastC=p.status==='On hold'||_pfDone(p)?'var(--slate)':r.stale?RV_ST.amber:'var(--mist)';
+      var mine=me&&String(p.lead||'').toUpperCase()===me.toUpperCase();
+      h+='<tr class="pf-row" onclick="pfOpenProject(\''+p.id+'\')" style="border-top:1px solid rgba(255,255,255,.05);cursor:pointer">'
+        +'<td style="padding:8px 14px 8px 36px"><div style="color:var(--white);font-weight:600">'+escHtml(p.name||'')+'</div><div style="font-size:11px;color:var(--fog);font-family:var(--mono)">'+escHtml(p.pid||'')+(p.county?' · '+escHtml(p.county):'')+'</div></td>'
+        +'<td style="padding:8px"><span style="font-size:11px;font-weight:600;color:'+ST[0]+';background:'+ST[1]+';border-radius:4px;padding:2px 7px">'+escHtml(p.status||'')+'</span></td>'
+        +'<td style="padding:8px;color:var(--mist)">'+escHtml(p.phase||'—')+'</td>'
+        +'<td style="padding:8px;font-family:var(--mono);font-size:11.5px;color:'+(mine?'#8cbcf2':'var(--mist)')+'">'+escHtml(p.lead||'—')+'</td>'
+        +'<td style="padding:8px;text-align:right;color:var(--mist)">'+r.contacts+'</td>'
+        +'<td style="padding:8px;text-align:right;font-weight:600;color:'+(r.over?RV_ST.red:r.fu?'var(--white)':dim)+'">'+(r.fu?(r.over?(r.over===r.fu?r.over+' overdue':r.fu+' · '+r.over+' overdue'):r.fu):'—')+'</td>'
+        +'<td style="padding:8px;text-align:right;color:'+(r.iss?'var(--white)':dim)+'">'+(r.iss||'—')+'</td>'
+        +'<td style="padding:8px;text-align:right;color:'+(r.com?'var(--white)':dim)+'">'+(r.com||'—')+'</td>'
+        +'<td style="padding:8px 14px;color:'+lastC+'">'+last+'</td></tr>';
+    });
+    return h+'</tbody>';
+  }).join('');
+  var allOpen=order.length&&order.every(function(k){ var o=(S.pfOpen||{})[k]; return o===undefined?S._pfFlagged[k]||!!q||!!quick:o; });
+  var bar='<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;background:#112236;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:8px 12px;margin:12px 0">'
+    +'<label style="display:flex;align-items:center;gap:8px;flex:1 1 240px;background:var(--navy);border:1px solid rgba(255,255,255,.18);border-radius:7px;padding:0 10px;min-height:36px"><span aria-hidden="true" style="color:var(--fog)">⌕</span>'
+    +'<input id="pf-q" aria-label="Search projects" value="'+escHtml(S.pfQ||'')+'" oninput="S.pfQ=this.value;_pfRender();var i=document.getElementById(\'pf-q\');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length);}" placeholder="Search project, PIN, county, client or lead" style="flex:1;background:transparent;border:0;color:var(--white);font-family:inherit;font-size:13px;outline:none;min-height:34px"></label>'
+    +'<div style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--slate)">Group by '+segBtn('pfBy','client','Client')+segBtn('pfBy','county','County')+segBtn('pfBy','lead','PI Lead')+'</div>'
+    +'<div style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--slate)">Show '+segBtn('pfShow','current','Active &amp; on hold')+segBtn('pfShow','complete','Complete')+segBtn('pfShow','all','All')+'</div>'
+    +'<button onclick="pfToggleAll('+(!allOpen)+')" style="margin-left:auto;font-family:inherit;font-size:12px;font-weight:600;color:var(--sky-lt);background:transparent;border:0;padding:6px 8px;min-height:32px;cursor:pointer">'+(allOpen?'Collapse all':'Expand all')+'</button></div>';
+  var table='<div style="background:#112236;border:1px solid rgba(255,255,255,.1);border-radius:12px;overflow-x:auto">'
+    +'<table class="pf-table" style="border-collapse:collapse;width:100%;min-width:980px;font-size:12.5px"><thead><tr style="background:#0f1f33">'
+    +'<th style="text-align:left;padding:9px 14px;color:var(--fog);font-weight:500">Project</th><th style="text-align:left;padding:9px 8px;color:var(--fog);font-weight:500">Status</th><th style="text-align:left;padding:9px 8px;color:var(--fog);font-weight:500">Phase</th><th style="text-align:left;padding:9px 8px;color:var(--fog);font-weight:500">Lead</th>'
+    +'<th style="'+thS+'">Contacts</th><th style="'+thS+'">Follow-ups</th><th style="'+thS+'">Issues</th><th style="'+thS+'">Commitments</th><th style="text-align:left;padding:9px 14px;color:var(--fog);font-weight:500">Last report</th></tr></thead>'
+    +rowsHTML+'</table>'+(order.length?'':'<div style="padding:24px;text-align:center;color:var(--slate)">No projects match.</div>')+'</div>';
+  return tiles+bar+table;
+}
+function _rptPortfolioHTML(){
+  var xb='font-family:inherit;font-size:12.5px;text-align:left;color:var(--mist);background:transparent;border:0;border-radius:6px;padding:8px 10px;cursor:pointer';
+  return '<div class="content" style="overflow-y:auto;padding:20px 24px;flex-direction:column">'
+    +'<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:12px">'
+    +'<div style="flex:1 1 260px"><div style="font-size:18px;font-weight:700;color:var(--white)">Portfolio</div><div style="font-size:12.5px;color:var(--slate)">Click a project to open its reports</div></div>'
+    +'<div style="position:relative"><button class="btn btn-sm" onclick="pfMenu()">Cross-project reports ▾</button>'
+    +'<div id="pf-xmenu" style="display:none;position:absolute;right:0;top:calc(100% + 6px);z-index:30;flex-direction:column;min-width:220px;background:#0f2135;border:1px solid var(--sky-lt);border-radius:10px;padding:6px;box-shadow:0 10px 28px rgba(0,0,0,.4)">'
+    +'<button style="'+xb+'" onclick="pfMenu();generatePortfolioContactList()">Master contact list</button>'
+    +'<button style="'+xb+'" onclick="pfMenu();generatePortfolioFollowups()">Open follow-ups</button>'
+    +'<button style="'+xb+'" onclick="pfMenu();generatePortfolioCommitments()">Open commitments</button>'
+    +'<button style="'+xb+'" onclick="pfMenu();generatePortfolioIssues()">Open issues</button>'
+    +'<button style="'+xb+'" onclick="pfMenu();generateNepaComplianceReport()">NEPA compliance</button></div></div>'
+    +'<button class="btn btn-sm" onclick="exportPortfolio()" style="color:var(--green);border-color:rgba(40,168,112,.4)">⇩ Export all projects</button></div>'
+    +'<div id="pf-body">'+_pfBodyHTML()+'</div></div>';
+}
+
 function renderReports(el){
   var projs=DB.get('projects');
   var ps=DB.get('project_stakeholders');
@@ -12130,65 +12595,14 @@ function renderReports(el){
   DIST_GROUPS.forEach(function(g){
     var ct=projPS.filter(function(x){return(x.distributionGroups||'').split(',').map(function(s){return s.trim()}).indexOf(g)>=0}).length;
     var isChecked=checkedGroups[g]!==undefined?checkedGroups[g]:true;
-    grpHTML+='<label style="display:flex;align-items:center;gap:7px;cursor:pointer;background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:8px 14px">'
+    grpHTML+='<label style="display:flex;align-items:center;gap:6px;cursor:pointer;min-height:32px">'
       +'<input type="checkbox" class="rpt-grp-cb" value="'+g+'"'+(isChecked?' checked':'')+' style="accent-color:var(--sky);width:15px;height:15px">'
-      +'<span style="font-size:13px;color:var(--mist)">'+g+'</span>'
-      +'<span class="badge b-dark" style="font-size:10px;margin-left:4px">'+ct+'</span></label>';
+      +'<span style="font-size:12.5px;color:var(--mist)">'+g+'</span>'
+      +'<span style="font-family:var(--mono);font-size:11px;color:var(--slate)">'+ct+'</span></label>';
   });
 
   // Internal stakeholder toggle
   var internalCt=projPS.filter(function(x){return(x.stakeholderRole||'External')==='Internal'}).length;
-
-  // Report type cards data
-  var rptCards=[
-    {id:'contact-list',name:'Stakeholder contact list',desc:'Formatted roster with contact info, support levels, and report distribution',
-      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><circle cx="9" cy="7" r="4"/><path d="M2 20c0-3.314 3.134-6 7-6s7 2.686 7 6"/><path d="M19 8v6M22 11h-6"/></svg>'},
-    {id:'interaction-log',name:'Interaction log',desc:'Full chronological record of all stakeholder communications',
-      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'},
-    {id:'followup-status',name:'Follow-up status report',desc:'All open and resolved action items with due dates and status',
-      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M9 16l2 2 4-4"/></svg>'},
-    {id:'sentiment-summary',name:'Sentiment & engagement matrix',desc:'Stakeholder positions grouped by Champion, Neutral, and Opponent',
-      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>'},
-    {id:'deliverable-status',name:'Deliverable / scope status',desc:'Scope items with contracted vs delivered quantities and progress',
-      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>'},
-    {id:'comment-matrix',name:'Public comment matrix',desc:'Public comments received with response status for formal documentation',
-      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h4"/></svg>'},
-    {id:'issues-report',name:'Issues tracker report',desc:'Open and resolved issues with linked interactions',
-      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><circle cx="12" cy="12" r="9"/><path d="M12 7v5"/><circle cx="12" cy="15.5" r=".8" fill="currentColor"/></svg>'},
-    {id:'stakeholder-map',name:'Stakeholder map',desc:'Interactive map with filters by support, type, influence, LEP/EJ — open as a full view with live filtering',
-      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M12 2C8.686 2 6 4.686 6 8c0 5 6 12 6 12s6-7 6-12c0-3.314-2.686-6-6-6z"/><circle cx="12" cy="8" r="2"/></svg>'},
-    {id:'events-log',name:'Events & outreach log',desc:'All logged public events and outreach activities with attendance and notes',
-      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>'},
-    {id:'outreach-log',name:'Outreach log',desc:'Press releases, newsletters, website updates, 511 alerts, social posts and news coverage, by campaign, with the latest engagement counts',
-      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" style="width:22px;height:22px"><path d="M3 10v4h3l7 5V5L6 10H3z"/><path d="M17 8.5a5 5 0 0 1 0 7"/></svg>'},
-    {id:'pi-summary',name:'PI Compliance Summary',desc:'FHWA/NEPA public involvement summary: NEPA checklist, public meetings, comment response rate, LEP/EJ outreach, and commitments — export as PDF',
-      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h4"/><circle cx="8" cy="9" r="1" fill="currentColor"/></svg>'},
-    {id:'nepa-compliance',name:'NEPA Compliance Report',desc:'Checklist progress by phase group, outstanding items, and comment period duration compliance — works for one project or the full portfolio',
-      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/><circle cx="7" cy="17" r="1" fill="currentColor"/></svg>'},
-    {id:'parcel-status',name:'Right-of-Way Parcel Report',desc:'Parcel register with notice and ownership coverage, acquisition status, and every parcel still missing an owner or a notice date',
-      icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px"><path d="M2 7l7-3 6 3 7-3v13l-7 3-6-3-7 3z"/><path d="M9 4v13M15 7v13"/></svg>'}
-  ];
-  var cardsHTML='';
-  rptCards.forEach(function(r){
-    // The internal-stakeholders option lives on the Interaction log card only —
-    // it affects that report exclusively (all other reports are external-only).
-    var extra = r.id==='interaction-log'
-      ? '<label onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.10)">'
-        +'<input type="checkbox" id="rpt-include-internal" onclick="event.stopPropagation()" style="accent-color:var(--sky);width:14px;height:14px">'
-        +'<span style="font-size:11px;color:var(--slate)">Include internal stakeholders</span>'
-        +'<span class="badge b-dark" style="font-size:9px;margin-left:2px">'+internalCt+'</span></label>'
-      : '';
-    cardsHTML+='<div style="background:#1A3050;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:18px 20px;cursor:pointer;transition:border-color .12s,transform .12s" '
-      +'onmouseover="this.style.borderColor=\'rgba(45,125,210,.5)\';this.style.transform=\'translateY(-2px)\'" '
-      +'onmouseout="this.style.borderColor=\'rgba(255,255,255,.14)\';this.style.transform=\'none\'" '
-      +'onclick="'+(r.id==="issues-report"?"generateIssuesReport()":r.id==="stakeholder-map"?"setView('map')":r.id==="pi-summary"?"generatePISummary()":r.id==="nepa-compliance"?"generateNepaComplianceReport()":r.id==="parcel-status"?"generateParcelReport()":("generateReport('"+r.id+"')"))+'">'
-      +'<div style="display:flex;align-items:flex-start;gap:12px">'
-      +'<div style="color:var(--sky-lt);flex-shrink:0;margin-top:2px">'+r.icon+'</div>'
-      +'<div><div style="font-size:14px;font-weight:600;color:var(--white);margin-bottom:5px">'+r.name+'</div>'
-      +'<div style="font-size:12px;color:var(--slate);line-height:1.5">'+r.desc+'</div></div></div>'
-      +extra
-      +'</div>';
-  });
 
   // Assemble main HTML
   var topbar='<div class="topbar">'
@@ -12200,149 +12614,9 @@ function renderReports(el){
     +projOpts+'</select></div></div>';
 
   if(!projF){
-    // ── CROSS-PROJECT PORTFOLIO OVERVIEW ──────────────────────────────
-    var allProjs=DB.get('projects').filter(function(p){return p.status!=='Cancelled';});
-    var allPS=DB.get('project_stakeholders');
-    var allInts=DB.get('interactions');
-    var allFU=allInts.filter(function(i){return i.followUp&&!i.followUpDone;});
-    var allOverdueFU=allFU.filter(function(i){return i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<new Date();});
-    var allComm=DB.get('commitments').filter(function(c){return c.status!=='Fulfilled';});
-    var allIssues=DB.get('issues').filter(function(iss){return iss.status==='Open'||iss.status==='In Progress';});
-
-    // Group by client
-    var clientMap={};
-    allProjs.forEach(function(p){var cl=p.client||'(No client)';if(!clientMap[cl])clientMap[cl]=[];clientMap[cl].push(p);});
-    var clientKeys=Object.keys(clientMap).sort();
-
-    var STATUS_COLOR={Active:'#1a7a50','On hold':'#b36b00',Complete:'#5a87c6',Completed:'#5a87c6','Not started':'#78909c'};
-    var STATUS_BG={Active:'rgba(26,122,80,.15)','On hold':'rgba(179,107,0,.15)',Complete:'rgba(90,135,198,.15)',Completed:'rgba(90,135,198,.15)','Not started':'rgba(120,144,156,.12)'};
-
-    // Build client sections with 4-per-row project cards
-    var crossHTML='';
-    clientKeys.forEach(function(cl){
-      var cProjs=clientMap[cl];
-      var cards=cProjs.map(function(p){
-        var ps=allPS.filter(function(x){return x.projectId===p.id;});
-        var openFU=allFU.filter(function(i){return i.projectId===p.id;}).length;
-        var overdueCount=allOverdueFU.filter(function(i){return i.projectId===p.id;}).length;
-        var openIss=allIssues.filter(function(iss){return iss.projectId===p.id;}).length;
-        var sc=STATUS_COLOR[p.status]||'#78909c';
-        var sb=STATUS_BG[p.status]||'rgba(120,144,156,.12)';
-        var meta='';
-        if(openFU>0) meta+='<span style="font-size:11px;color:'+(overdueCount>0?'#e05252':'var(--amber)')+'">'+openFU+' FU</span> ';
-        if(openIss>0) meta+='<span style="font-size:11px;color:#e05252">'+openIss+' iss</span>';
-        var card=document.createElement('div');
-        card.style.cssText='background:#1A3050;border:1px solid rgba(255,255,255,.12);border-left:3px solid '+sc+';border-radius:8px;padding:12px 14px;cursor:pointer;transition:background .15s';
-        card.onmouseover=function(){this.style.background='#1e3a5f';};
-        card.onmouseout=function(){this.style.background='#1A3050';};
-        card.onclick=function(){S.projectFilter=p.id;renderReports(document.getElementById('main'));};
-        card.innerHTML='<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px">'
-          +'<div style="font-size:12px;font-weight:600;color:var(--white);line-height:1.3;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.name+'</div>'
-          +'<span style="font-size:9px;font-weight:700;color:'+sc+';background:'+sb+';border-radius:4px;padding:2px 6px;flex-shrink:0;margin-left:6px">'+p.status+'</span>'
-          +'</div>'
-          +'<div style="font-size:10px;color:var(--fog);font-family:var(--mono);margin-bottom:6px">'+p.pid+(p.county?' · '+p.county:'')+'</div>'
-          +'<div style="display:flex;gap:10px;font-size:11px;color:var(--slate)">'
-          +'<span>'+ps.length+' stk</span>'+(meta?meta:'')
-          +'</div>';
-        return card.outerHTML;
-      }).join('');
-
-      crossHTML+='<div style="margin-bottom:20px">'
-        +'<div style="font-size:12px;font-weight:700;color:var(--mist);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.10)">'+cl+' <span style="font-weight:400;color:var(--fog)">('+cProjs.length+')</span></div>'
-        +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">'+cards+'</div>'
-        +'</div>';
-    });
-
-    // Totals bar
-    var totalOpenFU=allFU.length,totalOverdue=allOverdueFU.length,totalComm=allComm.length,totalIss=allIssues.length;
-    var totalsBar='<div style="display:flex;gap:16px;margin-bottom:20px;flex-wrap:wrap">'
-      +'<div style="flex:1;min-width:140px;background:#1A3050;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px 18px"><div style="font-size:11px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Projects</div><div style="font-size:26px;font-weight:700;color:var(--white)">'+allProjs.length+'</div></div>'
-      +'<div style="flex:1;min-width:140px;background:#1A3050;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px 18px"><div style="font-size:11px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Open Follow-ups</div><div style="font-size:26px;font-weight:700;color:'+(totalOverdue>0?'#e05252':'var(--white)')+'">'+totalOpenFU+'</div>'+(totalOverdue>0?'<div style="font-size:11px;color:#e05252">'+totalOverdue+' overdue</div>':'')+'</div>'
-      +'<div style="flex:1;min-width:140px;background:#1A3050;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px 18px"><div style="font-size:11px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Open Commitments</div><div style="font-size:26px;font-weight:700;color:'+(totalComm>0?'var(--amber)':'var(--white)')+'">'+totalComm+'</div></div>'
-      +'<div style="flex:1;min-width:140px;background:#1A3050;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px 18px"><div style="font-size:11px;color:var(--fog);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Open Issues</div><div style="font-size:26px;font-weight:700;color:'+(totalIss>0?'#e05252':'var(--white)')+'">'+totalIss+'</div></div>'
-      +'</div>';
-
-el.innerHTML=topbar
-      +'<div class="content" style="overflow-y:auto;padding:24px;flex-direction:column">'
-      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
-      +'<div style="font-size:18px;font-weight:700;color:var(--white)">Portfolio Overview</div>'
-      +'<button class="btn btn-sm" onclick="exportPortfolio()" style="color:var(--green);border-color:rgba(40,168,112,.4);gap:6px">'
-      +'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M8 2v8M5 7l3 3 3-3"/><rect x="2" y="11" width="12" height="2" rx="1"/></svg>'
-      +' Export All Projects</button></div>'
-      +'<div style="font-size:13px;color:var(--slate);margin-bottom:20px">All active and on-hold projects &mdash; click any row to open that project reports</div>'
-      +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;padding:14px 16px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.10);border-radius:10px">'
-      +'<div style="font-size:11px;font-weight:700;color:var(--fog);text-transform:uppercase;letter-spacing:.6px;width:100%;margin-bottom:8px">Cross-project reports</div>'
-      +'<button class="btn btn-sm" onclick="generatePortfolioContactList()" style="gap:6px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M8 2v8M5 7l3 3 3-3"/><rect x="2" y="11" width="12" height="2" rx="1"/></svg>Master contact list</button>'
-      +'<button class="btn btn-sm" onclick="generatePortfolioFollowups()" style="gap:6px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M8 2v8M5 7l3 3 3-3"/><rect x="2" y="11" width="12" height="2" rx="1"/></svg>Open follow-ups</button>'
-      +'<button class="btn btn-sm" onclick="generatePortfolioCommitments()" style="gap:6px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M8 2v8M5 7l3 3 3-3"/><rect x="2" y="11" width="12" height="2" rx="1"/></svg>Open commitments</button>'
-      +'<button class="btn btn-sm" onclick="generatePortfolioIssues()" style="gap:6px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M8 2v8M5 7l3 3 3-3"/><rect x="2" y="11" width="12" height="2" rx="1"/></svg>Open issues</button>'
-      +'<button class="btn btn-sm" onclick="generateNepaComplianceReport()" style="gap:6px;color:var(--teal);border-color:rgba(77,182,172,.4)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="width:12px;height:12px"><path d="M6 7.5l2 2L12 5"/><rect x="2" y="2" width="12" height="12" rx="2"/></svg>NEPA compliance</button>'
-      +'</div>'
-      +totalsBar+'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px">'+crossHTML+'</div>'+'</div>';
+    el.innerHTML=topbar+_rptPortfolioHTML();
     return;
   }
-
-  // Enhanced summary stats
-  var extPS=projPS.filter(function(x){return(x.stakeholderRole||'External')==='External'});
-  var intPS=projPS.filter(function(x){return(x.stakeholderRole||'External')==='Internal'});
-  var champCt=extPS.filter(function(x){return x.support==='Champion'}).length;
-  var neutCt=extPS.filter(function(x){return x.support==='Neutral'}).length;
-  var oppCt=extPS.filter(function(x){return x.support==='Opponent'}).length;
-  var _dgR=_delProgress(projDels), delPctR=_dgR.pct===null?_dgR.completeShare:_dgR.pct;
-  var overdueFU=projInts.filter(function(i){return i.followUp&&!i.followUpDone&&i.followUpDue&&new Date(i.followUpDue+'T00:00:00')<new Date()}).length;
-
-  // Mini donut for deliverables
-  function miniDonut(pct,color,sz){
-    var sw=sz<60?4:5, r=sz/2-sw/2-1,c=2*Math.PI*r,d2=pct/100*c,g=c-d2;
-    var fs=Math.min(13,Math.round(sz*0.24));
-    return '<div style="position:relative;width:'+sz+'px;height:'+sz+'px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">'
-      +'<svg width="'+sz+'" height="'+sz+'" viewBox="0 0 '+sz+' '+sz+'" style="transform:rotate(-90deg)">'
-      +'<circle cx="'+sz/2+'" cy="'+sz/2+'" r="'+r+'" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="'+sw+'"/>'
-      +'<circle cx="'+sz/2+'" cy="'+sz/2+'" r="'+r+'" fill="none" stroke="'+color+'" stroke-width="'+sw+'" stroke-dasharray="'+d2+' '+g+'" stroke-linecap="round"/>'
-      +'</svg><div style="position:absolute;font-size:'+fs+'px;font-weight:700;color:var(--white)">'+pct+'%</div></div>';
-  }
-
-  var fuColor=overdueFU>0?'var(--red)':openFUs>0?'var(--amber)':'var(--green)';
-  var delColor=delPctR>=75?'#28A870':delPctR>=40?'#5BA4CF':'#D9A544';
-  // Compact summary cards (Oct 2026): label on top, then the figure with its
-  // breakdown BESIDE it rather than stacked under it — about 75px tall, down
-  // from ~180. Every number the old cards carried is still here; only the
-  // sentiment bar went, since the three counts beside it say the same thing.
-  var _card=function(accent,label,body){
-    return '<div style="background:linear-gradient(160deg,#1e3a5f,#1A3050);border:1px solid rgba(255,255,255,.14);border-top:3px solid '+accent+';border-radius:10px;padding:10px 14px">'
-      +'<div style="font-size:10px;font-weight:700;color:var(--fog);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">'+label+'</div>'
-      +'<div style="display:flex;align-items:center;gap:12px">'+body+'</div></div>';
-  };
-  var _big=function(n,color){ return '<div style="font-size:30px;font-weight:700;line-height:1;color:'+(color||'var(--white)')+'">'+n+'</div>'; };
-  var _lines=function(rows){ return '<div style="display:flex;flex-direction:column;gap:2px;font-size:12px;line-height:1.3">'+rows.join('')+'</div>'; };
-  var summaryBar='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px">'
-    +_card('var(--teal)','Stakeholders', _big(projPS.length)+_lines([
-        '<div><span style="color:var(--teal)">'+extPS.length+' external</span> &nbsp;<span style="color:var(--sky-lt)">'+intPS.length+' internal</span></div>',
-        '<div><span style="color:var(--green)">'+champCt+' champ</span> &nbsp;<span style="color:var(--slate)">'+neutCt+' neutral</span> &nbsp;<span style="color:var(--red)">'+oppCt+' opp</span></div>']))
-    +_card('var(--sky-lt)','Interactions', _big(projInts.length)+_lines([
-        '<div style="color:var(--sky-lt)">'+projInts.filter(function(i){return i.direction==='Incoming'}).length+' incoming</div>',
-        '<div style="color:var(--green)">'+projInts.filter(function(i){return i.direction==='Outgoing'}).length+' outgoing</div>']))
-    +_card(fuColor,'Follow-ups', _big(openFUs,fuColor)+_lines([
-        '<div style="color:'+fuColor+'">'+(overdueFU>0?overdueFU+' overdue':openFUs>0?'All on track':'None pending')+'</div>']))
-    +_card(delColor,'Deliverables', miniDonut(delPctR,delColor,46)+_lines([
-        '<div style="font-size:18px;font-weight:700;color:var(--white);line-height:1">'+doneDels+'<span style="font-size:13px;color:var(--fog);font-weight:400"> of '+projDels.length+'</span></div>',
-        '<div style="color:var(--fog)">complete</div>']))
-    +'</div>';
-
-  var groupPanel='<div style="margin-bottom:20px;background:#0E1E30;border:1px solid rgba(255,255,255,.13);border-radius:10px;padding:14px 18px">'
-    +'<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px">'
-    +'<div style="font-size:12px;font-weight:700;color:var(--fog);text-transform:uppercase;letter-spacing:.5px">Report distribution — recipients</div>'
-    +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:8px;padding:6px 12px;white-space:nowrap">'
-    +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:15px;height:15px;color:var(--sky-lt)"><circle cx="12" cy="12" r="9"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><path d="M15 9l-3.5 5-2-2z" fill="currentColor" stroke="none"/></svg>'
-    +'<span style="font-size:12px;color:var(--slate)">Letterhead:</span>'
-    +'<select id="rpt-brand-sel" onchange="_rptBrandSet(this.value)" style="background:var(--navy-mid);border:1px solid var(--border);border-radius:6px;color:var(--white);font-size:12px;padding:3px 6px">'
-    +['off','sunrise','udot'].map(function(m){return '<option value="'+m+'"'+(_rptBrandModeQ()===m?' selected':'')+'>'+(m==='off'?'None':m==='udot'?'UDOT':'Sunrise')+'</option>';}).join('')
-    +'</select></label>'
-    +'</div>'
-    +'<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">'+grpHTML+'</div>'
-    +'<div style="margin-top:8px;font-size:12px;color:var(--fog)">'+projPS.length+' stakeholders across all groups</div></div>';
-
-  var reportCards='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px">'+cardsHTML+'</div>';
 
   // archive panel
   var archiveHtml=_buildArchiveHTML(projF);
@@ -12368,15 +12642,7 @@ el.innerHTML=topbar
   // tab content
   var tabContent='';
   if(rptTab==='reports'){
-    tabContent=summaryBar+groupPanel
-      +'<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">'
-      +'<div style="font-size:12px;font-weight:700;color:var(--fog);text-transform:uppercase;letter-spacing:.5px">Select a report to generate</div>'
-      +'<button class="btn btn-sm" onclick="openReportSequenceModal()" style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap">'
-      +'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" style="width:13px;height:13px"><path d="M2 4h9M2 8h9M2 12h6"/><path d="M12 3l2 2-2 2M14 5H9"/></svg>'
-      +'Build report package</button>'
-      +'</div>'
-      +reportCards
-      +'<div id="rpt-output"></div>';
+    tabContent=_rptQuickHTML(projF, grpHTML, internalCt);
   } else if(rptTab==='pi-editor'){
     var hasDraft=!!((_syncCache['reports']||[]).find(function(r){return String(r.projectId)===String(projF);}));
     tabContent='<div style="background:linear-gradient(135deg,#1A3050,#0E2440);border:1px solid rgba(45,125,210,.3);border-radius:12px;padding:24px;display:flex;align-items:flex-start;gap:20px;margin-bottom:20px">'
@@ -16873,6 +17139,7 @@ function openReportSequenceModal(){
   var ftr='<button class="btn" onclick="closeM()">Cancel</button>'
     +'<button class="btn btn-primary" onclick="generateReportSequence()" style="margin-left:8px">Generate package</button>';
   openM('Build report package',body,ftr);
+  _rptPkgPrefill();
 }
 
 function generateReportSequence(){

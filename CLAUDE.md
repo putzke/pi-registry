@@ -273,6 +273,38 @@ mockups (Nov 21). `sql/2026-11-21_client_update_briefing.sql` adds
   code); tests 70 and 73 now read the export date from More and find cards by
   Edit.
 
+### Reports view: report cards with pictures + a grouped portfolio (DEV, Nov 2026, Jeff)
+Designed with Jeff on a canvas mockup (Nov 22; an "Insights" tab was tried and
+dropped as overkill). Code next to `renderReports` (`RPT_GROUPS`,
+`_rptQuickHTML`, `_rptCardHTML`, `_rptInsightHTML`, `_rptModel`, `_rv*`).
+- **Quick Reports:** the stat row is gone; recipients, the internal-contacts
+  toggle (`#rpt-include-internal`, now on the strip, state `S.rptIncInt`), the
+  letterhead and **Report package · N ▸ Build** sit on one "Send to" strip.
+  12 cards, 4 across, in Engagement / Public record / Scope & compliance, each
+  with a small picture built from the app's own rules (`_qrFuState`,
+  `_delProgress`, `_intIsExternal`, `_outreachStats`, `_parcelStats`). The
+  Stakeholder map card went (a "Map ↗" link on the contact list card).
+- **Period switch** (`RPT_PERIODS`, localStorage `cc_rpt_period`, default 90
+  days) sets the window for the interaction log, comments, events and outreach
+  pictures only; the rest show the project today. The printed reports are
+  unchanged.
+- **＋ Package** on a card (`rptPkgToggle`, `S.rptPkg`, per project) numbers
+  the package dialog in click order (`_rptPkgPrefill`, after `openM`); the
+  dialog, its ordering and every ✦ AI option are unchanged. PI compliance and
+  NEPA cards have no ＋ Package (not package reports).
+- **Insight ▾** (`RPT_INSIGHT_IDS`: interaction log, follow-ups, deliverables,
+  comment matrix) opens a panel under that row. More cards one at a time.
+- Colours: the dataviz-validated dark categorical order `RV_CAT` (blue, orange,
+  aqua, violet, yellow); inbound orange / outbound blue; status `RV_ST`.
+- **Portfolio** (no project picked, `_rptPortfolioHTML` / `_pfBodyHTML`): one
+  table grouped by Client (or County / PI Lead), a header row per group with
+  totals; a group starts COLLAPSED unless a project in it has an overdue
+  follow-up or (Active) no report in `LAST_REPORT_STALE_DAYS`. Tiles filter
+  (`S.pfQuick`: mine / overdue / issues / stale); search `S.pfQ`; Show
+  Active & on hold (default) / Complete / All. Cross-project reports moved into
+  one menu. UDOT regions stay separate groups (Jeff).
+- Guarded by `test/tests/135-reports-cards-and-portfolio.test.js`.
+
 ### A freshly logged interaction could open its own Edit modal blank (Aug 2026)
 `saveQuickLog()` and `saveInt()` push a new row into the cache under a
 **temporary local id** (`DB.uid()`, prefixed `tmp_`) before the real Supabase

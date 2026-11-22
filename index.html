@@ -12133,7 +12133,17 @@ var RPT_CARD_INFO={
   'parcel-status':{name:'Right-of-way parcels', desc:'Notice and ownership coverage', glyph:'▤'}
 };
 function _rptPeriod(){ var v=''; try{ v=localStorage.getItem('cc_rpt_period')||''; }catch(e){} return RPT_PERIODS.some(function(p){return p[0]===v;})?v:'90'; }
-function setRptPeriod(v){ try{ localStorage.setItem('cc_rpt_period',v); }catch(e){} renderReports(document.getElementById('main')); }
+function setRptPeriod(v){ try{ localStorage.setItem('cc_rpt_period',v); }catch(e){} _rptRedraw(); }
+// Redraw Reports without losing the scroll position (a full render puts the
+// page back at the top). With `show`, scroll that insight panel into view.
+function _rptRedraw(show){
+  var main=document.getElementById('main'), sc=main&&main.querySelector('.content'), top=sc?sc.scrollTop:0;
+  renderReports(main);
+  var sc2=main&&main.querySelector('.content'); if(sc2) sc2.scrollTop=top;
+  if(show){ var p=main.querySelector('.rpt-insight[data-rid="'+show+'"]');
+    if(p&&sc2){ var pr=p.getBoundingClientRect(), cr=sc2.getBoundingClientRect();
+      if(pr.bottom>cr.bottom||pr.top<cr.top) sc2.scrollTop+=Math.min(pr.top-cr.top-12, pr.bottom-cr.bottom+16); } }
+}
 function _rptPeriodStart(){ var p=_rptPeriod(); return p==='all'?'':_isoAddDays(localToday(),-(Number(p)-1)); }
 function _rptRunCard(id){
   if(id==='issues-report') return generateIssuesReport();
@@ -12147,10 +12157,10 @@ function rptPkgToggle(id){
   var ids=_rptPkgList().slice(), i=ids.indexOf(id);
   if(i>=0) ids.splice(i,1); else ids.push(id);
   S.rptPkg={projId:S.projectFilter, ids:ids};
-  renderReports(document.getElementById('main'));
+  _rptRedraw();
 }
-function rptInsight(id){ S.rptInsight=S.rptInsight===id?'':id; renderReports(document.getElementById('main')); }
-function rptSetIncInt(on){ S.rptIncInt=!!on; renderReports(document.getElementById('main')); }
+function rptInsight(id){ S.rptInsight=S.rptInsight===id?'':id; _rptRedraw(S.rptInsight); }
+function rptSetIncInt(on){ S.rptIncInt=!!on; _rptRedraw(); }
 // Number the package dialog from the cards' ＋ Package picks, in click order.
 function _rptPkgPrefill(){
   var ids=_rptPkgList(); if(!ids.length) return;

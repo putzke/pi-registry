@@ -77,6 +77,26 @@ module.exports = {
         await app.page.screenshot({ path: SHOT + '/quick.png', fullPage: true });
       }
 
+      // A bottom-row Insight keeps your place and shows its panel (Jeff: it
+      // jumped back to the top, panel out of sight).
+      await app.page.setViewportSize({ width: 1440, height: 700 });
+      const sc = await app.page.evaluate(() => {
+        S.rptInsight = ''; render();
+        const c = document.querySelector('#main .content'); c.scrollTop = c.scrollHeight;
+        const before = c.scrollTop;
+        document.querySelector('.rpt-card[data-rid="deliverable-status"] .rpt-ins').click();
+        const c2 = document.querySelector('#main .content'), p = document.querySelector('.rpt-insight');
+        const pr = p.getBoundingClientRect(), cr = c2.getBoundingClientRect();
+        const out = { before, after: c2.scrollTop, inView: pr.top < cr.bottom && pr.bottom > cr.top && pr.top >= cr.top - 1 };
+        c2.scrollTop = 400; const keep = c2.scrollTop; rptPkgToggle('events-log');
+        out.pkgKeep = document.querySelector('#main .content').scrollTop === keep; rptPkgToggle('events-log');
+        return out;
+      });
+      t.ok(sc.before > 0 && sc.after > 0, 'opening a bottom-row Insight does not jump to the top');
+      t.ok(sc.inView, 'the opened panel is on screen');
+      t.ok(sc.pkgKeep, '＋ Package keeps the scroll position');
+      await app.page.setViewportSize({ width: 1440, height: 900 });
+
       const pf = await app.page.evaluate(() => {
         const today = localToday();
         _syncCache.projects = [

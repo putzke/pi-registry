@@ -303,6 +303,10 @@ dropped as overkill). Code next to `renderReports` (`RPT_GROUPS`,
   (`S.pfQuick`: mine / overdue / issues / stale); search `S.pfQ`; Show
   Active & on hold (default) / Complete / All. Cross-project reports moved into
   one menu. UDOT regions stay separate groups (Jeff).
+- **Card buttons keep your place** (`_rptRedraw`): Insight, ＋ Package, the
+  period switch and the internal toggle redraw without jumping to the top, and
+  an opened Insight panel is scrolled into view (Jeff: bottom-row panels opened
+  off screen).
 - Guarded by `test/tests/135-reports-cards-and-portfolio.test.js`.
 
 ### A freshly logged interaction could open its own Edit modal blank (Aug 2026)

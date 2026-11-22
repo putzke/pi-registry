@@ -489,6 +489,10 @@ select optgroup{background:var(--navy-mid);color:var(--sky-lt);font-weight:700;f
 .pf-row:hover{background:#1b3556}
 @media (max-width:1200px){.rpt-grid4{grid-template-columns:repeat(2,minmax(0,1fr))}.rpt-ins-grid,.rpt-ins-grid2{grid-template-columns:minmax(0,1fr)}.pf-tiles{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:640px){.rpt-grid4{grid-template-columns:minmax(0,1fr)}.pf-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.nepa-cols{display:grid;grid-template-columns:250px minmax(0,1fr)}
+.nepa-grp:hover{background:rgba(255,255,255,.05)!important}
+.nepa-row:hover{background:rgba(255,255,255,.03)}
+@media (max-width:900px){.nepa-cols{grid-template-columns:minmax(0,1fr)}}
 </style>
 <!-- SheetJS loaded on demand for Excel export -->
 <script>/* JSZip 3.10.1 - embedded for offline use */
@@ -2886,8 +2890,8 @@ function renderDash(el){
   const ejCt=scopeStakes.filter(s=>s.underserved).length;
   const allPeriods=(DB.get('comment_periods')||[]).filter(inS);
   const openPeriodsCt=allPeriods.filter(p=>p.status==='Open').length;
-  const nepaProjs=scopeProjs.filter(p=>p.nepaChecklist&&p.nepaChecklist.length>0);
-  const avgNepaPct=nepaProjs.length>0?Math.round(nepaProjs.reduce((sum,p)=>{const cl=p.nepaChecklist||[];return sum+(cl.length>0?cl.filter(x=>x.checked).length/cl.length:0);},0)/nepaProjs.length*100):null;
+  const nepaProjs=scopeProjs.filter(p=>_nepaLive(p.nepaChecklist).length>0);
+  const avgNepaPct=nepaProjs.length>0?Math.round(nepaProjs.reduce((sum,p)=>{const cl=_nepaLive(p.nepaChecklist);return sum+(cl.length>0?cl.filter(x=>x.checked).length/cl.length:0);},0)/nepaProjs.length*100):null;
   const active=scopeProjs.filter(p=>p.status==='Active');
   function projCard(p){
     // No contact/sentiment/interaction counts on this card any more, so the
@@ -3349,7 +3353,7 @@ function renderDash(el){
             <div style="font-size:13px;font-weight:600;color:var(--white);margin-bottom:12px">NEPA PI Checklist — by project</div>
             ${nepaProjs.length===0?'<div style="font-size:12px;color:var(--fog)">No projects have a NEPA classification set yet. Edit a project to assign CE / EA / EIS and unlock the checklist.</div>':
               nepaProjs.map(p=>{
-                const cl=p.nepaChecklist||[];
+                const cl=_nepaLive(p.nepaChecklist);
                 const done=cl.filter(x=>x.checked).length;
                 const pct=cl.length>0?Math.round(done/cl.length*100):0;
                 const col=pct===100?'var(--green)':pct>=60?'#4db6ac':pct>=30?'var(--amber)':'var(--sky-lt)';
@@ -6703,99 +6707,215 @@ function renderDelScope(pF){
         }).join('')}</tbody>
       </table></div>`}
       <div style="margin-top:10px;display:flex;gap:7px"><button class="btn btn-sm" onclick="openTplApply('${proj.id}')">+ Template</button><button class="btn btn-sm btn-primary" onclick="S.projectFilter='${proj.id}';openDelModal()">+ Add item</button></div>
-      ${(()=>{
-        const nc=proj.nepaClassification;
-        if(!nc||nc==='N/A')return'';
-        const cl=proj.nepaChecklist||[];
-        const total=cl.length,done=cl.filter(x=>x.checked).length;
-        const pctN=total>0?Math.round(done/total*100):0;
-        return`<div style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-            <div style="font-weight:600;font-size:13px;color:var(--sky-lt)">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" style="width:14px;height:14px;vertical-align:-2px;margin-right:5px"><path d="M13 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z"/><path d="M5 8l2 2 4-4"/></svg>
-              NEPA Compliance Checklist — ${nc}
-            </div>
-            <div style="display:flex;align-items:center;gap:8px">
-              <span style="font-size:12px;color:${pctN===100?'var(--green)':'var(--slate)'};font-weight:500">${done}/${total} complete</span>
-              <div class="pbar" style="width:80px"><div class="pfill ${pctN===100?'green':''}" style="width:${pctN}%"></div></div>
-            </div>
-          </div>
-          ${(()=>{
-            if(!window._nepaCollapsed)window._nepaCollapsed={};
-            var groups=[],gIdx={};
-            cl.forEach(function(item,idx){
-              var gName=item.group||'';
-              if(gIdx[gName]===undefined){gIdx[gName]=groups.length;groups.push({name:gName,items:[]});}
-              groups[gIdx[gName]].items.push({item:item,idx:idx});
-            });
-            return groups.map(function(g,gi){
-              var collapsible=g.items.length>4;
-              var allDone=g.items.every(function(x){return x.item.checked;});
-              var doneCt=g.items.filter(function(x){return x.item.checked;}).length;
-              var bodyId='nepa-grp-'+proj.id+'-'+gi;
-              var colKey=proj.id+':'+gi;
-              if(!(colKey in window._nepaCollapsed))window._nepaCollapsed[colKey]=allDone&&collapsible;
-              var collapsed=collapsible&&window._nepaCollapsed[colKey];
-              var hdrCol=allDone?'var(--green)':'var(--sky-lt)';
-              var hdr='<div style="margin-top:10px;margin-bottom:2px">'
-                +(collapsible
-                  ?'<button onclick="_toggleNepaGroup(\''+colKey+'\',\''+bodyId+'\',this)" style="width:100%;background:rgba(255,255,255,.03);border:none;border-left:3px solid '+hdrCol+';cursor:pointer;display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:0 5px 5px 0;text-align:left">'
-                    +'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" style="width:16px;height:16px;color:'+hdrCol+';flex-shrink:0;transform:rotate('+(collapsed?'0':'90')+'deg)">'
-                    +'<path d="M6 4l4 4-4 4"/></svg>'
-                    +'<span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:'+hdrCol+';flex:1">'+g.name+'</span>'
-                    +'<span style="font-size:11px;color:var(--fog)">'+doneCt+'/'+g.items.length+'</span>'
-                    +'</button>'
-                  :'<div style="display:flex;align-items:center;gap:9px;padding:7px 10px;border-left:3px solid '+hdrCol+'">'
-                    +'<span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:'+hdrCol+';flex:1">'+g.name+'</span>'
-                    +'<span style="font-size:11px;color:var(--fog)">'+doneCt+'/'+g.items.length+'</span>'
-                    +'</div>')
-                +'</div>';
-              var items=g.items.map(function(x){
-                var item=x.item,idx=x.idx;
-                return '<div style="display:flex;align-items:flex-start;gap:10px;padding:6px 8px;border-radius:5px;background:'+(item.checked?'rgba(34,197,94,.07)':'rgba(255,255,255,.03)')+';cursor:pointer" onclick="toggleNepaCheck(\''+proj.id+'\','+idx+')">'
-                  +'<div style="flex-shrink:0;margin-top:1px;width:16px;height:16px;border-radius:3px;border:1.5px solid '+(item.checked?'var(--green)':'rgba(255,255,255,.25)')+';background:'+(item.checked?'var(--green)':'transparent')+';display:flex;align-items:center;justify-content:center">'
-                  +(item.checked?'<svg viewBox="0 0 10 10" fill="none" stroke="white" stroke-width="2" style="width:9px;height:9px"><path d="M2 5l2.5 2.5L8 3"/></svg>':'')
-                  +'</div>'
-                  +'<div style="flex:1;font-size:13px;color:'+(item.checked?'var(--slate)':'var(--mist)')+(item.checked?';text-decoration:line-through':'')+'">'+(item.label||'')+'</div>'
-                  +(item.checked?'<div style="font-size:11px;color:var(--fog);white-space:nowrap;flex-shrink:0">'+(item.checkedDate?fmt(item.checkedDate):'')+' '+(item.checkedBy?'· '+item.checkedBy:'')+'</div>':'')
-                  +'</div>';
-              }).join('');
-              return hdr+'<div id="'+bodyId+'"'+(collapsed?' style="display:none"':'')+'>'+items+'</div>';
-            }).join('');
-          })()}
-          ${pctN===100?`<div style="margin-top:10px;padding:8px 12px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:6px;font-size:12px;color:var(--green);font-weight:500">✓ All NEPA PI compliance items complete for this ${nc} project.</div>`:''}
-        </div>`;
-      })()}
+      ${_nepaPanelHTML(proj)}
     </div>`;
   }).join('')+'</div>';
 }
 
-function _toggleNepaGroup(key, bodyId, btn) {
-  if(!window._nepaCollapsed)window._nepaCollapsed={};
-  window._nepaCollapsed[key]=!window._nepaCollapsed[key];
-  const el=document.getElementById(bodyId);
-  if(el)el.style.display=window._nepaCollapsed[key]?'none':'block';
-  const svg=btn&&btn.querySelector('svg');
-  if(svg)svg.style.transform='rotate('+(window._nepaCollapsed[key]?'0':'90')+'deg)';
+// ── NEPA CHECKLIST: compact panel, dates, In progress, N/A (DEV, Nov 2026, Jeff) ──
+// Designed with Jeff on the canvas (Nov 22). Groups down the left, the chosen
+// group's items on the right, one line each. An item is Open, In progress
+// (longer jobs only: NEPA_DURATION_KEYS — a start date and an owner), Done (the
+// completed date and who, both editable, never later than today) or Not
+// applicable (out of every percentage: _nepaLive). A date filled in by a click
+// is kept as `dateAuto` and flagged until someone saves a date. Everything is
+// stored inside pi_projects.nepa_checklist (jsonb) — no new columns.
+// Item fields: key, group, label, checked, checkedDate, checkedBy (completed
+// by), dateAuto, startedDate, owner, startedBy, na.
+var NEPA_LONG_DAYS=30;
+var NEPA_DURATION_KEYS={
+  CE:['CE-04','CE-05','CE-21','CE-22','CE-23','CE-25','CE-29','CE-30','CE-31'],
+  EA:['EA-04','EA-05','EA-06','EA-07','EA-08','EA-09','EA-13','EA-15','EA-16','EA-17','EA-37','EA-38','EA-39','EA-40','EA-41','EA-42','EA-43','EA-44','EA-45','EA-46','EA-49'],
+  EIS:['EIS-04','EIS-05','EIS-06','EIS-07','EIS-08','EIS-09','EIS-12','EIS-13','EIS-17','EIS-18','EIS-19','EIS-20','EIS-21','EIS-23','EIS-24','EIS-25','EIS-26','EIS-48','EIS-49','EIS-50','EIS-51','EIS-52','EIS-53','EIS-54','EIS-55','EIS-57','EIS-58','EIS-63']
+};
+function _nepaLive(cl){ return (cl||[]).filter(function(x){ return !x.na; }); }
+function _nepaKey(x){ return String(x.key||x.label||''); }
+function _nepaHasDuration(cls,x){ return (NEPA_DURATION_KEYS[cls]||[]).indexOf(x.key)>=0; }
+function _nepaState(x){ return x.na?'na':x.checked?'done':x.startedDate?'progress':'open'; }
+function _nepaNeedsCheck(x){ return !!(x.checked&&!x.na&&(!x.checkedDate||x.dateAuto)); }
+function _nepaMe(){ return String((typeof _myInitials==='function'&&_myInitials())||getLoggedBy()||'').toUpperCase(); }
+function _nepaUI(pid){ window._nepaUIS=window._nepaUIS||{}; return window._nepaUIS[pid]||(window._nepaUIS[pid]={group:'',filter:'all',edit:'',kind:'',open:'',allEdit:false}); }
+function _nepaMatch(x,f){
+  var s=_nepaState(x);
+  if(f==='open') return s==='open'||s==='progress';
+  if(f==='progress') return s==='progress';
+  if(f==='check') return _nepaNeedsCheck(x);
+  return true;
 }
-function toggleNepaCheck(projId,idx){
-  const all=DB.get('projects');
-  const proj=all.find(x=>x.id===projId);
-  if(!proj||!proj.nepaChecklist||!proj.nepaChecklist[idx])return;
-  const item=proj.nepaChecklist[idx];
-  item.checked=!item.checked;
-  item.checkedDate=item.checked?localToday():'';
-  item.checkedBy=item.checked?(getLoggedBy()||''):'';
+function _nepaPanelHTML(proj){
+  var nc=proj.nepaClassification;
+  if(!nc||nc==='N/A') return '';
+  var pid=String(proj.id), cl=proj.nepaChecklist||[], ui=_nepaUI(pid), today=localToday();
+  var live=_nepaLive(cl), nDone=live.filter(function(x){return x.checked;}).length, nNa=cl.length-live.length;
+  var nProg=live.filter(function(x){return _nepaState(x)==='progress';}).length, nCheck=cl.filter(_nepaNeedsCheck).length;
+  var pct=live.length?Math.round(nDone/live.length*100):0;
+  var groups=[], gi={};
+  cl.forEach(function(x){ var g=x.group||'General'; if(gi[g]===undefined){ gi[g]=groups.length; groups.push({name:g,items:[]}); } groups[gi[g]].items.push(x); });
+  if(!ui.group||gi[ui.group]===undefined){
+    var firstOpen=groups.find(function(g){ return g.items.some(function(x){ return !x.na&&!x.checked; }); });
+    ui.group=(firstOpen||groups[0]||{name:''}).name;
+  }
+  var e=function(s){ return escHtml(String(s)); }, J=function(s){ return e(JSON.stringify(String(s))); };
+  var btn='font-family:inherit;font-size:12px;font-weight:600;border-radius:6px;padding:6px 10px;min-height:32px;cursor:pointer;';
+  var filt=[['all','All'],['open','Open ('+(live.length-nDone)+')'],['progress','In progress ('+nProg+')'],['check','Check dates ('+nCheck+')']].map(function(f){
+    var on=ui.filter===f[0], warn=f[0]==='check'&&nCheck;
+    return '<button class="nepa-f" data-f="'+f[0]+'" onclick="nepaFilter('+J(pid)+',\''+f[0]+'\')" aria-pressed="'+on+'" style="'+btn+'color:'+(on?'#fff':warn?RV_ST.amber:'var(--slate)')+';background:'+(on?'var(--sky)':'transparent')+';border:1px solid '+(on?'var(--sky)':warn?'rgba(232,160,32,.6)':'rgba(255,255,255,.18)')+'">'+f[1]+'</button>';
+  }).join('');
+  var rail=groups.map(function(g){
+    var lv=g.items.filter(function(x){return !x.na;}), d=lv.filter(function(x){return x.checked;}).length;
+    var allNa=!lv.length, complete=!allNa&&d===lv.length, flag=g.items.some(_nepaNeedsCheck), on=ui.group===g.name;
+    var p=lv.length?Math.round(d/lv.length*100):0, c=flag?RV_ST.amber:RV_ST.green;
+    var any=g.items.some(function(x){return _nepaMatch(x,ui.filter);});
+    return '<button class="nepa-grp" data-g="'+e(g.name)+'" onclick="nepaGroup('+J(pid)+','+J(g.name)+')" aria-current="'+on+'" style="display:grid;grid-template-columns:22px minmax(0,1fr) auto;align-items:center;gap:8px;text-align:left;font-family:inherit;font-size:12.5px;font-weight:500;color:'+(on?'var(--white)':'var(--mist)')+';background:'+(on?'rgba(57,135,229,.18)':'transparent')+';border:0;border-left:3px solid '+(allNa?'#5D7A96':complete?c:d?'#3987e5':'rgba(255,255,255,.12)')+';border-radius:6px;padding:7px 8px;min-height:36px;cursor:pointer;opacity:'+(ui.filter==='all'||any?1:.4)+'">'
+      +'<span aria-hidden="true" style="width:18px;height:18px;border-radius:50%;display:grid;place-items:center;background:'+(allNa?'#5D7A96':'conic-gradient('+c+' 0 '+p+'%,rgba(255,255,255,.12) '+p+'% 100%)')+'"><span style="width:12px;height:12px;border-radius:50%;background:'+(complete?c:'#112236')+';font-size:9px;font-weight:700;color:#0B1929;display:grid;place-items:center">'+(complete?(flag?'!':'✓'):'')+'</span></span>'
+      +'<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+e(g.name)+'</span>'
+      +'<span style="font-size:11px;color:var(--slate)">'+(allNa?'N/A':d+'/'+lv.length)+'</span></button>';
+  }).join('');
+  var cur=groups[gi[ui.group]]||{name:'',items:[]}, curLive=cur.items.filter(function(x){return !x.na;}), curNa=!curLive.length&&cur.items.length;
+  var curD=curLive.filter(function(x){return x.checked;}).length;
+  var inp='background:var(--navy);color:var(--white);border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:5px 8px;font-family:inherit;font-size:13px;color-scheme:dark';
+  var team=(typeof _fuAssignees==='function'?_fuAssignees():[]);
+  var rows=cur.items.filter(function(x){return _nepaMatch(x,ui.filter);}).map(function(x){
+    var k=_nepaKey(x), s=_nepaState(x), chk=_nepaNeedsCheck(x), open=ui.open===k, dur=_nepaHasDuration(nc,x);
+    var chip='', chipC='var(--mist)', chipBg='transparent', chipBd='rgba(255,255,255,.16)', chipAct='';
+    if(s==='na'){ chip='Not applicable'; chipC='var(--slate)'; }
+    else if(s==='done'){
+      chip=x.checkedDate?fmt(x.checkedDate)+(x.checkedBy?' · '+x.checkedBy:'')+(x.dateAuto?' · ticked':''):'Add date';
+      if(chk){ chipC=RV_ST.amber; chipBg='rgba(232,160,32,.12)'; chipBd='rgba(232,160,32,.6)'; }
+      chipAct='nepaEdit('+J(pid)+','+J(k)+',\'done\')';
+    } else if(s==='progress'){
+      var days=_qrDaysBetween(x.startedDate,today), long=days>NEPA_LONG_DAYS;
+      chip='In progress · '+days+' day'+(days!==1?'s':'')+(x.owner?' · '+x.owner:'');
+      chipC=long?RV_ST.amber:'#8cbcf2'; chipBg=long?'rgba(232,160,32,.12)':'rgba(57,135,229,.14)'; chipBd=long?'rgba(232,160,32,.6)':'rgba(57,135,229,.5)';
+      chipAct='nepaEdit('+J(pid)+','+J(k)+',\'start\')';
+    }
+    var took=s==='done'&&x.startedDate&&x.checkedDate?'<span style="font-size:11px;color:var(--fog);white-space:nowrap">took '+Math.max(0,_qrDaysBetween(x.startedDate,x.checkedDate))+' days</span>':'';
+    var startBtn=s==='open'&&dur?'<button class="nepa-start" onclick="nepaStart('+J(pid)+','+J(k)+')" style="'+btn+'padding:3px 9px;min-height:26px;color:#8cbcf2;background:transparent;border:1px solid rgba(57,135,229,.5)">Start</button>':'';
+    var row='<div class="nepa-row" data-key="'+e(k)+'" data-state="'+s+'" style="display:grid;grid-template-columns:26px 58px minmax(0,1fr) auto 34px;align-items:center;gap:8px;padding:6px 4px;min-height:38px;border-bottom:1px solid rgba(255,255,255,.06);opacity:'+(s==='na'?.55:1)+'">'
+      +'<button class="nepa-box" onclick="nepaTick('+J(pid)+','+J(k)+')" aria-pressed="'+(s==='done')+'" aria-label="'+(s==='done'?'Mark not done: ':'Mark done: ')+e(k)+'"'+(s==='na'?' disabled':'')+' style="width:20px;height:20px;border-radius:4px;border:1.5px solid '+(s==='done'?RV_ST.green:'rgba(255,255,255,.3)')+';background:'+(s==='done'?RV_ST.green:'transparent')+';color:#0B1929;font-size:12px;font-weight:800;display:grid;place-items:center;cursor:pointer;padding:0">'+(s==='done'?'✓':'')+'</button>'
+      +'<span style="font-family:var(--mono);font-size:11px;color:var(--fog)">'+e(x.key||'')+'</span>'
+      +'<button onclick="nepaOpen('+J(pid)+','+J(k)+')" aria-expanded="'+open+'" title="'+(open?'':e(x.label||''))+'" style="text-align:left;background:transparent;border:0;padding:0;cursor:pointer;font-family:inherit;font-size:13px;color:'+(s==='done'||s==='na'?'var(--slate)':'var(--white)')+';overflow:hidden;text-overflow:ellipsis;white-space:'+(open?'normal':'nowrap')+'">'+e(x.label||'')+'</button>'
+      +'<span style="display:flex;align-items:center;gap:6px;justify-content:flex-end">'+took+startBtn
+      +(chip?'<button class="nepa-chip"'+(chipAct?' onclick="'+chipAct+'"':' disabled')+' title="'+(chipAct?'Change the date':'')+'" style="font-family:inherit;font-size:11.5px;font-weight:500;white-space:nowrap;border-radius:12px;padding:3px 9px;min-height:26px;cursor:'+(chipAct?'pointer':'default')+';color:'+chipC+';background:'+chipBg+';border:1px solid '+chipBd+'">'+e(chip)+'</button>':'')+'</span>'
+      +'<button class="nepa-na" onclick="nepaNa('+J(pid)+','+J(k)+')" title="'+(s==='na'?'Applies again':'Not applicable to this project')+'" aria-label="'+(s==='na'?'Applies again: ':'Not applicable: ')+e(k)+'" style="width:30px;height:26px;border-radius:6px;background:transparent;border:1px solid rgba(255,255,255,.14);color:var(--slate);font-size:10.5px;cursor:pointer;padding:0">N/A</button></div>';
+    if(ui.edit===k){
+      var box='display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 4px 8px 92px;background:rgba(57,135,229,.12);border:1px solid #3987e5;border-radius:8px;padding:8px 10px;font-size:12.5px';
+      if(ui.kind==='start'){
+        var opts=team.map(function(m){ return '<option value="'+e(m.ini)+'"'+(m.ini===String(x.owner||'').toUpperCase()?' selected':'')+'>'+e(m.name?m.name+' ('+m.ini+')':m.ini)+'</option>'; }).join('');
+        if(x.owner&&!team.some(function(m){return m.ini===String(x.owner).toUpperCase();})) opts='<option value="'+e(x.owner)+'" selected>'+e(x.owner)+'</option>'+opts;
+        row+='<div class="nepa-editor" data-kind="start" style="'+box+'">Started on <input type="date" id="nepa-sd" max="'+today+'" value="'+e(x.startedDate||today)+'" style="'+inp+'"> Owner '
+          +(opts?'<select id="nepa-ow" style="'+inp+'">'+opts+'</select>':'<input id="nepa-ow" value="'+e(x.owner||_nepaMe())+'" style="'+inp+';width:60px">')
+          +'<button onclick="nepaSaveStart('+J(pid)+','+J(k)+')" style="'+btn+'color:#fff;background:var(--sky);border:0">Save</button>'
+          +'<button onclick="nepaUnstart('+J(pid)+','+J(k)+')" style="'+btn+'color:var(--slate);background:transparent;border:0">Remove start</button>'
+          +'<button onclick="nepaEdit('+J(pid)+',\'\',\'\')" style="'+btn+'color:var(--slate);background:transparent;border:0">Close</button></div>';
+      } else {
+        row+='<div class="nepa-editor" data-kind="done" style="'+box+'">Completed on <input type="date" id="nepa-cd" max="'+today+'" value="'+e(x.checkedDate||today)+'" style="'+inp+'"> by <input id="nepa-cb" value="'+e(x.checkedBy||_nepaMe())+'" maxlength="4" style="'+inp+';width:60px;font-family:var(--mono)">'
+          +'<button onclick="nepaSaveDone('+J(pid)+','+J(k)+')" style="'+btn+'color:#fff;background:var(--sky);border:0">Save date</button>'
+          +(x.startedDate?'<span style="color:var(--slate)">Started '+fmt(x.startedDate)+(x.owner?' · '+e(x.owner):'')+'</span>':'')
+          +'<span style="color:var(--slate)">Use the day it actually happened — a later day can\'t be picked.</span></div>';
+      }
+    }
+    return row;
+  }).join('');
+  var allBox=ui.allEdit?'<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:rgba(57,135,229,.12);border:1px solid #3987e5;border-radius:8px;padding:8px 10px;font-size:12.5px">Mark every open item in this group done on <input type="date" id="nepa-all" max="'+today+'" value="'+today+'" style="'+inp+'"><button onclick="nepaMarkAll('+J(pid)+')" style="'+btn+'color:#fff;background:var(--sky);border:0">Mark done</button><button onclick="nepaAllEdit('+J(pid)+',false)" style="'+btn+'color:var(--slate);background:transparent;border:0">Cancel</button></div>':'';
+  return '<div class="nepa-panel" id="nepa-panel-'+e(pid)+'" style="margin-top:18px;background:#112236;border:1px solid rgba(255,255,255,.12);border-radius:12px;overflow:hidden">'
+    +'<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.08)">'
+    +'<div style="flex:1 1 240px"><div style="font-weight:600;font-size:14px;color:var(--white)">NEPA compliance checklist — '+e(nc)+'</div>'
+    +'<div class="nepa-summary" style="font-size:12px;color:var(--slate)">'+nDone+' of '+live.length+' done ('+pct+'%) · '+nProg+' in progress · '+nNa+' not applicable · '+nCheck+' date'+(nCheck!==1?'s':'')+' to check</div></div>'
+    +'<div aria-hidden="true" style="flex:1 1 200px;max-width:320px;display:flex;gap:2px;height:10px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.06)">'
+    +'<div style="width:'+(cl.length?nDone/cl.length*100:0).toFixed(1)+'%;background:'+RV_ST.green+'"></div><div style="width:'+(cl.length?nProg/cl.length*100:0).toFixed(1)+'%;background:#3987e5"></div><div style="width:'+(cl.length?nNa/cl.length*100:0).toFixed(1)+'%;background:#5D7A96"></div></div>'
+    +'<div role="group" aria-label="Show" style="display:flex;gap:4px;flex-wrap:wrap">'+filt+'</div></div>'
+    +'<div class="nepa-cols">'
+    +'<nav aria-label="Checklist groups" style="border-right:1px solid rgba(255,255,255,.08);padding:8px;display:flex;flex-direction:column;gap:2px;max-height:520px;overflow-y:auto">'+rail+'</nav>'
+    +'<div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px;min-width:0">'
+    +'<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px"><div style="flex:1 1 200px;font-size:14px;font-weight:600;color:var(--white)">'+e(cur.name)+' <span style="font-weight:400;font-size:12px;color:var(--slate)">'+(curNa?'not applicable':curD+' of '+curLive.length+' done')+'</span></div>'
+    +(curNa?'':'<button onclick="nepaAllEdit('+J(pid)+',true)" style="'+btn+'color:var(--mist);background:transparent;border:1px solid rgba(255,255,255,.2)">Mark all done…</button>')
+    +'<button class="nepa-gna" onclick="nepaGroupNa('+J(pid)+')" style="'+btn+'color:var(--slate);background:transparent;border:1px solid rgba(255,255,255,.2)">'+(curNa?'Group applies again':'Group not applicable')+'</button>'
+    +'<button onclick="nepaNextOpen('+J(pid)+')" style="'+btn+'color:#fff;background:var(--sky);border:0">Next open item →</button></div>'
+    +allBox+'<div role="list">'+(rows||'<div style="padding:18px;color:var(--slate);font-size:13px">Nothing in this group matches the filter.</div>')+'</div>'
+    +'</div></div>'
+    +(pct===100&&live.length?'<div style="margin:0 16px 12px;padding:8px 12px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:6px;font-size:12px;color:var(--green);font-weight:500">✓ All NEPA PI compliance items that apply to this '+e(nc)+' are complete</div>':'')
+    +'</div>';
+}
+function _nepaRedraw(pid){
+  var el=document.getElementById('nepa-panel-'+pid), p=(DB.get('projects')||[]).find(function(x){return String(x.id)===String(pid);});
+  if(el&&p){ var t=document.createElement('div'); t.innerHTML=_nepaPanelHTML(p); if(t.firstChild) el.replaceWith(t.firstChild); else el.remove(); }
+}
+function _nepaMut(pid,key,fn){
+  var all=DB.get('projects'), p=all.find(function(x){return String(x.id)===String(pid);}); if(!p) return;
+  var cl=p.nepaChecklist||[];
+  if(key===null) fn(cl,p); else { var it=cl.find(function(x){return _nepaKey(x)===String(key);}); if(!it) return; fn(it,p); }
   DB.set('projects',all);
-  const _main=document.getElementById('main');
-  const _content=_main?.querySelector('.content[style*="overflow"]');
-  const _scrollTop=_content?_content.scrollTop:0;
-  renderDeliverables(_main);
-  requestAnimationFrame(()=>{
-    const c=document.getElementById('main')?.querySelector('.content[style*="overflow"]');
-    if(c)c.scrollTop=_scrollTop;
+  _nepaRedraw(pid);
+}
+function nepaFilter(pid,f){ _nepaUI(pid).filter=f; _nepaRedraw(pid); }
+function nepaGroup(pid,g){ var u=_nepaUI(pid); u.group=g; u.edit=''; u.open=''; u.allEdit=false; _nepaRedraw(pid); }
+function nepaOpen(pid,k){ var u=_nepaUI(pid); u.open=u.open===k?'':k; _nepaRedraw(pid); }
+function nepaEdit(pid,k,kind){ var u=_nepaUI(pid); if(u.edit===k&&u.kind===kind){ u.edit=''; u.kind=''; } else { u.edit=k; u.kind=kind; } _nepaRedraw(pid); }
+function nepaAllEdit(pid,on){ _nepaUI(pid).allEdit=!!on; _nepaRedraw(pid); }
+function nepaTick(pid,k){
+  var u=_nepaUI(pid), wasDone=false;
+  _nepaMut(pid,k,function(it){
+    if(it.na) return;
+    wasDone=!!it.checked;
+    if(it.checked){ it.checked=false; it.checkedDate=''; it.checkedBy=''; it.dateAuto=false; }
+    else { it.checked=true; it.checkedDate=localToday(); it.checkedBy=_nepaMe(); it.dateAuto=true; }
+  });
+  u.edit=wasDone?'':k; u.kind=wasDone?'':'done'; _nepaRedraw(pid);
+}
+function nepaSaveDone(pid,k){
+  var d=(document.getElementById('nepa-cd')||{}).value||'', by=String((document.getElementById('nepa-cb')||{}).value||'').trim().toUpperCase().slice(0,4);
+  var today=localToday();
+  if(!d){ showToast('Pick the date it was completed.'); return; }
+  if(d>today){ showToast('The completed date can\'t be after today.'); return; }
+  var u=_nepaUI(pid); u.edit=''; u.kind='';
+  _nepaMut(pid,k,function(it){
+    if(it.startedDate&&d<it.startedDate){ it.startedDate=d; }
+    it.checked=true; it.na=false; it.checkedDate=d; it.checkedBy=by||_nepaMe(); it.dateAuto=false;
   });
 }
+function nepaStart(pid,k){
+  var u=_nepaUI(pid); u.edit=k; u.kind='start';
+  _nepaMut(pid,k,function(it){ it.startedDate=localToday(); it.owner=_nepaMe(); it.startedBy=_nepaMe(); it.na=false; });
+}
+function nepaSaveStart(pid,k){
+  var d=(document.getElementById('nepa-sd')||{}).value||'', ow=String((document.getElementById('nepa-ow')||{}).value||'').trim().toUpperCase();
+  if(!d){ showToast('Pick the day the work started.'); return; }
+  if(d>localToday()){ showToast('The start date can\'t be after today.'); return; }
+  var u=_nepaUI(pid); u.edit=''; u.kind='';
+  _nepaMut(pid,k,function(it){
+    if(it.checked&&it.checkedDate&&d>it.checkedDate){ showToast('Start date moved to the completed date.'); d=it.checkedDate; }
+    it.startedDate=d; it.owner=ow||it.owner||_nepaMe();
+  });
+}
+function nepaUnstart(pid,k){ var u=_nepaUI(pid); u.edit=''; u.kind=''; _nepaMut(pid,k,function(it){ it.startedDate=''; it.owner=''; it.startedBy=''; }); }
+function nepaNa(pid,k){
+  _nepaMut(pid,k,function(it){ it.na=!it.na; if(it.na){ it.checked=false; it.checkedDate=''; it.checkedBy=''; it.dateAuto=false; } });
+}
+function nepaGroupNa(pid){
+  var g=_nepaUI(pid).group;
+  _nepaMut(pid,null,function(cl){
+    var its=cl.filter(function(x){return (x.group||'General')===g;}), setNa=its.some(function(x){return !x.na;});
+    if(setNa&&its.some(function(x){return x.checked;})&&!confirm('Some items in this group are marked done. Mark the whole group not applicable anyway? Their dates will be cleared.')) return;
+    its.forEach(function(x){ x.na=setNa; if(setNa){ x.checked=false; x.checkedDate=''; x.checkedBy=''; x.dateAuto=false; } });
+  });
+}
+function nepaMarkAll(pid){
+  var d=(document.getElementById('nepa-all')||{}).value||'', u=_nepaUI(pid), g=u.group, me=_nepaMe();
+  if(!d||d>localToday()){ showToast('Pick a date no later than today.'); return; }
+  u.allEdit=false;
+  _nepaMut(pid,null,function(cl){
+    cl.forEach(function(x){ if((x.group||'General')===g&&!x.na&&!x.checked){ x.checked=true; x.checkedDate=d; x.checkedBy=me; x.dateAuto=false; if(x.startedDate&&d<x.startedDate) x.startedDate=d; } });
+  });
+}
+function nepaNextOpen(pid){
+  var p=(DB.get('projects')||[]).find(function(x){return String(x.id)===String(pid);}); if(!p) return;
+  var nx=(p.nepaChecklist||[]).find(function(x){return !x.na&&!x.checked;});
+  var u=_nepaUI(pid);
+  if(!nx){ showToast('Nothing open — every item that applies is done.'); return; }
+  u.group=nx.group||'General'; u.filter='all'; u.edit=''; u.open=_nepaKey(nx); _nepaRedraw(pid);
+}
+
 function renderDelAll(pF){
   let dels=DB.get('deliverables');
   if(pF)dels=dels.filter(d=>d.projectId===pF);
@@ -7227,7 +7347,7 @@ function renderProjects(el){
         const openFU=ints.filter(i=>i.projectId===p.id&&i.followUp&&!i.followUpDone).length;
         const isArchived=p.status==='Complete'||p.status==='Cancelled';
         const statusBadge=p.status==='Active'?'b-green':p.status==='On hold'?'b-amber':p.status==='Complete'?'b-sky':'b-red';
-        const _ncl=p.nepaChecklist||[];
+        const _ncl=_nepaLive(p.nepaChecklist);
         const _nTotal=_ncl.length;
         const _nDone=_ncl.filter(x=>x.checked).length;
         const _nPct=_nTotal>0?Math.round(_nDone/_nTotal*100):null;
@@ -11444,7 +11564,7 @@ async function saveProj(){
   if(_nepaClass&&_nepaClass!=='N/A'){
     if(_existing?.nepaClassification!==_nepaClass){
       // Classification changed or newly set — start fresh but keep any matching checked items (key-first, label fallback for legacy)
-      const _oldChecked=Object.fromEntries((_existing?.nepaChecklist||[]).filter(x=>x.checked).map(x=>[x.key||x.label,x]));
+      const _oldChecked=Object.fromEntries((_existing?.nepaChecklist||[]).filter(x=>x.checked||x.startedDate||x.na).map(x=>[x.key||x.label,x]));
       _nepaChecklist=_defaultItems.map(item=>_oldChecked[item.key]||_oldChecked[item.label]||item);
     } else {
       // Same classification — preserve existing checklist, add any new template items not yet present
@@ -12319,7 +12439,7 @@ function _rptCardBody(id, M){
     var lepIds=M.ps.map(function(x){return M.stakes.find(function(z){return String(z.id)===String(x.stakeholderId);});}).filter(function(s){return s&&(s.lep||_isEJ(s));}).map(function(s){return String(s.id);});
     var lepReached=M.allInts.some(function(i){return lepIds.indexOf(String(i.stakeholderId))>=0;});
     var late=M.coms.filter(function(c){return c.status!=='Fulfilled'&&c.status!=='Cancelled'&&c.dueDate&&c.dueDate<M.today;}).length;
-    var cl=M.proj.nepaChecklist||[];
+    var cl=_nepaLive(M.proj.nepaChecklist);
     var checks=[
       {label:M.cmts.length?'Comments answered '+Math.round(resp/M.cmts.length*100)+'%':'No public comments logged', ok:M.cmts.length?resp===M.cmts.length:null},
       {label:lepIds.length?(lepReached?'LEP / EJ contacts reached':'LEP / EJ contacts not yet contacted'):'No LEP / EJ contacts flagged', ok:lepIds.length?lepReached:null},
@@ -12330,7 +12450,7 @@ function _rptCardBody(id, M){
     big=rated.filter(function(k){return k.ok;}).length+' of '+rated.length; sub='checks met';
     under=_rvChecks(checks);
   } else if(id==='nepa-compliance'){
-    var cl2=M.proj.nepaChecklist||[], done=cl2.filter(function(x){return x.checked;}).length;
+    var cl2=_nepaLive(M.proj.nepaChecklist), done=cl2.filter(function(x){return x.checked;}).length;
     big=cl2.length?Math.round(done/cl2.length*100)+'%':'—'; sub=cl2.length?(cl2.length-done)+' checklist items open':'No NEPA checklist on this project';
     under=cl2.length?_rvSeg([{label:'Done',n:done,c:RV_ST.green},{label:'Open',n:cl2.length-done,c:RV_ST.amber}]):'';
   } else if(id==='parcel-status'){
@@ -15668,7 +15788,7 @@ function generatePISummary(){
   var overdueComms=comms.filter(function(c){return(c.status==='Open'||c.status==='Overdue')&&c.dueDate&&c.dueDate<now.toISOString().slice(0,10);}).length;
 
   // ── NEPA checklist ────────────────────────────────────────────────
-  var cl=proj.nepaChecklist||[];
+  var cl=_nepaLive(proj.nepaChecklist);
   var clDone=cl.filter(function(x){return x.checked;}).length;
   var clPct=cl.length>0?Math.round(clDone/cl.length*100):null;
   var clColor=clPct===100?'#28A870':clPct>=60?'#4db6ac':clPct>=30?'#D9A544':'#5BA4CF';
@@ -15878,7 +15998,7 @@ function generateNepaComplianceReport(){
   var bodyHTML='';
 
   targetProjs.forEach(function(proj){
-    var cl=proj.nepaChecklist||[];
+    var cl=_nepaLive(proj.nepaChecklist);
     var clDone=cl.filter(function(x){return x.checked;}).length;
     var clPct=cl.length>0?Math.round(clDone/cl.length*100):0;
     var periods=allPeriods.filter(function(p){return String(p.projectId)===String(proj.id);});
@@ -19178,7 +19298,7 @@ function _buildSectionDraftBase(secType) {
   }
 
   if (secType === 'auto-nepa-compliance') {
-    var cl_n = proj.nepaChecklist || [];
+    var cl_n = _nepaLive(proj.nepaChecklist);
     if (cl_n.length === 0) return null;
     var clDone_n = cl_n.filter(function(x){return x.checked;}).length;
     var clPct_n  = Math.round(clDone_n / cl_n.length * 100);
@@ -19217,7 +19337,7 @@ function _buildSectionDraftBase(secType) {
 
   if (secType === 'auto-pi-compliance') {
     var pcomms2 = (DB.get('public_comments')||[]).filter(function(c){return String(c.projectId)===String(projF);});
-    var cl2 = proj.nepaChecklist||[];
+    var cl2 = _nepaLive(proj.nepaChecklist);
     var clDone2 = cl2.filter(function(x){return x.checked;}).length;
     var clPct2 = cl2.length > 0 ? Math.round(clDone2/cl2.length*100) : null;
     var lepSt2 = stakes.filter(function(s){return s.lep;}).length;
@@ -19837,7 +19957,7 @@ function _buildSectionPreviewTable(secType, projF, pstart, pend, includeInternal
   } else if (secType === 'auto-pi-compliance') {
     // Compact, Word-friendly rollup: metric · status · progress bar (no checklist line items).
     var projObj = DB.get('projects').find(function(p){ return String(p.id)===String(projF); }) || {};
-    var clP = projObj.nepaChecklist || [];
+    var clP = _nepaLive(projObj.nepaChecklist);
     var clDoneP = clP.filter(function(x){ return x.checked; }).length;
     var clPctP = clP.length>0 ? Math.round(clDoneP/clP.length*100) : null;
     var extSkP = externalPS.map(function(lk){ return allStakes.find(function(x){ return String(x.id)===String(lk.stakeholderId); }); }).filter(Boolean);
@@ -20076,7 +20196,7 @@ function renderLivePreview() {
       }
       if (sec.type === 'auto-nepa-compliance') {
         var _prj = DB.get('projects').find(function(p){ return p.id === projF; });
-        var _cl = (_prj && _prj.nepaChecklist) || [];
+        var _cl = _nepaLive(_prj && _prj.nepaChecklist);
         var _clDone = _cl.filter(function(x){ return x.checked; }).length;
         if (_cl.length) counts.push(_clDone + '/' + _cl.length + ' checklist items');
         var _perCt = (DB.get('comment_periods')||[]).filter(function(p){ return String(p.projectId)===String(projF); }).length;
@@ -20503,7 +20623,7 @@ function _buildReportSnapshot(projF, saved) {
         if (pmS.unownedCt) counts.push(pmS.unownedCt + ' without an owner');
       }
       if (sec.type === 'auto-nepa-compliance') {
-        var cl = proj.nepaChecklist || [];
+        var cl = _nepaLive(proj.nepaChecklist);
         if (cl.length) counts.push(cl.filter(function(x){ return x.checked; }).length + '/' + cl.length + ' checklist items');
         var perCt = (DB.get('comment_periods')||[]).filter(function(p){ return String(p.projectId)===String(projF); }).length;
         if (perCt) counts.push(perCt + ' comment period' + (perCt !== 1 ? 's' : ''));
@@ -22478,7 +22598,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
       var _pcomms=(DB.get('public_comments')||[]).filter(function(c){return String(c.projectId)===String(proj.id);});
       var _meets=(DB.get('meetings')||[]).filter(function(m){return String(m.projectId)===String(proj.id)&&(m.type==='Public meeting'||m.type==='Public event');});
       var _comms=(DB.get('commitments')||[]).filter(function(c){return String(c.projectId)===String(proj.id);});
-      var _cl=proj.nepaChecklist||[];
+      var _cl=_nepaLive(proj.nepaChecklist);
       var _clDone=_cl.filter(function(x){return x.checked;}).length;
       var _clPct=_cl.length>0?Math.round(_clDone/_cl.length*100):null;
       var _extSk=externalPS.map(function(lk){return allStakes.find(function(x){return String(x.id)===String(lk.stakeholderId);});}).filter(Boolean);
@@ -22594,7 +22714,7 @@ function buildReportXML(proj,saved,periodInts,recipients,allStakes,dels,recipien
       }
 
     } else if(sec.type==='auto-nepa-compliance'){
-      var _ncl=proj.nepaChecklist||[];
+      var _ncl=_nepaLive(proj.nepaChecklist);
       var _nDone=_ncl.filter(function(x){return x.checked;}).length;
       var _nPct=_ncl.length>0?Math.round(_nDone/_ncl.length*100):null;
       xml+=para('NEPA Checklist Progress'+(proj.nepaClassification?' — '+proj.nepaClassification:''),boldRpr);

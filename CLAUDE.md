@@ -479,6 +479,32 @@ report on pace whose contract-window date had passed). Now, next to
   Log each meeting as an Event too (Partnering / Progress meeting) for dates.
   Guarded by `test/tests/118-partnering-meeting-types.test.js`.
 
+### NEPA checklist: compact panel, editable dates, In progress, N/A (DEV, Nov 2026, Jeff)
+Designed with Jeff on the canvas mockup (Nov 22). `_nepaPanelHTML(proj)` (block
+`// ── NEPA CHECKLIST` before `renderDelAll`) replaced the long grouped list on
+Deliverables: groups down the left (ring + count), the chosen group's items on
+the right, one line each (key, short label — click for the full text — date
+chip, N/A); filters All / Open / In progress / Check dates; Mark all done… on a
+chosen date; Group not applicable; Next open item. The panel redraws alone
+(`_nepaRedraw`), so the page keeps its place. **No new columns** — every new
+field lives in `pi_projects.nepa_checklist` (jsonb).
+- **Done** = `checked`, `checkedDate`, `checkedBy` (completed by). Ticking
+  fills today with `dateAuto:true` and opens "Completed on … by …"; the date is
+  flagged ("· ticked", amber, the Check dates filter) until someone saves one.
+  Dates are editable any time and never later than today. Old items carry no
+  `dateAuto`, so they are NOT flagged (Jeff's choice).
+- **In progress** = `startedDate`, `owner` (PI team initials), `startedBy`, only
+  on the longer items in `NEPA_DURATION_KEYS` (Claude's reading of the CE / EA /
+  EIS wording, agreed by Jeff as a start; adjust the list there). Chip "In
+  progress · N days · OWNER", amber past `NEPA_LONG_DAYS` (30); a finished item
+  shows "took N days". Unticking a started item returns it to In progress.
+- **Not applicable** = `na`, per item or whole group. `_nepaLive(cl)` drops N/A
+  items and is now used by EVERY checklist count (dashboard, project cards,
+  Reports card, PI summary, NEPA report, PI report section, snapshot, AI facts).
+  `saveProj` keeps checked, started and N/A items when the classification
+  changes. Start dates and owners stay internal (no report prints them).
+- Guarded by `test/tests/136-nepa-checklist-compact.test.js`.
+
 ### Flags that updated only after a refresh (Oct 2026)
 Reported live: exporting 1200 South Wastewater (PIN 700) left its card without
 "Exported today" until a reload. `exportProject` / `exportPortfolio` wrote

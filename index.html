@@ -9737,6 +9737,34 @@ function _hotMatchLabel(s, projectId){
   const w=_hotWhereLabel(s,projectId);
   return dispName(s)+(s.org&&(s.firstName||s.lastName)?' ('+s.org+')':'')+(w?' — '+w:'');
 }
+// ── HOTLINE WAIT (begin) — identical in index.html and mobile.html
+// How long a voicemail has waited for someone to act on it. The colour
+// counts BUSINESS days (Mon–Fri) after the day it arrived: same day = plain,
+// 1 = amber (due today), 2+ = red. Friday's message is amber on Monday, not red.
+var HOT_WAIT_AMBER_BD=1, HOT_WAIT_RED_BD=2;
+function _hotBizDaysSince(ts,now){
+  var t=new Date(ts); if(isNaN(t)) return 0;
+  var d=new Date(t.getFullYear(),t.getMonth(),t.getDate()), end=new Date(now.getFullYear(),now.getMonth(),now.getDate()), n=0;
+  while(d<end){ d.setDate(d.getDate()+1); var w=d.getDay(); if(w!==0&&w!==6) n++; }
+  return n;
+}
+function _hotWait(m,now){
+  now=now||new Date();
+  var t=new Date(m&&m.receivedAt); if(!m||!m.receivedAt||isNaN(t)) return null;
+  var mins=Math.max(0,Math.round((now-t)/60000)), txt;
+  if(mins<60) txt='Waiting '+(mins<=1?'1 minute':mins+' minutes');
+  else if(mins<24*60){ var h=Math.floor(mins/60); txt='Waiting '+h+(h===1?' hour':' hours'); }
+  else { var dd=Math.floor(mins/1440); txt='Waiting '+dd+(dd===1?' day':' days'); }
+  var bd=_hotBizDaysSince(m.receivedAt,now);
+  return {text:txt, bizDays:bd, level:bd>=HOT_WAIT_RED_BD?'red':bd>=HOT_WAIT_AMBER_BD?'amber':'ok'};
+}
+function _hotWaitPill(m,now){
+  var w=_hotWait(m,now); if(!w) return '';
+  var c=w.level==='red'?['rgba(224,82,82,.18)','#e05252']:w.level==='amber'?['rgba(232,160,32,.18)','#e8a020']:['rgba(74,155,232,.15)','#6fb0ee'];
+  var tip=w.level==='ok'?'Arrived today':w.bizDays+' business day'+(w.bizDays===1?'':'s')+' since it arrived';
+  return '<span class="hot-wait hot-wait-'+w.level+'" title="'+tip+'" style="display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:9px;background:'+c[0]+';color:'+c[1]+';margin-left:6px;white-space:nowrap">'+w.text+'</span>';
+}
+// ── HOTLINE WAIT (end)
 function _hotWhen(ts){
   if(!ts) return '';
   const d=new Date(ts);
@@ -10785,7 +10813,7 @@ function _hotCardHTML(m){
     <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">
       <div>
         <div style="font-size:14px;font-weight:700;color:var(--white)">${escHtml(_hotFmtPhone(m.callerNumber)||'Unknown caller')}${es?' <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:9px;background:rgba(232,160,32,.18);color:var(--amber,#e8a020);margin-left:6px">Español · LEP</span>':''}</div>
-        <div style="font-size:11px;color:var(--fog);margin-top:2px">${escHtml(_hotWhen(m.receivedAt))} · ${escHtml(h?h.name:'Hotline')}${ext}</div>
+        <div style="font-size:11px;color:var(--fog);margin-top:2px">${escHtml(_hotWhen(m.receivedAt))} · ${escHtml(h?h.name:'Hotline')}${ext}${_hotWaitPill(m)}</div>
         <div style="font-size:12px;color:var(--slate);margin-top:4px">${proj}</div>
       </div>
       <div style="display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap">

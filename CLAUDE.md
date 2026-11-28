@@ -4031,6 +4031,14 @@ a Twilio trial + one number on DEV for a real call, then release.
   `hotPlayPrompt`; suggested wording `HOT_VM_SCRIPT`). Applied to DEV + receiver
   v19. Guarded by `test/tests/99-hotline-voicemail-recording.test.js` (fails on
   the old receiver). Paste the SQL on LIVE with the hotline release.
+- **Waiting time on each voicemail (DEV, Nov 2026, Jeff).** Every waiting
+  card (desktop and mobile) shows "Waiting 20 minutes / 3 hours / 5 days"
+  (`_hotWaitPill`). Colour counts BUSINESS days (Mon–Fri) after the day it
+  arrived (`_hotBizDaysSince`): same day plain, 1 amber (`HOT_WAIT_AMBER_BD`),
+  2+ red (`HOT_WAIT_RED_BD`) — Friday's message is amber on Monday. One block,
+  `// ── HOTLINE WAIT (begin)` … `(end)`, identical in both apps. Holidays are
+  not counted. Guarded by `test/tests/137-hotline-wait-time.test.js` (fails on
+  the old code).
 - **Edit hotline dialog in call order (DEV, Nov 2026, Jeff).** Basics (name,
   number, status) on top, then a flow strip ("What happens when someone
   calls": 1 Greeting → 2 Spanish option → 3 Where callers go → 4 Ring the PI

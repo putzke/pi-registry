@@ -279,6 +279,11 @@ module.exports = {
     t.eq((await notify('Bearer stranger-token', { messageId: m2.id })).status, 403, '/notify refuses a signed-in non-staff user');
     const n = await notify('Bearer staff-token', { messageId: m2.id });
     t.ok(n.status === 200 && n.body.sent === true && log.emails.length === before + 1 && /SR-201/.test(log.emails.at(-1).subject), 'staff: the new assignee is emailed');
+    // A member who turned the voicemail email off (Settings → PI team) gets none.
+    await t.sql(`update pi_team_members set hotline_email=false where initials='JP'`);
+    const off = await notify('Bearer staff-token', { messageId: m2.id });
+    t.ok(off.status === 200 && off.body.sent === false && log.emails.length === before + 1, 'a member who turned the email off is not emailed');
+    await t.sql(`update pi_team_members set hotline_email=true where initials='JP'`);
 
     // ── greeting wording ──────────────────────────────────────────────────
     t.eq(L.hotName('Test Hotline'), 'Test', 'a name ending in "Hotline" is not doubled');

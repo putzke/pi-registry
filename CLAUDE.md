@@ -3840,7 +3840,8 @@ a Twilio trial + one number on DEV for a real call, then release.
   `sql/2026-10-17_hotline_live_transcript.sql` and
   `sql/2026-10-18_hotline_junk_cleanup.sql` and
   `sql/2026-10-19_hotline_menu_recording.sql` and
-  `sql/2026-10-25_hotline_voicemail_recording.sql` on LIVE too; (3) ✅ `hotline-audio` joins the nightly backup (Jeff, 2026-10-26; `BUCKETS`
+  `sql/2026-10-25_hotline_voicemail_recording.sql` and
+  `sql/2026-11-28_team_hotline_email.sql` on LIVE too; (3) ✅ `hotline-audio` joins the nightly backup (Jeff, 2026-10-26; `BUCKETS`
   in cirruscc-backups' `backup.sh`, files under `files/<bucket>/`);
   (4) paste `sql/2026-10-12_hotlines.sql` on LIVE, set the LIVE secrets and
   point the real number(s) at the LIVE function; (5) add Twilio to "Outside
@@ -4039,6 +4040,16 @@ a Twilio trial + one number on DEV for a real call, then release.
   `// ── HOTLINE WAIT (begin)` … `(end)`, identical in both apps. Holidays are
   not counted. Guarded by `test/tests/137-hotline-wait-time.test.js` (fails on
   the old code).
+- **Opt out of the voicemail email (DEV, Nov 2026, Jeff).**
+  `sql/2026-11-28_team_hotline_email.sql` adds `pi_team_members.hotline_email`
+  (default true; applied to DEV). Settings → PI team → a member → "Email me
+  about new hotline voicemails assigned to me" (`#f-tm-hotmail`, shown only
+  when `HOTLINE_ON`); the list reads "no voicemail email". `toSB` leaves it
+  out until a fetched row carries it (`window._teamHotEmailCol`, the
+  `_teamPortalCol` pattern). The receiver's `notifyAssignee` reads the member
+  with `select=*` (works before the column exists) and skips `hotline_email
+  === false`. Receiver v20 on DEV. Paste the SQL on LIVE with the hotline
+  release. Guarded by `test/tests/138-team-hotline-email.test.js` and test 82.
 - **Edit hotline dialog in call order (DEV, Nov 2026, Jeff).** Basics (name,
   number, status) on top, then a flow strip ("What happens when someone
   calls": 1 Greeting → 2 Spanish option → 3 Where callers go → 4 Ring the PI

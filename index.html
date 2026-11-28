@@ -1466,7 +1466,7 @@ const SB_TO_INT = {
   // logins: a new hire can lead projects before they have an email.
   pi_team_members: {
     id:'id', name:'name', initials:'initials', title:'title', phone:'phone',
-    email:'email', active:'active', showOnPortal:'show_on_portal', updatedBy:'updated_by'
+    email:'email', active:'active', showOnPortal:'show_on_portal', hotlineEmail:'hotline_email', updatedBy:'updated_by'
   },
   // Project hotlines (sql/2026-10-12_hotlines.sql). Messages are written by the
   // Twilio receiver (supabase/functions/hotline); the app reads them, logs or
@@ -1607,6 +1607,7 @@ function toSB(table, obj) {
   if (sbTable === 'pi_projects' && !window._webCols) { delete result.website_url; delete result.website_label; delete result.website_readings; }
   // Same gate for sql/2026-10-10_portal_pi_contact.sql's column.
   if (sbTable === 'pi_team_members' && !window._teamPortalCol) delete result.show_on_portal;
+  if (sbTable === 'pi_team_members' && !window._teamHotEmailCol) delete result.hotline_email;
   // And for sql/2026-10-11_followup_resolution_note.sql's column.
   if (sbTable === 'pi_interactions' && !window._fuResCol) delete result.follow_up_resolution;
   // And for sql/2026-10-12_hotlines.sql's thread link.
@@ -1650,6 +1651,8 @@ function fromSB(table, row) {
   if (sbTable === 'pi_team_members') {
     if (row && row.show_on_portal !== undefined) window._teamPortalCol = true;
     result.showOnPortal = row ? row.show_on_portal !== false : true;   // default on, as the column is
+    if (row && row.hotline_email !== undefined) window._teamHotEmailCol = true;
+    result.hotlineEmail = row ? row.hotline_email !== false : true;     // default on, as the column is
   }
   ['isMaster','isAnonymous','followUp','followUpDone','isArchived','equityFormSubmitted','lep','underserved','needsReview','authorizedSigner','active','spanishEnabled'].forEach(f => {
     if (result[f] !== undefined) result[f] = result[f] === true || result[f] === 1;
@@ -9543,7 +9546,7 @@ function renderTeamCard(){
       <td style="padding:6px 8px">${escHtml(m.title||'')}</td>
       <td style="padding:6px 8px">${escHtml(m.phone||'')}</td>
       <td style="padding:6px 8px">${m.email?escHtml(m.email):'<span style="opacity:.6">—</span>'}</td>
-      <td style="padding:6px 8px">${m.active===false?'Inactive':'Active'}${m.showOnPortal===false?' · <span title="Not shown to clients as their PI contact">off portal</span>':''}</td>
+      <td style="padding:6px 8px">${m.active===false?'Inactive':'Active'}${m.showOnPortal===false?' · <span title="Not shown to clients as their PI contact">off portal</span>':''}${HOTLINE_ON&&m.hotlineEmail===false?' · <span title="Gets no email about new hotline voicemails">no voicemail email</span>':''}</td>
       <td style="padding:6px 8px;text-align:right"><button class="btn btn-sm" onclick="openTeamMemberModal('${escHtml(m.id)}')">Edit</button></td>
     </tr>`).join('');
   // Initials already in use in the logs with nobody on the list — usually
@@ -9572,6 +9575,7 @@ function openTeamMemberModal(id,presetIni){
     <div class="fr"><label>Status</label><select id="f-tm-active"><option value="1"${m.active!==false?' selected':''}>Active</option><option value="0"${m.active===false?' selected':''}>Inactive</option></select></div>
   </div>
   <div class="fr"><div class="fcheck"><input type="checkbox" id="f-tm-portal"${m.showOnPortal!==false?' checked':''}><label for="f-tm-portal">Show as “Your PI contact” on the client portal for projects they lead (name, title, phone, email)</label></div></div>
+  ${HOTLINE_ON?`<div class="fr"><div class="fcheck"><input type="checkbox" id="f-tm-hotmail"${m.hotlineEmail!==false?' checked':''}><label for="f-tm-hotmail">Email me about new hotline voicemails assigned to me (needs an email above)</label></div></div>`:''}
   <div style="font-size:11px;color:var(--fog);line-height:1.5;margin-top:6px">The team list is not a login. Signing in is set up separately; adding someone here lets them lead projects and be assigned follow-ups.</div>`,
   `<button class="btn" onclick="closeM()">Cancel</button>
    <button class="btn btn-primary" onclick="saveTeamMember()">Save</button>`);
@@ -9579,7 +9583,7 @@ function openTeamMemberModal(id,presetIni){
 async function saveTeamMember(){
   const v=id=>(document.getElementById(id)?.value||'').trim();
   const id=S.editTeamId;
-  const rec={name:v('f-tm-name'),initials:v('f-tm-ini').toUpperCase(),title:v('f-tm-title'),phone:v('f-tm-phone'),email:v('f-tm-email').toLowerCase(),active:v('f-tm-active')!=='0',showOnPortal:!!document.getElementById('f-tm-portal')?.checked,updatedBy:getLoggedBy()||''};
+  const rec={name:v('f-tm-name'),initials:v('f-tm-ini').toUpperCase(),title:v('f-tm-title'),phone:v('f-tm-phone'),email:v('f-tm-email').toLowerCase(),active:v('f-tm-active')!=='0',showOnPortal:!!document.getElementById('f-tm-portal')?.checked,...(document.getElementById('f-tm-hotmail')?{hotlineEmail:document.getElementById('f-tm-hotmail').checked}:{}),updatedBy:getLoggedBy()||''};
   if(!rec.name){alert('Name is required.');return}
   if(!/^[A-Z]{2,4}$/.test(rec.initials)){alert('Initials must be 2 to 4 letters.');return}
   if(rec.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rec.email)){alert('That email address doesn’t look right.');return}

@@ -485,8 +485,9 @@ export function createHandler({ env, fetchFn = fetch, now = () => new Date() }) 
   // the email — the inbox is where those are read.
   async function notifyAssignee(msg) {
     if (!msg || !msg.assigned_to) return false;
-    const m = await one(`pi_team_members?initials=ilike.${encodeURIComponent(msg.assigned_to)}&active=eq.true&select=name,email`);
-    if (!m || !m.email) return false;
+    // select=* so this works before the hotline_email column exists (no column = on).
+    const m = await one(`pi_team_members?initials=ilike.${encodeURIComponent(msg.assigned_to)}&active=eq.true&select=*`);
+    if (!m || !m.email || m.hotline_email === false) return false;   // they turned the email off
     const proj = msg.project_id ? await one(`pi_projects?id=eq.${encodeURIComponent(msg.project_id)}&select=name`) : null;
     const where = proj ? proj.name : 'the general mailbox';
     const app = (env.APP_BASE_URL || '').replace(/\/$/, '');

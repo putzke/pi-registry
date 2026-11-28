@@ -4050,6 +4050,13 @@ a Twilio trial + one number on DEV for a real call, then release.
   with `select=*` (works before the column exists) and skips `hotline_email
   === false`. Receiver v20 on DEV. Paste the SQL on LIVE with the hotline
   release. Guarded by `test/tests/138-team-hotline-email.test.js` and test 82.
+- **Settings → Project hotlines: the list first (DEV, Nov 2026, Jeff).**
+  `renderHotlineCard` draws the hotline table and "+ Add hotline" first
+  (`#hot-list`), then "Settings for every hotline" (`#hot-all-settings`: the
+  ring defaults `#hot-defaults` and the voicemail prompt). Nothing else
+  changed. Guarded by `test/tests/139-hotline-settings-order.test.js`.
+  "Mark urgent" on a voicemail card was offered and deferred to a later
+  release (Jeff).
 - **Edit hotline dialog in call order (DEV, Nov 2026, Jeff).** Basics (name,
   number, status) on top, then a flow strip ("What happens when someone
   calls": 1 Greeting → 2 Spanish option → 3 Where callers go → 4 Ring the PI

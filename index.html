@@ -10441,7 +10441,16 @@ function renderHotlineCard(){
       <td style="padding:6px 8px">${escHtml(_hotRingSummary(_hotRingSettings(g,h,null)))}${ex.some(e=>e.ringMode||e.hoursStart)?' <span title="Some menu options have their own ringing or hours">*</span>':''}</td>
       <td style="padding:6px 8px;text-align:right"><button class="btn btn-sm" onclick="openHotlineModal('${escHtml(h.id)}')">Edit</button></td>
     </tr>`;}).join('');
-  el.innerHTML=`<div id="hot-defaults" style="border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:12px 14px;margin-bottom:14px">
+  // The hotline list comes first (most visits are to edit one); the
+  // settings that apply to every hotline follow (Jeff, Nov 2026).
+  el.innerHTML=`<div id="hot-list">
+    ${hs.length?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;color:var(--fog)">
+      <thead><tr style="text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em"><th style="padding:4px 8px">Hotline</th><th style="padding:4px 8px">Number</th><th style="padding:4px 8px">Goes to</th><th style="padding:4px 8px">Language</th><th style="padding:4px 8px">When a call comes in</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`:'<div style="font-size:12px;color:var(--fog)">No hotlines yet.</div>'}
+    <div style="margin-top:12px;margin-bottom:18px"><button class="btn btn-primary btn-sm" onclick="openHotlineModal()">+ Add hotline</button></div></div>
+    <div id="hot-all-settings" style="border-top:1px solid rgba(255,255,255,.1);padding-top:14px">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--fog);margin-bottom:10px">Settings for every hotline</div>
+    <div id="hot-defaults" style="border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:12px 14px;margin-bottom:14px">
       <div style="font-size:12px;font-weight:700;color:var(--white);margin-bottom:4px">When someone calls — defaults for every hotline</div>
       <div style="font-size:11px;color:var(--fog);line-height:1.5;margin-bottom:10px">During business hours the project’s PI Lead (from the PI team list) is rung first; they press 1 to take the call. If nobody does, or it’s after hours, the caller leaves a voicemail. A hotline or a menu option can set its own — open it with Edit.</div>
       ${_hotRingFieldsHTML(gst,true)}
@@ -10449,10 +10458,7 @@ function renderHotlineCard(){
         <span style="font-size:11px;color:var(--fog);margin-left:8px">Times are Mountain Time.</span></div>
     </div>
     ${_hotVmBoxHTML(g)}
-    ${hs.length?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;color:var(--fog)">
-      <thead><tr style="text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em"><th style="padding:4px 8px">Hotline</th><th style="padding:4px 8px">Number</th><th style="padding:4px 8px">Goes to</th><th style="padding:4px 8px">Language</th><th style="padding:4px 8px">When a call comes in</th><th></th></tr></thead>
-      <tbody>${rows}</tbody></table></div>`:'<div style="font-size:12px;color:var(--fog)">No hotlines yet.</div>'}
-    <div style="margin-top:12px"><button class="btn btn-primary btn-sm" onclick="openHotlineModal()">+ Add hotline</button></div>`;
+    </div>`;
 }
 
 function _hotProjOptions(cur){
